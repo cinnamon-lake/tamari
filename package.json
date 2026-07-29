@@ -1,0 +1,48 @@
+{
+  "name": "tamari",
+  "version": "2.0.0-alpha.0",
+  "type": "module",
+  "license": "AGPL-3.0",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cinnamon-lake/tamari.git"
+  },
+  "engines": {
+    "node": ">= 20"
+  },
+  "overrides": {
+    "uuid": "^14.0.0",
+    "vectra": {
+      "openai": "^4.17.0"
+    },
+    "node-fetch": {
+      "whatwg-url": "^14.0.0"
+    }
+  },
+  "workspaces": [
+    "packages/*",
+    "server",
+    "client",
+    "e2e"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=server & npm run dev --workspace=client",
+    "build": "npm run build --workspace=packages/types && npm run build --workspace=server && npm run build --workspace=client",
+    "start": "npm run build && node server/dist/main.js",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run build && npm run test --workspace=e2e",
+    "test:e2e:ui": "npm run build && npm run test:ui --workspace=e2e",
+    "db:migrate": "npx tsx server/src/db/migrate.ts",
+    "db:seed": "npx tsx server/src/db/seed.ts",
+    "test:e2e:smoke": "npm run build && npm run test:smoke --workspace=e2e",
+    "test:e2e:journeys": "npm run build && npm run test:journeys --workspace=e2e",
+    "test:e2e:coverage": "rm -rf e2e/.coverage e2e/coverage && E2E_COVERAGE=1 npm run build && E2E_COVERAGE=1 npm run test --workspace=e2e",
+    "lint:css": "node audit_css_hooks.cjs"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.59.4",
+    "@typescript-eslint/parser": "^8.59.4",
+    "eslint": "^8.57.1"
+  }
+}

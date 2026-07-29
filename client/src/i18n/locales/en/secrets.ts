@@ -1,0 +1,30 @@
+/**
+ * Secrets domain — SecretsModal.tsx + SecretPicker.tsx.
+ */
+export const secrets = {
+  title: 'Secrets',
+  description: 'Encrypted vault for API keys and tokens. Reference a secret from a backend config or tool as {{ref}} to avoid pasting raw keys everywhere.',
+  empty: 'No secrets stored yet.',
+  add: 'Add Secret',
+  edit: 'Edit',
+  delete: 'Delete',
+  key: 'Key',
+  keyHint: 'Unique identifier (used in {{ref}} references).',
+  label: 'Label',
+  labelHint: 'Human-friendly name (e.g. "OpenAI – Work").',
+  value: 'Value',
+  valueHint: 'The API key or token.',
+  reveal: 'Reveal',
+  hide: 'Hide',
+  save: 'Save',
+  cancel: 'Cancel',
+  deleteConfirm: 'Delete secret "{{name}}"?',
+  cannotDeleteInUse: 'This secret is referenced by one or more configs. Delete anyway?',
+  useVaultSecret: 'Use vault secret',
+  pickSecret: 'Pick a secret',
+  noneAvailable: 'No secrets in the vault. Add one first.',
+  refHint: 'Reference: {{ref}}',
+  errorFetch: 'Failed to load secrets',
+  errorSave: 'Failed to save secret',
+  errorDelete: 'Failed to delete secret',
+};

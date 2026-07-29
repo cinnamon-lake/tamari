@@ -1,0 +1,144 @@
+:root {
+  /* ─── Surface Colors ─── */
+  --color-bg-primary: #1a1a1c;
+  --color-bg-secondary: #232326;
+  --color-bg-tertiary: #2c2c30;
+  --color-bg-elevated: #323238;
+
+  /* ─── Text Colors ─── */
+  --color-text-primary: #ececf1;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #9a9aa4;
+  --color-text-inverse: #09090b;
+
+  /* ─── Accent ─── */
+  --color-accent: #818cf8;
+  --color-accent-hover: #a5b4fc;
+  --color-accent-soft: rgba(129, 140, 248, 0.12);
+  --color-accent-border: rgba(129, 140, 248, 0.2);
+  --color-accent-glow: rgba(129, 140, 248, 0.25);
+
+  /* ─── Status ─── */
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --color-danger-hover: #fca5a5;
+  --color-danger-soft: rgba(248, 113, 113, 0.15);
+  --color-danger-subtle: rgba(248, 113, 113, 0.12);
+  --color-info-soft: rgba(74, 158, 255, 0.15);
+
+  /* ─── Borders ─── */
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-focus: var(--color-accent);
+  --color-surface-hover: rgba(255, 255, 255, 0.02);
+  --color-surface-elevated: var(--color-bg-elevated);
+  --color-surface-highlight: #3f3f46;
+  --color-surface: var(--color-bg-tertiary);
+
+  /* ─── Shadows ─── */
+  --shadow-sm:
+    0 1px 2px 0 rgb(0 0 0 / calc(30% * var(--shadow-opacity))),
+    0 1px 3px 0 rgb(0 0 0 / calc(15% * var(--shadow-opacity)));
+  --shadow-md:
+    0 4px 6px -1px rgb(0 0 0 / calc(35% * var(--shadow-opacity))),
+    0 2px 4px -2px rgb(0 0 0 / calc(20% * var(--shadow-opacity)));
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / calc(40% * var(--shadow-opacity))),
+    0 4px 6px -4px rgb(0 0 0 / calc(25% * var(--shadow-opacity)));
+  --shadow-glow: 0 0 0 3px var(--color-accent-soft);
+  --shadow-focus: 0 0 0 1px var(--color-accent);
+  --shadow-focus-soft: 0 0 0 2px var(--color-accent-soft);
+  --shadow-focus-inset: inset 0 0 0 1px var(--color-accent);
+  --shadow-ring-neutral: 0 0 0 1px var(--color-border-subtle);
+  --shadow-dropdown: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-xl:
+    0 20px 25px -5px rgb(0 0 0 / calc(40% * var(--shadow-opacity))),
+    0 8px 10px -6px rgb(0 0 0 / calc(25% * var(--shadow-opacity)));
+
+  /* ─── Spacing ─── */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+
+  /* ─── Typography ─── */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --text-2xs: 0.625rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+  --text-4xl: 3rem;
+
+  --leading-none: 1;
+  --leading-tight: 1.2;
+  --leading-snug: 1.4;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+
+  /* ─── Radii ─── */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+  --radius-none: 0;
+
+  /* ─── Motion ─── */
+  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* keyframe-animation durations (longer-running than transitions) */
+  --duration-short: 1s;
+  --duration-medium: 1.5s;
+
+  /* ─── Z-Index Layers ─── */
+  --z-sticky: 10;
+  --z-dropdown: 100;
+  --z-modal: 1000;
+  --z-popover: 1500;
+  --z-overlay: 2000;
+
+  /* ─── Layout ─── */
+  --sidebar-width: 280px;
+  --chat-max-width: 50rem;
+  --message-gap: 0.75rem;
+  --header-height: 60px;
+  --modal-max-width: 40rem;
+
+  /* ─── Component sizing (avatars, thumbnails) ─── */
+  --avatar-sm: 34px;
+  --avatar-md: 64px;
+  --asset-thumb: 72px;
+
+  /* ─── Backdrops ─── */
+  --color-backdrop: rgba(0, 0, 0, 0.65);
+  --color-backdrop-light: rgba(0, 0, 0, 0.5);
+  --color-backdrop-subtle: rgba(0, 0, 0, 0.4);
+
+  /* ─── Map terrain (lua_map widget tiles) ─── */
+  --color-terrain-grass: #2e4a2a;
+  --color-terrain-forest: #1d3520;
+  --color-terrain-water: #1e3a5f;
+  --color-terrain-mountain: #4a4a52;
+  --color-terrain-wall: #43302e;
+  --color-terrain-road: #4d4232;
+  --color-terrain-door: #5a4632;
+  --color-terrain-town: #54503a;
+  --color-terrain-dungeon: #2c2438;
+  --color-terrain-void: #101012;
+
+  /* ─── Dynamic overrides ─── */
+  --shadow-opacity: 1;
+  --backdrop-blur: 1;
+  --avatar-border-radius: var(--radius-full);
+}

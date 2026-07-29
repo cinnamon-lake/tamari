@@ -1,0 +1,91 @@
+# ─── Git & CI ───
+.git
+.github
+.gitignore
+.gitattributes
+.gitmodules
+
+# ─── Docker itself ───
+Dockerfile
+.dockerignore
+docker-compose*.yml
+docker-compose*.yaml
+
+# ─── Node modules (all levels) ───
+**/node_modules
+
+# ─── Build outputs (all levels) ───
+**/dist
+**/build
+**/.vite
+**/.turbo
+**/.rollup.cache
+*.tsbuildinfo
+
+# ─── Runtime data & backups (mount these as volumes) ───
+/data
+/data-v2
+/data-data-backup-pre-v2
+*.tar.gz
+
+# ─── Tests & test artifacts ───
+/e2e
+**/coverage
+**/.coverage
+/test-results
+**/test-results
+**/playwright-report
+**/.test-data*
+**/*.test.ts
+**/*.test.js
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.js
+vitest.config.*
+playwright.config.*
+jest.config.*
+
+# ─── Old / reference codebases (not part of the v2 build) ───
+/old
+/Risuai
+
+# ─── Docs & meta ───
+/docs
+*.md
+LICENSE
+
+# ─── Dev tooling & agent configs ───
+.editorconfig
+.eslintrc*
+eslint-base.cjs
+audit_css_hooks.cjs
+.prettierrc*
+.stylelintrc*
+.vscode
+.idea
+.claude
+.gemini
+**/.DS_Store
+*.swp
+*.swo
+*~
+
+# ─── Shell scripts ───
+*.sh
+
+# ─── Misc junk ───
+*.log
+logs
+**/tmp
+tmp
+.cache
+.npm
+.npmignore
+.nomedia
+
+# ─── Sensitive files ───
+**/.env*
+**/.env.local
+**/.env.*.local
+**/*.pem
+**/certs

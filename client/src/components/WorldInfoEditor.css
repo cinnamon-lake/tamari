@@ -1,0 +1,146 @@
+.worldinfo-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.book-editor-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.book-editor-header .back-btn {
+  flex-shrink: 0;
+}
+
+.book-editor-header .book-name-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.worldinfo-item,
+.entry-row {
+  justify-content: space-between;
+}
+
+.worldinfo-item:hover,
+.entry-row:hover,
+.entry-row:focus-visible {
+  transform: translateX(2px);
+}
+
+.entry-keys {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-accent);
+}
+
+.entry-content-preview {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.entry-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding-top: var(--space-md);
+  padding-bottom: var(--space-md);
+  padding-left: var(--space-md);
+  padding-right: var(--space-md);
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-md);
+}
+
+.test-triggers-panel {
+  margin-top: var(--space-md);
+}
+
+.test-triggers-panel textarea {
+  resize: vertical;
+  display: block;
+  width: 100%;
+  margin-top: var(--space-sm);
+}
+
+.test-triggers-panel button {
+  margin-top: var(--space-sm);
+}
+
+.test-results {
+  margin-top: var(--space-sm);
+}
+
+.test-result-item {
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+  padding-left: 0;
+  padding-right: 0;
+  border-bottom: 1px solid var(--color-bg-tertiary);
+}
+
+.delete-book-btn {
+  margin-top: var(--space-md);
+}
+
+.entry-row-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.entry-row-inline label {
+  flex: 1 1 140px;
+}
+
+.entry-row-inline label,
+.entry-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Entry inputs use the shared `.modal input` atom (utilities.css). Mobile
+   width overrides remain below. */
+
+.entry-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.entry-checkboxes label {
+  flex-direction: row;
+  align-items: center;
+}
+
+.entry-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+/* World Info modal */
+.modal.worldinfo-modal {
+  max-width: 36rem;
+}
+
+@media (max-width: 768px) {
+  .modal.worldinfo-modal {
+    padding-top: var(--space-md);
+    padding-bottom: var(--space-md);
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
+
+  .entry-row-inline select,
+  .entry-row-inline input {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}

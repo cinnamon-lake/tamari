@@ -1,0 +1,393 @@
+@import './tokens.css';
+
+/* ─── Reset & Base ─── */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+*:first-child {
+  margin-top: 0;
+}
+
+*:last-child {
+  margin-bottom: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html {
+  background: var(--color-bg-primary);
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbars ─── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* ─── Skip link ─── */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+  padding-left: var(--space-sm);
+  padding-right: var(--space-sm);
+  z-index: var(--z-overlay);
+  text-decoration: none;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  transition: top var(--transition-fast);
+}
+.skip-link:focus {
+  top: 0;
+}
+
+/* ─── Focus rings ─── */
+*:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-glow);
+  border-radius: var(--radius-sm);
+}
+
+/* ─── Windows High Contrast Mode ───
+   The glow-based focus ring (rgba @ low alpha) is invisible under forced
+   colors, so restore a solid system-color outline and drop the competing
+   box-shadow. CanvasText is readable against both light and dark HCM palettes. */
+@media (forced-colors: active) {
+  *:focus-visible {
+    outline: 2px solid CanvasText;
+    box-shadow: none;
+  }
+  /* Selection / active state is otherwise conveyed by accent background + inset
+     box-shadow, which collapse under forced colors — restore a visible boundary. */
+  .chat-item.active,
+  .character-item.selected,
+  .tag-chip.active,
+  .message-bubble.streaming {
+    outline: 2px solid CanvasText;
+  }
+}
+
+/* ─── Reduced motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─── Error boundary fallback ─── */
+.app-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  min-height: 100vh;
+  padding-top: var(--space-lg);
+  padding-bottom: var(--space-lg);
+  padding-left: var(--space-lg);
+  padding-right: var(--space-lg);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  text-align: center;
+}
+
+.app-error pre {
+  max-width: 60ch;
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-sm);
+  padding-right: var(--space-sm);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  overflow: auto;
+  text-align: left;
+}
+
+.app-error-retry {
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-md);
+  padding-right: var(--space-md);
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-bg-primary);
+}
+
+/* Sidebar */
+.sidebar {
+  background: var(--color-bg-secondary);
+  border-right: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-lg);
+  padding-bottom: var(--space-lg);
+  padding-left: var(--space-lg);
+  padding-right: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  overflow-y: auto;
+}
+
+/* Main panel */
+.main-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Chat view */
+.chat-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-top: var(--space-md);
+  padding-bottom: var(--space-md);
+  padding-left: var(--space-md);
+  padding-right: var(--space-md);
+  position: relative;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes stream-fade-in {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modal-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --space-xs: 0.125rem;
+    --space-sm: 0.125rem;
+    --space-md: 0.25rem;
+    --space-lg: 0.5rem;
+    --space-xl: 0.75rem;
+    --space-2xl: 1rem;
+    --message-gap: 0.25rem;
+    --radius-sm: 3px;
+    --radius-md: 5px;
+    --radius-lg: 7px;
+    --radius-xl: 10px;
+  }
+
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0;
+    width: 85%;
+    max-width: 320px;
+    z-index: var(--z-dropdown);
+    transform: translateX(-100%);
+    transition: transform var(--transition-slow);
+    border-right: 1px solid var(--color-border-subtle);
+    box-shadow: var(--shadow-lg);
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+  }
+
+  /* Open state — co-located with the closed (translateX(-100%)) drawer rule
+     above so the transform pair lives in one file (§13). */
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .main-panel {
+    padding-top: var(--header-height);
+  }
+
+  .chat-view {
+    padding-top: var(--space-sm);
+    padding-bottom: var(--space-sm);
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* ─── Skeleton screens ─── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-tertiary) 25%,
+    var(--color-bg-elevated) 50%,
+    var(--color-bg-tertiary) 75%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--radius-sm);
+  animation: skeleton-pulse var(--duration-medium) ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.skeleton-line {
+  width: 100%;
+}
+
+.skeleton-avatar {
+  border-radius: var(--radius-full);
+}
+
+.skeleton-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-sm);
+  padding-right: var(--space-sm);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+}
+
+.skeleton-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* ─── RTL support ─── */
+[dir="rtl"] .app-shell {
+  grid-template-columns: 1fr var(--sidebar-width);
+}
+
+[dir="rtl"] .sidebar {
+  border-right: none;
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+[dir="rtl"] .skip-link {
+  left: auto;
+  right: 0;
+}

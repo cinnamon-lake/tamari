@@ -1,0 +1,35 @@
+.qr-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+}
+
+.qr-settings-label {
+  flex: 1;
+  font-size: var(--text-sm);
+}
+
+.qr-settings-lang {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+.qr-settings-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+/* Action buttons use the shared `.btn` system (`.btn-ghost` / `.btn-danger` + `.btn-sm`). */
+.qr-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: var(--space-sm);
+}

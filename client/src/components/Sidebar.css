@@ -1,0 +1,335 @@
+.logo {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-accent);
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+
+.character-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1;
+  cursor: pointer;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chat-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.chat-name {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-actions {
+  display: flex;
+  gap: var(--space-xs);
+  transition: opacity var(--transition-fast);
+}
+
+.chat-rename-input {
+  flex: 1;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-focus);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  padding-top: 2px;
+  padding-bottom: 2px;
+  padding-left: 6px;
+  padding-right: 6px;
+  font-size: var(--text-sm);
+}
+
+.character-avatar {
+  width: var(--avatar-sm);
+  height: var(--avatar-sm);
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  background: var(--color-bg-tertiary);
+  box-shadow: var(--shadow-ring-neutral);
+  transition: box-shadow var(--transition-fast);
+}
+
+.character-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* Long character names must not wrap the section title ("<Name> Chats")
+   over multiple lines — truncate with an ellipsis instead. */
+.section-header .section-heading {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.section-title-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pagination-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+  padding-left: 0;
+  padding-right: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.page-indicator {
+  min-width: 3ch;
+  text-align: center;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.settings-btn {
+  width: 100%;
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-md);
+  padding-right: var(--space-md);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-align: left;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.settings-btn:hover,
+.settings-btn:focus-visible {
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+  transform: translateX(2px);
+}
+
+.mobile-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: var(--color-backdrop-light);
+  z-index: var(--z-dropdown);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sort-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.sort-row .icon-btn {
+  height: 36px;
+  width: 36px;
+  flex-shrink: 0;
+}
+
+.character-list,
+.chat-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.character-item {
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-sm);
+  padding-right: var(--space-sm);
+  border-radius: var(--radius-md);
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast);
+  font-size: var(--text-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+
+  &:hover {
+    background: var(--color-bg-tertiary);
+    transform: translateX(2px);
+  }
+}
+
+.chat-item {
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-md);
+  padding-right: var(--space-md);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+
+  &:hover {
+    background: var(--color-bg-tertiary);
+    transform: translateX(2px);
+  }
+
+  &.active {
+    background: var(--color-accent-soft);
+    color: var(--color-accent-hover);
+    box-shadow: var(--shadow-focus-inset);
+  }
+}
+
+.character-item:hover .character-avatar,
+.character-item:focus-visible .character-avatar {
+  box-shadow: var(--shadow-focus-soft);
+}
+
+.character-item.selected {
+  background: var(--color-accent-soft);
+  box-shadow: var(--shadow-focus-inset);
+
+  .character-name {
+    color: var(--color-accent-hover);
+    font-weight: 600;
+  }
+}
+
+.character-list.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: var(--space-sm);
+
+  .character-item {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--space-xs);
+    padding-top: var(--space-sm);
+    padding-bottom: var(--space-sm);
+    padding-left: var(--space-sm);
+    padding-right: var(--space-sm);
+    text-align: center;
+
+    &:hover {
+      transform: translateY(-2px);
+    }
+  }
+
+  .character-main {
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+
+  .character-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-md);
+  }
+
+  .character-name {
+    font-size: var(--text-xs);
+    line-height: var(--leading-tight);
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Mobile responsive sidebar */
+/* Mobile-only fixed menu toggle (standalone — utilities.css loads last, so an
+   `.icon-btn` base here would clobber this `display:none` at equal specificity). */
+.mobile-menu-btn {
+  display: none;
+  position: fixed;
+  top: var(--space-sm);
+  left: var(--space-sm);
+  z-index: var(--z-dropdown);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-raised);
+}
+
+.mobile-close.icon-btn {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: inline-flex;
+  }
+
+  .mobile-overlay {
+    display: block;
+  }
+
+  .mobile-close.icon-btn {
+    display: inline-flex;
+  }
+
+  .chat-actions {
+    opacity: 1;
+    transform: none;
+  }
+}

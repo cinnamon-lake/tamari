@@ -1,0 +1,96 @@
+/* Preset prompt marker textarea */
+.preset-prompt-marker {
+  background: var(--color-bg-tertiary);
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+/* Prompt Manager — Preset Modal */
+.prompt-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: var(--space-xs);
+}
+
+.prompt-item-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.prompt-name {
+  flex: 1;
+  font-weight: 500;
+  font-size: var(--text-sm);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-item-body textarea {
+  width: 100%;
+  font-size: var(--text-sm);
+  min-height: 48px;
+}
+
+.prompt-add-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: var(--color-bg-primary);
+  border: 1px dashed var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-sm);
+  padding-right: var(--space-sm);
+}
+
+.prompt-badge {
+  font-size: var(--text-xs);
+  padding-top: 2px;
+  padding-bottom: 2px;
+  padding-left: 6px;
+  padding-right: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.prompt-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-sm);
+  padding-right: var(--space-sm);
+  transition: opacity var(--transition-fast);
+}
+
+.prompt-item.disabled {
+  opacity: 0.5;
+}
+
+@media (max-width: 768px) {
+  .prompt-item-header {
+    flex-wrap: wrap;
+  }
+
+  /* Keep the name readable — without a floor it shrinks to an ellipsis stub
+     before the wrap kicks in (badge + checkbox + role select + arrows stay
+     on the same line). */
+  .prompt-name {
+    min-width: 8rem;
+  }
+}

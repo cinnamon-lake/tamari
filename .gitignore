@@ -1,0 +1,45 @@
+# Literally user data
+data-v2/
+data-data-backup-pre-v2/
+data/
+*.tar.gz
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# Runtime / data
+*.db
+*.db-shm
+*.db-wal
+.env
+content.log
+access.log
+
+# IDE
+.vscode/**
+!.vscode/extensions.json
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+
+# Test artifacts
+test-results/
+coverage/
+.coverage/
+playwright-report/
+.test-data/
+.test-data-*/
+
+# Claude Code (per-user local settings; not shared)
+.claude/settings.local.json
+.claude/settings.local.json.tmp.*
+
+# Reference codebases
+/Risuai/
+/old/

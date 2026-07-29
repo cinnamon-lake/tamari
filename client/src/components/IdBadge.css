@@ -1,0 +1,40 @@
+.id-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: none;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 1px var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  max-width: 100%;
+  /* Allow shrinking inside flex rows; the value ellipsizes (click still copies the full id). */
+  min-width: 0;
+  overflow: hidden;
+  flex-shrink: 1;
+}
+
+.id-badge:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
+}
+
+.id-badge.copied {
+  color: var(--color-success, #4caf50);
+}
+
+/* Icon-only variant for dense action rows (id lives in the tooltip). */
+.id-badge.icon-only {
+  padding: 1px var(--space-xs);
+  flex-shrink: 0;
+}
+
+.id-badge-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}

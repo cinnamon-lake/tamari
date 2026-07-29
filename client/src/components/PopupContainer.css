@@ -1,0 +1,112 @@
+.popup-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  pointer-events: auto;
+  animation: fade-in var(--transition-fast) ease-out;
+}
+
+/* The dialog box itself — mirrors the shared `.modal` card (utilities.css §13)
+   so confirm/prompt popups read as the same surface on every screen size. */
+.popup-modal {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding-top: var(--space-lg);
+  padding-bottom: var(--space-lg);
+  padding-left: var(--space-lg);
+  padding-right: var(--space-lg);
+  width: 100%;
+  max-width: 24rem;
+  max-height: 85vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-lg);
+  animation: modal-in var(--transition-base);
+}
+
+.popup-modal.popup-wide {
+  max-width: 32rem;
+}
+
+.popup-modal.popup-large {
+  max-width: 42rem;
+}
+
+.popup-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.popup-message {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+}
+
+.popup-input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.popup-input {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  width: 100%;
+  resize: vertical;
+}
+
+.popup-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.popup-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.popup-checkbox-row input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--color-accent);
+}
+
+/* Popup System */
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  pointer-events: none;
+}
+
+.popup-actions {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+  margin-top: var(--space-xs);
+}
+
+/* Buttons use the shared `.btn` system (`.btn-ghost` cancel / `.btn-primary` confirm). */

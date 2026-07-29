@@ -1,0 +1,82 @@
+.auth-modal {
+  width: 100%;
+  max-width: 400px;
+  padding-top: var(--space-xl);
+  padding-bottom: var(--space-xl);
+  padding-left: var(--space-xl);
+  padding-right: var(--space-xl);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.auth-modal h2 {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.auth-modal p {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.auth-hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.auth-hint code {
+  background: var(--color-bg-tertiary);
+  padding-top: 0.125rem;
+  padding-bottom: 0.125rem;
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+  border-radius: var(--radius-sm);
+  font-family: monospace;
+}
+
+.auth-error {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  border-radius: var(--radius-md);
+  background: rgba(220, 38, 38, 0.15);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.auth-input {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  width: 100%;
+}
+
+.auth-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+/* `.auth-submit` retired → `.btn .btn-primary` (the submit button in AuthModal.tsx). */
+
+/* Authentication overlay */
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-primary);
+  z-index: var(--z-overlay);
+}

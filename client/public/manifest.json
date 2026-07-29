@@ -1,0 +1,38 @@
+{
+  "name": "tamari",
+  "short_name": "tamari",
+  "description": "LLM Frontend for Power Users",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a1c",
+  "theme_color": "#1a1a1c",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "form_factor": "narrow",
+      "label": "tamari Mobile"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "form_factor": "wide",
+      "label": "tamari Desktop"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Chat",
+      "short_name": "Chat",
+      "description": "Start a new conversation",
+      "url": "/"
+    }
+  ]
+}

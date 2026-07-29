@@ -1,0 +1,72 @@
+.scene-stage {
+  position: relative;
+  height: 240px;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: var(--color-bg-primary);
+}
+
+.scene-stage.collapsed {
+  height: auto;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+  padding-left: var(--space-xs);
+  padding-right: var(--space-xs);
+}
+
+.scene-stage.collapsed .scene-stage-toggle {
+  position: static;
+}
+
+.scene-stage-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scene-sprite {
+  position: absolute;
+  bottom: 0;
+  max-height: 90%;
+  object-fit: contain;
+}
+
+.scene-sprite-left {
+  left: 5%;
+}
+
+.scene-sprite-center {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.scene-sprite-right {
+  right: 5%;
+}
+
+.scene-stage-toggle {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  z-index: var(--z-sticky);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.scene-stage-toggle:hover {
+  background: var(--color-bg-tertiary);
+}

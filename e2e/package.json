@@ -1,0 +1,20 @@
+{
+  "name": "@tamari/e2e",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "test": "playwright test",
+    "test:smoke": "playwright test --project=chromium-smoke",
+    "test:journeys": "playwright test --project=chromium-journeys",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "shots:mobile": "node mobile-screenshots.mjs",
+    "install:browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^20.0.0",
+    "monocart-reporter": "^2.12.2"
+  }
+}

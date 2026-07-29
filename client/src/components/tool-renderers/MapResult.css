@@ -1,0 +1,94 @@
+.map-result {
+  --map-tile-size: 28px;
+
+  margin-top: var(--space-sm);
+  max-width: 100%;
+  overflow: auto;
+}
+
+.map-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--map-cols), var(--map-tile-size));
+  gap: 1px;
+  width: fit-content;
+  background: var(--color-border-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.map-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--map-tile-size);
+  height: var(--map-tile-size);
+  font-size: var(--text-sm);
+  line-height: var(--leading-none);
+}
+
+.map-tile-grass {
+  background: var(--color-terrain-grass);
+}
+
+.map-tile-forest {
+  background: var(--color-terrain-forest);
+}
+
+.map-tile-water {
+  background: var(--color-terrain-water);
+}
+
+.map-tile-mountain {
+  background: var(--color-terrain-mountain);
+}
+
+.map-tile-wall {
+  background: var(--color-terrain-wall);
+}
+
+.map-tile-road {
+  background: var(--color-terrain-road);
+}
+
+.map-tile-door {
+  background: var(--color-terrain-door);
+}
+
+.map-tile-town {
+  background: var(--color-terrain-town);
+}
+
+.map-tile-dungeon {
+  background: var(--color-terrain-dungeon);
+}
+
+.map-tile-void {
+  background: var(--color-terrain-void);
+}
+
+.map-tile-fog {
+  background: var(--color-bg-primary);
+}
+
+.map-tile-player {
+  box-shadow: var(--shadow-focus-inset);
+}
+
+.map-tile-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding-left: var(--space-xs);
+  padding-right: var(--space-xs);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-tight);
+  color: var(--color-text-primary);
+  background: var(--color-backdrop-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}

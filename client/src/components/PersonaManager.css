@@ -1,0 +1,119 @@
+.persona-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.persona-avatar {
+  width: var(--avatar-sm);
+  height: var(--avatar-sm);
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  background: var(--color-bg-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+}
+
+.persona-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.persona-name {
+  font-weight: 500;
+  font-size: var(--text-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.persona-desc {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.persona-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.persona-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.persona-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.persona-actions-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.persona-avatar-upload {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.persona-avatar-preview {
+  width: var(--avatar-md);
+  height: var(--avatar-md);
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.persona-avatar-preview.placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: var(--text-2xl);
+}
+
+/* Older messages loading indicator */
+
+
+/* Persona manager modal */
+.modal.persona-modal {
+  max-width: 480px;
+}
+
+@media (max-width: 768px) {
+  .modal.persona-modal {
+    padding-top: var(--space-md);
+    padding-bottom: var(--space-md);
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
+}
+
+.persona-item.active {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-focus);
+}
+

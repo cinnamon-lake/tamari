@@ -1,0 +1,317 @@
+.tools-description {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.tools-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-height: 28rem;
+  overflow-y: auto;
+  padding-right: var(--space-xs);
+  min-width: 0;
+}
+
+.tools-empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+  text-align: center;
+  padding-top: var(--space-lg);
+  padding-bottom: var(--space-lg);
+  padding-left: var(--space-lg);
+  padding-right: var(--space-lg);
+}
+
+.toolset-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+  padding-left: var(--space-sm);
+  padding-right: var(--space-sm);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  user-select: none;
+}
+
+.toolset-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.toolset-header-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  font-weight: 600;
+  text-transform: capitalize;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.toolset-header-name {
+  /* Content-sized basis so the name stays visible; the IdBadge is what shrinks. */
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolset-header-meta {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-weight: 400;
+  text-transform: none;
+}
+
+.toolset-checkbox {
+  accent-color: var(--color-accent);
+  width: 1.1rem;
+  height: 1.1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tools-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+  align-items: start;
+  margin-top: var(--space-md);
+}
+
+.lua-tools-panel h3 {
+  font-size: var(--text-base);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text-primary);
+}
+
+.instance-row:hover,
+.instance-row:focus-visible {
+  border-color: var(--color-border);
+}
+
+.instance-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.instance-row-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-top: var(--space-md);
+  padding-bottom: var(--space-md);
+  padding-left: var(--space-md);
+  padding-right: var(--space-md);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.instance-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.instance-field label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Instance-field inputs use the shared `.modal input` atom (utilities.css). */
+
+.instance-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.instance-section > label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.instance-field > code + label {
+  display: block;
+  margin-top: var(--space-sm);
+}
+
+.instance-param {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.instance-param:first-of-type {
+  margin-top: var(--space-sm);
+}
+
+.instance-param-key {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  min-width: 6rem;
+  flex-shrink: 0;
+}
+
+.instance-param input {
+  width: 100%;
+}
+
+.lua-tool-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-md);
+  padding-right: var(--space-md);
+}
+
+.lua-tool-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1;
+  min-width: 0;
+}
+
+.lua-tool-main i {
+  color: var(--color-accent);
+  font-size: var(--text-base);
+}
+
+.lua-tool-name {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}
+
+.lua-tool-editor-code {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.lua-tool-editor-code label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.lua-tool-editor-code textarea {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-sm);
+  padding-right: var(--space-sm);
+  min-height: 12rem;
+}
+
+/* Toolset card */
+.toolset-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+/* Toolset body */
+.toolset-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+  padding-left: var(--space-sm);
+  padding-right: var(--space-sm);
+}
+
+@media (max-width: 768px) {
+  .tools-panels {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tool instances inside a toolset */
+
+
+/* Standalone Custom Lua Tools panel */
+.lua-tools-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+/* Instance rows ----------------------------------------------------------- */
+.instance-row {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast);
+}
+
+/* Lua tool rows ----------------------------------------------------------- */
+.lua-tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Lua tool editor --------------------------------------------------------- */
+
+
+.lua-tool-editor-fields {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-sm);
+}
+
+/* Mobile tweaks */
+@media (max-width: 768px) {
+  .lua-tool-editor-fields {
+    grid-template-columns: 1fr;
+  }
+
+
+  .instance-row-editor {
+    padding-top: var(--space-sm);
+    padding-bottom: var(--space-sm);
+    padding-left: var(--space-sm);
+    padding-right: var(--space-sm);
+  }
+}

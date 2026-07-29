@@ -1,0 +1,237 @@
+.lorebook-selector .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.lorebook-selector .empty-state i {
+  font-size: var(--text-2xl);
+  display: block;
+}
+
+.lorebook-selector .hint {
+  font-size: var(--text-xs);
+}
+
+.editor-avatar {
+  width: var(--avatar-md);
+  height: var(--avatar-md);
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+  background: var(--color-bg-tertiary);
+}
+
+.tag-input-wrap {
+  position: relative;
+}
+
+.greeting-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.greeting-row textarea {
+  flex: 1;
+}
+
+.asset-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.asset-type-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--color-text-secondary);
+}
+
+.asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: var(--space-sm);
+}
+
+.asset-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  text-align: center;
+}
+
+.asset-thumb {
+  width: var(--asset-thumb);
+  height: var(--asset-thumb);
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+.asset-placeholder {
+  width: var(--asset-thumb);
+  height: var(--asset-thumb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+.asset-name {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tag Editor */
+.tag-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Greetings editor */
+.greetings-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Asset display */
+.assets-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Export dropdown */
+.export-dropdown {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+/* Editor tabs */
+.editor-tabs {
+  display: flex;
+  gap: var(--space-xs);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-md);
+}
+
+.editor-tab {
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-md);
+  padding-right: var(--space-md);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.editor-tab:hover {
+  color: var(--color-text-primary);
+}
+
+.editor-tab.active {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-accent);
+}
+
+.editor-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* PromptTextarea: label row with expand button */
+.prompt-textarea-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.prompt-expand-btn {
+  flex-shrink: 0;
+}
+
+/* Auto-growing textareas: no manual resize handle, cap handled in JS */
+.textarea-input.autogrow {
+  resize: none;
+  overflow-y: auto;
+}
+
+/* Expanded text modal */
+.expanded-text-modal {
+  width: min(900px, 95vw);
+  height: 85vh;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.expanded-textarea {
+  flex: 1;
+  resize: none;
+}
+
+/* The editor needs more room than the default 32rem modal: tabs, a Lua code
+   editor, and a dry-run panel are unreadable at dialog width. */
+.modal.character-editor-modal {
+  max-width: 48rem;
+}
+
+/* Logic tab: sections and their nested forms get real breathing room. */
+.character-regex-section,
+.character-backend-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.character-backend-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.character-backend-editor .backend-dry-run-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* `.character-editor-modal` relies on the shared `.modal` base (utilities.css);
+   kept on the DOM as a §16 styling hook + mobile-override target. */
+@media (max-width: 768px) {
+  .modal.character-editor-modal {
+    padding-top: var(--space-md);
+    padding-bottom: var(--space-md);
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
+}

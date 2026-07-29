@@ -1,0 +1,584 @@
+/**
+ * Instruct templates for text-completion rendering.
+ *
+ * An instruct template defines how to wrap system prompts, user messages,
+ * and assistant messages when flattening a PromptCollection into a single
+ * string for text-completion APIs.
+ *
+ * This replaces the old ST's separate instruct-mode system (BOS, BOU, BOA,
+ * etc. fields) with a single declarative template.
+ */
+
+export interface InstructTemplate {
+  name: string;
+  /** Prefix for the entire prompt (e.g. `<s>`) */
+  bos?: string;
+  /** Suffix for the entire prompt */
+  eos?: string;
+  /** Separator between prompt chunks (default: `\n\n`) */
+  separator?: string;
+  /** Wrap system/content prompts: `{{content}}` is replaced */
+  systemPrefix?: string;
+  systemSuffix?: string;
+  /** Wrap user-turn messages */
+  userPrefix?: string;
+  userSuffix?: string;
+  /** Wrap assistant-turn messages */
+  assistantPrefix?: string;
+  assistantSuffix?: string;
+  /** Prefix for the reply we're asking the model to generate */
+  responsePrefix?: string;
+  /** Reasoning block extraction and reconstruction (text-completion mode only) */
+  reasoning?: {
+    /** Regex pattern with two capture groups: (1) thinking block, (2) content */
+    pattern: string;
+    /** Opening delimiter (for reconstruction) */
+    prefix: string;
+    /** Closing delimiter (for reconstruction and stripping) */
+    suffix: string;
+    /** Separator between reasoning block and content (for reconstruction) */
+    separator: string;
+  };
+}
+
+const BUILTIN_TEMPLATES: Map<string, InstructTemplate> = new Map([
+  [
+    'none',
+    {
+      name: 'None (plain)',
+      separator: '\n\n',
+    },
+  ],
+  [
+    'alpaca',
+    {
+      name: 'Alpaca',
+      separator: '\n\n',
+      systemPrefix: '',
+      systemSuffix: '',
+      userPrefix: '### Instruction:\n',
+      userSuffix: '',
+      assistantPrefix: '### Response:\n',
+      assistantSuffix: '',
+      responsePrefix: '### Response:\n',
+    },
+  ],
+  [
+    'chatml',
+    {
+      name: 'ChatML',
+      separator: '',
+      systemPrefix: '<|im_start|>system\n',
+      systemSuffix: '<|im_end|>\n',
+      userPrefix: '<|im_start|>user\n',
+      userSuffix: '<|im_end|>\n',
+      assistantPrefix: '<|im_start|>assistant\n',
+      assistantSuffix: '<|im_end|>\n',
+      responsePrefix: '<|im_start|>assistant\n',
+    },
+  ],
+  [
+    'llama2',
+    {
+      name: 'Llama 2',
+      bos: '<s>',
+      separator: ' ',
+      systemPrefix: '[INST] <<SYS>>\n',
+      systemSuffix: '\n<</SYS>> [/INST]',
+      userPrefix: '[INST] ',
+      userSuffix: ' [/INST]',
+      assistantPrefix: ' ',
+      assistantSuffix: ' ',
+      responsePrefix: ' ',
+    },
+  ],
+  [
+    'llama3',
+    {
+      name: 'Llama 3',
+      bos: '<|begin_of_text|>',
+      separator: '',
+      systemPrefix: '<|start_header_id|>system<|end_header_id|>\n\n',
+      systemSuffix: '<|eot_id|>',
+      userPrefix: '<|start_header_id|>user<|end_header_id|>\n\n',
+      userSuffix: '<|eot_id|>',
+      assistantPrefix: '<|start_header_id|>assistant<|end_header_id|>\n\n',
+      assistantSuffix: '<|eot_id|>',
+      responsePrefix: '<|start_header_id|>assistant<|end_header_id|>\n\n',
+    },
+  ],
+  // Mistral v0.1 (legacy key kept for backwards compatibility)
+  [
+    'mistral',
+    {
+      name: 'Mistral',
+      bos: '<s>',
+      separator: '',
+      systemPrefix: ' [INST] ',
+      systemSuffix: '\n\n',
+      userPrefix: '',
+      userSuffix: ' [/INST]',
+      assistantPrefix: ' ',
+      assistantSuffix: '',
+      responsePrefix: ' ',
+      eos: '</s>',
+    },
+  ],
+  [
+    'mistral-v0.1',
+    {
+      name: 'Mistral v0.1',
+      bos: '<s>',
+      separator: '',
+      systemPrefix: ' [INST] ',
+      systemSuffix: '\n\n',
+      userPrefix: '',
+      userSuffix: ' [/INST]',
+      assistantPrefix: ' ',
+      assistantSuffix: '',
+      responsePrefix: ' ',
+      eos: '</s>',
+    },
+  ],
+  [
+    'mistral-v0.3',
+    {
+      name: 'Mistral v0.3',
+      bos: '<s>',
+      separator: '',
+      systemPrefix: '[INST] ',
+      systemSuffix: '\n\n',
+      userPrefix: '',
+      userSuffix: '[/INST]',
+      assistantPrefix: ' ',
+      assistantSuffix: '',
+      responsePrefix: ' ',
+      eos: '</s>',
+    },
+  ],
+  [
+    'mistral-nemo',
+    {
+      name: 'Mistral Nemo',
+      bos: '<s>',
+      separator: '',
+      systemPrefix: '[INST]',
+      systemSuffix: '\n\n',
+      userPrefix: '',
+      userSuffix: '[/INST]',
+      assistantPrefix: '',
+      assistantSuffix: '',
+      responsePrefix: '',
+      eos: '</s>',
+    },
+  ],
+  [
+    'mistral-large-2411',
+    {
+      name: 'Mistral Large 2411',
+      bos: '<s>',
+      separator: '',
+      systemPrefix: '[SYSTEM_PROMPT] ',
+      systemSuffix: '[/SYSTEM_PROMPT]',
+      userPrefix: '[INST] ',
+      userSuffix: '[/INST]',
+      assistantPrefix: ' ',
+      assistantSuffix: '',
+      responsePrefix: ' ',
+      eos: '</s>',
+    },
+  ],
+  // Mistral v3 family (Small 24B/3.1/3.2, Medium 3.5, Large 3, Ministral 3, Devstral 2)
+  [
+    'kimi-k2.6',
+    {
+      name: 'Kimi K2.6',
+      separator: '',
+      systemPrefix: '<|im_system|>system<|im_middle|>',
+      systemSuffix: '<|im_end|>',
+      userPrefix: '<|im_user|>user<|im_middle|>',
+      userSuffix: '<|im_end|>',
+      assistantPrefix: '<|im_assistant|>assistant<|im_middle|>',
+      assistantSuffix: '<|im_end|>',
+      responsePrefix: '<|im_assistant|>assistant<|im_middle|><think></think>',
+    },
+  ],
+  [
+    'kimi-k2.6-thinking',
+    {
+      name: 'Kimi K2.6 (Thinking)',
+      separator: '',
+      systemPrefix: '<|im_system|>system<|im_middle|>',
+      systemSuffix: '<|im_end|>',
+      userPrefix: '<|im_user|>user<|im_middle|>',
+      userSuffix: '<|im_end|>',
+      assistantPrefix: '<|im_assistant|>assistant<|im_middle|>',
+      assistantSuffix: '<|im_end|>',
+      responsePrefix: '<|im_assistant|>assistant<|im_middle|><think>',
+      reasoning: {
+        pattern: '(.*?<\\/think>\\s*)?(.*)',
+        prefix: '<think>',
+        suffix: '</think>',
+        separator: '',
+      },
+    },
+  ],
+  // Z.ai GLM 5.1
+  [
+    'glm-5.1',
+    {
+      name: 'GLM 5.1',
+      bos: '[gMASK]<sop>',
+      separator: '',
+      systemPrefix: '<|system|>\n',
+      systemSuffix: '',
+      userPrefix: '<|user|>\n',
+      userSuffix: '',
+      assistantPrefix: '<|assistant|>\n',
+      assistantSuffix: '',
+      responsePrefix: '<|assistant|></think>',
+    },
+  ],
+  [
+    'glm-5.1-thinking',
+    {
+      name: 'GLM 5.1 (Thinking)',
+      bos: '[gMASK]<sop>',
+      separator: '',
+      systemPrefix: '<|system|>\n',
+      systemSuffix: '',
+      userPrefix: '<|user|>\n',
+      userSuffix: '',
+      assistantPrefix: '<|assistant|>\n',
+      assistantSuffix: '',
+      responsePrefix: '<|assistant|><think>',
+      reasoning: {
+        pattern: '(.*?<\\/think>\\s*)?(.*)',
+        prefix: '<think>',
+        suffix: '</think>',
+        separator: '',
+      },
+    },
+  ],
+  // DeepSeek V4 Pro
+  [
+    'deepseek-v4-pro',
+    {
+      name: 'DeepSeek V4 Pro',
+      bos: '<｜begin▁of▁sentence｜>',
+      separator: '',
+      systemPrefix: '',
+      systemSuffix: '',
+      userPrefix: '<｜User｜>',
+      userSuffix: '',
+      assistantPrefix: '<｜Assistant｜>',
+      assistantSuffix: '<｜end▁of▁sentence｜>',
+      responsePrefix: '<｜Assistant｜></think>',
+    },
+  ],
+  [
+    'deepseek-v4-pro-thinking',
+    {
+      name: 'DeepSeek V4 Pro (Thinking)',
+      bos: '<｜begin▁of▁sentence｜>',
+      separator: '',
+      systemPrefix: '',
+      systemSuffix: '',
+      userPrefix: '<｜User｜>',
+      userSuffix: '',
+      assistantPrefix: '<｜Assistant｜>',
+      assistantSuffix: '<｜end▁of▁sentence｜>',
+      responsePrefix: '<｜Assistant｜><think>',
+      reasoning: {
+        pattern: '(.*?<\\/think>\\s*)?(.*)',
+        prefix: '<think>',
+        suffix: '</think>',
+        separator: '',
+      },
+    },
+  ],
+  // Meta Llama 4
+  [
+    'llama4',
+    {
+      name: 'Llama 4',
+      bos: '<|begin_of_text|>',
+      separator: '',
+      systemPrefix: '<|header_start|>system<|header_end|>\n\n',
+      systemSuffix: '<|eot|>',
+      userPrefix: '<|header_start|>user<|header_end|>\n\n',
+      userSuffix: '<|eot|>',
+      assistantPrefix: '<|header_start|>assistant<|header_end|>\n\n',
+      assistantSuffix: '<|eot|>',
+      responsePrefix: '<|header_start|>assistant<|header_end|>\n\n',
+    },
+  ],
+  // Google Gemma 4
+  [
+    'gemma4',
+    {
+      name: 'Gemma 4',
+      bos: '<bos>',
+      separator: '',
+      systemPrefix: '<|turn|>system\n',
+      systemSuffix: '<turn|>\n',
+      userPrefix: '<|turn|>user\n',
+      userSuffix: '<turn|>\n',
+      assistantPrefix: '<|turn|>model\n',
+      assistantSuffix: '<turn|>\n',
+      responsePrefix: '<|turn|>model\n',
+    },
+  ],
+  [
+    'gemma4-thinking',
+    {
+      name: 'Gemma 4 (Thinking)',
+      bos: '<bos>',
+      separator: '',
+      systemPrefix: '<|turn|>system\n',
+      systemSuffix: '<turn|>\n',
+      userPrefix: '<|turn|>user\n',
+      userSuffix: '<turn|>\n',
+      assistantPrefix: '<|turn|>model\n',
+      assistantSuffix: '<turn|>\n',
+      responsePrefix: '<|turn|>model\n<|channel|>thought\n',
+      reasoning: {
+        pattern: '(.*?)<channel\\|>\\s*(.*)',
+        prefix: '<|channel|>thought\n',
+        suffix: '\n<channel|>',
+        separator: '',
+      },
+    },
+  ],
+  // Mistral v3 family (Large 3, Ministral 3, Devstral 2, Small 3.2, Small 4, Medium 4)
+  [
+    'mistral-v3',
+    {
+      name: 'Mistral v3',
+      bos: '<s>',
+      separator: '',
+      systemPrefix: '[SYSTEM_PROMPT]',
+      systemSuffix: '[/SYSTEM_PROMPT]',
+      userPrefix: '[INST]',
+      userSuffix: '[/INST]',
+      assistantPrefix: '',
+      assistantSuffix: '</s>',
+      responsePrefix: '',
+    },
+  ],
+  [
+    'mistral-v3-thinking',
+    {
+      name: 'Mistral v3 (Thinking)',
+      bos: '<s>',
+      separator: '',
+      systemPrefix: '[SYSTEM_PROMPT]',
+      systemSuffix: '[/SYSTEM_PROMPT]',
+      userPrefix: '[INST]',
+      userSuffix: '[/INST]',
+      assistantPrefix: '',
+      assistantSuffix: '</s>',
+      responsePrefix: '[THINK]',
+      reasoning: {
+        pattern: '(.*?\\[/THINK\\]\\s*)?(.*)',
+        prefix: '[THINK]',
+        suffix: '[/THINK]',
+        separator: '',
+      },
+    },
+  ],
+  // NVIDIA Nemotron 3
+  [
+    'nemotron-3',
+    {
+      name: 'NVIDIA Nemotron 3',
+      separator: '',
+      systemPrefix: '<|im_start|>system\n',
+      systemSuffix: '<|im_end|>\n',
+      userPrefix: '<|im_start|>user\n',
+      userSuffix: '<|im_end|>\n',
+      assistantPrefix: '<|im_start|>assistant\n',
+      assistantSuffix: '<|im_end|>\n',
+      responsePrefix: '<|im_start|>assistant\n<think></think>',
+    },
+  ],
+  [
+    'nemotron-3-thinking',
+    {
+      name: 'NVIDIA Nemotron 3 (Thinking)',
+      separator: '',
+      systemPrefix: '<|im_start|>system\n',
+      systemSuffix: '<|im_end|>\n',
+      userPrefix: '<|im_start|>user\n',
+      userSuffix: '<|im_end|>\n',
+      assistantPrefix: '<|im_start|>assistant\n',
+      assistantSuffix: '<|im_end|>\n',
+      responsePrefix: '<|im_start|>assistant\n<think>\n',
+      reasoning: {
+        pattern: '(.*?<\\/think>\\s*)?(.*)',
+        prefix: '<think>\n',
+        suffix: '</think>',
+        separator: '\n',
+      },
+    },
+  ],
+  // Qwen 3 (ChatML, optional thinking)
+  [
+    'qwen3',
+    {
+      name: 'Qwen 3',
+      separator: '',
+      systemPrefix: '<|im_start|>system\n',
+      systemSuffix: '<|im_end|>\n',
+      userPrefix: '<|im_start|>user\n',
+      userSuffix: '<|im_end|>\n',
+      assistantPrefix: '<|im_start|>assistant\n',
+      assistantSuffix: '<|im_end|>\n',
+      responsePrefix: '<|im_start|>assistant\n<think>\n\n</think>\n\n',
+    },
+  ],
+  [
+    'qwen3-thinking',
+    {
+      name: 'Qwen 3 (Thinking)',
+      separator: '',
+      systemPrefix: '<|im_start|>system\n',
+      systemSuffix: '<|im_end|>\n',
+      userPrefix: '<|im_start|>user\n',
+      userSuffix: '<|im_end|>\n',
+      assistantPrefix: '<|im_start|>assistant\n',
+      assistantSuffix: '<|im_end|>\n',
+      responsePrefix: '<|im_start|>assistant\n<think>\n',
+      reasoning: {
+        pattern: '(.*?<\\/think>\\s*)?(.*)',
+        prefix: '<think>\n',
+        suffix: '</think>',
+        separator: '\n\n',
+      },
+    },
+  ],
+  // Qwen 3.5 / 3.6 (ChatML + vision tokens)
+  [
+    'qwen3.5',
+    {
+      name: 'Qwen 3.5 / 3.6',
+      separator: '',
+      systemPrefix: '<|im_start|>system\n',
+      systemSuffix: '<|im_end|>\n',
+      userPrefix: '<|im_start|>user\n',
+      userSuffix: '<|im_end|>\n',
+      assistantPrefix: '<|im_start|>assistant\n',
+      assistantSuffix: '<|im_end|>\n',
+      responsePrefix: '<|im_start|>assistant\n<think>\n\n</think>\n\n',
+    },
+  ],
+  [
+    'qwen3.5-thinking',
+    {
+      name: 'Qwen 3.5 / 3.6 (Thinking)',
+      separator: '',
+      systemPrefix: '<|im_start|>system\n',
+      systemSuffix: '<|im_end|>\n',
+      userPrefix: '<|im_start|>user\n',
+      userSuffix: '<|im_end|>\n',
+      assistantPrefix: '<|im_start|>assistant\n',
+      assistantSuffix: '<|im_end|>\n',
+      responsePrefix: '<|im_start|>assistant\n<think>\n',
+      reasoning: {
+        pattern: '(.*?<\\/think>\\s*)?(.*)',
+        prefix: '<think>\n',
+        suffix: '</think>',
+        separator: '\n\n',
+      },
+    },
+  ],
+  // Microsoft Phi-4 Mini
+  [
+    'phi-4-mini',
+    {
+      name: 'Phi-4 Mini',
+      bos: '<|endoftext|>',
+      separator: '',
+      systemPrefix: '<|system|>\n',
+      systemSuffix: '<|end|>\n',
+      userPrefix: '<|user|>\n',
+      userSuffix: '<|end|>\n',
+      assistantPrefix: '<|assistant|>\n',
+      assistantSuffix: '<|end|>\n',
+      responsePrefix: '<|assistant|>\n',
+    },
+  ],
+  // Microsoft Phi-4 Reasoning Plus
+  [
+    'phi-4-reasoning-plus',
+    {
+      name: 'Phi-4 Reasoning Plus',
+      bos: '<|endoftext|>',
+      separator: '',
+      systemPrefix: '<|im_start|>system<|im_sep|>',
+      systemSuffix: '<|im_end|>',
+      userPrefix: '<|im_start|>user<|im_sep|>',
+      userSuffix: '<|im_end|>',
+      assistantPrefix: '<|im_start|>assistant<|im_sep|>',
+      assistantSuffix: '<|im_end|>',
+      responsePrefix: '<|im_start|>assistant<|im_sep|><think>\n',
+      reasoning: {
+        pattern: '(.*?<\\/think>\\s*)?(.*)',
+        prefix: '<think>\n',
+        suffix: '</think>',
+        separator: '\n',
+      },
+    },
+  ],
+  // IBM Granite 4.0 / 4.1
+  [
+    'granite-4.0',
+    {
+      name: 'IBM Granite 4.0 / 4.1',
+      separator: '',
+      systemPrefix: '<|start_of_role|>system<|end_of_role|>',
+      systemSuffix: '<|end_of_text|>',
+      userPrefix: '<|start_of_role|>user<|end_of_role|>',
+      userSuffix: '<|end_of_text|>',
+      assistantPrefix: '<|start_of_role|>assistant<|end_of_role|>',
+      assistantSuffix: '<|end_of_text|>',
+      responsePrefix: '<|start_of_role|>assistant<|end_of_role|>',
+    },
+  ],
+  // MiniMax Text-01
+  [
+    'minimax-text-01',
+    {
+      name: 'MiniMax Text-01',
+      separator: '',
+      systemPrefix: '<beginning_of_sentence>system ai_setting=assistant\n',
+      systemSuffix: '<end_of_sentence>\n',
+      userPrefix: '<beginning_of_sentence>user name=user\n',
+      userSuffix: '<end_of_sentence>\n',
+      assistantPrefix: '<beginning_of_sentence>ai name=assistant\n',
+      assistantSuffix: '<end_of_sentence>\n',
+      responsePrefix: '<beginning_of_sentence>ai name=assistant\n',
+    },
+  ],
+
+]);
+
+function fallbackTemplate(): InstructTemplate {
+  const t = BUILTIN_TEMPLATES.get('none');
+  if (!t) throw new Error('Builtin instruct template "none" is missing');
+  return t;
+}
+
+export function getInstructTemplate(
+  name?: string,
+  custom?: Map<string, InstructTemplate> | Record<string, InstructTemplate>,
+): InstructTemplate {
+  if (!name) return fallbackTemplate();
+  if (custom) {
+    const lookup = custom instanceof Map ? custom.get(name) : custom[name];
+    if (lookup) return lookup;
+  }
+  return BUILTIN_TEMPLATES.get(name) ?? fallbackTemplate();
+}
+
+

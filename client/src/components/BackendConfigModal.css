@@ -1,0 +1,93 @@
+/* Advanced-sampling collapsible section. Native <details> keeps it accessible
+   with zero JS; this just styles the disclosure marker with design tokens. */
+
+.advanced-sampling > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.advanced-sampling > summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-sampling > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: var(--space-xs);
+  transition: transform var(--transition-fast);
+}
+
+.advanced-sampling[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+/* Sampler knobs as a compound "input-group": a prepend add-on (the enable
+   checkbox) flush against the value input, so enable + value read as one
+   control. The add-on doubles as a send-state indicator — accent-tinted when
+   the sampler is on, neutral when off — so a column of knobs is scannable. */
+
+.sampler-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.sampler-input-group {
+  display: flex;
+  align-items: stretch;
+}
+
+/* Prepend add-on: holds the enable checkbox. Neutral by default. */
+.sampler-input-group .sampler-input-addon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  padding-inline: var(--space-sm);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-right: none;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+/* Enabled sampler: the add-on glows softly with accent — the scanning signature. */
+.sampler-input-group .sampler-input-addon:has(input:checked) {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent-border);
+}
+
+/* Value control flush against the add-on: drop the left edge + round only the
+   right corners so the two read as one piece. */
+.sampler-input-group .input {
+  border-left: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+/* Checkbox-type value slot (e.g. Dynamic Temperature): an input-styled box that
+   holds the value checkbox + its label, filling the right side of the group. */
+.sampler-input-group .sampler-input-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1;
+  padding-inline: var(--space-md);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  cursor: pointer;
+}
+
+/* Focus cohesion: typing into the value control also lights the add-on edge. */
+.sampler-input-group:focus-within .sampler-input-addon {
+  border-color: var(--color-accent-border);
+}
+
+/* Disabled sampler: mute the whole compound control. */
+.sampler-input-group:has(.sampler-value-input:disabled) {
+  opacity: 0.5;
+}
