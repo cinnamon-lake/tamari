@@ -4,7 +4,7 @@ tamari is a single-user LLM frontend for character chat — a ground-up rewrite 
 
 ## Install & Run
 
-tamari requires **Node.js 20 or newer** (the Docker image uses Node 22).
+tamari requires **Node.js 24 or newer** (the Docker image also uses Node 24).
 
 ### From source
 
