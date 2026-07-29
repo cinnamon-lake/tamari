@@ -529,7 +529,7 @@ describe('ChatView', () => {
       expect(document.querySelector('.message-content')).toBeInTheDocument();
     });
 
-    it('clicking a data-post-response button sends the response then generates', () => {
+    it('clicking a data-post-response button sends the response then generates', async () => {
       const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
       setActiveChatId('chat-1');
       setState('settings', {} as any);
@@ -546,7 +546,10 @@ describe('ChatView', () => {
       expect(button).toBeInTheDocument();
       fireEvent.click(button);
 
-      expect(sendSpy).toHaveBeenCalledWith({ type: 'action.sendAndGenerate', chatId: 'chat-1', content: 'attack' });
+      // The chat is already materialized, so the send fires after a microtask.
+      await vi.waitFor(() => {
+        expect(sendSpy).toHaveBeenCalledWith({ type: 'action.sendAndGenerate', chatId: 'chat-1', content: 'attack' });
+      });
       // click-to-edit must not fire for button clicks
       expect(document.querySelector('.message-edit')).not.toBeInTheDocument();
     });
@@ -568,7 +571,7 @@ describe('ChatView', () => {
       expect(sendSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'action.send' }));
     });
 
-    it('submitting a data-post-response form posts fenced XML then generates', () => {
+    it('submitting a data-post-response form posts fenced XML then generates', async () => {
       const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
       setActiveChatId('chat-1');
       setState('settings', {} as any);
@@ -600,7 +603,9 @@ describe('ChatView', () => {
         '  <flourish>from &lt;the&gt; shadows</flourish>\n' +
         '</action>\n' +
         '```';
-      expect(sendSpy).toHaveBeenCalledWith({ type: 'action.sendAndGenerate', chatId: 'chat-1', content: expected });
+      await vi.waitFor(() => {
+        expect(sendSpy).toHaveBeenCalledWith({ type: 'action.sendAndGenerate', chatId: 'chat-1', content: expected });
+      });
       // click-to-edit must not fire for form interaction
       expect(document.querySelector('.message-edit')).not.toBeInTheDocument();
     });
@@ -642,11 +647,18 @@ describe('ChatView', () => {
       expect(sendSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'action.send' }));
     });
 
-    it('clicking a data-post-response button in the virtual greeting posts and generates', () => {
+    it('clicking a data-post-response button in the virtual greeting materializes, then posts and generates', async () => {
       // The virtual greeting bubble is read-only, but read-only gates editing,
-      // not the button protocol — first_mes is where cards put their menus,
-      // and the posted message is what materializes the chat server-side.
+      // not the button protocol — first_mes is where cards put their menus.
+      // The click first sends chat.materialize (turning the greeting into real
+      // DB messages) and only then posts the response.
       const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
+      const handlers = new Map<string, Set<(m: unknown) => void>>();
+      vi.spyOn(bus, 'on').mockImplementation((event: any, handler: any) => {
+        if (!handlers.has(event)) handlers.set(event, new Set());
+        handlers.get(event)!.add(handler);
+        return () => handlers.get(event)!.delete(handler);
+      });
       setActiveChatId('chat-greeting');
       setState('settings', {} as any);
       setState('activeChat', makeChat({ id: 'chat-greeting', materialized: false }));
@@ -668,13 +680,26 @@ describe('ChatView', () => {
       expect(button).toBeInTheDocument();
       fireEvent.click(button);
 
-      expect(sendSpy).toHaveBeenCalledWith({ type: 'action.sendAndGenerate', chatId: 'chat-greeting', content: 'lumia_pick_0' });
+      // Materialization is requested first…
+      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat.materialize', chatId: 'chat-greeting' }));
+      expect(sendSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'action.sendAndGenerate' }));
+      // …and the response is posted once the server answers with a snapshot.
+      (handlers.get('chat.snapshot') ?? new Set()).forEach((h) => h({ chat: { id: 'chat-greeting' } }));
+      await vi.waitFor(() => {
+        expect(sendSpy).toHaveBeenCalledWith({ type: 'action.sendAndGenerate', chatId: 'chat-greeting', content: 'lumia_pick_0' });
+      });
       // click-to-edit must stay gated off in the read-only greeting
       expect(document.querySelector('.message-edit')).not.toBeInTheDocument();
     });
 
-    it('submitting a data-post-response form in the virtual greeting posts and generates', () => {
+    it('submitting a data-post-response form in the virtual greeting materializes, then posts and generates', async () => {
       const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
+      const handlers = new Map<string, Set<(m: unknown) => void>>();
+      vi.spyOn(bus, 'on').mockImplementation((event: any, handler: any) => {
+        if (!handlers.has(event)) handlers.set(event, new Set());
+        handlers.get(event)!.add(handler);
+        return () => handlers.get(event)!.delete(handler);
+      });
       setActiveChatId('chat-greeting');
       setState('settings', {} as any);
       setState('activeChat', makeChat({ id: 'chat-greeting', materialized: false }));
@@ -700,6 +725,9 @@ describe('ChatView', () => {
       expect(form).toBeInTheDocument();
       fireEvent.submit(form);
 
+      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat.materialize', chatId: 'chat-greeting' }));
+      (handlers.get('chat.snapshot') ?? new Set()).forEach((h) => h({ chat: { id: 'chat-greeting' } }));
+
       const expected =
         '```xml\n' +
         '<lumia_start>\n' +
@@ -707,7 +735,9 @@ describe('ChatView', () => {
         '  <scenario>0</scenario>\n' +
         '</lumia_start>\n' +
         '```';
-      expect(sendSpy).toHaveBeenCalledWith({ type: 'action.sendAndGenerate', chatId: 'chat-greeting', content: expected });
+      await vi.waitFor(() => {
+        expect(sendSpy).toHaveBeenCalledWith({ type: 'action.sendAndGenerate', chatId: 'chat-greeting', content: expected });
+      });
     });
   });
 });

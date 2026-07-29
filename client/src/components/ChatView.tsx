@@ -2,6 +2,7 @@ import { Show, For, Switch, Match, createSignal, createEffect, createMemo, onCle
 import { Portal } from 'solid-js/web';
 import { onEnterActivate, trapFocus } from '../lib/focusUtils.js';
 import { serializeResponseForm } from '../lib/responseForm.js';
+import { materializeChat } from '../lib/materializeChat.js';
 import type { JSX } from 'solid-js';
 import { state } from '../stores/serverStore.js';
 import {
@@ -1068,16 +1069,19 @@ function MessageBubble(props: {
         // attribute value as the user's next message, then generates — the
         // chat log is the IPC channel (honest text, principle 3).
         // Buttons stay live in the read-only virtual greeting: readOnly there
-        // only gates editing, and the posted message is what materializes the
-        // chat server-side (StApi.sendMessage) — first_mes is exactly where
-        // cards put their menus.
+        // only gates editing, and first_mes is exactly where cards put their
+        // menus. The greeting is materialized first (chat.materialize, same as
+        // MessageInput.send) — otherwise the posted message would land in an
+        // unmaterialized chat and the greeting would never reach the DB.
         const postButton = target.closest('button[data-post-response]');
         if (postButton) {
           e.stopPropagation();
           const content = postButton.getAttribute('data-post-response') ?? '';
           const chatId = activeChatId();
           if (!content || !chatId) return;
-          bus.send({ type: 'action.sendAndGenerate', chatId, content });
+          void materializeChat(chatId).then(() => {
+            bus.send({ type: 'action.sendAndGenerate', chatId, content });
+          });
           return;
         }
         if (target.tagName === 'IMG') {
@@ -1097,14 +1101,17 @@ function MessageBubble(props: {
         // channel, same honesty as the button protocol. Forms in messages are
         // decorative, so navigation is prevented unconditionally; only marked
         // forms post anything. Like buttons, forms stay submittable in the
-        // read-only virtual greeting — the submit materializes the chat.
+        // read-only virtual greeting; the greeting is materialized first, same
+        // as the button path above.
         e.preventDefault();
         const form = e.target as HTMLFormElement;
         if (!form.hasAttribute('data-post-response')) return;
         const content = serializeResponseForm(form);
         const chatId = activeChatId();
         if (!content || !chatId) return;
-        bus.send({ type: 'action.sendAndGenerate', chatId, content });
+        void materializeChat(chatId).then(() => {
+          bus.send({ type: 'action.sendAndGenerate', chatId, content });
+        });
       }}
       onSwipeLeft={isSwipeable() ? () => handleSwipe('left') : undefined}
       onSwipeRight={isSwipeable() ? () => handleSwipe('right') : undefined}
