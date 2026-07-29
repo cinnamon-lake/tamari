@@ -14,7 +14,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.49.0",
-    "@types/node": "^20.0.0",
+    "@types/node": "^24.0.0",
     "monocart-reporter": "^2.12.2"
   }
 }

@@ -9,7 +9,7 @@
     "url": "https://github.com/cinnamon-lake/tamari.git"
   },
   "engines": {
-    "node": ">= 20"
+    "node": ">= 24"
   },
   "overrides": {
     "uuid": "^14.0.0",
