@@ -5,7 +5,6 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TestHarness, type TestClient } from '../testing/TestHarness.js';
-import type { CustomBackendTestOutcome } from '@tamari/types';
 
 const ECHO_LUA = 'function generate(prompt, ctx) return "echo:" .. prompt.messages[#prompt.messages].content end';
 
@@ -35,7 +34,7 @@ describe('custombackend.test handler', () => {
     const result = lastTestResult();
     expect(result).toBeDefined();
     expect(result!.requestId).toBe('req-1');
-    const outcome = result!.outcome as CustomBackendTestOutcome;
+    const outcome = result!.outcome;
     expect(outcome.ok).toBe(true);
     expect(outcome.text).toBe('echo:hello');
     expect(outcome.delegations).toHaveLength(0);
@@ -48,7 +47,7 @@ describe('custombackend.test handler', () => {
       input: 'hi',
       delegateResponse: 'CANNED',
     } as never);
-    const outcome = lastTestResult()!.outcome as CustomBackendTestOutcome;
+    const outcome = lastTestResult()!.outcome;
     expect(outcome.text).toBe('writer said: CANNED');
     expect(outcome.delegations).toHaveLength(1);
     expect(outcome.delegations[0]!.promptPreview).toContain('user: hi');
@@ -61,7 +60,7 @@ describe('custombackend.test handler', () => {
       luaSource: ECHO_LUA,
     });
     await h.send(client, { type: 'custombackend.test', customBackendId: item.id, input: 'stored' } as never);
-    const outcome = lastTestResult()!.outcome as CustomBackendTestOutcome;
+    const outcome = lastTestResult()!.outcome;
     expect(outcome.ok).toBe(true);
     expect(outcome.text).toBe('echo:stored');
   });
@@ -81,7 +80,7 @@ describe('custombackend.test handler', () => {
       },
     });
     await h.send(client, { type: 'custombackend.test', characterId: character.id, input: 'hit' } as never);
-    const outcome = lastTestResult()!.outcome as CustomBackendTestOutcome;
+    const outcome = lastTestResult()!.outcome;
     expect(outcome.ok).toBe(true);
     expect(outcome.text).toBe(`sys:A blackjack table. char:${character.id}`);
   });
@@ -97,7 +96,7 @@ describe('custombackend.test handler', () => {
       luaSource: 'function generate(p, c) return "adhoc" end',
       input: 'x',
     } as never);
-    const outcome = lastTestResult()!.outcome as CustomBackendTestOutcome;
+    const outcome = lastTestResult()!.outcome;
     expect(outcome.text).toBe('adhoc');
   });
 

@@ -114,7 +114,7 @@ export interface DefaultConfigs {
 }
 
 export function loadDefaultConfigs(): DefaultConfigs[] {
-  let files: string[] = [];
+  let files: string[];
   try {
     files = readdirSync(PRESETS_DIR).filter((f) => f.endsWith('.json'));
   } catch {

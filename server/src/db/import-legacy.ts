@@ -585,11 +585,10 @@ export async function importLegacyData(
 
     // ---------- Settings ----------
     const settingsPath = join(basePath, 'settings.json');
-    let legacySettings: LegacySettings = {};
     if (existsSync(settingsPath)) {
       try {
         const raw = readFileSync(settingsPath, 'utf-8');
-        legacySettings = JSON.parse(raw) as LegacySettings;
+        const legacySettings = JSON.parse(raw) as LegacySettings;
         const blob = JSON.stringify(legacySettings);
         await client.execute({
           sql: `INSERT INTO settings (id, blob, updated_at) VALUES (?, ?, ?)

@@ -7,7 +7,7 @@
     "build": "tsc && rm -rf dist/db/migrations && mkdir -p dist/db && cp -r src/db/migrations dist/db/",
     "dev": "tsx watch src/main.ts",
     "start": "node dist/main.js",
-    "lint": "eslint src --ext .ts",
+    "lint": "eslint src",
     "test": "vitest run",
     "format": "prettier --write \"src/**/*.ts\""
   },

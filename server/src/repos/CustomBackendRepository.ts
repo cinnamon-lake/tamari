@@ -50,7 +50,7 @@ export class CustomBackendRepository implements ICustomBackendRepository {
     await this.client.execute({
       sql: `INSERT INTO custom_backends (id, name, description, lua_source, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [id, data.name, data.description ?? '', data.luaSource ?? '', now, now],
+      args: [id, data.name, data.description, data.luaSource, now, now],
     });
     const created = await this.getById(id);
     if (!created) throw new Error(`Failed to retrieve created custom backend: ${id}`);

@@ -88,7 +88,7 @@ export async function luaFetch(url: string, opts?: LuaFetchOptions): Promise<Lua
     };
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error(`fetch: request timed out after ${FETCH_TIMEOUT_MS}ms`);
+      throw new Error(`fetch: request timed out after ${FETCH_TIMEOUT_MS}ms`, { cause: err });
     }
     throw err;
   } finally {

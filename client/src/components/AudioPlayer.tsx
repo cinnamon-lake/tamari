@@ -108,7 +108,7 @@ export const AudioPlayer: Component<AudioPlayerProps> = (props) => {
     if (!Number.isFinite(dur) || dur <= 0) return;
     const step = dur * 0.05;
     const bigStep = dur * 0.2;
-    let target: number | null = null;
+    let target: number;
     switch (e.key) {
       case 'ArrowLeft':
       case 'ArrowDown':

@@ -47,6 +47,7 @@ import type {
   ToolCall,
 } from './BackendAdapter.js';
 import { consumeStream } from './BackendAdapter.js';
+import { str } from '../lib/coerce.js';
 import { getLogger } from '../lib/logger.js';
 
 const log = getLogger('lua-backend');
@@ -143,7 +144,7 @@ export function toLuaLiteral(value: unknown): string {
   if (typeof value === 'string') {
     return (
       '"' +
-      value.replace(/[\\\"\n\r]/g, (ch) => {
+      value.replace(/[\\"\n\r]/g, (ch) => {
         switch (ch) {
           case '\\': return '\\\\';
           case '"': return '\\"';
@@ -268,11 +269,11 @@ export class LuaBackendAdapter implements BackendAdapter {
       const captureScriptState = async (): Promise<string | undefined> => {
         try {
           if (typeof lua.global.get('serialize') === 'function') {
-            const raw = await lua.doString('return serialize()');
+            const raw: unknown = await lua.doString('return serialize()');
             return typeof raw === 'string' ? raw : jsonEncodeFallback(raw);
           }
           if (lua.global.get('state') !== undefined && lua.global.get('state') !== null) {
-            const encoded = await lua.doString('return json.encode(state)');
+            const encoded: unknown = await lua.doString('return json.encode(state)');
             return typeof encoded === 'string' ? encoded : undefined;
           }
           return undefined;
@@ -381,7 +382,7 @@ export class LuaBackendAdapter implements BackendAdapter {
       if (!Array.isArray(raw)) return [];
       return raw
         .filter((m): m is Record<string, unknown> => !!m && typeof m === 'object')
-        .map((m) => ({ id: String(m['id'] ?? ''), name: String(m['name'] ?? m['id'] ?? '') }))
+        .map((m) => ({ id: str(m['id']), name: str(m['name'] ?? m['id']) }))
         .filter((m) => m.id.length > 0);
     } catch (err) {
       log.warn({ err, backend: this.name }, 'custom backend list_models failed');

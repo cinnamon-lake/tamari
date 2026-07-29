@@ -119,7 +119,7 @@ export function parseCharX(buffer: Buffer): CharXParseResult {
   try {
     files = unzipSync(zipData, { filter: (file) => !file.name.endsWith('/') });
   } catch (err) {
-    throw new Error(`Failed to parse ZIP: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(`Failed to parse ZIP: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
   }
 
   // Find card.json (case-insensitive)

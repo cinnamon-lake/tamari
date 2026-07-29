@@ -141,10 +141,13 @@ export function parseRisum(
 
   let main: { type?: unknown; module?: unknown };
   try {
-    main = JSON.parse(mainRaw.toString('utf-8'));
+    main = JSON.parse(mainRaw.toString('utf-8')) as { type?: unknown; module?: unknown };
   } catch {
     throw new RisumParseError('Corrupt .risum: main block is not valid JSON after RPack decode');
   }
+  // `main` is unvalidated JSON.parse output — it can be `null` at runtime
+  // despite the declared type, so the optional chain is load-bearing.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (main?.type !== 'risuModule' || !main.module || typeof main.module !== 'object') {
     throw new RisumParseError('Not a RisuAI module: main block is not tagged type="risuModule"');
   }

@@ -36,10 +36,10 @@ describe('BackendDryRunPanel', () => {
   beforeEach(() => {
     resultHandler = undefined;
     vi.spyOn(bus, 'send').mockImplementation(() => {});
-    vi.spyOn(bus, 'on').mockImplementation(((type: string, handler: (msg: TestResultMessage) => void) => {
+    vi.spyOn(bus, 'on').mockImplementation((type: string, handler: (msg: TestResultMessage) => void) => {
       if (type === 'custombackend.testResult') resultHandler = handler;
       return () => {};
-    }) as unknown as typeof bus.on);
+    });
   });
 
   afterEach(() => {

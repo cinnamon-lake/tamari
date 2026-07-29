@@ -233,7 +233,7 @@ describe('blackjack card (contextual backend e2e)', () => {
       name: 'blackjack',
       headMessageId: null,
       metadata: {},
-    } as never);
+    });
   });
 
   afterEach(async () => {
@@ -377,7 +377,7 @@ describe('custom backend tool calls (e2e)', () => {
         name: 'tools',
         headMessageId: null,
         metadata: {},
-      } as never);
+      });
 
       await h.deps.generationService.handleSend(chatId, 'say hi to everyone');
       await h.deps.generationService.handleGenerate(chatId);
@@ -434,7 +434,7 @@ describe('group chat with one scripted character (e2e)', () => {
         name: 'group',
         headMessageId: null,
         metadata: {},
-      } as never);
+      });
       await h.deps.chatMembers.addMember(chatId, scripted.id);
       await h.deps.chatMembers.addMember(chatId, plain.id);
 

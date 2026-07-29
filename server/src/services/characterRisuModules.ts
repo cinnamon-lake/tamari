@@ -78,6 +78,9 @@ function summarizeModule(id: string, module: RisuModuleData, source: RisuModuleM
       lorebook: Array.isArray(module.lorebook) ? module.lorebook.length : 0,
       assets: Array.isArray(module.assets) ? module.assets.length : 0,
     },
+    // Module JSON is stored/loaded via an optimistic cast (risum.ts), not
+    // validated — effect entries can be null at runtime.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     hasLua: triggers.some((t) => Array.isArray(t.effect) && t.effect.some((e) => e?.type === 'triggerlua')),
     lowLevelAccess: Boolean(module.lowLevelAccess),
   };
@@ -181,9 +184,13 @@ export function getRisuModuleSection(
         data: triggers.map((t, i) => ({
           index: i,
           type: t.type,
+          // Module JSON is an optimistic cast, not validated — `comment` and
+          // effect entries can be missing/null at runtime.
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
           comment: t.comment ?? '',
           effectCount: Array.isArray(t.effect) ? t.effect.length : 0,
           conditionCount: Array.isArray(t.conditions) ? t.conditions.length : 0,
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
           hasLua: Array.isArray(t.effect) && t.effect.some((e) => e?.type === 'triggerlua'),
         })),
       };

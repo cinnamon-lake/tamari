@@ -256,7 +256,6 @@ export class ChatBroadcastService {
       : [];
 
     // Enrich with canonical names/avatars
-    let enrichedMessage = message;
     const charIds = new Set<string>();
     const personaIds = new Set<string>();
     if (typeof message.extra.characterId === 'string') charIds.add(message.extra.characterId);
@@ -286,7 +285,7 @@ export class ChatBroadcastService {
       nextExtra.personaName = personaMeta.name;
       if (personaMeta.url) nextExtra.personaAvatarUrl = personaMeta.url;
     }
-    enrichedMessage = { ...message, extra: nextExtra };
+    const enrichedMessage = { ...message, extra: nextExtra };
 
     const html = await renderMessageHtml({
       message: enrichedMessage,

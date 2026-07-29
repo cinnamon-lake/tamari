@@ -659,7 +659,7 @@ export function createStApi(ctx: ScriptContext, deps: StApiDeps): StApi {
         const character = await createCharacter({ characters, bus }, data as Record<string, unknown>);
         return { id: character.id, name: character.name };
       } catch (err) {
-        throw new Error(`create_character: ${err instanceof Error ? err.message : String(err)}`);
+        throw new Error(`create_character: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
       }
     },
 
@@ -671,7 +671,7 @@ export function createStApi(ctx: ScriptContext, deps: StApiDeps): StApi {
       try {
         await updateCharacter({ characters, bus }, characterId, patch as Record<string, unknown>);
       } catch (err) {
-        throw new Error(`update_character: ${err instanceof Error ? err.message : String(err)}`);
+        throw new Error(`update_character: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
       }
     },
 

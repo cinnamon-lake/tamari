@@ -169,6 +169,9 @@ async function applyLuaRule(text: string, rule: RegexRule, lua: LuaEngine): Prom
     const m = regex.exec(text);
     if (!m) break;
     const replacement: unknown = await lua.doString(
+      // Unmatched optional capture groups are `undefined` at runtime even
+      // though RegExpExecArray is typed string[] — the `?? null` is real.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       `return replace(${toLuaLiteral(m[0])}, ${toLuaLiteral(m.slice(1).map((c) => c ?? null))})`,
     );
     result += text.slice(lastIndex, m.index);

@@ -65,7 +65,6 @@ async function migrateBlobsToFiles(client: Client, dataDir: string): Promise<voi
 
   let charCount = 0;
   let personaCount = 0;
-  let attachmentCount = 0;
 
   // Characters
   if (await hasColumn('characters', 'avatar_blob')) {
@@ -119,7 +118,7 @@ async function migrateBlobsToFiles(client: Client, dataDir: string): Promise<voi
     });
     log.info(`migrated attachment: ${id}`);
   }
-  attachmentCount = attachments.rows.length;
+  const attachmentCount = attachments.rows.length;
 
   if (charCount + personaCount + attachmentCount > 0) {
     log.info(

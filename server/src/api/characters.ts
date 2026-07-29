@@ -380,7 +380,7 @@ export function createCharacterRouter(
   // metadata only; section reads load the raw module JSON from FileStorage.
   router.get('/:id/risu-modules', (async (req, res) => {
     try {
-      const character = await characters.getById(req.params.id as string);
+      const character = await characters.getById(req.params.id);
       if (!character) {
         res.status(404).json({ error: 'Character not found' });
         return;
@@ -395,7 +395,7 @@ export function createCharacterRouter(
 
   router.get('/:id/risu-modules/:moduleId', (async (req, res) => {
     try {
-      const character = await characters.getById(req.params.id as string);
+      const character = await characters.getById(req.params.id);
       if (!character) {
         res.status(404).json({ error: 'Character not found' });
         return;
@@ -483,12 +483,12 @@ export function createCharacterRouter(
 
   router.delete('/:id/risu-module/:moduleId', (async (req, res) => {
     try {
-      const character = await characters.getById(req.params.id as string);
+      const character = await characters.getById(req.params.id);
       if (!character) {
         res.status(404).json({ error: 'Character not found' });
         return;
       }
-      const moduleId = req.params.moduleId as string;
+      const moduleId = req.params.moduleId;
       const metas = listRisuModuleMeta(character);
       if (!metas.some((m) => m.id === moduleId)) {
         res.status(404).json({ error: 'Module not found' });
