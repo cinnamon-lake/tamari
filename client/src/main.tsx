@@ -6,6 +6,14 @@ import { I18nProvider } from './i18n/index.js';
 import './styles/utilities.css';
 import './styles/global.css';
 import './styles/hljs-theme.css';
+// Vendored fonts + icons (no CDN — the app and the e2e suite work offline).
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
+import 'bootstrap-icons/font/bootstrap-icons.min.css';
 import { applyBrowserFixes } from './lib/browser.js';
 
 // Global error handlers to prevent silent failures and log to console
