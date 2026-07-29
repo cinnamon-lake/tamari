@@ -10,6 +10,7 @@ import { SafeImage } from './SafeImage.js';
 import { apiFetch } from '../lib/apiFetch.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import './PersonaManager.css';
 
 export function PersonaManager(props: { onClose: () => void }) {
@@ -158,7 +159,7 @@ function PersonaEditor(props: { persona: Persona; onBack: () => void }) {
 
   const scheduleAutoSave = () => {
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
-    autoSaveTimer = setTimeout(() => doSaveFields(), 600);
+    autoSaveTimer = setTimeout(() => doSaveFields(), AUTOSAVE_DEBOUNCE_MS);
   };
 
   // Flush a pending auto-save on unmount so closing the editor within the

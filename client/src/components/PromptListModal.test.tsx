@@ -85,7 +85,7 @@ describe('PromptListModal', () => {
 
       // Local edit -> debounced save pending.
       fireEvent.click(screen.getByLabelText<HTMLInputElement>('Enable Main Prompt'));
-      // Delete before the 500ms debounce fires.
+      // Delete before the debounced save fires.
       fireEvent.click(screen.getByText('Delete List'));
       await vi.advanceTimersByTimeAsync(1000);
 

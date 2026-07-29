@@ -8,6 +8,7 @@ import { IdBadge } from './IdBadge.js';
 import { str } from '../lib/coerce.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import { getSamplerProfile, type SamplerKnob } from './samplerProfiles.js';
 import { isDeclaredProviderParamKey } from '@tamari/types';
 import { SecretPicker } from './SecretPicker.js';
@@ -502,7 +503,7 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     const timer = setTimeout(() => {
       saveConfig();
       setDirty(false);
-    }, 500);
+    }, AUTOSAVE_DEBOUNCE_MS);
     onCleanup(() => clearTimeout(timer));
   });
 

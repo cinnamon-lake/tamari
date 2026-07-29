@@ -5,6 +5,7 @@ import { confirmPopup, alertPopup } from '../../stores/popupStore.js';
 import { apiFetch, authenticatedUrl } from '../../lib/apiFetch.js';
 import { useI18n } from '../../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../../lib/focusUtils.js';
+import { AUTOSAVE_DEBOUNCE_MS } from '../../timing.js';
 import type { Character, RegexRule } from '@tamari/types';
 import { CropModal } from '../CropModal.js';
 import { SafeImage } from '../SafeImage.js';
@@ -216,7 +217,7 @@ export function CharacterEditor(props: CharacterEditorProps) {
 
   const scheduleAutoSave = () => {
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
-    autoSaveTimer = setTimeout(() => doSave(false), 600);
+    autoSaveTimer = setTimeout(() => doSave(false), AUTOSAVE_DEBOUNCE_MS);
   };
 
   // Flush a pending auto-save on unmount so closing the editor within the

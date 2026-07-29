@@ -5,6 +5,7 @@ import { bus } from '../bus/WebSocketBus.js';
 import { confirmPopup, alertPopup } from '../stores/popupStore.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import type { PresetPromptDef, PresetPromptOrderEntry } from '@tamari/types';
 import './PromptListModal.css';
 
@@ -229,7 +230,7 @@ export function PromptListModal(props: { onClose: () => void }) {
     const timer = setTimeout(() => {
       saveList();
       setDirty(false);
-    }, 500);
+    }, AUTOSAVE_DEBOUNCE_MS);
     onCleanup(() => clearTimeout(timer));
   });
 

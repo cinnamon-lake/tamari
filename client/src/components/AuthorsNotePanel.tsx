@@ -4,6 +4,7 @@ import { state } from '../stores/serverStore.js';
 import { bus } from '../bus/WebSocketBus.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 
 export interface AuthorsNotePanelProps {
   open: boolean;
@@ -103,7 +104,7 @@ export function AuthorsNotePanel(props: AuthorsNotePanelProps) {
 
   const scheduleAutoSave = () => {
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
-    autoSaveTimer = setTimeout(() => doSave(), 600);
+    autoSaveTimer = setTimeout(() => doSave(), AUTOSAVE_DEBOUNCE_MS);
   };
 
   // Flush a pending auto-save on unmount so closing the panel within the

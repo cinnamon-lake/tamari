@@ -6,6 +6,7 @@ import { IdBadge } from './IdBadge.js';
 import { confirmPopup } from '../stores/popupStore.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import type { Toolset, ToolTemplate } from '@tamari/types';
 import './ToolsModal.css';
 
@@ -209,7 +210,7 @@ function ToolsetConfigPanel(props: { toolset: Toolset }) {
       // flush re-send a full save on every later unmount.
       autoSaveTimer = null;
       doSave();
-    }, 600);
+    }, AUTOSAVE_DEBOUNCE_MS);
   };
 
   // Flush a pending auto-save on unmount so closing the modal within the
@@ -364,7 +365,7 @@ function ToolOverrideRow(props: {
       // flush re-send a full save on every later unmount.
       autoSaveTimer = null;
       doSave();
-    }, 600);
+    }, AUTOSAVE_DEBOUNCE_MS);
   };
 
   // Flush a pending auto-save on unmount so closing the modal within the
@@ -590,7 +591,7 @@ function LuaTemplateEditor(props: { template: ToolTemplate; onDone: () => void }
       // flush re-send a full save on every later unmount.
       autoSaveTimer = null;
       doSave();
-    }, 600);
+    }, AUTOSAVE_DEBOUNCE_MS);
   };
 
   // Flush a pending auto-save on unmount so closing the editor within the

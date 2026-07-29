@@ -4,6 +4,7 @@ import { activeWorldInfoId, setActiveWorldInfoId } from '../stores/uiStore.js';
 import { bus } from '../bus/WebSocketBus.js';
 import { confirmPopup } from '../stores/popupStore.js';
 import { onEnterActivate, trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import { useI18n } from '../i18n/index.js';
 import { IdBadge } from './IdBadge.js';
 import type { WorldInfo, WorldInfoEntry } from '@tamari/types';
@@ -343,7 +344,7 @@ function EntryEditor(props: { entry: WorldInfoEntry; onSave: (patch: Partial<Omi
     autoSaveTimer = setTimeout(() => {
       props.onSave(buildPatch());
       showSaved();
-    }, 600);
+    }, AUTOSAVE_DEBOUNCE_MS);
   };
 
   const save = () => {

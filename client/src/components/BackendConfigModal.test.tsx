@@ -186,7 +186,7 @@ describe('BackendConfigModal delete', () => {
 
     // Local edit -> debounced save pending.
     fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Renamed' } });
-    // Delete before the 500ms debounce fires.
+    // Delete before the debounced save fires.
     fireEvent.click(screen.getByText('Delete Config'));
     await vi.advanceTimersByTimeAsync(1000);
 
