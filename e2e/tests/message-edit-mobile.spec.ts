@@ -31,10 +31,11 @@ test.describe('Mobile message editing', () => {
 
     // app.startChat's explicit chat-item click doesn't survive the mobile
     // drawer auto-closing — the client already selects the new chat, so just
-    // open it and wait for the greeting bubble.
+    // open it and wait for the greeting bubble. No force: the natural
+    // actionability checks wait for the drawer's slide-in to settle.
     await app.revealHoverButtons();
     await page.locator('input[placeholder="Search characters..."]').fill(charName);
-    await app.characterRow(charName).locator('[title="New chat"]').click({ force: true });
+    await app.characterRow(charName).locator('[title="New chat"]').click();
     await expect(page.locator('.chat-view')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('.message-bubble')).toHaveCount(1, { timeout: 5000 });
 

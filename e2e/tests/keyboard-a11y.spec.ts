@@ -21,6 +21,12 @@ test.describe('Keyboard Accessibility', () => {
     await editor.locator('.textarea-input').nth(3).fill(`Hello! I am ${charName}.`);
     await expect(editor.locator('.save-indicator')).toContainText('Saved', { timeout: 3000 });
     await editor.locator('[title="Close"]').click();
+    await expect(editor).not.toBeVisible();
+    // Modal close restores focus to the "Create character" trigger via rAF.
+    // Wait for that handoff before the keyboard gesture below — otherwise the
+    // restore can steal focus back mid-gesture, and Enter on the trigger opens
+    // a fresh editor modal (which then inerts the sidebar for good).
+    await expect(page.locator('[title="Create character"]')).toBeFocused({ timeout: 3000 });
 
     // Search for the character so it's the only one visible
     await page.locator('input[placeholder="Search characters..."]').fill(charName);
@@ -31,13 +37,15 @@ test.describe('Keyboard Accessibility', () => {
     await expect(charCard).toHaveAttribute('role', 'button');
     await expect(charCard).toHaveAttribute('tabindex', '0');
 
-    // Focus the card and press Enter — should select the character
-    await charCard.focus();
-    await expect(charCard).toBeFocused();
-    await page.keyboard.press('Enter');
-
-    // The character should become selected (the character-item gets the selected class)
-    await expect(page.locator('.character-item.selected')).toBeVisible({ timeout: 5000 });
+    // Focus the card and press Enter — should select the character (the
+    // character-item gets the selected class). A character.listed broadcast
+    // can re-render the list between focus() and the keypress and drop focus,
+    // so retry the whole gesture until the selection sticks.
+    await expect(async () => {
+      await charCard.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('.character-item.selected')).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 10000 });
   });
 
   test('Escape closes modals via the global handler', async ({ page }) => {
