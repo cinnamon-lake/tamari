@@ -16,11 +16,13 @@ import { expect, type Locator, type Page } from '@playwright/test';
 
 export interface CreateCharacterOptions {
   name: string;
-  /** First `.textarea-input` in the editor. */
   description?: string;
-  /** Fourth `.textarea-input` in the editor (the greeting / first message). */
   firstMes?: string;
-  /** Label of an existing lorebook to link (it must already exist in World Info). */
+  /**
+   * Label of an existing lorebook to link (it must already exist in World
+   * Info). The fast create path cannot link an existing book, so passing this
+   * makes createCharacter fall back to the (slower) editor flow.
+   */
   lorebookBookLabel?: string;
 }
 
@@ -61,8 +63,65 @@ export class App {
 
   // ── characters & chats ──────────────────────────────────────────────────
 
+  /**
+   * Create a character with one WS `character.create` message — the same wire
+   * call the editor makes, without the open → fill → debounced-save → close
+   * choreography. Fields are stored raw (unlike the REST import endpoint,
+   * which normalizes Risu macros) and the client receives the same
+   * created/snapshot/listed broadcasts, so tests observe the same end state.
+   * Returns the new character id ('' on the fallback path).
+   *
+   * Falls back to the editor flow when lorebookBookLabel is set (the create
+   * schema cannot link an existing book by label).
+   */
+  async createCharacter(opts: CreateCharacterOptions): Promise<string> {
+    if (opts.lorebookBookLabel !== undefined) {
+      await this.createCharacterViaEditor(opts);
+      return '';
+    }
+    const id = await this.page.evaluate(
+      (card) => {
+        return new Promise<string>((resolve, reject) => {
+          const token = localStorage.getItem('st_auth_token') ?? '';
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const ws = new WebSocket(`${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`);
+          const timer = setTimeout(() => {
+            ws.close();
+            reject(new Error('createCharacter timed out'));
+          }, 10000);
+          ws.onopen = () => ws.send(JSON.stringify({ type: 'auth' }));
+          ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data as string);
+            if (msg.type === 'snapshot') {
+              ws.send(JSON.stringify({ type: 'character.create', data: card }));
+            } else if (msg.type === 'character.created' && msg.character?.name === card.name) {
+              clearTimeout(timer);
+              ws.close();
+              resolve(msg.character.id as string);
+            } else if (msg.type === 'error') {
+              clearTimeout(timer);
+              ws.close();
+              reject(new Error((msg.message as string) ?? 'character.create failed'));
+            }
+          };
+          ws.onerror = () => {
+            clearTimeout(timer);
+            ws.close();
+            reject(new Error('createCharacter websocket error'));
+          };
+        });
+      },
+      { name: opts.name, description: opts.description ?? '', firstMes: opts.firstMes ?? '' },
+    );
+    // Filter by name before asserting: a leftover search from a prior startChat
+    // (and pagination across a long suite run) can otherwise hide the new row.
+    await this.page.locator('input[placeholder="Search characters..."]').fill(opts.name);
+    await expect(this.page.locator('.character-list li', { hasText: opts.name })).toBeVisible();
+    return id;
+  }
+
   /** Create a character via the editor, wait for auto-save, close the editor. */
-  async createCharacter(opts: CreateCharacterOptions): Promise<void> {
+  async createCharacterViaEditor(opts: CreateCharacterOptions): Promise<void> {
     await this.page.locator('[title="Create character"]').click();
     const editor = this.page.locator('.character-editor-modal');
     await expect(editor).toBeVisible();
