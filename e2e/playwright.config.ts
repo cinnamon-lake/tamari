@@ -105,6 +105,10 @@ export default defineConfig({
   globalSetup: require.resolve('./global-setup'),
   use: {
     baseURL: `http://localhost:${e2ePort}`,
+    // Pre-seeded localStorage (auth token + fast timers), written by
+    // global-setup.ts so the origin tracks E2E_PORT. Specs that exercise the
+    // auth modal opt out with test.use({ storageState: { cookies: [], origins: [] } }).
+    storageState: '.auth/state.json',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'on-first-retry',

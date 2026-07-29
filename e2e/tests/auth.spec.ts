@@ -1,6 +1,9 @@
 import { test, expect } from '../fixtures/base.js';
 import { login, expectAuthModal, TEST_SECRET } from '../helpers/auth.js';
 
+// These tests exercise the auth modal itself — run them unauthenticated.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Authentication', () => {
   test('shows auth modal when not authenticated', async ({ page }) => {
     await page.goto('/');

@@ -1,7 +1,8 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { FullConfig } from '@playwright/test';
 import { startMockLlmServer } from './fixtures/mockLlmServer.js';
+import { TEST_SECRET } from './helpers/auth.js';
 
 /**
  * Stale-build guard.
@@ -88,6 +89,29 @@ function assertDistIsFresh(repoRoot: string): void {
  */
 export default async function globalSetup(config: FullConfig): Promise<() => Promise<void>> {
   assertDistIsFresh(join(config.rootDir, '..'));
+
+  // Pre-seeded localStorage for every browser context (use.storageState in
+  // playwright.config.ts). st_auth_token skips the UI login — the token IS the
+  // secret (AuthService compares directly), so this is byte-identical to what
+  // a real login stores. st_fast_timers collapses the autosave debounce
+  // (client/src/timing.ts). Written here so the origin tracks E2E_PORT.
+  const authDir = join(config.rootDir, '.auth');
+  mkdirSync(authDir, { recursive: true });
+  writeFileSync(
+    join(authDir, 'state.json'),
+    JSON.stringify({
+      cookies: [],
+      origins: [
+        {
+          origin: `http://localhost:${Number(process.env.E2E_PORT ?? 8765)}`,
+          localStorage: [
+            { name: 'st_auth_token', value: TEST_SECRET },
+            { name: 'st_fast_timers', value: '1' },
+          ],
+        },
+      ],
+    }),
+  );
 
   const server = await startMockLlmServer({ port: Number(process.env.MOCK_LLM_PORT ?? 9876) });
   process.env.MOCK_LLM_URL = server.url;
