@@ -1,7 +1,7 @@
 /** Reference doc for the `characters` topic, served by the Docs tool. */
 export const CHARACTERS_DOC = `# Characters
 
-A character is a card: named text fields, an \`extensions\` bag, plus optional avatar, assets, and a linked lorebook. The text fields have **no fixed semantics of their own** — whether and where they reach the model is decided by the active prompt list (see topic \`prompt_lists\`).
+A character is a card: named text fields, plus optional avatar, assets, character-scoped regex rules, a card-coupled backend script, and a linked lorebook. The text fields have **no fixed semantics of their own** — whether and where they reach the model is decided by the active prompt list (see topic \`prompt_lists\`).
 
 ## Core fields
 
@@ -19,16 +19,15 @@ A character is a card: named text fields, an \`extensions\` bag, plus optional a
 | \`creatorNotes\` | Free-form notes; no built-in marker interpolates it, so it never reaches the model unless a custom prompt list references it. |
 | \`tags\` | String array for filtering/organization; never sent to the model. |
 | \`worldInfoId\` | The character's linked lorebook (1:1 by convention). |
-| \`extensions\` | Extension bus — see below. |
 
-## The \`extensions\` bus
+## Character-scoped feature data
 
-Character-scoped feature data lives here and travels with card export:
+Feature data attached to a card is edited through dedicated Workbench fs paths (topic \`workbench\`), never through \`meta.json\`:
 
-- \`extensions.regexScripts\` — character-scoped regex rules (see topic \`regexes\`).
-- \`extensions.contextualBackend\` — \`{ enabled, luaSource }\`: a card-coupled Lua backend that wraps the user's active adapter (see topic \`custom_backends\`). \`enabled\` is opt-in; imported cards never activate silently.
-- \`extensions.risuModules\` — metadata for attached raw RisuAI modules. **Effectively inert:** nothing in v2 executes module triggers, regexes, or lore; the raw module JSON is preserved purely as porting source material, readable via the Workbench fs at \`/characters/<id>/modules/\` (topic \`workbench\`) or the REST module endpoints. Only light metadata (name, namespace, counts, \`hasLua\`) lives here so broadcasts stay small.
-- \`extensions.risuai.defaultVariables\` — seeds \`{{getvar}}\` variables when greetings materialize.
+- Character-scoped regex rules — \`/characters/<id>/regex/\` (see topic \`regexes\`).
+- Card-coupled Lua backend — \`/characters/<id>/backend_logic.lua\`: a script that wraps the user's active adapter (see topic \`custom_backends\`). Workbench writes author the script only; the active flag is not writable through the fs, so imported cards never activate silently.
+- RisuAI modules — \`/characters/<id>/modules/\` (read-only). **Effectively inert:** nothing in v2 executes module triggers, regexes, or lore; the raw module JSON is preserved purely as porting source material.
+- Default \`{{getvar}}\` variables — imported cards may carry variables that seed when greetings materialize; not editable via the Workbench fs.
 
 ## Macros in card fields
 

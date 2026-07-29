@@ -35,7 +35,7 @@ end
 
 ## Scope and order
 
-- **Global** rules live in settings; **character-scoped** rules live in \`character.extensions.regexScripts\` and travel with the card.
+- **Global** rules live in settings; **character-scoped** rules live on the card — Workbench fs: \`/characters/<id>/regex/\` — and travel with it.
 - Merged global-first, character rules appended — so character rules see global rules' output and win on overlap.
 
 ## Execution facts

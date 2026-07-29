@@ -6,7 +6,7 @@ A custom backend is a Lua script that owns the prompt. It runs instead of a buil
 ## Two kinds
 
 - **Type A — registry (global).** Named scripts in the \`custom_backends\` registry, selected on a backend config via \`backendProvider: "custom"\` + \`providerParams.customBackendId\`, with \`providerParams.delegateConfigId\` as the default delegate. Author/test via the Workbench fs: \`/custom-backends/<id>/source.lua\` (+ \`meta.json\`) and \`run {"verb":"test_custom_backend",...}\` (topic \`workbench\`).
-- **Type B — contextual (card-coupled).** \`character.extensions.contextualBackend = { enabled, luaSource }\`; travels with card export. Wraps the user's active adapter as its default delegate. Ignored when the active config is itself \`custom\` (explicit Type A wins). \`enabled\` is opt-in — never activate silently. Author/test via the Workbench fs: \`/characters/<id>/backend_logic.lua\` and \`run {"verb":"test_backend_logic",...}\` (topic \`workbench\`).
+- **Type B — contextual (card-coupled).** A Lua script stored on the card; travels with card export. Wraps the user's active adapter as its default delegate. Ignored when the active config is itself \`custom\` (explicit Type A wins). Activation is opt-in — never activate silently; the fs authors the script only, it cannot flip the active flag. Author/test via the Workbench fs: \`/characters/<id>/backend_logic.lua\` and \`run {"verb":"test_backend_logic",...}\` (topic \`workbench\`).
 
 ## Script contract
 
