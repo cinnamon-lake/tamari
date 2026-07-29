@@ -1,6 +1,6 @@
 # Scriptable Layers: Custom Backends, Display Transforms, Button Protocol
 
-**Status:** Proposal (not yet implemented). Supersedes nothing; extends the Lua scripting story in `docs/user/lua-scripting.md`.
+**Status:** Mostly implemented — the three layers, the forms protocol, and the raw-module porting workflow all landed. Remaining open items are collected in §7. Supersedes nothing; extends the Lua scripting story in `docs/user/lua-scripting.md`.
 
 **Context:** Analysis of RisuAI's module system (`.risum` containers, embedded `module.risum` in CharX, TriggerScript) found a monolithic engine — six event types (`start`/`input`/`output`/`display`/`request`/`manual`), ~140 effect types, allowlists per mode, hidden chat-message IPC, render-time code, and retroactive UI mutation. It is powerful and it is a mess. This document defines tamari's alternative: **three single-purpose layers**, each mapped to an interface that already exists or has one obvious home.
 
@@ -55,7 +55,7 @@ Type B activation (implemented in `GenerationService.resolveGenerationBackend`):
 - The chat's character ships an **enabled** contextual script and the active config is a normal provider → the script wraps the resolved adapter; its default delegate **is the user's selected backend** (the writer model follows the user's normal selection — the coherent form of "custom backend and regular backend selected at the same time").
 - The active config is itself `provider: 'custom'` → explicit Type A selection wins; the character script is ignored.
 - Group chats: wrapping applies per speaking character by construction (`resolveGenerationBackend(character)`).
-- **`enabled` is opt-in** (default `false`): imports and ports ship logic but never activate it silently — the RisuAI `lowLevelAccess` lesson. The Character Workbench `backend_logic_get` / `backend_logic_set` tools give the porting agent the write path.
+- **`enabled` is opt-in** (default `false`): imports and ports ship logic but never activate it silently — the RisuAI `lowLevelAccess` lesson. The Workbench fs path `/characters/<id>/backend_logic.lua` (write/edit) gives the porting agent the write path; the `enabled` flag is deliberately not writable through the fs.
 
 ### Script state (implemented)
 
@@ -104,11 +104,11 @@ Rules:
 
 ### Registry and UI
 
-Custom backends are named entities in a new top-level registry (SQLite table + WS CRUD, same pattern as presets): `{ id, name, description, luaSource, createdAt, updatedAt }`. A backend config selects `custom:<id>` as its adapter; the model field maps to `list_models()`. Management lives in its own menu (editor with syntax highlighting + a dry-run "what would you send" panel, the moral equivalent of `buildRequest`). *(Dry-run status: the mechanism exists — `backends/customBackendDryRun.ts` runs a script against a recording delegate and returns text/state/delegations — exposed via the Character Workbench `backend_logic_test` tool. A UI panel is still pending.)*
+Custom backends are named entities in a new top-level registry (SQLite table + WS CRUD, same pattern as presets): `{ id, name, description, luaSource, createdAt, updatedAt }`. A backend config selects `custom:<id>` as its adapter; the model field maps to `list_models()`. Management lives in its own menu (editor with syntax highlighting + a dry-run "what would you send" panel, the moral equivalent of `buildRequest`). *(Dry-run status: implemented end to end — `backends/customBackendDryRun.ts` runs a script against a recording delegate and returns text/state/delegations; exposed to agents as the Workbench `run test_backend_logic` verb and to users as the `BackendDryRunPanel` in the custom-backends modal and the character editor, over the `custombackend.test` WS pair.)*
 
 ### Group chats
 
-The chat's active backend runs, period. Character-specific behavior is expressed as explicit branching inside the script on `ctx.speakerName`/`characterId` — one script, visible control flow. (Risu's per-character trigger binding degrades to exactly this in practice: group chats drop per-character triggers in several code paths, and chat script-state is a single shared namespace, so "per-character" was always convention over mechanism.)
+The chat's active backend runs, period. Character-specific behavior is expressed as explicit branching inside the script on `ctx.characterId` — one script, visible control flow. (Risu's per-character trigger binding degrades to exactly this in practice: group chats drop per-character triggers in several code paths, and chat script-state is a single shared namespace, so "per-character" was always convention over mechanism.) *(Implementation note: the injected `ctx` carries exactly `chatId`, `characterId`, `generationType` — no `speakerName`; resolve names from the character id if needed.)*
 
 ---
 
@@ -133,7 +133,7 @@ Semantics (as implemented):
 - **Runs server-side only, wherever plain regexes run** — prompt build (`PromptBuilder`) and the server-side display render (`DisplayRenderer`/`ChatBroadcastService`), which happens at message finalize/snapshot time, never in the browser (principle 1 holds).
 - **Sandbox.** Scripts run in a fresh wasmoon state (no io/os/debug/require/net; `json`/`base64` available), 5 s timeout, one state shared per `applyRules` call. A script that errors, times out, or lacks `replace()` skips that rule, text unchanged — identical failure semantics to the Worker path.
 - **Sanitization still applies.** Transform output feeds the normal `marked` + DOMPurify pipeline in `server/src/services/DisplayRenderer.ts`. Scripts cannot smuggle unsanitized HTML; the XSS posture is identical to author-written HTML.
-- **Scoped and ordered.** Rules live where they already live: global (`settings.regexRules`) and character-scoped (`character.extensions.regexScripts`), character rules merged after global ones. Character Workbench `regex_add`/`regex_update` accept `replaceLua`; `regex_test` exercises it.
+- **Scoped and ordered.** Rules live where they already live: global (`settings.regexRules`) and character-scoped (`character.extensions.regexScripts`), character rules merged after global ones. The Workbench fs exposes character rules under `/characters/<id>/regex/` (`replace_lua` as a per-field file); `run test_regex` exercises them.
 - Buttons (§4) emitted by transforms are inert HTML until clicked — freezing them in old messages is correct.
 
 **Still open:** the `displayText` memoization + var-snapshot ctx (`replace(match, captures, ctx)` with `ctx.vars`) — only needed by cards whose display depends on chat vars. ~~No client UI for editing `replaceLua`~~ — done: both regex editors (character + global settings) have a Text/Lua replacement-type toggle with the Lua field and a Lua badge in the list; the client test preview shows a server-side-only hint for Lua rules.
@@ -204,7 +204,7 @@ The button protocol generalizes from "click posts a fixed string" to "submit pos
 
 The layers are user-level named entities; cards couple by reference.
 
-- `character.extensions.customBackend = "<registry id>"` (chat-level override allowed). On CharX/`.risum`/JSON import: if the referenced backend exists, couple it; if not, warn and import as a plain card. Missing coupling never bricks the card (principle: graceful degradation, §4).
+- `character.extensions.customBackend = "<registry id>"` (chat-level override allowed). On CharX/`.risum`/JSON import: if the referenced backend exists, couple it; if not, warn and import as a plain card. Missing coupling never bricks the card (principle: graceful degradation, §4). *(Not implemented, and superseded in practice: Type A coupling lives on the backend config — `providerParams.customBackendId` — selected by the user, not carried by the card. The only card-coupled form is Type B's inline `contextualBackend`. A registry-id reference on the character would still be the way to make Type A travel with export, if a card ever asks for it.)*
 - **Delegate portability.** An explicit `delegateConfigId` (or `backends.generate("<configId>", …)`) refers to a LOCAL backend config row — meaningless on anyone else's install. Exportable cards should therefore delegate by default (`backends.generate(prompt)`), which resolves to the recipient's own active backend. If explicit targets ever prove necessary in shared cards, add a delegate-by-name fallback rather than shipping local ids; until then, explicit ids are for single-install presets only.
 - `.risum` import mapping (manual port, not automatic conversion):
   - `lorebook[]` → world info (implemented: the CharX `data.character_book` path imports to world info; the module's native lore duplicates it).
@@ -219,7 +219,7 @@ The first slice of the distribution story landed, deliberately ahead of the laye
 - `server/src/lib/risum.ts` decodes the `.risum` container (magic/version/length-prefixed blocks + RPack byte substitution; map embedded from RisuAI under MIT).
 - CharX import (`importCharXCard`) decodes an embedded `module.risum`; standalone `.risum` files attach via `POST /characters/:id/risu-module` (and detach via `DELETE`). A corrupt module never bricks card import.
 - Raw module JSON is stored via FileStorage (`character_modules/<charId>/<moduleId>.json`); `character.extensions.risuModules` holds only metadata (name, namespace, source, counts, `hasLua`) so character broadcasts stay light. **Asset payloads land as ordinary character assets** (`storeRisuModuleAssets` — servable at `/characters/:id/assets/:assetId`, re-exported with the card) so ported cards keep their media packs; only CharX-embedded modules skip payloads (the card's own asset section already covers them).
-- Character Workbench tools `risu_module_list` / `risu_module_get` (sections: `info`, `triggers`, `trigger` incl. full Lua source, `regex`, `lorebook`, `assets`) / `risu_module_remove` give the agent read access to the raw material, and `character_asset_list` shows what media the port has; porting happens through the existing mutation tools (`lorebook_*`, `regex_*`, `character_update`) and custom backends. External modules are attached by the USER, directly to the character (character-editor module viewer → `POST /characters/:id/risu-module`) — modules are card material, so no chat-attachment or filesystem-path detour exists on purpose.
+- The Workbench fs gives the porting agent read access to the raw material — `/characters/<id>/modules/<moduleId>.json[/<section>]` (sections: `info`, `triggers`, `trigger/<n>` incl. full Lua source, `regex`, `lorebook`, `assets`; read + rm only) and `/characters/<id>/assets/` for the media — and porting happens through the same fs (`.../lorebook/new.json`, `.../regex/new.json`, the character's text fields, `backend_logic.lua`) plus the `run copy_assets` / `run copy_module_assets` verbs. External modules are attached by the USER, directly to the character (character-editor module viewer → `POST /characters/:id/risu-module`) — modules are card material, so no chat-attachment or filesystem-path detour exists on purpose.
 - **Frontend porting surface (implemented):** the same reads are available over REST (`GET /characters/:id/risu-modules`, `GET /characters/:id/risu-modules/:moduleId?section=…&index=…` — section extraction shared with the workbench via `getRisuModuleSection`), and the recording-delegate dry-run is a WS request/response pair (`custombackend.test` → `custombackend.testResult`, resolving ad-hoc `luaSource` > registry `customBackendId` > character `characterId`). The UI builds on these: module viewer + dry-run panels in the character editor and the custom-backends modal.
 
 ---
@@ -237,11 +237,16 @@ Stated explicitly so future contributors don't re-add the gravity well:
 
 ## 7. Open questions
 
-- **Var-snapshot shape for display transforms:** exact `message.extra` schema (`displayText`, `displayVars`) and invalidation on edit/regenerate/swipe switch (each swipe finalizes independently).
-- **Display-rule storage:** separate registry vs. folding into Quick Reply sets vs. world-info-style named lists. Leaning: named rule lists, referenced like the backend coupling.
-- **Token-budget helpers:** custom backends receive a budgeted prompt; if they rebuild it, they need the tokenizer (`st.token_count` exists) and possibly the budget params in `ctx`.
+Still open (the genuinely unimplemented parts):
+
+- **Var-snapshot ctx for display transforms:** `replace(match, captures, ctx)` with `ctx.vars`, plus the finalize-time `displayText` memoization and its exact `message.extra` schema (`displayText`, `displayVars`) and invalidation on edit/regenerate/swipe switch (each swipe finalizes independently). Only needed by cards whose display depends on chat vars; the RegexEngine currently has no ctx support at all.
+- **Token-budget helpers:** custom backends receive a budgeted prompt; if they rebuild it, they need the tokenizer (`st.token_count` exists) and possibly the budget params in `ctx`. The injected `ctx` still carries only `chatId`, `characterId`, `generationType`.
+- **In-VM abort:** `ctx.signal` is still not wired into the VM — in-flight scripts rely on the Lua timeout (10 min `generate`, 10 s `list_models`).
+- **`data-post-response-fill`** (fill-without-sending) — deferred until a card asks for it (§4 non-goals).
+- **Registry-id card coupling for Type A** (`character.extensions.customBackend`) — never implemented; see §5 for why config-level selection covers it so far.
 
 Resolved while implementing (kept for the record):
 
+- ~~**Display-rule storage**~~ — settled by not adding a store: rules live where plain regexes already lived (global `settings.regexRules`, character-scoped `character.extensions.regexScripts`); named rule lists never materialized.
 - ~~**Lua timeout/memory limits**~~ — settled: 10 min for `generate()`, 10 s for `list_models()`, 5 s for `replaceLua`; wasmoon deadline aborts are mapped to clean "script timed out" errors (`isLuaTimeoutError`). In-VM abort still relies on the timeout rather than `ctx.signal`.
-- ~~**Dry-run surface**~~ — settled: `backends/customBackendDryRun.ts` runs a script against a recording delegate and returns text/state/delegations; exposed as the Character Workbench `backend_logic_test` tool. A UI panel remains pending.
+- ~~**Dry-run surface**~~ — settled: `backends/customBackendDryRun.ts` runs a script against a recording delegate and returns text/state/delegations; exposed as the Workbench `run test_backend_logic` verb and the `BackendDryRunPanel` UI (custom-backends modal + character editor).
