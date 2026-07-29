@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -30,11 +31,15 @@ import { join } from 'node:path';
  *
  * This config assumes it lives at `<repo-root>/e2e/playwright.config.ts`.
  */
+// NixOS can't run Playwright's downloaded chromium — point at the system
+// browser when it exists (local dev). In CI the path is absent, so
+// Playwright falls back to its own installed chromium.
+const nixosChromium = '/run/current-system/sw/bin/chromium-browser';
 const chromeLaunch = {
   ...devices['Desktop Chrome'],
-  launchOptions: {
-    executablePath: '/run/current-system/sw/bin/chromium-browser',
-  },
+  ...(existsSync(nixosChromium)
+    ? { launchOptions: { executablePath: nixosChromium } }
+    : {}),
 };
 
 const coverageEnabled = !!process.env.E2E_COVERAGE;
