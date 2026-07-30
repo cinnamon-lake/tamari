@@ -30,6 +30,7 @@ import type { FileStorage } from '../FileStorage.js';
 import type { RAGService } from '../RAGService.js';
 import { createCharacter, updateCharacter } from '../characterMutations.js';
 import { setCharacterAvatarFromBuffer } from '../characterAvatar.js';
+import { validateVfsPath } from '../../scripting/LuaVfs.js';
 import { getCharacterRegexRules, mergeRegexRules, getGlobalRegexRules, CHARACTER_REGEX_EXTENSION_KEY } from '../characterRegex.js';
 import { applyRules, filterRulesByRole, parseRegexString } from '../RegexEngine.js';
 import {
@@ -293,6 +294,31 @@ const BackendLogicTestArgs = z.object({
   delegateResponse: z.string().optional().describe('Canned text returned by every delegated backends.generate() call. Defaults to a placeholder.'),
 });
 
+const BackendFilePathArgs = z.object({
+  characterId: z.string().describe(CHARACTER_ID),
+  path: z.string().describe('Module path inside backend_logic/ (e.g. lib/utils.lua). Slash-separated; the .lua extension is appended when omitted.'),
+});
+
+const BackendFileSetArgs = z.object({
+  characterId: z.string().describe(CHARACTER_ID),
+  path: z.string().describe('Module path inside backend_logic/ (e.g. lib/utils.lua).'),
+  luaSource: z.string().describe('Lua module source. The chunk\'s return value is the module; top-level return is allowed.'),
+});
+
+const BackendFileEditArgs = z.object({
+  characterId: z.string().describe(CHARACTER_ID),
+  path: z.string().describe('Module path inside backend_logic/ (e.g. lib/utils.lua).'),
+  oldString: z
+    .string()
+    .min(1)
+    .describe('Exact text to find in the module source. Must match exactly once unless replaceAll is set.'),
+  newString: z.string().describe('Replacement text (may be empty to delete the match).'),
+  replaceAll: z
+    .boolean()
+    .optional()
+    .describe('Replace every occurrence. Default false — a non-unique oldString is an error.'),
+});
+
 /** Map a MIME type to a file extension for asset storage/URLs. */
 function extFromMime(mimeType: string): string {
   const subtype = mimeType.split('/')[1]?.toLowerCase() ?? '';
@@ -369,6 +395,16 @@ export class CharacterWorkbench {
           return await this.backendLogicEdit(args);
         case 'backend_logic_test':
           return await this.backendLogicTest(args);
+        case 'backend_file_list':
+          return await this.backendFileList(args);
+        case 'backend_file_get':
+          return await this.backendFileGet(args);
+        case 'backend_file_set':
+          return await this.backendFileSet(args);
+        case 'backend_file_remove':
+          return await this.backendFileRemove(args);
+        case 'backend_file_edit':
+          return await this.backendFileEdit(args);
         default:
           return { content: `Error: unknown tool ${toolName}` };
       }
@@ -1060,7 +1096,10 @@ export class CharacterWorkbench {
 
     const raw = character.extensions[CHARACTER_BACKEND_EXTENSION_KEY];
     const existing = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+    // Spread the stored extension so sibling keys (the `files` module map)
+    // survive a source/toggle update.
     const next = {
+      ...existing,
       enabled: enabled ?? existing['enabled'] === true,
       luaSource: luaSource ?? (typeof existing['luaSource'] === 'string' ? existing['luaSource'] : ''),
     };
@@ -1116,7 +1155,7 @@ export class CharacterWorkbench {
       return { content: `Error: edit rejected (NOT saved) — the edited script fails to load: ${invalid}` };
     }
 
-    const next = { enabled: ext['enabled'] === true, luaSource: nextSource };
+    const next = { ...ext, enabled: ext['enabled'] === true, luaSource: nextSource };
     const updated = await this.deps.characters.update(characterId, {
       extensions: { ...character.extensions, [CHARACTER_BACKEND_EXTENSION_KEY]: next },
     });
@@ -1143,11 +1182,13 @@ export class CharacterWorkbench {
       }
     }
 
+    const files = this.getBackendFiles(character);
     const outcome = await dryRunBackendScript(this.deps.luaRuntime, {
       luaSource: source,
       input,
       state,
       delegateResponse,
+      files: Object.keys(files).length > 0 ? files : undefined,
       character: {
         id: character.id,
         name: character.name,
@@ -1156,5 +1197,133 @@ export class CharacterWorkbench {
       },
     });
     return { content: JSON.stringify(outcome) };
+  }
+
+  // ── backend_logic/ module files (the card VFS behind `require`) ────────
+
+  /** Tolerant read of the stored module map (string→string entries only). */
+  private getBackendFiles(character: Character): Record<string, string> {
+    const raw = character.extensions[CHARACTER_BACKEND_EXTENSION_KEY];
+    const ext = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+    const rawFiles = ext['files'];
+    if (!rawFiles || typeof rawFiles !== 'object' || Array.isArray(rawFiles)) return {};
+    const files: Record<string, string> = {};
+    for (const [key, value] of Object.entries(rawFiles as Record<string, unknown>)) {
+      if (typeof value === 'string') files[key] = value;
+    }
+    return files;
+  }
+
+  /** Persist a new module map, preserving every other extension key. */
+  private async setBackendFiles(character: Character, files: Record<string, string>): Promise<void> {
+    const raw = character.extensions[CHARACTER_BACKEND_EXTENSION_KEY];
+    const ext = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+    const updated = await this.deps.characters.update(character.id, {
+      extensions: { ...character.extensions, [CHARACTER_BACKEND_EXTENSION_KEY]: { ...ext, files } },
+    });
+    await this.broadcastCharacterMutation(updated);
+  }
+
+  private async backendFileList(args: Record<string, unknown>): Promise<ToolExecuteResult> {
+    const parsed = BackendFilePathArgs.pick({ characterId: true }).safeParse(args);
+    if (!parsed.success) return invalidArgs(parsed.error);
+    const character = await this.deps.characters.getById(parsed.data.characterId);
+    if (!character) return { content: `Error: character "${parsed.data.characterId}" not found` };
+    return { content: JSON.stringify({ files: Object.keys(this.getBackendFiles(character)).sort() }) };
+  }
+
+  private async backendFileGet(args: Record<string, unknown>): Promise<ToolExecuteResult> {
+    const parsed = BackendFilePathArgs.safeParse(args);
+    if (!parsed.success) return invalidArgs(parsed.error);
+    const key = validateVfsPath(parsed.data.path);
+    if (key === null) return { content: `Error: invalid module path "${parsed.data.path}"` };
+    const character = await this.deps.characters.getById(parsed.data.characterId);
+    if (!character) return { content: `Error: character "${parsed.data.characterId}" not found` };
+    const luaSource = this.getBackendFiles(character)[key];
+    if (luaSource === undefined) return { content: `Error: no such module: ${key}` };
+    return { content: JSON.stringify({ path: key, luaSource }) };
+  }
+
+  /** Load-check a module in a fresh sandbox: the chunk must parse (top-level
+      return allowed — the generate() requirement applies to main.lua only). */
+  private async validateModuleSource(source: string): Promise<string | null> {
+    const { lua, cleanup } = await this.deps.luaRuntime.createState({}, 10_000);
+    try {
+      await lua.doString(source);
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    } finally {
+      cleanup();
+    }
+  }
+
+  private async backendFileSet(args: Record<string, unknown>): Promise<ToolExecuteResult> {
+    const parsed = BackendFileSetArgs.safeParse(args);
+    if (!parsed.success) return invalidArgs(parsed.error);
+    const key = validateVfsPath(parsed.data.path);
+    if (key === null) {
+      return { content: `Error: invalid module path "${parsed.data.path}" — use slash-separated segments of [A-Za-z0-9_-] with a .lua extension (no "..", no leading "/")` };
+    }
+    const character = await this.deps.characters.getById(parsed.data.characterId);
+    if (!character) return { content: `Error: character "${parsed.data.characterId}" not found` };
+
+    const invalid = await this.validateModuleSource(parsed.data.luaSource);
+    if (invalid !== null) {
+      return { content: `Error: write rejected (NOT saved) — the module fails to load: ${invalid}` };
+    }
+
+    const files = { ...this.getBackendFiles(character), [key]: parsed.data.luaSource };
+    await this.setBackendFiles(character, files);
+    return { content: JSON.stringify({ path: key, lines: parsed.data.luaSource.split('\n').length }) };
+  }
+
+  private async backendFileRemove(args: Record<string, unknown>): Promise<ToolExecuteResult> {
+    const parsed = BackendFilePathArgs.safeParse(args);
+    if (!parsed.success) return invalidArgs(parsed.error);
+    const key = validateVfsPath(parsed.data.path);
+    if (key === null) return { content: `Error: invalid module path "${parsed.data.path}"` };
+    const character = await this.deps.characters.getById(parsed.data.characterId);
+    if (!character) return { content: `Error: character "${parsed.data.characterId}" not found` };
+    const files = this.getBackendFiles(character);
+    if (files[key] === undefined) return { content: `Error: no such module: ${key}` };
+    const { [key]: _removed, ...rest } = files;
+    await this.setBackendFiles(character, rest);
+    return { content: JSON.stringify({ removed: key }) };
+  }
+
+  private async backendFileEdit(args: Record<string, unknown>): Promise<ToolExecuteResult> {
+    const parsed = BackendFileEditArgs.safeParse(args);
+    if (!parsed.success) return invalidArgs(parsed.error);
+    const key = validateVfsPath(parsed.data.path);
+    if (key === null) return { content: `Error: invalid module path "${parsed.data.path}"` };
+    const { characterId, oldString, newString, replaceAll } = parsed.data;
+    const character = await this.deps.characters.getById(characterId);
+    if (!character) return { content: `Error: character "${characterId}" not found` };
+
+    const source = this.getBackendFiles(character)[key];
+    if (source === undefined) {
+      return { content: `Error: no such module: ${key} — create it with a write first` };
+    }
+
+    const occurrences = source.split(oldString).length - 1;
+    if (occurrences === 0) return { content: 'Error: oldString not found in the module' };
+    if (occurrences > 1 && replaceAll !== true) {
+      return {
+        content: `Error: oldString matches ${occurrences} locations — provide more surrounding context for a unique match, or set replaceAll: true`,
+      };
+    }
+    const nextSource = source.split(oldString).join(newString);
+
+    const invalid = await this.validateModuleSource(nextSource);
+    if (invalid !== null) {
+      return { content: `Error: edit rejected (NOT saved) — the edited module fails to load: ${invalid}` };
+    }
+
+    const files = { ...this.getBackendFiles(character), [key]: nextSource };
+    await this.setBackendFiles(character, files);
+    return {
+      content: JSON.stringify({ path: key, replacements: occurrences, lines: nextSource.split('\n').length }),
+    };
   }
 }

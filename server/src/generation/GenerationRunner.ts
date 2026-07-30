@@ -201,6 +201,7 @@ export class GenerationRunner {
           characterId: target.character!.id,
           characterName: target.character!.name,
           luaSource: backendScript.luaSource,
+          files: backendScript.files,
           activeAdapter: backend,
         },
       );

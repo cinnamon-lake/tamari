@@ -17,7 +17,9 @@
  *   /characters/<id>/regex/<ruleId>.json
  *   /characters/<id>/assets/<assetId>.json  metadata only; binary not readable
  *   /characters/<id>/modules/<moduleId>.json[/<section>]   Risu modules; read + rm only
- *   /characters/<id>/backend_logic.lua      per-character backend script
+ *   /characters/<id>/backend_logic/main.lua   per-character backend script (entry point)
+ *   /characters/<id>/backend_logic/<path>     Lua modules require()'d from the script
+ *   /characters/<id>/backend_logic.lua        legacy alias for backend_logic/main.lua
  *   /backends/<configId>.json               backend config (apiKey redacted)
  *   /custom-backends/<id>/{meta.json,source.lua}
  *   /toolsets/<toolsetId>.json
@@ -62,7 +64,7 @@ const MAX_READ_LINES = 400;
 const MAX_GREP_MATCHES = 50;
 
 const PATH_DESCRIBE =
-  'Absolute vfs path (leading "/"). Layout: /characters/<id>/ (text fields, meta.json, lorebook/, greetings/, regex/, assets/, modules/, backend_logic.lua), ' +
+  'Absolute vfs path (leading "/"). Layout: /characters/<id>/ (text fields, meta.json, lorebook/, greetings/, regex/, assets/, modules/, backend_logic/<main.lua|modules>), ' +
   '/backends/<id>.json, /custom-backends/<id>/{meta.json,source.lua}, /toolsets/<id>.json, ' +
   '/quickreplies/<scope>/<scopeId>/<id>.json (scope global|character|chat; "_" = global scopeId), /luatools/<id>/{meta.json,code.lua}.';
 
@@ -409,15 +411,23 @@ export class WorkbenchTemplate implements ToolTemplate {
     const last = call.segs[call.segs.length - 1] ?? '';
     if (isJson(last)) return { content: err(`use write for JSON files: ${call.path}`) };
 
-    // backend_logic.lua is the one file whose edits are delegated to the
-    // provider: backend_logic_edit re-validates the edited script (must load
-    // and define generate) before saving.
+    // backend_logic files are the one area whose edits are delegated to the
+    // provider: main.lua edits re-validate the edited script (must load and
+    // define generate); module edits load-check the edited module.
     if (routed.domainName === 'characters' && isBackendLogicPath(call.segs) && call.segs[0] !== undefined) {
-      const result = await this.providers.characterWorkbench.execute(
-        'backend_logic_edit',
-        { characterId: call.segs[0], oldString, newString, ...(replaceAll ? { replaceAll: true } : {}) },
-        context,
-      );
+      const [characterId, , file, ...rest] = call.segs;
+      const isMainEdit = call.segs.length === 2 || (file === 'main.lua' && rest.length === 0);
+      const result = isMainEdit
+        ? await this.providers.characterWorkbench.execute(
+            'backend_logic_edit',
+            { characterId, oldString, newString, ...(replaceAll ? { replaceAll: true } : {}) },
+            context,
+          )
+        : await this.providers.characterWorkbench.execute(
+            'backend_file_edit',
+            { characterId, path: [file, ...rest].join('/'), oldString, newString, ...(replaceAll ? { replaceAll: true } : {}) },
+            context,
+          );
       return { content: typeof result.content === 'string' ? result.content : JSON.stringify(result.content) };
     }
 

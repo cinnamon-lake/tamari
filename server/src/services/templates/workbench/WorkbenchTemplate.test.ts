@@ -60,6 +60,7 @@ const REGEX_RULES = [{ id: 'r1', name: 'Fix caps', findRegex: 'hello', replaceSt
 const ASSETS = [{ id: 'a1', name: 'sprite' }];
 const MODULES = [{ id: 'm1', name: 'Combat' }];
 const LUA_SOURCE = 'function generate(prompt, ctx)\n  return prompt\nend';
+const MODULE_SOURCE = 'local M = {}\nfunction M.reply() return "dragon module" end\nreturn M';
 const QUICK_REPLIES = [{ id: 'q1', label: 'Say hi', message: 'Hi!' }];
 
 function defaultCharacterHandlers(): Record<string, Handler> {
@@ -75,6 +76,11 @@ function defaultCharacterHandlers(): Record<string, Handler> {
     backend_logic_get: () => ({ enabled: true, luaSource: LUA_SOURCE }),
     backend_logic_set: () => ({ ok: true }),
     backend_logic_edit: () => 'Edited backend logic',
+    backend_file_list: () => ({ files: [] }),
+    backend_file_get: () => 'Error: no such module',
+    backend_file_set: (args) => ({ path: args['path'] }),
+    backend_file_remove: (args) => ({ removed: args['path'] }),
+    backend_file_edit: () => 'Edited module',
     lorebook_entry_remove: () => 'Removed lorebook entry',
     regex_remove: () => 'Removed regex rule',
     character_asset_remove: () => 'Removed asset',
@@ -196,14 +202,14 @@ describe('ls', () => {
   it('lists only non-empty fields and present subdirs of a character dir by default', async () => {
     const { template } = setup();
     expect(await exec(template, 'ls', { path: '/characters/c1' })).toBe(
-      ['description', 'scenario', 'first_mes', 'meta.json', 'lorebook/', 'greetings/', 'regex/', 'assets/', 'modules/', 'backend_logic.lua'].join('\n'),
+      ['description', 'scenario', 'first_mes', 'meta.json', 'lorebook/', 'greetings/', 'regex/', 'assets/', 'modules/', 'backend_logic/'].join('\n'),
     );
   });
 
   it('keeps empty fields hidden even if a leftover all flag is passed', async () => {
     const { template } = setup();
     expect(await exec(template, 'ls', { path: '/characters/c1', all: true })).toBe(
-      ['description', 'scenario', 'first_mes', 'meta.json', 'lorebook/', 'greetings/', 'regex/', 'assets/', 'modules/', 'backend_logic.lua'].join('\n'),
+      ['description', 'scenario', 'first_mes', 'meta.json', 'lorebook/', 'greetings/', 'regex/', 'assets/', 'modules/', 'backend_logic/'].join('\n'),
     );
   });
 
@@ -225,6 +231,22 @@ describe('ls', () => {
     const { template } = setup();
     expect(await exec(template, 'ls', { path: '/characters/c1/regex/' })).toBe('r1.json  "Fix caps"');
     expect(await exec(template, 'ls', { path: '/characters/c1/lorebook/' })).toBe('e1.json  "Dragon lore"');
+  });
+
+  it('lists backend_logic/ as main.lua plus every stored module', async () => {
+    const { template } = setup({ character: { backend_file_list: () => ({ files: ['lib/utils.lua', 'lib/aaa.lua'] }) } });
+    expect(await exec(template, 'ls', { path: '/characters/c1/backend_logic/' })).toBe('main.lua\nlib/utils.lua\nlib/aaa.lua');
+  });
+
+  it('shows the backend_logic dir when only modules exist (no script source)', async () => {
+    const { template } = setup({
+      character: {
+        backend_logic_get: () => ({ enabled: false, luaSource: '' }),
+        backend_file_list: () => ({ files: ['lib/utils.lua'] }),
+      },
+    });
+    const listing = await exec(template, 'ls', { path: '/characters/c1' });
+    expect(listing).toContain('backend_logic/');
   });
 
   it('lists a scoped quickreply collection and maps "_" to the empty scopeId', async () => {
@@ -315,6 +337,20 @@ describe('read', () => {
     const { template } = setup();
     expect(await exec(template, 'read', {})).toMatch(/^Error: invalid arguments/);
   });
+
+  it('reads backend_logic/main.lua and modules from the directory form', async () => {
+    const { template, fakes } = setup({
+      character: { backend_file_get: (args) => (args['path'] === 'lib/utils.lua' ? { path: 'lib/utils.lua', luaSource: MODULE_SOURCE } : 'Error: no such module') },
+    });
+    expect(await exec(template, 'read', { path: '/characters/c1/backend_logic/main.lua' })).toBe(LUA_SOURCE);
+    expect(await exec(template, 'read', { path: '/characters/c1/backend_logic/lib/utils.lua' })).toBe(MODULE_SOURCE);
+    expect(fakes.character.calls.at(-1)).toMatchObject({ tool: 'backend_file_get', args: { characterId: 'c1', path: 'lib/utils.lua' } });
+  });
+
+  it('keeps backend_logic.lua as a read alias for main.lua', async () => {
+    const { template } = setup();
+    expect(await exec(template, 'read', { path: '/characters/c1/backend_logic.lua' })).toBe(LUA_SOURCE);
+  });
 });
 
 describe('grep', () => {
@@ -341,6 +377,17 @@ describe('grep', () => {
         '/characters/c1/lorebook/e1.json:7:  "content": "Dragons hoard gold"',
       ].join('\n'),
     );
+  });
+
+  it('finds matches inside backend_logic modules (walk reads them)', async () => {
+    const { template } = setup({
+      character: {
+        backend_file_list: () => ({ files: ['lib/utils.lua'] }),
+        backend_file_get: (args) => (args['path'] === 'lib/utils.lua' ? { path: 'lib/utils.lua', luaSource: MODULE_SOURCE } : 'Error: no such module'),
+      },
+    });
+    const content = await exec(template, 'grep', { pattern: 'dragon module', path: '/characters/c1/' });
+    expect(content).toContain('/characters/c1/backend_logic/lib/utils.lua:2:function M.reply() return "dragon module" end');
   });
 
   it('ignores case by default', async () => {
@@ -402,6 +449,19 @@ describe('write', () => {
     const { template, fakes } = setup();
     await exec(template, 'write', { path: '/characters/c1/backend_logic.lua', content: LUA_SOURCE });
     expect(fakes.character.calls[0]).toMatchObject({ tool: 'backend_logic_set', args: { characterId: 'c1', luaSource: LUA_SOURCE } });
+  });
+
+  it('routes backend_logic/ writes to backend_logic_set (main.lua) and backend_file_set (modules)', async () => {
+    const { template, fakes } = setup();
+    await exec(template, 'write', { path: '/characters/c1/backend_logic/main.lua', content: LUA_SOURCE });
+    expect(fakes.character.calls[0]).toMatchObject({ tool: 'backend_logic_set', args: { characterId: 'c1', luaSource: LUA_SOURCE } });
+
+    await exec(template, 'write', { path: '/characters/c1/backend_logic/lib/utils.lua', content: MODULE_SOURCE });
+    expect(fakes.character.calls[1]).toMatchObject({ tool: 'backend_file_set', args: { characterId: 'c1', path: 'lib/utils.lua', luaSource: MODULE_SOURCE } });
+
+    // Nested module paths keep their segments.
+    await exec(template, 'write', { path: '/characters/c1/backend_logic/lib/deep/util.lua', content: 'return 1' });
+    expect(fakes.character.calls[2]).toMatchObject({ tool: 'backend_file_set', args: { characterId: 'c1', path: 'lib/deep/util.lua' } });
   });
 
   it('keeps only writable keys in meta.json writes', async () => {
@@ -502,6 +562,21 @@ describe('edit', () => {
     await exec(template, 'edit', { path: '/characters/c1/backend_logic.lua', oldString: 'a', newString: 'b', replaceAll: true });
     expect(fakes.character.calls[0]?.args).toEqual({ characterId: 'c1', oldString: 'a', newString: 'b', replaceAll: true });
   });
+
+  it('delegates backend_logic/main.lua edits to backend_logic_edit', async () => {
+    const { template, fakes } = setup();
+    await exec(template, 'edit', { path: '/characters/c1/backend_logic/main.lua', oldString: 'prompt', newString: 'p' });
+    expect(fakes.character.calls[0]?.tool).toBe('backend_logic_edit');
+    expect(fakes.character.calls[0]?.args).toEqual({ characterId: 'c1', oldString: 'prompt', newString: 'p' });
+  });
+
+  it('delegates backend_logic module edits to backend_file_edit', async () => {
+    const { template, fakes } = setup();
+    const content = await exec(template, 'edit', { path: '/characters/c1/backend_logic/lib/utils.lua', oldString: 'a', newString: 'b' });
+    expect(content).toBe('Edited module');
+    expect(fakes.character.calls[0]?.tool).toBe('backend_file_edit');
+    expect(fakes.character.calls[0]?.args).toEqual({ characterId: 'c1', path: 'lib/utils.lua', oldString: 'a', newString: 'b' });
+  });
 });
 
 describe('rm', () => {
@@ -518,6 +593,19 @@ describe('rm', () => {
       expect(fakes.character.calls[0]).toMatchObject({ tool, args });
     });
   }
+
+  it('deletes a backend_logic module via backend_file_remove', async () => {
+    const { template, fakes } = setup();
+    await exec(template, 'rm', { path: '/characters/c1/backend_logic/lib/utils.lua' });
+    expect(fakes.character.calls[0]).toMatchObject({ tool: 'backend_file_remove', args: { characterId: 'c1', path: 'lib/utils.lua' } });
+  });
+
+  it('refuses to remove backend_logic/main.lua (clear with write instead)', async () => {
+    const { template } = setup();
+    expect(await exec(template, 'rm', { path: '/characters/c1/backend_logic/main.lua' })).toBe(
+      'Error: cannot remove /characters/c1/backend_logic/main.lua — clear it with write and empty content',
+    );
+  });
 
   it('deletes a custom-backend directory via custom_backend_delete', async () => {
     const { template, fakes } = setup({ backend: { custom_backend_delete: () => 'Deleted custom backend cb1' } });

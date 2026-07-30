@@ -3,13 +3,16 @@
  *
  * Layout: text field files (snake_case names mapping to camelCase card
  * fields), meta.json, the lorebook/ greetings/ regex/ assets/ modules/
- * sub-collections, and backend_logic.lua (the card-coupled backend script).
- * greetings/ holds the card's alternate greetings as one text file per index
- * (meta.json still exposes the whole alternateGreetings array for bulk
- * reads/replaces). The backend_logic `enabled` flag is deliberately NOT
- * exposed as a separate file: writes go to backend_logic_set, which preserves
- * the current flag when only luaSource is given; edits go to
- * backend_logic_edit, which load-validates before saving.
+ * sub-collections, and backend_logic/ (the card-coupled backend script as a
+ * directory: main.lua is the entry point, everything else is a module
+ * require()'d from the script). greetings/ holds the card's alternate
+ * greetings as one text file per index (meta.json still exposes the whole
+ * alternateGreetings array for bulk reads/replaces). The backend_logic
+ * `enabled` flag is deliberately NOT exposed as a separate file: writes to
+ * main.lua go to backend_logic_set, which preserves the current flag when
+ * only luaSource is given; edits go to backend_logic_edit, which
+ * load-validates before saving. The legacy single-file path
+ * backend_logic.lua stays as an alias for backend_logic/main.lua.
  *
  * JSON-blob files — meta.json, lorebook/<entryId>.json, regex/<ruleId>.json —
  * also expand into per-field files (<file>.json/<field> or meta.json/<field>):
@@ -148,6 +151,7 @@ async function ls(call: RouteCall): Promise<ListEntry[] | string> {
   if (id === undefined) return COLLECTION_REFUSAL;
   if (isNewSegment(id)) return err(`no such file: ${call.path}`);
   if (sub === undefined) return lsCharacterDir(call, id);
+  if (call.segs.length === 2 && sub === 'backend_logic') return lsBackendLogicDir(call, id);
   if (call.segs.length === 2 && SUBCOLLECTIONS.has(sub)) return lsSubCollection(call, id, sub);
   // JSON-blob files with per-field expansions list their field files.
   if (sub === 'meta.json' && file === undefined) return lsFieldFiles(call, META_FIELDS);
@@ -197,9 +201,22 @@ async function lsCharacterDir(call: RouteCall, id: string): Promise<ListEntry[] 
   const logic = await provider(call, 'backend_logic_get', { characterId: id });
   const logicRec = logic.ok && isRecord(logic.value) ? logic.value : {};
   const logicSource = asString(logicRec['luaSource']) ?? '';
-  if (logicRec['enabled'] === true || logicSource.length > 0) entries.push({ name: 'backend_logic.lua', dir: false });
+  const logicFiles = await provider(call, 'backend_file_list', { characterId: id });
+  const moduleCount = logicFiles.ok && isRecord(logicFiles.value) ? asArray(logicFiles.value['files']).length : 0;
+  if (logicRec['enabled'] === true || logicSource.length > 0 || moduleCount > 0) {
+    entries.push({ name: 'backend_logic', dir: true });
+  }
 
   return entries;
+}
+
+/** ls /characters/<id>/backend_logic/ — main.lua plus every stored module. */
+async function lsBackendLogicDir(call: RouteCall, id: string): Promise<ListEntry[] | string> {
+  const res = await provider(call, 'backend_file_list', { characterId: id });
+  // A failing provider call degrades to "no modules" rather than failing the
+  // whole listing (same rule as the card dir).
+  const modules = res.ok && isRecord(res.value) ? asArray(res.value['files']).filter((f): f is string => typeof f === 'string') : [];
+  return [{ name: 'main.lua', dir: false }, ...modules.map((f) => ({ name: f, dir: false }))];
 }
 
 async function lsSubCollection(call: RouteCall, id: string, sub: string): Promise<ListEntry[] | string> {
@@ -256,6 +273,11 @@ async function read(call: RouteCall): Promise<string> {
     return readMetaField(call, id, file, rest);
   }
   if (sub === 'backend_logic.lua' && file === undefined) return readBackendLogic(call, id);
+  if (sub === 'backend_logic') {
+    if (file === undefined) return err(`is a directory (use ls): ${call.path}`);
+    if (file === 'main.lua' && rest.length === 0) return readBackendLogic(call, id);
+    return readBackendFile(call, id, [file, ...rest].join('/'));
+  }
 
   const textField = TEXT_FIELDS.find(([name]) => name === sub);
   if (textField !== undefined && file === undefined) {
@@ -314,6 +336,15 @@ async function readBackendLogic(call: RouteCall, id: string): Promise<string> {
   const luaSource = asString(rec['luaSource']) ?? '';
   // Matches the ls rule: the file exists only when the script is enabled or non-empty.
   if (rec['enabled'] !== true && luaSource.length === 0) return err(`no such file: ${call.path}`);
+  return luaSource;
+}
+
+async function readBackendFile(call: RouteCall, id: string, path: string): Promise<string> {
+  const res = await provider(call, 'backend_file_get', { characterId: id, path });
+  if (!res.ok) return res.error;
+  const rec = isRecord(res.value) ? res.value : {};
+  const luaSource = asString(rec['luaSource']);
+  if (luaSource === undefined) return err(`no such file: ${call.path}`);
   return luaSource;
 }
 
@@ -421,6 +452,19 @@ async function write(call: RouteCall, content: string): Promise<string> {
   if (sub === 'backend_logic.lua' && file === undefined) {
     // backend_logic_set preserves the current `enabled` flag when only luaSource is given.
     const res = await provider(call, 'backend_logic_set', { characterId: id, luaSource: content });
+    if (!res.ok) return res.error;
+    return resultToString(res);
+  }
+
+  if (sub === 'backend_logic' && file !== undefined) {
+    if (file === 'main.lua' && rest.length === 0) {
+      const res = await provider(call, 'backend_logic_set', { characterId: id, luaSource: content });
+      if (!res.ok) return res.error;
+      return resultToString(res);
+    }
+    // Module paths may nest (lib/deep/util.lua) — normalizePath already
+    // rejected `.`/`..` segments; backend_file_set enforces the VFS rules.
+    const res = await provider(call, 'backend_file_set', { characterId: id, path: [file, ...rest].join('/'), luaSource: content });
     if (!res.ok) return res.error;
     return resultToString(res);
   }
@@ -547,12 +591,20 @@ async function rm(call: RouteCall): Promise<string> {
   if (file === undefined) {
     if (sub === 'meta.json') return err(`${call.path} is read-only`);
     if (SUBCOLLECTIONS.has(sub)) return err(`is a directory: ${call.path}`);
-    // Text fields and backend_logic.lua: clear via write with empty content instead.
+    // Text fields, backend_logic/, and backend_logic.lua: clear via write with empty content instead.
     return err(`cannot remove ${call.path} — clear it with write and empty content`);
   }
   if (isNewSegment(file)) return err(`no such file: ${call.path}`);
-  if (rest.length > 0) return err(`${call.path} is read-only`);
+  if (rest.length > 0 && sub !== 'backend_logic') return err(`${call.path} is read-only`);
   if (sub === 'meta.json') return err(`${call.path} is read-only — clear string fields with write and empty content`);
+  if (sub === 'backend_logic') {
+    if (file === 'main.lua' && rest.length === 0) {
+      return err(`cannot remove ${call.path} — clear it with write and empty content`);
+    }
+    const res = await provider(call, 'backend_file_remove', { characterId: id, path: [file, ...rest].join('/') });
+    if (!res.ok) return res.error;
+    return resultToString(res);
+  }
 
   switch (sub) {
     case 'lorebook': {
@@ -594,7 +646,7 @@ async function rm(call: RouteCall): Promise<string> {
 
 export const charactersRoute: DomainRoute = { ls, read, write, rm };
 
-/** Used by WorkbenchTemplate.edit: the one file whose edits must be delegated to the provider (it load-validates before saving). */
+/** Used by WorkbenchTemplate.edit: backend_logic files whose edits are delegated to the provider (load-validation before saving). */
 export function isBackendLogicPath(segs: string[]): boolean {
-  return segs.length === 2 && segs[1] === 'backend_logic.lua';
+  return (segs.length === 2 && segs[1] === 'backend_logic.lua') || (segs.length >= 3 && segs[1] === 'backend_logic');
 }

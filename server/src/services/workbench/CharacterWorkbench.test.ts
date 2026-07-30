@@ -1116,6 +1116,27 @@ describe('CharacterWorkbench', () => {
       expect(types).toContain('character.snapshot');
     });
 
+    it('backend_logic_set and backend_logic_edit preserve the files module map', async () => {
+      const files = { 'lib/utils.lua': 'return { x = 1 }' };
+      const { template, charStore } = makeTemplate({
+        characters: [makeCharacter({ extensions: { contextualBackend: { enabled: true, luaSource: 'return 1', files } } })],
+      });
+
+      await template.execute('backend_logic_set', { characterId: 'char1', luaSource: 'function generate(p, c) return "y" end' });
+      let ext = charStore.get('char1')!.extensions['contextualBackend'] as Record<string, unknown>;
+      expect(ext['files']).toEqual(files);
+      expect(ext['luaSource']).toBe('function generate(p, c) return "y" end');
+
+      await template.execute('backend_logic_edit', {
+        characterId: 'char1',
+        oldString: '"y"',
+        newString: '"z"',
+      });
+      ext = charStore.get('char1')!.extensions['contextualBackend'] as Record<string, unknown>;
+      expect(ext['files']).toEqual(files);
+      expect(ext['luaSource']).toBe('function generate(p, c) return "z" end');
+    });
+
     it('backend_logic_set errors for an unknown character', async () => {
       const { template } = makeTemplate();
       const res = await template.execute('backend_logic_set', { characterId: 'nope', enabled: true });
@@ -1277,6 +1298,110 @@ describe('CharacterWorkbench', () => {
       const outcome = JSON.parse(res.content as string) as Record<string, unknown>;
       expect(outcome['ok']).toBe(false);
       expect(outcome['error']).toContain('kaboom');
+    });
+
+    it('backend_logic_test lets the script require the stored module files', async () => {
+      const { template } = makeTemplate({ characters: [makeCharacter()] });
+      await template.execute('backend_logic_set', {
+        characterId: 'char1',
+        luaSource: `
+          local u = require('lib/utils')
+          function generate(prompt, ctx)
+            return u.reply()
+          end
+        `,
+      });
+      await template.execute('backend_file_set', {
+        characterId: 'char1',
+        path: 'lib/utils.lua',
+        luaSource: 'local M = {}\nfunction M.reply() return "FROM-MODULE" end\nreturn M',
+      });
+      const res = await template.execute('backend_logic_test', { characterId: 'char1', input: 'hi' });
+      const outcome = JSON.parse(res.content as string) as Record<string, unknown>;
+      expect(outcome['ok']).toBe(true);
+      expect(outcome['text']).toBe('FROM-MODULE');
+    });
+  });
+
+  describe('backend_file tools', () => {
+    const MODULE = 'local M = {}\nfunction M.reply() return "FROM-MODULE" end\nreturn M';
+
+    it('backend_file_set/get/remove round-trips a module', async () => {
+      const { template } = makeTemplate({ characters: [makeCharacter()] });
+
+      const setRes = await template.execute('backend_file_set', { characterId: 'char1', path: 'lib/utils.lua', luaSource: MODULE });
+      expect(JSON.parse(setRes.content as string)).toEqual({ path: 'lib/utils.lua', lines: 3 });
+
+      // list sorts the keys; the .lua extension is appended when omitted.
+      await template.execute('backend_file_set', { characterId: 'char1', path: 'lib/aaa', luaSource: 'return 1' });
+      const listRes = await template.execute('backend_file_list', { characterId: 'char1' });
+      expect(JSON.parse(listRes.content as string)).toEqual({ files: ['lib/aaa.lua', 'lib/utils.lua'] });
+
+      const getRes = await template.execute('backend_file_get', { characterId: 'char1', path: 'lib/utils' });
+      expect(JSON.parse(getRes.content as string)).toEqual({ path: 'lib/utils.lua', luaSource: MODULE });
+
+      const rmRes = await template.execute('backend_file_remove', { characterId: 'char1', path: 'lib/utils.lua' });
+      expect(JSON.parse(rmRes.content as string)).toEqual({ removed: 'lib/utils.lua' });
+      const getAfter = await template.execute('backend_file_get', { characterId: 'char1', path: 'lib/utils.lua' });
+      expect(getAfter.content).toContain('no such module');
+    });
+
+    it('backend_file_set rejects invalid module paths', async () => {
+      const { template } = makeTemplate({ characters: [makeCharacter()] });
+      for (const path of ['../x.lua', '/abs.lua', 'bad name.lua', 'lib//x.lua']) {
+        const res = await template.execute('backend_file_set', { characterId: 'char1', path, luaSource: 'return 1' });
+        expect(res.content).toContain('invalid module path');
+      }
+    });
+
+    it('backend_file_set rejects modules that fail to load (NOT saved)', async () => {
+      const { template } = makeTemplate({ characters: [makeCharacter()] });
+      const res = await template.execute('backend_file_set', { characterId: 'char1', path: 'bad.lua', luaSource: 'function (' });
+      expect(res.content).toContain('write rejected');
+      const getRes = await template.execute('backend_file_get', { characterId: 'char1', path: 'bad.lua' });
+      expect(getRes.content).toContain('no such module');
+    });
+
+    it('backend_file_edit unique-matches and load-checks (no generate requirement)', async () => {
+      const { template } = makeTemplate({ characters: [makeCharacter()] });
+      await template.execute('backend_file_set', { characterId: 'char1', path: 'lib/utils.lua', luaSource: MODULE });
+
+      const res = await template.execute('backend_file_edit', {
+        characterId: 'char1',
+        path: 'lib/utils.lua',
+        oldString: 'FROM-MODULE',
+        newString: 'EDITED-MODULE',
+      });
+      expect(JSON.parse(res.content as string)).toMatchObject({ path: 'lib/utils.lua', replacements: 1 });
+      const getRes = await template.execute('backend_file_get', { characterId: 'char1', path: 'lib/utils.lua' });
+      expect(JSON.parse(getRes.content as string)['luaSource']).toContain('EDITED-MODULE');
+
+      const bad = await template.execute('backend_file_edit', {
+        characterId: 'char1',
+        path: 'lib/utils.lua',
+        oldString: 'return M',
+        newString: 'return M (((',
+      });
+      expect(bad.content).toContain('edit rejected');
+      const after = await template.execute('backend_file_get', { characterId: 'char1', path: 'lib/utils.lua' });
+      expect(JSON.parse(after.content as string)['luaSource']).not.toContain('(((');
+
+      // A module does NOT need to define generate() — that rule is main.lua-only.
+      const noGenerate = await template.execute('backend_file_edit', {
+        characterId: 'char1',
+        path: 'lib/utils.lua',
+        oldString: 'EDITED-MODULE',
+        newString: 'PLAIN',
+      });
+      expect(JSON.parse(noGenerate.content as string)).toMatchObject({ replacements: 1 });
+    });
+
+    it('module map survives backend_logic_set (files preserved)', async () => {
+      const { template, charStore } = makeTemplate({ characters: [makeCharacter()] });
+      await template.execute('backend_file_set', { characterId: 'char1', path: 'lib/utils.lua', luaSource: MODULE });
+      await template.execute('backend_logic_set', { characterId: 'char1', luaSource: 'function generate(p, c) return "x" end' });
+      const ext = charStore.get('char1')!.extensions['contextualBackend'] as Record<string, unknown>;
+      expect(ext['files']).toEqual({ 'lib/utils.lua': MODULE });
     });
   });
 });

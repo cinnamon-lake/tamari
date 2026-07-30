@@ -29,6 +29,8 @@ Notes on what you get (wasmoon, not native Lua):
 - `os` provides `time`, `clock`, `date`, `getenv` (a fake WASM env), etc. **`os.execute` and `os.exit` always stay blocked** — they abort the WASM engine in ways Lua's `pcall` cannot catch.
 - `require` can only load modules the script itself registered in `package.preload` (or wrote to the ephemeral FS) during the same execution.
 - `base64.encode` / `base64.decode` are always available (no flag needed), like `json` — Lua strings are byte strings, so binary round-trips safely.
+- `json.encode(value)` / `json.decode(text)` are always available. `json.decode` throws on invalid input; `json.parse_result(text)` is the non-throwing variant — it returns `{ value = <decoded> }` on success and `{ error = <message> }` on failure, so scripts can pattern-match instead of `pcall`ing (handy when consuming structured LLM output, which is often malformed).
+- One exception to the stripped `require`: **card-coupled backend scripts** (Type B custom backends) get a sandboxed `require` that resolves against the card's own virtual filesystem (`backend_logic/` in the workbench) — see [Custom Backends](./custom-backends.md). Everywhere else `require` stays removed.
 - These flags exist so *you* can give *your own* templates more power. The AI cannot set them; `run_lua` (where the AI writes the code) always runs fully sandboxed.
 
 ### Returning media from a tool

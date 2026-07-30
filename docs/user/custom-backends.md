@@ -58,6 +58,39 @@ end
 
 Available globals: `backends` (delegation, below), `json`, `base64`, and `fetch` (the same SSRF-guarded async fetch Lua tool templates get — see [Lua Scripting](./lua-scripting.md)). The `st` API is **not** injected.
 
+### Multi-file scripts: `require` and the card VFS (Type B)
+
+A card-coupled script doesn't have to live in one blob. The card carries a small virtual filesystem (`extensions.contextualBackend.files`, edited through the workbench's `backend_logic/` directory — see [Workbench](./workbench.md)) and `require` resolves against it:
+
+```lua
+-- backend_logic/main.lua
+local utils = require('lib/utils')   -- resolves backend_logic/lib/utils.lua
+function generate(prompt, ctx)
+  return utils.reply(prompt)
+end
+```
+
+- Path rules: slash-separated segments of `[A-Za-z0-9_-]`, `.lua` appended when omitted, no `..`, no leading `/`. `require('./lib/utils')` also works.
+- A module is a plain Lua chunk whose **return value is the module** (top-level `return` is expected). Modules execute **once** per generation (cached); circular requires raise `circular require: <path>`.
+- Resolution is against the card's files **only** — the real filesystem is never touched, and anything the card doesn't contain is `module not found: <path>`.
+- The workbench dry-run (`test_backend_logic`) sees the same files, so what you test is what generation runs.
+
+### Structured output: `response_format`
+
+`prompt.responseFormat` is readable from Lua as `prompt.response_format` — your script can inspect what structured output was requested. To **request** it on a delegated call, set `response_format` (or `responseFormat`) on the prompt table you hand to `backends.generate` or `__passthrough`:
+
+```lua
+function generate(prompt, ctx)
+  prompt.response_format = { type = 'json_schema', schema = { type = 'object' } }
+  local res = backends.generate(prompt):await()
+  local parsed = json.parse_result(res.text)
+  if parsed.error then return "The model didn't produce JSON: " .. parsed.error end
+  return "Got structured data: " .. json.encode(parsed.value)
+end
+```
+
+Adapters that support structured output (OpenAI, Claude, Gemini) map it; the rest silently ignore it — it's a hint, never a guarantee, and there is no automatic validation or retry. Parse defensively with `json.parse_result` (returns `{ value = ... }` / `{ error = ... }`; `json.decode` keeps throwing on garbage).
+
 ### Return shapes
 
 `generate()` may return:

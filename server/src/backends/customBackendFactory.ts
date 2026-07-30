@@ -28,6 +28,7 @@ import type { IBackendConfigRepository } from '../repos/BackendConfigRepository.
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
 import { buildBackendSettings } from './buildBackendSettings.js';
 import { str } from '../lib/coerce.js';
+import { validateVfsPath } from '../scripting/LuaVfs.js';
 import {
   LuaBackendAdapter,
   runAdapterBlocking,
@@ -146,6 +147,8 @@ export const CHARACTER_BACKEND_EXTENSION_KEY = 'contextualBackend';
 
 export interface CharacterBackendScript {
   luaSource: string;
+  /** Card VFS modules for the sandboxed `require` (path → Lua source). */
+  files?: Record<string, string>;
 }
 
 /**
@@ -160,7 +163,23 @@ export function getCharacterBackendScript(
   const ext = raw as Record<string, unknown>;
   if (ext['enabled'] !== true) return null;
   const luaSource = typeof ext['luaSource'] === 'string' ? ext['luaSource'].trim() : '';
-  return luaSource.length > 0 ? { luaSource } : null;
+  if (luaSource.length === 0) return null;
+
+  // Card VFS: tolerate garbage — only string→string entries with valid VFS
+  // paths survive (LuaVfs skips them again at prelude build).
+  let files: Record<string, string> | undefined;
+  const rawFiles = ext['files'];
+  if (rawFiles && typeof rawFiles === 'object' && !Array.isArray(rawFiles)) {
+    files = {};
+    for (const [key, value] of Object.entries(rawFiles as Record<string, unknown>)) {
+      if (typeof value !== 'string') continue;
+      if (validateVfsPath(key) === null) continue;
+      files[key] = value;
+    }
+    if (Object.keys(files).length === 0) files = undefined;
+  }
+
+  return files ? { luaSource, files } : { luaSource };
 }
 
 /**
@@ -175,6 +194,8 @@ export function createContextualBackendAdapter(
     characterId: string;
     characterName: string;
     luaSource: string;
+    /** Card VFS modules available to the script's `require`. */
+    files?: Record<string, string>;
     activeAdapter: BackendAdapter;
   },
 ): LuaBackendAdapter {
@@ -190,6 +211,7 @@ export function createContextualBackendAdapter(
     id: `character-backend:${opts.characterId}`,
     name: `${opts.characterName} (card logic)`,
     luaSource: opts.luaSource,
+    vfsFiles: opts.files,
     runtime: deps.luaRuntime,
     delegate: {
       generate: async (configId, prompt, signal, ctx) =>

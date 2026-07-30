@@ -21,7 +21,7 @@ tamari server listening on http://[::]:8000
 
 Open `http://localhost:8000` in your browser.
 
-Alternatively, `./start.sh` does the whole thing in one shot — it checks for Node.js, runs `npm install`, builds, and starts the server (any extra arguments are passed through to the server).
+Alternatively, `./start.sh` (Linux/macOS) or `start.bat` (Windows) does the whole thing in one shot — it checks for Node.js, runs `npm install`, builds, and starts the server (any extra arguments are passed through to the server).
 
 > **Note:** The dev servers from `npm run dev` (Vite + tsx watch) are for development. For normal use, `npm start` is all you need.
 
@@ -48,7 +48,20 @@ Where the token comes from:
 - **Set `TAMARI_SECRET` yourself (recommended).** Pick any long random string and start the server with it. That's your login token, and it survives restarts:
 
   ```sh
+  # Linux / macOS
   TAMARI_SECRET=$(openssl rand -hex 32) npm start
+  ```
+
+  ```powershell
+  # Windows (PowerShell)
+  $env:TAMARI_SECRET = -join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) })
+  npm start
+  ```
+
+  ```bat
+  rem Windows (Command Prompt)
+  set TAMARI_SECRET=pick-a-long-random-string
+  npm start
   ```
 
 - **If `TAMARI_SECRET` is unset**, the server generates a random secret on every boot and logs a warning — but only a **masked** form of it:

@@ -4,7 +4,7 @@
   "type": "module",
   "main": "./dist/main.js",
   "scripts": {
-    "build": "tsc && rm -rf dist/db/migrations && mkdir -p dist/db && cp -r src/db/migrations dist/db/",
+    "build": "tsc && node scripts/copy-migrations.mjs",
     "dev": "tsx watch src/main.ts",
     "start": "node dist/main.js",
     "lint": "eslint src",

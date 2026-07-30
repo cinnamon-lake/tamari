@@ -30,6 +30,8 @@ export interface DryRunOptions {
   delegateResponse?: string;
   /** Character context woven into the sample prompt (description → system, firstMes → assistant). */
   character?: DryRunCharacterContext;
+  /** Card VFS module map visible to the script's `require` (matches generation). */
+  files?: Record<string, string>;
 }
 
 export interface DryRunDelegation {
@@ -79,6 +81,7 @@ export async function dryRunBackendScript(runtime: LuaRuntime, opts: DryRunOptio
     id: 'dry-run',
     name: 'dry-run',
     luaSource: opts.luaSource,
+    vfsFiles: opts.files,
     runtime,
     delegate,
   });

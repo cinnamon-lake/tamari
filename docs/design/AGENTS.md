@@ -369,6 +369,14 @@ A tool result whose `extra.renderType` is a non-empty string is **omitted from t
 
 The built-in `scene` template (`server/src/services/templates/SceneTemplate.ts`) adds a second consumer of this contract: the client derives the *current* scene by scanning the active branch's messages backwards for the newest `scene` renderType part (`client/src/lib/sceneState.ts`), and `SceneStage` renders it as a stage panel above the chat. Stage-like features should reuse this branch-scan derivation instead of adding new state channels.
 
+### Lua Sandbox Surfaces
+
+Three distinct Lua surfaces exist, with three different `st` exposures: **quick replies** get the full `st` API; **Lua tool templates** get the curated subset (`createToolStApi` — no chat actions or lifecycle); **backend scripts** (registry custom backends and card-coupled `backend_logic`, both `LuaBackendAdapter`) get **no `st` at all** — only `backends` (credential-safe delegation), `json`, `base64`, `fetch`, and the `state` snapshot channel.
+
+Backend scripts additionally get a **sandboxed `require`** (`server/src/scripting/LuaVfs.ts`): a card carries a virtual filesystem at `extensions.contextualBackend.files` (path → Lua source, edited as the workbench's `/characters/<id>/backend_logic/` directory), and `require` resolves against it only — per-state module cache, circular/missing modules raise named errors, the real filesystem is never touched. The entry point stays `luaSource` (`backend_logic/main.lua`); the legacy `backend_logic.lua` workbench path aliases it. Type A registry backends stay single-blob by design.
+
+**Structured output:** `Prompt.responseFormat` is the canonical field (set by nothing built-in; honored by the OpenAI/Claude/Gemini adapters). Lua scripts inspect it as `prompt.response_format` and request it by setting `response_format` on delegate/`__passthrough` prompt tables (normalized to `responseFormat` in `LuaBackendAdapter`). Consuming is the script's job: `json.parse_result` (`{ value }` / `{ error }`) — no adapter-level validation or retries.
+
 ### Rules
 - The `run_lua` backend tool (for arbitrary Lua execution during generation) uses the same `LuaRuntime` as Quick Replies but **does not** inject the `st` API.
 - Lua tool templates are cached for 30s; the cache is invalidated on `toolTemplate.update` / `delete`.

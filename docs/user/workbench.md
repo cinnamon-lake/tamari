@@ -57,8 +57,10 @@ What `ls` *can* list:
 │       ├── assets/<assetId>.json          asset metadata only; the binary is not readable
 │       ├── modules/<moduleId>.json        Risu modules; read + rm only. Sections:
 │       │   └── <section>                  info | triggers | trigger/<n> | regex | lorebook | assets
-│       └── backend_logic.lua              card-coupled backend script (listed only when
-│                                          enabled or non-empty)
+│       ├── backend_logic/                 card-coupled backend script, as a directory
+│       │   ├── main.lua                   entry point (listed when enabled, scripted, or modules exist)
+│       │   └── <path>.lua                 modules require()'d from main.lua (e.g. lib/utils.lua)
+│       └── backend_logic.lua              legacy alias for backend_logic/main.lua
 ├── backends/<configId>.json               backend config; apiKey redacted to hasApiKey
 ├── custom-backends/<id>/
 │   ├── meta.json                          { name, description, updatedAt }
@@ -125,7 +127,7 @@ Output is `path:line:text`, capped at 50 matches.
 
 `edit { path, oldString, newString, replaceAll? }` — surgical search-and-replace inside a text or `.lua` file. `oldString` must match **exactly once** unless `replaceAll: true` is set. Whole `.json` files are refused (`Error: use write for JSON files`), but `edit` *does* work on per-field files (below) — the precise way to tweak one regex pattern or one paragraph.
 
-Edited `.lua` source is re-validated before saving: `backend_logic.lua` must load and define `generate`, and a luatool `code.lua` must load. Invalid edits are **not** saved.
+Edited `.lua` source is re-validated before saving: `backend_logic/main.lua` (and its `backend_logic.lua` alias) must load and define `generate`, a `backend_logic/` module must load (top-level `return` allowed — modules don't need `generate`), and a luatool `code.lua` must load. Invalid edits are **not** saved.
 
 ### `rm`
 
@@ -137,7 +139,7 @@ Refused, with an explanation:
 - Backend configs (overwrite with `write`, or switch the active config)
 - Toolsets (disable instead: `write` with `{"enabled": false}`)
 - Quick replies and Lua tool templates (no delete, by policy)
-- `meta.json` files, text fields, and `backend_logic.lua` (clear them by writing empty content)
+- `meta.json` files, text fields, and `backend_logic/main.lua` (clear them by writing empty content); `backend_logic/` itself is a directory
 - Collections
 
 ### `run`
@@ -237,12 +239,12 @@ Risu modules on a card are read-only under `modules/`, so porting means re-creat
 3. Port the pieces:
    - **Lore** → `write /characters/<clone>/lorebook/new.json` per entry. Module lorebooks are **not** auto-converted.
    - **Display/HUD rules** → `write /characters/<clone>/regex/new.json`, previewed with `run test_regex`.
-   - **Backend logic** → `write /characters/<clone>/backend_logic.lua`, dry-run with `run test_backend_logic`. Prefer `edit` when iterating on a large script.
+   - **Backend logic** → `write /characters/<clone>/backend_logic/main.lua`, dry-run with `run test_backend_logic`. Bigger scripts split into modules: `write /characters/<clone>/backend_logic/lib/utils.lua` and `require('lib/utils')` from `main.lua`. Prefer `edit` when iterating on a large script.
 4. **Assets** → `run copy_assets` or `run copy_module_assets`, then reference them in card text with `{{img::name}}` (see [Macro System](./macros.md)).
 
 ## Safety Notes
 
-- **Lua is validated before saving.** `backend_logic.lua` must load and define `generate`; a luatool `code.lua` must load. Invalid `write` and `edit` attempts are rejected and nothing is stored.
+- **Lua is validated before saving.** `backend_logic/main.lua` (alias `backend_logic.lua`) must load and define `generate`; `backend_logic/` modules must load; a luatool `code.lua` must load. Invalid `write` and `edit` attempts are rejected and nothing is stored.
 - **Most things can't be deleted.** Characters, backend configs, toolsets, quick replies, and Lua tool templates have no delete path — `rm` refuses them with an explanation. Deletable items are limited to lorebook entries, greetings, regex rules, assets, modules, and custom backends.
 - **Credentials are redacted.** Backend configs come back with `apiKey` replaced by `hasApiKey`, and `test_backend` dry runs scrub credentials from the URLs, headers, and bodies they display.
 - **Dry runs send nothing.** `test_backend` in `dry` mode, and the `test_custom_backend` / `test_backend_logic` script tests, never touch the network or your saved config.

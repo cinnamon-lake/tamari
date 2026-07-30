@@ -7,6 +7,7 @@
 
 import { LuaFactory, LuaEngine } from 'wasmoon';
 import { luaFetch } from './LuaFetch.js';
+import { vfsRequirePrelude } from './LuaVfs.js';
 const MAX_EXECUTION_MS = 5000;
 
 /**
@@ -19,6 +20,9 @@ export interface LuaVmSandboxOptions {
   allowDebug?: boolean;
   allowRequire?: boolean;
   allowNet?: boolean;
+  /** Card-scoped module map for the sandboxed VFS `require` (LuaVfs.ts).
+      When present, `require` resolves ONLY against these sources. */
+  vfsFiles?: Record<string, string>;
 }
 
 /**
@@ -80,10 +84,20 @@ export class LuaRuntime {
       // `local res = fetch(url, opts):await()`.
       lua.global.set('fetch', luaFetch);
     }
-    // Inject JSON helpers (wasmoon doesn't provide native JSON)
+    // Inject JSON helpers (wasmoon doesn't provide native JSON). `decode`
+    // throws on garbage; `parse_result` is the result-style envelope for
+    // scripts consuming structured output (reverse proxies emit invalid JSON
+    // often enough that pattern-matching beats pcall).
     lua.global.set('json', {
       encode: (value: unknown) => JSON.stringify(value),
       decode: (text: string): unknown => JSON.parse(text),
+      parse_result: (text: string): { value: unknown } | { error: string } => {
+        try {
+          return { value: JSON.parse(text) };
+        } catch (err) {
+          return { error: err instanceof Error ? err.message : String(err) };
+        }
+      },
     });
 
     // Base64 helpers for binary payloads (media templates). Lua strings are
@@ -96,6 +110,13 @@ export class LuaRuntime {
 
     // Inject safe time helper for templates that need current time
     lua.global.set('get_time_iso', () => new Date().toISOString());
+
+    // VFS require (LuaVfs): installs a sandboxed `require` resolving against
+    // the given module map. MUST run before the strip block below — the
+    // prelude captures the `load` builtin into a closure.
+    if (opts.vfsFiles) {
+      await lua.doString(vfsRequirePrelude(opts.vfsFiles));
+    }
 
     // Always strip code-loading builtins regardless of sandbox level
     lua.global.set('loadfile', undefined);

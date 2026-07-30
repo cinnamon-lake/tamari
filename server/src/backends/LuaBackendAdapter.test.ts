@@ -139,6 +139,61 @@ describe('LuaBackendAdapter', () => {
     expect(result.usage).toEqual({ promptTokens: 6, completionTokens: 14 });
   });
 
+  it('normalizes response_format to responseFormat on delegate calls', async () => {
+    const delegate = makeDelegate();
+    const adapter = makeAdapter(`
+      function generate(prompt, ctx)
+        prompt.response_format = { type = 'json_schema', schema = { type = 'object' } }
+        local res = backends.generate(prompt):await()
+        return res.text
+      end
+    `, delegate);
+    await run(adapter);
+    const calledPrompt = vi.mocked(delegate.generate).mock.calls[0]![1] as unknown as Record<string, unknown>;
+    expect(calledPrompt['responseFormat']).toEqual({ type: 'json_schema', schema: { type: 'object' } });
+    expect(calledPrompt['response_format']).toBeUndefined();
+  });
+
+  it('keeps an explicit responseFormat over a snake_case duplicate', async () => {
+    const delegate = makeDelegate();
+    const adapter = makeAdapter(`
+      function generate(prompt, ctx)
+        prompt.responseFormat = { type = 'text' }
+        prompt.response_format = { type = 'json_object' }
+        local res = backends.generate(prompt):await()
+        return res.text
+      end
+    `, delegate);
+    await run(adapter);
+    const calledPrompt = vi.mocked(delegate.generate).mock.calls[0]![1] as unknown as Record<string, unknown>;
+    expect(calledPrompt['responseFormat']).toEqual({ type: 'text' });
+  });
+
+  it('normalizes response_format on the passthrough path', async () => {
+    let seen: Prompt | undefined;
+    const recordingAdapter: BackendAdapter = {
+      id: 'mock',
+      supportsStreaming: true,
+      supportsTools: false,
+      // Records the outgoing prompt; no chunks needed for this assertion.
+      // eslint-disable-next-line require-yield
+      async *stream(prompt: Prompt): AsyncGenerator<BackendStreamItem, GenerationResult> {
+        seen = prompt;
+        return { finishReason: 'stop', usage: { promptTokens: 0, completionTokens: 0 } };
+      },
+      listModels: async () => [],
+    };
+    const delegate = makeDelegate({ resolveAdapter: vi.fn(async () => recordingAdapter) });
+    const adapter = makeAdapter(`
+      function generate(prompt, ctx)
+        prompt.response_format = { type = 'json_object' }
+        return { __passthrough = true, prompt = prompt }
+      end
+    `, delegate);
+    await run(adapter);
+    expect((seen as unknown as Record<string, unknown>)['responseFormat']).toEqual({ type: 'json_object' });
+  });
+
   it('errors when delegation fails', async () => {
     const delegate = makeDelegate({
       generate: vi.fn(async () => {

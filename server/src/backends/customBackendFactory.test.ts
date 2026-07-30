@@ -216,6 +216,54 @@ describe('getCharacterBackendScript', () => {
     expect(getCharacterBackendScript(null)).toBeNull();
     expect(getCharacterBackendScript(undefined)).toBeNull();
   });
+
+  it('parses the files module map tolerantly', () => {
+    const character = {
+      extensions: {
+        contextualBackend: {
+          enabled: true,
+          luaSource: 'return 1',
+          files: { 'lib/utils.lua': 'return {}', 'lib/noext': 'return 1' },
+        },
+      },
+    };
+    expect(getCharacterBackendScript(character)).toEqual({
+      luaSource: 'return 1',
+      files: { 'lib/utils.lua': 'return {}', 'lib/noext': 'return 1' },
+    });
+  });
+
+  it('drops invalid keys, non-string values, and garbage files shapes', () => {
+    expect(
+      getCharacterBackendScript({
+        extensions: {
+          contextualBackend: {
+            enabled: true,
+            luaSource: 'x',
+            files: {
+              '../evil.lua': 'x',
+              '/abs.lua': 'x',
+              'bad name.lua': 'x',
+              'ok/good.lua': 42,
+              'ok/alsoBad.lua': null,
+            },
+          },
+        },
+      }),
+    ).toEqual({ luaSource: 'x' });
+
+    // Non-object files values are ignored outright.
+    expect(
+      getCharacterBackendScript({
+        extensions: { contextualBackend: { enabled: true, luaSource: 'x', files: 'not-a-map' } },
+      }),
+    ).toEqual({ luaSource: 'x' });
+    expect(
+      getCharacterBackendScript({
+        extensions: { contextualBackend: { enabled: true, luaSource: 'x', files: ['lib/a.lua'] } },
+      }),
+    ).toEqual({ luaSource: 'x' });
+  });
 });
 
 describe('createContextualBackendAdapter', () => {

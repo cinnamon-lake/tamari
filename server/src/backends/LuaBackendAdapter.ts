@@ -85,6 +85,9 @@ export interface LuaBackendAdapterConfig {
   luaSource: string;
   runtime: LuaRuntime;
   delegate: CustomBackendDelegate;
+  /** Card VFS module map for the sandboxed `require` (generate() only;
+      list_models() states don't get it, matching the absent backends global). */
+  vfsFiles?: Record<string, string>;
   /** Execution limit for generate(); defaults to LUA_GENERATE_TIMEOUT_MS (10 min). Tests override. */
   generateTimeoutMs?: number;
 }
@@ -168,6 +171,21 @@ export function toLuaLiteral(value: unknown): string {
   return 'nil';
 }
 
+/**
+ * Script ergonomics: accept `response_format` (snake_case) on prompt tables
+ * handed back to JS and rename it to `responseFormat`. camelCase still wins
+ * when both are present. No validation — adapters that support structured
+ * output already map it; the rest ignore it.
+ */
+function normalizeResponseFormat(prompt: Prompt): Prompt {
+  const p = prompt as unknown as Record<string, unknown>;
+  if (p['responseFormat'] === undefined && p['response_format'] !== undefined) {
+    const { response_format: _ignored, ...rest } = p;
+    return { ...(rest as unknown as Prompt), responseFormat: p['response_format'] as Prompt['responseFormat'] };
+  }
+  return prompt;
+}
+
 export class LuaBackendAdapter implements BackendAdapter {
   readonly id: string;
   readonly name: string;
@@ -184,6 +202,7 @@ export class LuaBackendAdapter implements BackendAdapter {
   private readonly luaSource: string;
   private readonly runtime: LuaRuntime;
   private readonly delegate: CustomBackendDelegate;
+  private readonly vfsFiles: Record<string, string> | undefined;
   private readonly generateTimeoutMs: number;
 
   constructor(config: LuaBackendAdapterConfig) {
@@ -192,6 +211,7 @@ export class LuaBackendAdapter implements BackendAdapter {
     this.luaSource = config.luaSource;
     this.runtime = config.runtime;
     this.delegate = config.delegate;
+    this.vfsFiles = config.vfsFiles;
     this.generateTimeoutMs = config.generateTimeoutMs ?? LUA_GENERATE_TIMEOUT_MS;
   }
 
@@ -200,7 +220,7 @@ export class LuaBackendAdapter implements BackendAdapter {
     signal: AbortSignal,
     ctx?: BackendCallContext,
   ): AsyncGenerator<BackendStreamItem, GenerationResult> {
-    const { lua, cleanup } = await this.runtime.createState({ allowNet: true }, this.generateTimeoutMs);
+    const { lua, cleanup } = await this.runtime.createState({ allowNet: true, vfsFiles: this.vfsFiles }, this.generateTimeoutMs);
     try {
       // Track delegated usage so scripts that don't report usage still account tokens.
       let delegatedUsage = { promptTokens: 0, completionTokens: 0 };
@@ -209,7 +229,7 @@ export class LuaBackendAdapter implements BackendAdapter {
           // Two call shapes: generate(prompt) — default delegate; or
           // generate("<configId>", prompt) — explicit target by config id.
           const configId = typeof arg1 === 'string' ? arg1 : null;
-          const promptArg = (typeof arg1 === 'string' ? arg2 : arg1) as Prompt;
+          const promptArg = normalizeResponseFormat((typeof arg1 === 'string' ? arg2 : arg1) as Prompt);
           const result = await this.delegate.generate(configId, promptArg, signal, ctx);
           delegatedUsage = {
             promptTokens: delegatedUsage.promptTokens + result.usage.promptTokens,
@@ -299,7 +319,7 @@ export class LuaBackendAdapter implements BackendAdapter {
       ) {
         const pt = (raw as Record<string, unknown>)['__passthrough'];
         const configId = pt === true ? null : String(pt);
-        const passthroughPrompt = ((raw as Record<string, unknown>)['prompt'] ?? prompt) as Prompt;
+        const passthroughPrompt = normalizeResponseFormat(((raw as Record<string, unknown>)['prompt'] ?? prompt) as Prompt);
         let adapter: BackendAdapter;
         try {
           adapter = await this.delegate.resolveAdapter(configId);

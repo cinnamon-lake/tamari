@@ -40,3 +40,53 @@ describe('LuaRuntime timeout', () => {
     cleanup();
   });
 });
+
+describe('json.parse_result', () => {
+  async function evalLua(source: string): Promise<unknown> {
+    const rt = new LuaRuntime();
+    const { lua, cleanup } = await rt.createState({}, 5000);
+    try {
+      return await lua.doString(source);
+    } finally {
+      cleanup();
+    }
+  }
+
+  it('returns { value = ... } for valid JSON (objects and non-object roots)', async () => {
+    expect(
+      await evalLua(`
+        local res = json.parse_result('{"a": 1}')
+        if res.error then return 'err' end
+        return res.value.a
+      `),
+    ).toBe(1);
+    expect(
+      await evalLua(`
+        local res = json.parse_result('[1, 2, 3]')
+        if res.error then return 'err' end
+        return res.value[2]
+      `),
+    ).toBe(2);
+    expect(
+      await evalLua(`
+        local res = json.parse_result('42')
+        if res.error then return 'err' end
+        return res.value
+      `),
+    ).toBe(42);
+  });
+
+  it('returns { error = ... } for garbage instead of throwing', async () => {
+    const res = (await evalLua(`
+      local res = json.parse_result('{not json')
+      if res.error then return { hadError = true, message = res.error } end
+      return { hadError = false }
+    `)) as Record<string, unknown>;
+    expect(res['hadError']).toBe(true);
+    expect(typeof res['message']).toBe('string');
+  });
+
+  it('json.decode keeps throwing on garbage', async () => {
+    await expect(evalLua(`return json.decode('{not json')`)).rejects.toThrow();
+  });
+});
