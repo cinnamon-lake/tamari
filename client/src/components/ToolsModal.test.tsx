@@ -21,6 +21,7 @@ describe('ToolsModal', () => {
     config: {},
     toolOverrides: {},
     enabled: false,
+    agentVisible: false,
     createdAt: 0,
     updatedAt: 0,
   };
@@ -59,6 +60,21 @@ describe('ToolsModal', () => {
       type: 'toolset.update',
       toolsetId: 'ts-1',
       patch: { enabled: true },
+    });
+  });
+
+  it('toggles a toolset sub-agent visibility', () => {
+    const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
+    render(() => <ToolsModal onClose={() => {}} />);
+
+    const checkbox = document.querySelector('.toolset-agent-checkbox') as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+
+    fireEvent.click(checkbox);
+    expect(sendSpy).toHaveBeenCalledWith({
+      type: 'toolset.update',
+      toolsetId: 'ts-1',
+      patch: { agentVisible: true },
     });
   });
 

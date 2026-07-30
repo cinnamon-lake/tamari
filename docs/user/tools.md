@@ -33,6 +33,7 @@ Each toolset has:
 - **Name** — a label for you; the model never sees it.
 - **Template** — a dropdown of every registered template, built-in and Lua. You can switch a toolset to a different template at any time.
 - **Enabled** — the checkbox on the card. Only enabled toolsets advertise tools. Prefer disabling over deleting: your config and overrides are preserved.
+- **Sub-agents** — the second checkbox on the card. When on (and the toolset is enabled), the toolset's tools are also advertised to sub-agents spawned by `run_agent`. Default off: sub-agents only get the tools you explicitly allow. At the maximum agent nesting depth (`MAX_AGENT_DEPTH`, default 4) the spawn tool itself is hidden from the sub-agent, so recursion always bottoms out.
 - **Configuration** — a form generated from the template's `configSchema`, shown only when the template declares options (for example, the Speak template's provider settings).
 - **Tools Available** — the template's tools, each with optional per-tool **overrides**:
   - `name` — rename the tool. **The renamed name is what the model calls.**
@@ -65,6 +66,8 @@ Config options (defaults; per-call args override them):
 | `systemPrompt` | System prompt for the agent. Empty = a concise default. |
 
 > **Note:** Nesting is capped by the `MAX_AGENT_DEPTH` env var (default 4) — an agent at the cap gets an error result instead of spawning further agents.
+
+**State sharing.** A sub-agent reads the parent chat's context (branch history and tool state), so stateful tools continue from where the main chat left off. When the sub-agent finishes, the newest state snapshot of each tool it used is written back onto the parent branch as part of the `run_agent` tool result — so the sub-agent's changes to tool state (scene, map, Lua tool state, …) persist in the main chat, and swiping to another version of the spawning message undoes them. Macro variables (`{{setvar}}`) are the exception: they stay isolated per generation and never cross the boundary.
 
 ### Asset Lister (`assets`)
 

@@ -72,6 +72,7 @@ describe('sub-agents', () => {
           assembly: h.chatPromptAssembly,
           toolRegistry,
           toolsetRepo: h.deps.toolsets,
+          maxAgentDepth,
         },
         maxAgentDepth,
       });
@@ -88,7 +89,7 @@ describe('sub-agents', () => {
     await h.teardown();
   });
 
-  async function createChatWithTools(toolNames: Array<{ templateId: string; name: string }>): Promise<string> {
+  async function createChatWithTools(toolNames: Array<{ templateId: string; name: string; agentVisible?: boolean }>): Promise<string> {
     await h.send(client, {
       type: 'character.create',
       data: { name: 'AgentHost', description: 'hosts agents.', firstMes: 'Ready.' },
@@ -101,7 +102,7 @@ describe('sub-agents', () => {
     for (const t of toolNames) {
       await h.send(client, {
         type: 'toolset.create',
-        data: { templateId: t.templateId, name: t.name, config: {}, toolOverrides: {}, enabled: true },
+        data: { templateId: t.templateId, name: t.name, config: {}, toolOverrides: {}, enabled: true, agentVisible: t.agentVisible ?? false },
       });
       h.expectBroadcast('toolset.created');
     }
@@ -121,8 +122,8 @@ describe('sub-agents', () => {
     ]);
     await setup(backend);
     const chatId = await createChatWithTools([
-      { templateId: 'echo', name: 'Echo' },
-      { templateId: 'agent', name: 'Agent' },
+      { templateId: 'echo', name: 'Echo', agentVisible: true },
+      { templateId: 'agent', name: 'Agent', agentVisible: true },
     ]);
 
     await h.send(client, { type: 'action.sendAndGenerate', chatId, content: 'run an agent' });
@@ -204,5 +205,126 @@ describe('sub-agents', () => {
     // Round 2 of the quiet generation must SEE the tool result — the legacy
     // quiet path dropped it (the follow-up-prompt gap).
     expect(JSON.stringify(backend.prompts[1]!.messages)).toContain('ECHO_EXECUTED:quiet');
+  });
+
+  it('sub-agents do NOT see tools from enabled-but-not-agentVisible toolsets', async () => {
+    const backend = new RecordingBackend([
+      [{ type: 'tool_use', id: 'spawn_1', name: 'run_agent', input: { prompt: 'look around' } }],
+      [{ type: 'content', content: 'nothing to call' }],
+      [{ type: 'content', content: 'Parent done.' }],
+    ]);
+    await setup(backend);
+    // echo is enabled but NOT agent-visible; agent is agent-visible.
+    const chatId = await createChatWithTools([
+      { templateId: 'echo', name: 'Echo' },
+      { templateId: 'agent', name: 'Agent', agentVisible: true },
+    ]);
+
+    await h.send(client, { type: 'action.sendAndGenerate', chatId, content: 'spawn' });
+    h.expectBroadcast('generation.done');
+
+    // The PARENT (main chat path) sees every enabled toolset's tools…
+    const parentToolNames = (backend.prompts[0]!.tools ?? []).map((t) => t.function.name);
+    expect(parentToolNames).toContain('echo_marker');
+    expect(parentToolNames).toContain('run_agent');
+    // …but the sub-agent only sees agentVisible toolsets — echo is hidden.
+    const subToolNames = (backend.prompts[1]!.tools ?? []).map((t) => t.function.name);
+    expect(subToolNames).toContain('run_agent');
+    expect(subToolNames).not.toContain('echo_marker');
+  });
+
+  it('hides run_agent from a sub-agent at the depth cap (by owning template, not name)', async () => {
+    const backend = new RecordingBackend([
+      [{ type: 'tool_use', id: 'spawn_1', name: 'run_agent', input: { prompt: 'go deeper' } }],
+      [{ type: 'content', content: 'bottom level' }],
+      [{ type: 'content', content: 'Parent done.' }],
+    ]);
+    // maxAgentDepth 2: the spawned sub-agent runs at depth 1, and (1 + 1) >= 2
+    // hides the spawn tool from its definitions.
+    await setup(backend, 2);
+    const chatId = await createChatWithTools([
+      { templateId: 'echo', name: 'Echo', agentVisible: true },
+      { templateId: 'agent', name: 'Agent', agentVisible: true },
+    ]);
+
+    await h.send(client, { type: 'action.sendAndGenerate', chatId, content: 'spawn' });
+    h.expectBroadcast('generation.done');
+
+    const subToolNames = (backend.prompts[1]!.tools ?? []).map((t) => t.function.name);
+    expect(subToolNames).toContain('echo_marker');
+    expect(subToolNames).not.toContain('run_agent');
+  });
+
+  it('writes the sub-agent’s tool state back onto the parent branch', async () => {
+    // Minimal stateful builtin: registry drives deserialize → execute →
+    // serialize, so the tool_result carries an extra._toolState snapshot.
+    let stored = 'initial';
+    const stateful = {
+      id: 'stateful',
+      name: 'Stateful',
+      source: 'builtin' as const,
+      getDefinition: () => ({
+        stateKey: 'stateful',
+        configSchema: {},
+        tools: [
+          {
+            name: 'bump_state',
+            description: 'Append +x to the stored state and return it.',
+            parameters: { type: 'object', properties: {} },
+          },
+        ],
+      }),
+      execute: () => {
+        stored = `${stored}+x`;
+        return Promise.resolve({ content: `state is now ${stored}` });
+      },
+      serialize: () => stored,
+      deserialize: (raw: string) => {
+        stored = raw;
+      },
+    };
+
+    const backend = new RecordingBackend([
+      [{ type: 'tool_use', id: 'spawn_1', name: 'run_agent', input: { prompt: 'bump it' } }],
+      // Sub-agent bumps the state once.
+      [{ type: 'tool_use', id: 'bump_1', name: 'bump_state', input: {} }],
+      [{ type: 'content', content: 'SUBAGENT_DONE' }],
+      // Parent bumps it again — it must deserialize the SUB-AGENT's snapshot.
+      [{ type: 'tool_use', id: 'bump_2', name: 'bump_state', input: {} }],
+      [{ type: 'content', content: 'Parent done.' }],
+    ]);
+    await setup(backend);
+    toolRegistry.registerTemplate(stateful);
+    const chatId = await createChatWithTools([
+      { templateId: 'agent', name: 'Agent', agentVisible: true },
+      { templateId: 'stateful', name: 'Stateful', agentVisible: true },
+    ]);
+
+    await h.send(client, { type: 'action.sendAndGenerate', chatId, content: 'spawn' });
+    h.expectBroadcast('generation.done');
+
+    expect(backend.prompts).toHaveLength(5);
+
+    // The spawn tool_result on the parent branch carries the sub-agent's
+    // state snapshot (newest per stateKey, 'agent' itself excluded).
+    const branch = await h.deps.chats.getActiveBranch(chatId);
+    const assistant = branch.filter((m) => m.role === 'assistant').at(-1)!;
+    const spawnResult = (assistant.extra.parts ?? []).find(
+      (p) => p.type === 'tool_result' && p.toolUseId === 'spawn_1',
+    );
+    expect(spawnResult).toBeDefined();
+    const stateMap = spawnResult!.type === 'tool_result'
+      ? (spawnResult!.extra?.['_toolState'] as Record<string, string> | undefined)
+      : undefined;
+    expect(stateMap?.['stateful']).toBe('initial+x');
+    expect(stateMap?.['agent']).toBeUndefined();
+
+    // The parent's own bump deserialized the sub-agent's snapshot:
+    // 'initial' → (sub) 'initial+x' → (parent, inherited) 'initial+x+x'.
+    const parentBump = (assistant.extra.parts ?? []).find(
+      (p) => p.type === 'tool_result' && p.toolUseId === 'bump_2',
+    );
+    expect(parentBump).toBeDefined();
+    expect(parentBump!.type === 'tool_result' && String(parentBump!.content)).toBe('state is now initial+x+x');
   });
 });

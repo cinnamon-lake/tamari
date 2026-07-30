@@ -243,6 +243,7 @@ export const ToolsetRowSchema = z.object({
   config: z.string(),
   tool_overrides: z.string(),
   enabled: z.number(),
+  agent_visible: z.number(),
   created_at: z.number(),
   updated_at: z.number(),
 });

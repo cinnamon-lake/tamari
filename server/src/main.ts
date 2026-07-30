@@ -302,7 +302,14 @@ const generationService = new GenerationService({
 // Sub-agent spawn tool (run_agent) — needs the runner, so it registers after construction.
 registerAgentTemplate(toolRegistry, {
   runner: generationRunner,
-  targetDeps: { chats, generationBroadcast, assembly: chatPromptAssembly, toolRegistry, toolsetRepo: toolsets },
+  targetDeps: {
+    chats,
+    generationBroadcast,
+    assembly: chatPromptAssembly,
+    toolRegistry,
+    toolsetRepo: toolsets,
+    maxAgentDepth: config.maxAgentDepth,
+  },
   maxAgentDepth: config.maxAgentDepth,
 });
 

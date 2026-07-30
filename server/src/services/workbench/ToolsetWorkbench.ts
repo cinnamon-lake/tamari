@@ -140,6 +140,7 @@ export class ToolsetWorkbench {
       config: config ?? {},
       toolOverrides: (toolOverrides ?? {}),
       enabled: enabled ?? true,
+      agentVisible: false,
     });
     await this.broadcastChange('created', toolset);
     return {

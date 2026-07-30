@@ -575,6 +575,9 @@ export interface Toolset {
     { name?: string; description?: string; parameterDescriptions?: Record<string, string> }
   >;
   enabled: boolean;
+  /** When true, this toolset's tools are also visible to sub-agents
+      (run_agent). Default off — sub-agents get an explicit allowlist. */
+  agentVisible: boolean;
   createdAt: number;
   updatedAt: number;
 }

@@ -100,6 +100,14 @@ function ToolsetCard(props: { id?: string; toolset: Toolset; autoExpand?: boolea
     });
   };
 
+  const toggleAgentVisible = () => {
+    bus.send({
+      type: 'toolset.update',
+      toolsetId: props.toolset.id,
+      patch: { agentVisible: !props.toolset.agentVisible },
+    });
+  };
+
   const templateName = () => {
     const tmpl = state.tools.find((tm) => tm.id === props.toolset.templateId);
     return tmpl?.name ?? props.toolset.templateId;
@@ -133,6 +141,14 @@ function ToolsetCard(props: { id?: string; toolset: Toolset; autoExpand?: boolea
             onChange={toggle}
             title={props.toolset.enabled ? t('tools.enabled') : t('tools.disabled')}
             aria-label={props.toolset.enabled ? t('tools.enabled') : t('tools.disabled')}
+          />
+          <input
+            type="checkbox"
+            class="toolset-agent-checkbox"
+            checked={props.toolset.agentVisible}
+            onChange={toggleAgentVisible}
+            title={t('tools.agentVisibleHint')}
+            aria-label={t('tools.agentVisible')}
           />
           <button class="btn btn-sm btn-ghost btn-danger" onClick={remove} title={t('common.delete')} aria-label={t('common.delete')}>
             <i class="bi bi-trash" />

@@ -41,6 +41,7 @@ function makeToolset(overrides: Partial<Toolset> = {}): Toolset {
     config: {},
     toolOverrides: {},
     enabled: true,
+    agentVisible: false,
     createdAt: 1,
     updatedAt: 1,
     ...overrides,
@@ -52,6 +53,7 @@ function makeTemplate(opts: { toolsets?: Toolset[]; luaTemplates?: Record<string
   const toolsets = {
     list: async () => [...store.values()],
     listEnabled: async () => [...store.values()].filter((t) => t.enabled),
+    listAgentVisible: async () => [...store.values()].filter((t) => t.enabled && t.agentVisible),
     getById: async (id: string) => store.get(id),
     create: async (id: string, data: ToolsetCreateInput) => {
       const ts = makeToolset({ id, ...data });

@@ -19,6 +19,8 @@ export const tools = {
   showConfig: 'Show config',
   enabled: 'Enabled',
   disabled: 'Disabled',
+  agentVisible: 'Visible to sub-agents',
+  agentVisibleHint: 'Sub-agents (run_agent) can use this toolset',
   template: 'Template',
   configuration: 'Configuration',
   toolsAvailable: 'Tools Available',

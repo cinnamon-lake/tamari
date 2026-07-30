@@ -1022,6 +1022,7 @@ describe('serverStore', () => {
       config: {},
       toolOverrides: {},
       enabled: true,
+      agentVisible: false,
       createdAt: 0,
       updatedAt: 0,
       ...overrides,

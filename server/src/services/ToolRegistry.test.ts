@@ -83,9 +83,10 @@ describe('ToolRegistry', () => {
     const registry = new ToolRegistry();
     const toolsetRepo = {
       list: vi.fn(async () => [
-        { id: 'ts1', templateId: 'test', name: 'Test Toolset', config: {}, toolOverrides: {}, enabled: true, createdAt: 0, updatedAt: 0 },
+        { id: 'ts1', templateId: 'test', name: 'Test Toolset', config: {}, toolOverrides: {}, enabled: true, agentVisible: false, createdAt: 0, updatedAt: 0 },
       ]),
       listEnabled: vi.fn(),
+      listAgentVisible: vi.fn(),
       getById: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
@@ -103,6 +104,7 @@ describe('ToolRegistry', () => {
     const toolsetRepo = {
       list: vi.fn(async () => []),
       listEnabled: vi.fn(),
+      listAgentVisible: vi.fn(),
       getById: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
@@ -129,9 +131,10 @@ describe('ToolRegistry', () => {
     registry.registerTemplate(tmpl);
     const toolsetRepo = {
       list: vi.fn(async () => [
-        { id: 'ts1', templateType: 'builtin' as const, templateId: 'fail', name: 'Fail', config: {}, toolOverrides: {}, enabled: true, createdAt: 0, updatedAt: 0 },
+        { id: 'ts1', templateType: 'builtin' as const, templateId: 'fail', name: 'Fail', config: {}, toolOverrides: {}, enabled: true, agentVisible: false, createdAt: 0, updatedAt: 0 },
       ]),
       listEnabled: vi.fn(),
+      listAgentVisible: vi.fn(),
       getById: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
@@ -206,9 +209,10 @@ return Tool
 
     const toolsetRepo = {
       list: vi.fn(async () => [
-        { id: 'ts1', templateId: '1', name: 'Lua Greet', config: {}, toolOverrides: {}, enabled: true, createdAt: 0, updatedAt: 0 },
+        { id: 'ts1', templateId: '1', name: 'Lua Greet', config: {}, toolOverrides: {}, enabled: true, agentVisible: false, createdAt: 0, updatedAt: 0 },
       ]),
       listEnabled: vi.fn(),
+      listAgentVisible: vi.fn(),
       getById: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
@@ -238,9 +242,10 @@ describe('ToolRegistry endsTurn', () => {
   function makeToolsetRepo(templateId: string) {
     return {
       list: vi.fn(async () => [
-        { id: 'ts1', templateId, name: 'TS', config: {}, toolOverrides: {}, enabled: true, createdAt: 0, updatedAt: 0 },
+        { id: 'ts1', templateId, name: 'TS', config: {}, toolOverrides: {}, enabled: true, agentVisible: false, createdAt: 0, updatedAt: 0 },
       ]),
       listEnabled: vi.fn(),
+      listAgentVisible: vi.fn(),
       getById: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),

@@ -15,6 +15,7 @@ function rowToToolset(row: unknown): Toolset {
     config: safeParseJson(r.config, z.record(z.string(), z.unknown()), {}),
     toolOverrides: safeParseJson(r.tool_overrides, z.record(z.string(), z.unknown()), {}) as unknown as Toolset['toolOverrides'],
     enabled: Boolean(r.enabled),
+    agentVisible: Boolean(r.agent_visible),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -23,6 +24,8 @@ function rowToToolset(row: unknown): Toolset {
 export interface IToolsetRepository {
   list(): Promise<Toolset[]>;
   listEnabled(): Promise<Toolset[]>;
+  /** Enabled toolsets explicitly marked as visible to sub-agents. */
+  listAgentVisible(): Promise<Toolset[]>;
   getById(id: string): Promise<Toolset | undefined>;
   create(id: string, data: ToolsetCreateInput): Promise<Toolset>;
   update(id: string, patch: ToolsetUpdateInput): Promise<Toolset>;
@@ -48,6 +51,14 @@ export class ToolsetRepository implements IToolsetRepository {
     return mapRowsLenient(rs.rows, rowToToolset, 'ToolsetRepository.listEnabled');
   }
 
+  async listAgentVisible(): Promise<Toolset[]> {
+    const rs = await this.client.execute({
+      sql: 'SELECT * FROM toolsets WHERE enabled = 1 AND agent_visible = 1 ORDER BY created_at DESC',
+      args: [],
+    });
+    return mapRowsLenient(rs.rows, rowToToolset, 'ToolsetRepository.listAgentVisible');
+  }
+
   async getById(id: string): Promise<Toolset | undefined> {
     const rs = await this.client.execute({
       sql: 'SELECT * FROM toolsets WHERE id = ?',
@@ -60,8 +71,8 @@ export class ToolsetRepository implements IToolsetRepository {
   async create(id: string, data: ToolsetCreateInput): Promise<Toolset> {
     const now = Math.floor(Date.now() / 1000);
     await this.client.execute({
-      sql: `INSERT INTO toolsets (id, template_id, name, config, tool_overrides, enabled, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO toolsets (id, template_id, name, config, tool_overrides, enabled, agent_visible, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       /* eslint-disable @typescript-eslint/no-unnecessary-condition -- defensive fallbacks for unvalidated API input */
       args: [
         id,
@@ -70,6 +81,7 @@ export class ToolsetRepository implements IToolsetRepository {
         JSON.stringify(data.config ?? {}),
         JSON.stringify(data.toolOverrides ?? {}),
         data.enabled ? 1 : 0,
+        data.agentVisible ? 1 : 0,
         now,
         now,
       ],
@@ -103,6 +115,10 @@ export class ToolsetRepository implements IToolsetRepository {
     if (patch.enabled !== undefined) {
       sets.push('enabled = ?');
       args.push(patch.enabled ? 1 : 0);
+    }
+    if (patch.agentVisible !== undefined) {
+      sets.push('agent_visible = ?');
+      args.push(patch.agentVisible ? 1 : 0);
     }
 
     sets.push('updated_at = ?');

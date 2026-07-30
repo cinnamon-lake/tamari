@@ -148,6 +148,14 @@ return outcome.text;
 - **Quick replies triggered from inside a sub-agent throw.** A quick reply is an external, user-level thing that is merely *triggered* by the agent — the lock is not passed into it, its `tryLock` fails, the request dies loudly. Deliberate, not a bug: silently queueing external side effects inside a sub-agent tenure would be worse.
 - Cross-chat sub-agents are forbidden: a sub-agent's `chatId` must equal its parent's, because the passed lock keys on it.
 
+### Tool access and state sharing
+
+- **Tool access is an explicit allowlist.** A toolset's tools are advertised to sub-agents only when the toolset is enabled AND its `agent_visible` flag is set (UI: the toolset's **Sub-agents** checkbox; default off). The main chat is unaffected — it keeps using every enabled toolset.
+- **The spawn tool hides itself at the cap.** A sub-agent at the last allowed depth doesn't get `run_agent` in its definitions at all — filtered by the owning toolset's `templateId` (`agent`), not by tool name, so renamed (override) spawn tools are still caught. The `agent_spawn`/`run_agent` depth guard remains as the hard bound.
+- **Reads inherit.** A sub-agent's tool executions see the parent's branch (plus their own transcript) as context — tool state snapshots, chat content, everything a main-chat tool would see.
+- **Writes land on the parent branch once.** After the nested run, the spawn tool collects the newest `_toolState` snapshot per stateKey from the sub-agent's transcript and returns them as `extra._toolState` on its own tool result. The parent's message therefore carries the sub-agent's mutations — and swiping away the spawn message undoes them (branch-aware for free). The `agent` stateKey itself is never propagated.
+- **Macro vars stay isolated.** A sub-agent's `{{setvar}}` never touches the parent's variables.
+
 ## Generation records
 
 All target kinds write a generation record in `finalize` — including quiet and sub-agent runs. Sub-agent records carry `kind: 'subagent'` plus a parent-generation reference, giving a traceable tree for debugging instead of an invisible black box. One row per completed `run()`, not per tool round.

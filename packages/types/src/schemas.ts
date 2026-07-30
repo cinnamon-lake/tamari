@@ -799,6 +799,7 @@ export const ToolsetSchema = z.object({
     )
     .default({}),
   enabled: z.boolean().default(true),
+  agentVisible: z.boolean().default(false),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

@@ -17,6 +17,7 @@ import type { ToolRegistry } from '../ToolRegistry.js';
 import type { ToolContext, ToolExecuteResult, ToolTemplate } from '../ToolTemplate.js';
 import type { GenerationRunner } from '../../generation/GenerationRunner.js';
 import { TranscriptTarget, type TranscriptTargetDeps } from '../../generation/TranscriptTarget.js';
+import { TOOL_STATE_KEY } from '../toolState.js';
 import { getLogger } from '../../lib/logger.js';
 import { str } from '../../lib/coerce.js';
 
@@ -132,8 +133,29 @@ class AgentTemplate implements ToolTemplate {
           : outcome.error;
         return { content: `Agent error: ${message}` };
       }
-      if (!outcome.text) return { content: 'Agent returned empty response.' };
-      return { content: outcome.text };
+
+      // State write-back (delegate semantics): the newest `_toolState`
+      // snapshot per stateKey from the sub-agent's transcript rides the spawn
+      // tool_result, so the sub-agent's tool mutations land on the parent
+      // branch exactly once — and swiping away the spawn message undoes them.
+      // The 'agent' stateKey itself is never propagated (this template is
+      // stateless; its serialize() returns '', so the registry leaves
+      // result.extra untouched).
+      const stateMap: Record<string, string> = {};
+      const parts = target.read();
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const part = parts[i]!;
+        if (part.type !== 'tool_result') continue;
+        const map = part.extra?.[TOOL_STATE_KEY] as Record<string, string> | undefined;
+        if (!map) continue;
+        for (const [key, snapshot] of Object.entries(map)) {
+          if (key !== 'agent' && !(key in stateMap)) stateMap[key] = snapshot;
+        }
+      }
+      const extra = Object.keys(stateMap).length > 0 ? { [TOOL_STATE_KEY]: stateMap } : undefined;
+
+      if (!outcome.text) return { content: 'Agent returned empty response.', extra };
+      return { content: outcome.text, extra };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logger.warn({ err: message }, 'run_agent: sub-agent run threw');

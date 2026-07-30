@@ -34,6 +34,9 @@ export interface TranscriptTargetDeps {
   /** Tool definitions for sub-agent prompts (enabled toolsets). */
   toolRegistry?: ToolRegistry;
   toolsetRepo?: IToolsetRepository;
+  /** Sub-agent recursion bound: at the last allowed depth the spawn tool is
+      hidden from the sub-agent's definitions. */
+  maxAgentDepth?: number;
 }
 
 export interface TranscriptTargetOptions {
@@ -158,12 +161,23 @@ export class TranscriptTarget implements GenerationTarget {
     return prompt;
   }
 
-  /** Tool definitions from enabled toolsets (sub-agent prompts). */
+  /** Tool definitions for a sub-agent: enabled toolsets the user explicitly
+      marked agent-visible, minus the spawn tool at the depth cap. */
   private async loadToolDefinitions(): Promise<ToolDefinition[] | undefined> {
-    if (!this.deps.toolRegistry || !this.deps.toolsetRepo) return undefined;
-    const enabledToolsets = await this.deps.toolsetRepo.listEnabled();
-    if (enabledToolsets.length === 0) return undefined;
-    return this.deps.toolRegistry.getDefinitionsByToolsets(enabledToolsets);
+    const { toolRegistry, toolsetRepo, maxAgentDepth } = this.deps;
+    if (!toolRegistry || !toolsetRepo) return undefined;
+    const toolsets = await toolsetRepo.listAgentVisible();
+    if (toolsets.length === 0) return undefined;
+    // Depth cap: hide the spawn tool when a nested spawn would exceed the
+    // cap. Filter by owning toolset's templateId — tool overrides can rename
+    // run_agent, so a name match would miss renamed tools.
+    const atDepthCap = maxAgentDepth !== undefined && (this.depth ?? 0) + 1 >= maxAgentDepth;
+    const definitions: ToolDefinition[] = [];
+    for (const toolset of toolsets) {
+      if (atDepthCap && toolset.templateId === 'agent') continue;
+      definitions.push(...(await toolRegistry.getDefinitionsByToolsets([toolset])));
+    }
+    return definitions.length > 0 ? definitions : undefined;
   }
 
   read(): ContentPart[] {
@@ -180,20 +194,31 @@ export class TranscriptTarget implements GenerationTarget {
     return pending;
   }
 
-  /** The accumulated transcript as tool-execution context. */
+  /** Tool-execution context: the parent branch (reads inherit) followed by
+      the accumulated transcript. genraw stays transcript-only. */
   async toolContextMessages(): Promise<ToolContextMessage[]> {
-    const messages: ToolContextMessage[] = [
+    const transcript: ToolContextMessage[] = [
       { id: 'seed', role: 'user', content: this.seed },
     ];
     if (this.parts.length > 0) {
-      messages.push({
+      transcript.push({
         id: 'transcript',
         role: 'assistant',
         content: getMessageText(this.parts),
         extra: { parts: this.parts },
       });
     }
-    return messages;
+    if (this.kind === 'genraw') return transcript;
+    const branch = await this.deps.chats.getActiveBranch(this.chatId, { limit: 100 });
+    return [
+      ...branch.map((m) => ({
+        id: String(m.id),
+        role: m.role,
+        content: getMessageText(m.extra.parts),
+        extra: m.extra,
+      })),
+      ...transcript,
+    ];
   }
 
   write(item: BackendStreamItem): void {
