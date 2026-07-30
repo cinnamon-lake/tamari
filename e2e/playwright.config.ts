@@ -133,7 +133,9 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: `rm -rf ${dataDir} && mkdir -p ${dataDir} && node server/dist/main.js`,
+    // The wipe is a Node script (not rm/mkdir) so the command also works
+    // under cmd on Windows — && chains fine there.
+    command: `node e2e/scripts/reset-test-data.mjs ${dataDir} && node server/dist/main.js`,
     cwd: '..',
     url: `http://localhost:${e2ePort}`,
     reuseExistingServer: false,

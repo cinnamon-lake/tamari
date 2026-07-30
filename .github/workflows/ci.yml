@@ -49,8 +49,16 @@ jobs:
         run: npm run test --workspace=server
 
   e2e:
-    runs-on: ubuntu-latest
+    # Matrix over Linux + Windows. Windows runs SMOKE ONLY: journey runtime
+    # roughly doubles per added OS, and the journeys' value is in the flows,
+    # not in OS coverage (the smoke tier already proves build + boot + WS +
+    # tool flows on Windows).
+    runs-on: ${{ matrix.os }}
     needs: lint-and-test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -71,13 +79,14 @@ jobs:
         run: npm run build
 
       - name: Run E2E (smoke)
-        # Fast, isolated per-feature specs — runs on every PR and push.
+        # Fast, isolated per-feature specs — runs on every PR and push, on both OSes.
         run: npm run test:e2e:smoke
 
       - name: Run E2E (full, incl. journeys)
-        # The long user journeys run on push (merge to main), not PRs. Run the
+        # The long user journeys run on push (merge to main), not PRs — and on
+        # Linux only: each added OS roughly doubles journey runtime. Run the
         # full suite (smoke + journeys together) rather than journeys alone:
         # the interleaving is the more stable configuration while an
         # intermittent generation-stall issue is being investigated.
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && matrix.os == 'ubuntu-latest'
         run: npm run test:e2e
