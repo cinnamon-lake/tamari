@@ -4,7 +4,7 @@
  */
 
 import type { MemoryCitation } from './memory.js';
-import type { ContentPart } from './pipeline.js';
+import type { ContentPart, Prompt, TraceError } from './pipeline.js';
 
 export interface CharacterAsset {
   id: string;
@@ -299,8 +299,22 @@ export interface Generation {
   kind: 'send' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw' | 'subagent';
   /** The spawning generation's id (sub-agent runs); null at top level. */
   parentId: string | null;
+  /** Debug-trace payload (docs/design/debug-traces.md); null for pre-007 rows. */
+  meta?: GenerationMeta | null;
   createdAt: number;
   updatedAt: number;
+}
+
+/** Per-run debug-trace payload stored in generations.meta (migration 007). */
+export interface GenerationMeta {
+  /** The layer this node ran on (adapter id / script identity). */
+  layer?: string;
+  depth?: number;
+  rounds?: number;
+  toolCalls?: Array<{ name: string; isError?: boolean }>;
+  traceError?: TraceError;
+  /** Round-1 prompt snapshot — only when the debugPrompts setting is on. */
+  prompt?: Prompt;
 }
 
 export type GenerationInsert = Omit<Generation, 'createdAt' | 'updatedAt' | 'kind' | 'parentId'> & {

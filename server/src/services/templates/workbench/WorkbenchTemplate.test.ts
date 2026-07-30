@@ -95,6 +95,7 @@ function setup(
     toolset?: Record<string, Handler>;
     quickReply?: Record<string, Handler>;
     luaTool?: Record<string, Handler>;
+    generations?: { getById(id: string): Promise<unknown> };
   } = {},
 ) {
   const fakes = {
@@ -110,6 +111,7 @@ function setup(
     toolsetWorkbench: fakes.toolset as unknown as WorkbenchProviders['toolsetWorkbench'],
     quickReplyWorkbench: fakes.quickReply as unknown as WorkbenchProviders['quickReplyWorkbench'],
     luaToolWorkbench: fakes.luaTool as unknown as WorkbenchProviders['luaToolWorkbench'],
+    generations: (overrides.generations ?? { getById: async () => undefined }) as WorkbenchProviders['generations'],
   };
   return { template: new WorkbenchTemplate(providers), providers, fakes };
 }
@@ -185,9 +187,9 @@ describe('path handling', () => {
 });
 
 describe('ls', () => {
-  it('lists the six domain names at the root', async () => {
+  it('lists the domain names at the root', async () => {
     const { template } = setup();
-    const expected = 'characters/\nbackends/\ncustom-backends/\ntoolsets/\nquickreplies/\nluatools/';
+    const expected = 'characters/\nbackends/\ncustom-backends/\ntoolsets/\nquickreplies/\nluatools/\ngenerations/';
     expect(await exec(template, 'ls', { path: '/' })).toBe(expected);
     expect(await exec(template, 'ls', {})).toBe(expected);
   });
@@ -904,5 +906,96 @@ describe('unknown tool', () => {
   it('returns an Error string for an unknown tool name', async () => {
     const { template } = setup();
     expect(await exec(template, 'bogus', {})).toBe('Error: unknown tool bogus');
+  });
+});
+
+describe('/generations debug-trace route (read-only)', () => {
+  const TRACE_ERROR = {
+    code: 'DELEGATE_ERROR' as const,
+    layer: 'delegate(default)',
+    message: 'boom',
+    cause: { code: 'LUA_ERROR' as const, layer: 'inner-lua', message: 'inner boom' },
+  };
+  const RECORD = {
+    id: 'gen-1',
+    chatId: 'chat-1',
+    messageId: 7,
+    status: 'error' as const,
+    backend: 'trivial',
+    promptTokens: 10,
+    completionTokens: null,
+    errorMessage: 'boom',
+    kind: 'subagent' as const,
+    parentId: null,
+    meta: { layer: 'trivial', depth: 1, rounds: 2, traceError: TRACE_ERROR },
+    createdAt: 1,
+    updatedAt: 2,
+  };
+  const RECORD_WITH_PROMPT = {
+    ...RECORD,
+    id: 'gen-2',
+    status: 'complete' as const,
+    errorMessage: null,
+    meta: { layer: 'trivial', depth: 0, rounds: 1, prompt: { messages: [{ role: 'user', content: 'hi' }], tokenUsage: { prompt: 1, completion: 1 } } },
+  };
+
+  function setupGenerations(records: Record<string, unknown>) {
+    return setup({ generations: { getById: async (id: string) => records[id] } });
+  }
+
+  it('ls /generations/ refuses like every collection', async () => {
+    const { template } = setupGenerations({});
+    expect(await exec(template, 'ls', { path: '/generations/' })).toBe(COLLECTION_REFUSAL);
+  });
+
+  it('ls a generation dir lists meta.json + error.txt (prompt.json only when captured)', async () => {
+    const { template } = setupGenerations({ 'gen-1': RECORD, 'gen-2': RECORD_WITH_PROMPT });
+    expect(await exec(template, 'ls', { path: '/generations/gen-1/' })).toBe('meta.json\nerror.txt');
+    expect(await exec(template, 'ls', { path: '/generations/gen-2/' })).toBe('meta.json\nprompt.json');
+  });
+
+  it('read meta.json returns the full record', async () => {
+    const { template } = setupGenerations({ 'gen-1': RECORD });
+    const content = await exec(template, 'read', { path: '/generations/gen-1/meta.json' });
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    expect(parsed['id']).toBe('gen-1');
+    expect(parsed['kind']).toBe('subagent');
+    expect((parsed['meta'] as Record<string, unknown>)['rounds']).toBe(2);
+  });
+
+  it('read error.txt renders the trace chain', async () => {
+    const { template } = setupGenerations({ 'gen-1': RECORD });
+    expect(await exec(template, 'read', { path: '/generations/gen-1/error.txt' })).toBe(
+      'delegate(default) → inner-lua: LUA_ERROR: inner boom',
+    );
+  });
+
+  it('read prompt.json returns the captured round-1 prompt', async () => {
+    const { template } = setupGenerations({ 'gen-2': RECORD_WITH_PROMPT });
+    const content = await exec(template, 'read', { path: '/generations/gen-2/prompt.json' });
+    expect(content).toContain('"role": "user"');
+    // Not captured on this record → no such file.
+    expect(await exec(template, 'read', { path: '/generations/gen-1/prompt.json' })).toBe(
+      'Error: no such file: /generations/gen-1/prompt.json',
+    );
+  });
+
+  it('unknown ids and unknown files error; write and rm are read-only', async () => {
+    const { template } = setupGenerations({ 'gen-1': RECORD });
+    expect(await exec(template, 'read', { path: '/generations/nope/meta.json' })).toBe('Error: no such file: /generations/nope/meta.json');
+    expect(await exec(template, 'read', { path: '/generations/gen-1/bogus.txt' })).toBe('Error: no such file: /generations/gen-1/bogus.txt');
+    expect(await exec(template, 'write', { path: '/generations/gen-1/meta.json', content: '{}' })).toBe(
+      'Error: /generations/gen-1/meta.json is read-only',
+    );
+    expect(await exec(template, 'rm', { path: '/generations/gen-1/meta.json' })).toBe(
+      'Error: /generations/gen-1/meta.json is read-only',
+    );
+  });
+
+  it('grep walks a generation and finds matches inside meta.json', async () => {
+    const { template } = setupGenerations({ 'gen-1': RECORD });
+    const content = await exec(template, 'grep', { pattern: 'inner boom', path: '/generations/gen-1/' });
+    expect(content).toContain('/generations/gen-1/meta.json:');
+    expect(content).toContain('/generations/gen-1/error.txt:1:delegate(default) → inner-lua: LUA_ERROR: inner boom');
   });
 });

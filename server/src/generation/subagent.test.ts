@@ -74,6 +74,7 @@ describe('sub-agents', () => {
           toolsetRepo: h.deps.toolsets,
           maxAgentDepth,
         },
+        generations: new GenerationRepository(h.db),
         maxAgentDepth,
       });
 
@@ -159,6 +160,54 @@ describe('sub-agents', () => {
     expect(parent).toBeDefined();
     expect(subagent).toBeDefined();
     expect(subagent!.parentId).toBe(parent!.id);
+  });
+
+  it('run_agent error results carry the composed ancestry trace', async () => {
+    // First stream call (parent) spawns; the second (the sub-agent's) errors.
+    let calls = 0;
+    const backend: import('../backends/BackendAdapter.js').BackendAdapter = {
+      id: 'scripted',
+      supportsStreaming: true,
+      supportsTools: true,
+      async *stream(): AsyncGenerator<import('../backends/BackendAdapter.js').BackendStreamItem, import('../backends/BackendAdapter.js').GenerationResult> {
+        calls++;
+        if (calls === 1) {
+          yield { type: 'toolCall', id: 'spawn_1', name: 'run_agent', arguments: { prompt: 'go deep' } };
+          return {
+            finishReason: 'stop',
+            usage: { promptTokens: 0, completionTokens: 0 },
+            toolCalls: [{ id: 'spawn_1', name: 'run_agent', arguments: { prompt: 'go deep' } }],
+          };
+        }
+        return { finishReason: 'error', usage: { promptTokens: 0, completionTokens: 0 }, error: 'inner exploded' };
+      },
+      async listModels() {
+        return [];
+      },
+    };
+    await setup(backend as RecordingBackend);
+    const chatId = await createChatWithTools([{ templateId: 'agent', name: 'Agent', agentVisible: true }]);
+
+    await h.send(client, { type: 'action.sendAndGenerate', chatId, content: 'spawn' });
+    h.expectBroadcast('generation.done');
+
+    const branch = await h.deps.chats.getActiveBranch(chatId);
+    const assistant = branch.filter((m) => m.role === 'assistant').at(-1)!;
+    const spawnResult = (assistant.extra.parts ?? []).find((p) => p.type === 'tool_result' && p.toolUseId === 'spawn_1');
+    expect(spawnResult).toBeDefined();
+    const content = spawnResult!.type === 'tool_result' ? String(spawnResult!.content) : '';
+    // The composed trace: parent line, sub-agent line, rendered error chain.
+    expect(content).toContain('Agent error:');
+    expect(content).toContain('send(scripted)');
+    expect(content).toContain('subagent(scripted)');
+    expect(content).toContain('UNKNOWN: inner exploded');
+
+    // The trace reference points at the sub-agent's generation record.
+    const records = await new GenerationRepository(h.db).listByChat(chatId);
+    const subagent = records.find((r) => r.kind === 'subagent');
+    expect(subagent).toBeDefined();
+    const extra = spawnResult!.type === 'tool_result' ? (spawnResult!.extra as Record<string, unknown> | undefined) : undefined;
+    expect(extra?.['generationId']).toBe(subagent!.id);
   });
 
   it('refuses to spawn at the depth cap without running a nested generation', async () => {

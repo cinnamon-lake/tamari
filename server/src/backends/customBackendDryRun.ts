@@ -26,8 +26,10 @@ export interface DryRunOptions {
   input: string;
   /** Canned script-state snapshot (raw string, same format as _toolState values). */
   state?: string;
-  /** Canned text returned by every delegated backends.generate() call. */
-  delegateResponse?: string;
+  /** Canned answer for every delegated backends.generate() call — text, or
+      `{ error }` to test delegation-failure paths (the bridge throws into Lua,
+      exactly like a real failed delegation). */
+  delegateResponse?: string | { error: string };
   /** Character context woven into the sample prompt (description → system, firstMes → assistant). */
   character?: DryRunCharacterContext;
   /** Card VFS module map visible to the script's `require` (matches generation). */
@@ -36,8 +38,12 @@ export interface DryRunOptions {
 
 export interface DryRunDelegation {
   configId: string | null;
+  /** Trace layer for this delegation ('default' for the un-id'd delegate). */
+  layer: string;
   promptPreview: string;
   response: string;
+  /** Set when the canned response was a failure. */
+  error?: string;
 }
 
 export interface DryRunOutcome {
@@ -52,6 +58,12 @@ export interface DryRunOutcome {
   /** Every delegated backends.generate() call, in order. */
   delegations: DryRunDelegation[];
   error?: string;
+  /** Debug trace: per-delegation layer (+ failure) and the VFS modules the
+      script actually required during the run. */
+  trace: {
+    delegations: Array<{ layer: string; error?: string }>;
+    modulesLoaded: string[];
+  };
 }
 
 const PREVIEW_LIMIT = 4000;
@@ -65,12 +77,25 @@ function promptPreview(prompt: Prompt): string {
 
 export async function dryRunBackendScript(runtime: LuaRuntime, opts: DryRunOptions): Promise<DryRunOutcome> {
   const delegations: DryRunDelegation[] = [];
-  const cannedResponse = opts.delegateResponse ?? '[dry-run delegate response]';
+  const canned = opts.delegateResponse ?? '[dry-run delegate response]';
+  const cannedError = typeof canned === 'object' ? canned.error : undefined;
+  const cannedText = typeof canned === 'string' ? canned : '';
 
   const delegate: CustomBackendDelegate = {
     generate: async (configId, prompt): Promise<DelegatedGenerateResult> => {
-      delegations.push({ configId, promptPreview: promptPreview(prompt), response: cannedResponse });
-      return { text: cannedResponse, finishReason: 'stop', usage: { promptTokens: 0, completionTokens: 0 } };
+      delegations.push({
+        configId,
+        layer: configId ?? 'default',
+        promptPreview: promptPreview(prompt),
+        response: cannedError ?? cannedText,
+        ...(cannedError ? { error: cannedError } : {}),
+      });
+      return {
+        text: cannedText,
+        finishReason: cannedError ? 'error' : 'stop',
+        error: cannedError,
+        usage: { promptTokens: 0, completionTokens: 0 },
+      };
     },
     resolveAdapter: async () => {
       throw new Error('passthrough (__passthrough) is not supported in a dry-run — there is no real backend to stream from');
@@ -109,6 +134,10 @@ export async function dryRunBackendScript(runtime: LuaRuntime, opts: DryRunOptio
     ok: result.finishReason !== 'error',
     usage: result.usage,
     delegations,
+    trace: {
+      delegations: delegations.map((d) => ({ layer: d.layer, ...(d.error ? { error: d.error } : {}) })),
+      modulesLoaded: adapter.getLoadedModules(),
+    },
   };
   if (text.length > 0) outcome.text = text;
   if (result.reasoningText) outcome.reasoning = result.reasoningText;

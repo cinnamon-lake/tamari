@@ -291,7 +291,10 @@ const BackendLogicTestArgs = z.object({
   input: z.string().min(1).describe('Sample user message fed to generate() as the last prompt message.'),
   luaSource: z.string().optional().describe('Test this Lua source instead of the character\'s stored script — iterate without saving.'),
   state: z.string().optional().describe('Canned script-state snapshot (JSON string) injected as the `state` global, e.g. the stateOut of a previous dry-run.'),
-  delegateResponse: z.string().optional().describe('Canned text returned by every delegated backends.generate() call. Defaults to a placeholder.'),
+  delegateResponse: z
+    .union([z.string(), z.object({ error: z.string() })])
+    .optional()
+    .describe('Canned answer for every delegated backends.generate() call — text, or { "error": "..." } to test delegation failures. Defaults to a placeholder.'),
 });
 
 const BackendFilePathArgs = z.object({

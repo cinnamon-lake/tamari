@@ -111,6 +111,96 @@ describe('LuaBackendAdapter', () => {
     expect(result.error).not.toContain('Aborted');
   });
 
+  describe('trace errors (debug traces)', () => {
+    it('layers a script error as LUA_ERROR with the adapter name', async () => {
+      const adapter = makeAdapter('function generate(prompt, ctx) error("boom") end');
+      const { result } = await run(adapter);
+      expect(result.traceError).toEqual({ code: 'LUA_ERROR', layer: 'Test Backend', message: expect.stringContaining('boom') });
+    });
+
+    it('layers a timeout as LUA_TIMEOUT', async () => {
+      const adapter = new LuaBackendAdapter({
+        id: 'custom:test',
+        name: 'Test Backend',
+        luaSource: 'function generate(prompt, ctx) while true do end end',
+        runtime: new LuaRuntime(),
+        delegate: makeDelegate(),
+        generateTimeoutMs: 250,
+      });
+      const { result } = await run(adapter);
+      expect(result.traceError?.code).toBe('LUA_TIMEOUT');
+      expect(result.traceError?.layer).toBe('Test Backend');
+    });
+
+    it('layers a script-returned { error } as UNKNOWN with the layer', async () => {
+      const adapter = makeAdapter('function generate(prompt, ctx) return { error = "model exploded" } end');
+      const { result } = await run(adapter);
+      expect(result.traceError).toEqual({ code: 'UNKNOWN', layer: 'Test Backend', message: 'model exploded' });
+    });
+
+    it('throws the rendered delegate chain into Lua (delegate traceError as cause)', async () => {
+      const delegate = makeDelegate({
+        generate: vi.fn(async (): Promise<DelegatedGenerateResult> => ({
+          text: '',
+          finishReason: 'error',
+          error: 'boom',
+          usage: { promptTokens: 0, completionTokens: 0 },
+          traceError: { code: 'LUA_ERROR', layer: 'inner-lua', message: 'inner boom' },
+        })),
+      });
+      // The script does NOT pcall — the thrown chain becomes the script's error.
+      const adapter = makeAdapter(`
+        function generate(prompt, ctx)
+          local res = backends.generate(prompt):await()
+          return res.text
+        end
+      `, delegate);
+      const { result } = await run(adapter);
+      expect(result.traceError?.code).toBe('LUA_ERROR');
+      expect(result.traceError?.layer).toBe('Test Backend');
+      // wasmoon appends a stack traceback after the thrown message.
+      expect(result.traceError?.message).toContain('delegate(default) → inner-lua: LUA_ERROR: inner boom');
+    });
+
+    it('a pcall-ing script still sees the rendered chain as the thrown message', async () => {
+      const delegate = makeDelegate({
+        generate: vi.fn(async (): Promise<DelegatedGenerateResult> => ({
+          text: '',
+          finishReason: 'error',
+          error: 'kaboom',
+          usage: { promptTokens: 0, completionTokens: 0 },
+        })),
+      });
+      const adapter = makeAdapter(`
+        function generate(prompt, ctx)
+          local ok, err = pcall(function() return backends.generate("cfg-9", prompt):await() end)
+          if not ok then return { error = tostring(err) } end
+          return "unreachable"
+        end
+      `, delegate);
+      const { result } = await run(adapter);
+      expect(result.error).toContain('delegate(cfg-9): DELEGATE_ERROR: kaboom');
+      expect(result.traceError?.code).toBe('UNKNOWN');
+    });
+
+    it('layers a passthrough resolveAdapter failure as DELEGATE_ERROR', async () => {
+      const delegate = makeDelegate({
+        resolveAdapter: vi.fn(async () => {
+          throw new Error('backend config "nope" not found');
+        }),
+      });
+      const adapter = makeAdapter(`
+        function generate(prompt, ctx)
+          return { __passthrough = "nope" }
+        end
+      `, delegate);
+      const { result } = await run(adapter);
+      expect(result.traceError?.code).toBe('DELEGATE_ERROR');
+      expect(result.traceError?.layer).toBe('Test Backend');
+      expect(result.traceError?.message).toContain('not found');
+    });
+  });
+
   it('exposes ctx and a mutable prompt to the script', async () => {
     const adapter = makeAdapter(`
       function generate(prompt, ctx)

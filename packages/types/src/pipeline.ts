@@ -64,6 +64,31 @@ export interface PipelineMessage {
   reasoningFormatted?: string;
 }
 
+/**
+ * Structured error for debug traces (docs/design/debug-traces.md). Boundaries
+ * WRAP, never flatten: each layer that catches an error it didn't produce adds
+ * its own node with the inner one as `cause`. Lives in the types package so
+ * `GenerationMeta` (db.ts) and server adapters share one definition.
+ */
+export type TraceErrorCode =
+  | 'LUA_ERROR'
+  | 'LUA_TIMEOUT'
+  | 'DELEGATE_ERROR'
+  | 'NO_BACKEND'
+  | 'DEPTH_CAP'
+  | 'ABORTED'
+  | 'HTTP_ERROR'
+  | 'UNKNOWN';
+
+export interface TraceError {
+  code: TraceErrorCode;
+  /** The layer that produced this node: 'custom-backend(research)',
+      'openai(gpt-4o)', 'run_agent', 'runner', … */
+  layer: string;
+  message: string;
+  cause?: TraceError;
+}
+
 export interface ToolDefinition {
   type: 'function';
   function: {

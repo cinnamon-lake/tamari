@@ -6,7 +6,7 @@
  *
  * The virtual filesystem:
  *
- *   /                                       the six domain names (ls / only)
+ *   /                                       the domain names (ls / only)
  *   /characters/<id>/                       non-empty text fields + meta.json + present subdirs
  *   /characters/<id>/<field>                description, personality, scenario, first_mes,
  *                                           mes_example, system_prompt, post_history_instructions,
@@ -25,6 +25,7 @@
  *   /toolsets/<toolsetId>.json
  *   /quickreplies/<scope>/<scopeId>/<id>.json   scope global|character|chat; global uses scopeId `_`
  *   /luatools/<id>/{meta.json,code.lua}
+ *   /generations/<id>/{meta.json,error.txt,prompt.json}   debug traces; read-only
  *
  * No discovery, by design: collections (/characters/, /backends/, ...) can
  * never be listed and grep never crosses entity boundaries — entity ids come
@@ -66,7 +67,8 @@ const MAX_GREP_MATCHES = 50;
 const PATH_DESCRIBE =
   'Absolute vfs path (leading "/"). Layout: /characters/<id>/ (text fields, meta.json, lorebook/, greetings/, regex/, assets/, modules/, backend_logic/<main.lua|modules>), ' +
   '/backends/<id>.json, /custom-backends/<id>/{meta.json,source.lua}, /toolsets/<id>.json, ' +
-  '/quickreplies/<scope>/<scopeId>/<id>.json (scope global|character|chat; "_" = global scopeId), /luatools/<id>/{meta.json,code.lua}.';
+  '/quickreplies/<scope>/<scopeId>/<id>.json (scope global|character|chat; "_" = global scopeId), /luatools/<id>/{meta.json,code.lua}, ' +
+  '/generations/<id>/{meta.json,error.txt,prompt.json} (debug traces, read-only).';
 
 const NO_COLLECTIONS =
   'Collections CANNOT be listed (/characters/, /backends/, /toolsets/, /luatools/, /custom-backends/, /quickreplies/, /quickreplies/<scope>/) — entity ids come from the user or chat context.';

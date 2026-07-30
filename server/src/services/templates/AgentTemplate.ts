@@ -17,6 +17,8 @@ import type { ToolRegistry } from '../ToolRegistry.js';
 import type { ToolContext, ToolExecuteResult, ToolTemplate } from '../ToolTemplate.js';
 import type { GenerationRunner } from '../../generation/GenerationRunner.js';
 import { TranscriptTarget, type TranscriptTargetDeps } from '../../generation/TranscriptTarget.js';
+import { composeGenerationTrace } from '../../generation/trace.js';
+import type { IGenerationRepository } from '../../repos/GenerationRepository.js';
 import { TOOL_STATE_KEY } from '../toolState.js';
 import { getLogger } from '../../lib/logger.js';
 import { str } from '../../lib/coerce.js';
@@ -36,6 +38,8 @@ const AgentArgs = z.object({
 export interface AgentTemplateDeps {
   runner: GenerationRunner;
   targetDeps: TranscriptTargetDeps;
+  /** Generation records, for composing debug traces over a sub-agent's run. */
+  generations: IGenerationRepository;
   /** Recursion bound: spawning at or beyond this depth returns an error. */
   maxAgentDepth: number;
 }
@@ -127,11 +131,21 @@ class AgentTemplate implements ToolTemplate {
       // Nested run under the parent's tenure (context.lock may be undefined
       // when the parent itself was top-level — the runner acquires then).
       const outcome = await this.deps.runner.run(target, context.lock);
+
+      // Debug traces: the sub-agent's record exists now (one row per run) —
+      // errors render the composed ancestry chain, successes reference the id.
+      const record = await this.deps.generations.getById(outcome.generationId);
+
       if (outcome.error) {
-        const message = outcome.error === 'NO_BACKEND'
-          ? 'no backend configured. Set API key and model in settings.'
-          : outcome.error;
-        return { content: `Agent error: ${message}` };
+        if (outcome.error === 'NO_BACKEND' || !record) {
+          const message = outcome.error === 'NO_BACKEND'
+            ? 'no backend configured. Set API key and model in settings.'
+            : outcome.error;
+          return { content: `Agent error: ${message}` };
+        }
+        const trace = await composeGenerationTrace(record, (id) => this.deps.generations.getById(id));
+        const rendered = [...trace.lines, ...(trace.error ? [trace.error] : [])].join('\n');
+        return { content: `Agent error:\n${rendered}`, extra: { generationId: outcome.generationId } };
       }
 
       // State write-back (delegate semantics): the newest `_toolState`
@@ -152,10 +166,20 @@ class AgentTemplate implements ToolTemplate {
           if (key !== 'agent' && !(key in stateMap)) stateMap[key] = snapshot;
         }
       }
-      const extra = Object.keys(stateMap).length > 0 ? { [TOOL_STATE_KEY]: stateMap } : undefined;
+
+      // Recovered nested-tool failures: the run completed, but a tool the
+      // sub-agent called errored — surface that as a warning note, not an error.
+      const failedTools = (record?.meta?.toolCalls ?? []).filter((t) => t.isError === true);
+      const warnings = failedTools.length > 0
+        ? failedTools.map((t) => `tool ${t.name} failed inside the sub-agent (recovered)`).join('; ')
+        : undefined;
+
+      const extra: Record<string, unknown> = { generationId: outcome.generationId };
+      if (Object.keys(stateMap).length > 0) extra[TOOL_STATE_KEY] = stateMap;
+      if (warnings) extra['warnings'] = warnings;
 
       if (!outcome.text) return { content: 'Agent returned empty response.', extra };
-      return { content: outcome.text, extra };
+      return { content: `${outcome.text}\n\n[trace: ${outcome.generationId}]`, extra };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logger.warn({ err: message }, 'run_agent: sub-agent run threw');

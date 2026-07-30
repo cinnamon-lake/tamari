@@ -19,6 +19,7 @@ async function initSchema() {
       error_message TEXT,
       kind TEXT NOT NULL DEFAULT 'send',
       parent_id TEXT,
+      meta TEXT,
       created_at INTEGER DEFAULT (unixepoch()),
       updated_at INTEGER DEFAULT (unixepoch())
     )
@@ -59,6 +60,44 @@ describe('GenerationRepository', () => {
     expect(fetched).toBeDefined();
     expect(fetched!.chatId).toBe('chat-1');
     expect(fetched!.backend).toBe('openai');
+  });
+
+  it('round-trips meta (create + update), tolerating null and invalid payloads', async () => {
+    const meta = {
+      layer: 'openai',
+      depth: 0,
+      rounds: 2,
+      toolCalls: [{ name: 'get_weather', isError: false }],
+      traceError: { code: 'LUA_ERROR' as const, layer: 'custom:test', message: 'boom' },
+    };
+    await repo.create('gen-meta', {
+      chatId: 'chat-1',
+      messageId: null,
+      status: 'pending',
+      backend: 'openai',
+      promptTokens: null,
+      completionTokens: null,
+      errorMessage: null,
+      meta,
+    });
+    expect((await repo.getById('gen-meta'))!.meta).toEqual(meta);
+
+    const updated = await repo.update('gen-meta', { meta: { rounds: 3 } });
+    expect(updated.meta).toEqual({ rounds: 3 });
+
+    // No meta → null; invalid JSON → null (never throws on read).
+    await repo.create('gen-nometa', {
+      chatId: 'chat-1',
+      messageId: null,
+      status: 'pending',
+      backend: 'openai',
+      promptTokens: null,
+      completionTokens: null,
+      errorMessage: null,
+    });
+    expect((await repo.getById('gen-nometa'))!.meta).toBeNull();
+    await client.execute({ sql: "UPDATE generations SET meta = '{invalid' WHERE id = 'gen-meta'", args: [] });
+    expect((await repo.getById('gen-meta'))!.meta).toBeNull();
   });
 
   it('updates a generation', async () => {

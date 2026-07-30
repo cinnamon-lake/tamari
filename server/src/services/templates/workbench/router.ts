@@ -23,6 +23,8 @@ import { customBackendsRoute } from './routes/customBackends.js';
 import { toolsetsRoute } from './routes/toolsets.js';
 import { quickRepliesRoute } from './routes/quickReplies.js';
 import { luaToolsRoute } from './routes/luaTools.js';
+import { generationsRoute } from './routes/generations.js';
+import type { Generation } from '@tamari/types';
 
 /** The five internal workbench providers the vfs dispatches to. */
 export interface WorkbenchProviders {
@@ -31,6 +33,8 @@ export interface WorkbenchProviders {
   toolsetWorkbench: ToolsetWorkbench;
   quickReplyWorkbench: QuickReplyWorkbench;
   luaToolWorkbench: LuaToolWorkbench;
+  /** Generation records for the read-only /generations/ debug-trace route. */
+  generations?: { getById(id: string): Promise<Generation | undefined> };
 }
 
 export interface RouteCall {
@@ -209,9 +213,10 @@ const ROUTES: Record<string, DomainRoute> = {
   toolsets: toolsetsRoute,
   quickreplies: quickRepliesRoute,
   luatools: luaToolsRoute,
+  generations: generationsRoute,
 };
 
-/** The six static domain names shown by `ls /`. */
+/** The static domain names shown by `ls /`. */
 export const DOMAIN_NAMES = Object.keys(ROUTES);
 
 export function resolveDomain(name: string): DomainRoute | undefined {

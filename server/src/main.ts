@@ -239,7 +239,7 @@ const backendWorkbench = new BackendWorkbench({ backendConfigs, settings, bus, s
 const toolsetWorkbench = new ToolsetWorkbench({ toolsets, toolRegistry, bus });
 const quickReplyWorkbench = new QuickReplyWorkbench({ quickReplies, bus });
 const luaToolWorkbench = new LuaToolWorkbench({ toolTemplates, luaExecutor: luaToolExecutor, registry: toolRegistry, bus });
-registerWorkbenchTemplate(toolRegistry, { characterWorkbench, backendWorkbench, toolsetWorkbench, quickReplyWorkbench, luaToolWorkbench });
+registerWorkbenchTemplate(toolRegistry, { characterWorkbench, backendWorkbench, toolsetWorkbench, quickReplyWorkbench, luaToolWorkbench, generations });
 
 
 await seedToolTemplates(toolTemplates);
@@ -310,6 +310,7 @@ registerAgentTemplate(toolRegistry, {
     toolsetRepo: toolsets,
     maxAgentDepth: config.maxAgentDepth,
   },
+  generations,
   maxAgentDepth: config.maxAgentDepth,
 });
 

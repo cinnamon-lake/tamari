@@ -101,10 +101,16 @@ export async function consumeStream<T, R>(gen: AsyncGenerator<T, R>): Promise<{ 
 
 // ---------- Result ----------
 
+export type { TraceError, TraceErrorCode } from '@tamari/types';
+import type { TraceError } from '@tamari/types';
+
 export interface GenerationResult {
   finishReason: 'stop' | 'length' | 'content_filter' | 'error';
   usage: { promptTokens: number; completionTokens: number };
   error?: string;
+  /** Structured form of `error` for debug traces. Absent on success and from
+      adapters that haven't adopted tracing (treated as UNKNOWN at backend.id). */
+  traceError?: TraceError;
   /** Reasoning / thinking text extracted from models that emit it separately (Claude, DeepSeek, etc.). */
   reasoningText?: string;
   /** Provider-specific reasoning signature (e.g. Claude redacted-thinking signature). */

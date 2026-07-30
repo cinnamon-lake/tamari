@@ -71,6 +71,11 @@ What `ls` *can* list:
 └── luatools/<id>/
     ├── meta.json                          { name, sandbox, configSchema }
     └── code.lua                           Lua tool template code
+
+/generations/<id>/                         debug traces, read-only:
+    ├── meta.json                          the full generation record (kind, rounds, tool calls, traceError)
+    ├── error.txt                          rendered error chain (only when the run failed)
+    └── prompt.json                        round-1 prompt snapshot (only when debugPrompts was on)
 ```
 
 Paths are absolute and start with `/`. `.` and `..` segments are rejected.

@@ -3,10 +3,12 @@
  */
 
 import type { Client } from '@libsql/client';
-import type { Generation, GenerationInsert } from '@tamari/types';
+import { z } from 'zod';
+import type { Generation, GenerationInsert, GenerationMeta } from '@tamari/types';
 import { GenerationRowSchema } from '@tamari/types';
 import { NotFoundError } from '../errors.js';
 import { mapRowsLenient } from './rows.js';
+import { safeParseJson } from '../lib/safeJson.js';
 
 export interface IGenerationRepository {
   getById(id: string): Promise<Generation | undefined>;
@@ -29,6 +31,8 @@ function rowToGeneration(row: unknown): Generation {
     errorMessage: r.error_message,
     kind: r.kind,
     parentId: r.parent_id,
+    // Tolerate null/invalid payloads (pre-007 rows, hand-edited data).
+    meta: r.meta === null ? null : (safeParseJson(r.meta, z.unknown(), null) as GenerationMeta | null),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -54,8 +58,8 @@ export class GenerationRepository implements IGenerationRepository {
   async create(id: string, data: Omit<GenerationInsert, 'id'>): Promise<Generation> {
     const now = Math.floor(Date.now() / 1000);
     await this.client.execute({
-      sql: `INSERT INTO generations (id, chat_id, message_id, status, backend, prompt_tokens, completion_tokens, error_message, kind, parent_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO generations (id, chat_id, message_id, status, backend, prompt_tokens, completion_tokens, error_message, kind, parent_id, meta, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         id,
         data.chatId,
@@ -67,6 +71,7 @@ export class GenerationRepository implements IGenerationRepository {
         data.errorMessage ?? null,
         data.kind ?? 'send',
         data.parentId ?? null,
+        data.meta !== undefined && data.meta !== null ? JSON.stringify(data.meta) : null,
         now,
         now,
       ],
@@ -110,6 +115,10 @@ export class GenerationRepository implements IGenerationRepository {
     if (patch.errorMessage !== undefined) {
       sets.push('error_message = ?');
       values.push(patch.errorMessage);
+    }
+    if (patch.meta !== undefined) {
+      sets.push('meta = ?');
+      values.push(patch.meta === null ? null : JSON.stringify(patch.meta));
     }
 
     if (sets.length === 0) return existing;

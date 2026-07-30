@@ -47,6 +47,8 @@ import type {
   ToolCall,
 } from './BackendAdapter.js';
 import { consumeStream } from './BackendAdapter.js';
+import type { TraceError } from './BackendAdapter.js';
+import { renderTraceError } from '../generation/trace.js';
 import { str } from '../lib/coerce.js';
 import { getLogger } from '../lib/logger.js';
 
@@ -62,6 +64,8 @@ export interface DelegatedGenerateResult {
   finishReason: GenerationResult['finishReason'];
   error?: string;
   usage: { promptTokens: number; completionTokens: number };
+  /** Structured error chain from the delegate (propagated, never re-wrapped). */
+  traceError?: TraceError;
 }
 
 /**
@@ -94,8 +98,8 @@ export interface LuaBackendAdapterConfig {
 
 const EMPTY_USAGE = { promptTokens: 0, completionTokens: 0 };
 
-function errorResult(error: string, usage = EMPTY_USAGE): GenerationResult {
-  return { finishReason: 'error', usage, error };
+function errorResult(error: string, usage = EMPTY_USAGE, traceError?: TraceError): GenerationResult {
+  return { finishReason: 'error', usage, error, traceError };
 }
 
 /**
@@ -204,6 +208,7 @@ export class LuaBackendAdapter implements BackendAdapter {
   private readonly delegate: CustomBackendDelegate;
   private readonly vfsFiles: Record<string, string> | undefined;
   private readonly generateTimeoutMs: number;
+  private modulesLoaded: string[] = [];
 
   constructor(config: LuaBackendAdapterConfig) {
     this.id = config.id;
@@ -213,6 +218,11 @@ export class LuaBackendAdapter implements BackendAdapter {
     this.delegate = config.delegate;
     this.vfsFiles = config.vfsFiles;
     this.generateTimeoutMs = config.generateTimeoutMs ?? LUA_GENERATE_TIMEOUT_MS;
+  }
+
+  /** VFS module keys the last generate() actually loaded (dry-run traces). */
+  getLoadedModules(): string[] {
+    return this.modulesLoaded;
   }
 
   async *stream(
@@ -238,9 +248,17 @@ export class LuaBackendAdapter implements BackendAdapter {
           // Errors are first-class (scriptable-layers.md §2): a failed delegation
           // with no usable text throws into Lua — scripts that want to inspect or
           // recover from backend errors can pcall. Never degrade to a silent
-          // empty reply.
+          // empty reply. The thrown message is the rendered trace chain: this
+          // delegation node wraps the delegate's structured error (when the
+          // delegate is itself a layered backend) as its cause.
           if (result.error && result.text.length === 0) {
-            throw new Error(result.error);
+            const chain: TraceError = {
+              code: 'DELEGATE_ERROR',
+              layer: `delegate(${configId ?? 'default'})`,
+              message: result.error,
+              cause: result.traceError,
+            };
+            throw new Error(renderTraceError(chain));
           }
           return result;
         },
@@ -264,7 +282,11 @@ export class LuaBackendAdapter implements BackendAdapter {
       // across the await boundary are unreliable — see LuaToolExecutor).
       await lua.doString(this.luaSource);
       if (typeof lua.global.get('generate') !== 'function') {
-        return errorResult(`custom backend "${this.name}" does not define generate(prompt, ctx)`);
+        return errorResult(`custom backend "${this.name}" does not define generate(prompt, ctx)`, EMPTY_USAGE, {
+          code: 'LUA_ERROR',
+          layer: this.name,
+          message: 'does not define generate(prompt, ctx)',
+        });
       }
 
       // Branch-aware script state (the lua_memory / tool-template protocol):
@@ -324,7 +346,12 @@ export class LuaBackendAdapter implements BackendAdapter {
         try {
           adapter = await this.delegate.resolveAdapter(configId);
         } catch (err) {
-          return errorResult(`passthrough: ${err instanceof Error ? err.message : String(err)}`);
+          const message = err instanceof Error ? err.message : String(err);
+          return errorResult(`passthrough: ${message}`, EMPTY_USAGE, {
+            code: 'DELEGATE_ERROR',
+            layer: this.name,
+            message: `passthrough: ${message}`,
+          });
         }
         const stream = adapter.stream(passthroughPrompt, signal, ctx);
         let next = await stream.next();
@@ -359,15 +386,13 @@ export class LuaBackendAdapter implements BackendAdapter {
         const parsedCalls = parseLuaToolCalls(table['toolCalls']);
         if (parsedCalls.length > 0) toolCalls = parsedCalls;
         if (typeof table['error'] === 'string' && table['error'].length > 0) {
-          return errorResult(table['error'], usage);
+          return errorResult(table['error'], usage, { code: 'UNKNOWN', layer: this.name, message: table['error'] });
         }
       }
 
       if (text === null && !toolCalls) {
-        return errorResult(
-          `custom backend "${this.name}": generate() must return a string, { text = ... }, { toolCalls = ... }, or { __passthrough = ... } (got ${raw === null ? 'nil' : typeof raw})`,
-          usage,
-        );
+        const message = `custom backend "${this.name}": generate() must return a string, { text = ... }, { toolCalls = ... }, or { __passthrough = ... } (got ${raw === null ? 'nil' : typeof raw})`;
+        return errorResult(message, usage, { code: 'LUA_ERROR', layer: this.name, message });
       }
 
       if (reasoning) yield { type: 'reasoning', token: reasoning };
@@ -380,14 +405,23 @@ export class LuaBackendAdapter implements BackendAdapter {
         scriptState: await captureScriptState(),
       };
     } catch (err) {
-      const message = isLuaTimeoutError(err)
+      const timeout = isLuaTimeoutError(err);
+      const message = timeout
         ? `script timed out (${Math.round(this.generateTimeoutMs / 1000)}s execution limit)`
         : err instanceof Error
           ? err.message
           : String(err);
       log.warn({ err, backend: this.name }, 'custom backend generate failed');
-      return errorResult(`custom backend "${this.name}": ${message}`);
+      return errorResult(`custom backend "${this.name}": ${message}`, EMPTY_USAGE, {
+        code: timeout ? 'LUA_TIMEOUT' : 'LUA_ERROR',
+        layer: this.name,
+        message,
+      });
     } finally {
+      // Read back which VFS modules the script actually required (the prelude
+      // tracks them in a Lua global) — before the state is torn down.
+      const loaded: unknown = lua.global.get('__vfsModulesLoaded');
+      this.modulesLoaded = Array.isArray(loaded) ? loaded.filter((k): k is string => typeof k === 'string') : [];
       cleanup();
     }
   }
@@ -431,5 +465,8 @@ export async function runAdapterBlocking(
     finishReason: result.finishReason,
     error: result.error,
     usage: result.usage,
+    // Propagate the delegate's structured chain as-is — never re-wrap here;
+    // the delegating adapter wraps it as DELEGATE_ERROR cause at the bridge.
+    traceError: result.traceError,
   };
 }

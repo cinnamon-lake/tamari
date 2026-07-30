@@ -27,7 +27,8 @@ import type { IGenerationRepository } from '../repos/GenerationRepository.js';
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
 import type { IBackendConfigRepository } from '../repos/BackendConfigRepository.js';
 import type { IPromptListRepository } from '../repos/PromptListRepository.js';
-import type { BackendAdapter, GenerationResult, Prompt } from '../backends/BackendAdapter.js';
+import type { BackendAdapter, GenerationResult, Prompt, TraceError } from '../backends/BackendAdapter.js';
+import type { GenerationMeta } from '@tamari/types';
 import { buildBackendSettings } from '../backends/buildBackendSettings.js';
 import type { BackendAdapterFactory } from '../backends/factory.js';
 import { createContextualBackendAdapter, getCharacterBackendScript } from '../backends/customBackendFactory.js';
@@ -72,6 +73,8 @@ export interface GenerationOutcome {
   text: string;
   finishReason: string;
   error?: string;
+  /** Structured error chain for traces (docs/design/debug-traces.md). */
+  traceError?: TraceError;
 }
 
 interface ActiveGeneration {
@@ -240,7 +243,12 @@ export class GenerationRunner {
             code: 'NO_BACKEND',
           });
         }
-        return this.outcome(generationId, target, { finishReason: 'error', usage: { promptTokens: 0, completionTokens: 0 }, error: 'NO_BACKEND' });
+        return this.outcome(generationId, target, {
+          finishReason: 'error',
+          usage: { promptTokens: 0, completionTokens: 0 },
+          error: 'NO_BACKEND',
+          traceError: { code: 'NO_BACKEND', layer: 'runner', message: 'No backend configured. Set API key and model in settings.' },
+        });
       }
 
       await target.prepare();
@@ -250,6 +258,21 @@ export class GenerationRunner {
       let recordCreated = false;
       let rounds = 0;
       const maxToolRounds = this.deps.maxToolRounds ?? 100;
+
+      // Debug-trace meta (docs/design/debug-traces.md): per-run layer/depth/
+      // rounds/tool calls + the structured error, plus the round-1 prompt when
+      // debugPrompts is on.
+      const debugPromptsOn = Boolean(await this.deps.settings.get('debugPrompts'));
+      let firstPrompt: Prompt | undefined;
+      const toolCallsMeta: Array<{ name: string; isError?: boolean }> = [];
+      const buildMeta = (traceError?: TraceError): GenerationMeta => ({
+        layer: resolved.backend.id,
+        depth: target.depth ?? 0,
+        rounds,
+        ...(toolCallsMeta.length > 0 ? { toolCalls: toolCallsMeta } : {}),
+        ...(traceError ? { traceError } : {}),
+        ...(debugPromptsOn && firstPrompt ? { prompt: firstPrompt } : {}),
+      });
 
       while (rounds < maxToolRounds) {
         const pending = target.pendingToolCalls();
@@ -266,6 +289,7 @@ export class GenerationRunner {
               depth: target.depth ?? 0,
               generationId,
             });
+            toolCallsMeta.push({ name: call.name, isError: outcome.isError });
             await target.writeToolOutcome(call, outcome);
             if (outcome.endsTurn === true) turnEnds = true;
           }
@@ -277,6 +301,7 @@ export class GenerationRunner {
         }
 
         const prompt = await target.prompt(resolved);
+        firstPrompt ??= prompt;
         if (!recordCreated) {
           await this.deps.generations.create(generationId, {
             chatId: target.chatId,
@@ -292,7 +317,7 @@ export class GenerationRunner {
           recordCreated = true;
         }
 
-        result = await this.streamRound(generationId, prompt, resolved, target);
+        result = await this.streamRound(generationId, prompt, resolved, target, buildMeta);
         if (result.error) break;
         rounds++;
       }
@@ -304,6 +329,7 @@ export class GenerationRunner {
             status: 'complete',
             messageId: target.messageId ?? undefined,
             completionTokens: result.usage.completionTokens,
+            meta: buildMeta(),
           });
         }
         // Auto-continue: the target decides whether a follow-up is warranted
@@ -341,6 +367,7 @@ export class GenerationRunner {
     prompt: Prompt,
     resolved: ResolvedGenerationBackend,
     target: GenerationTarget,
+    buildMeta: (traceError?: TraceError) => GenerationMeta,
   ): Promise<GenerationResult> {
     const abortController = new AbortController();
     this.active.set(generationId, { abortController, target });
@@ -368,10 +395,13 @@ export class GenerationRunner {
       const result = next.value;
 
       if (result.error) {
+        // Attach a trace node when the backend didn't layer one itself.
+        result.traceError ??= { code: 'UNKNOWN', layer: resolved.backend.id, message: result.error };
         await this.deps.generations.update(generationId, {
           status: 'error',
           errorMessage: result.error,
           completionTokens: result.usage.completionTokens,
+          meta: buildMeta(result.traceError),
         });
         log.error({ chatId: target.chatId, generationId, backend: resolved.backend.id, error: result.error }, 'generation failed');
         this.deps.generationBroadcast.broadcastGenerationError(target.chatId, generationId, result.error);
@@ -390,13 +420,18 @@ export class GenerationRunner {
       const error = err instanceof Error ? err.message : String(err);
       log.error({ err: error }, 'generation failed');
       const aborted = abortController.signal.aborted;
-      await this.deps.generations.update(generationId, { status: aborted ? 'aborted' : 'error', errorMessage: error });
+      const result: GenerationResult = {
+        finishReason: 'error',
+        usage: { promptTokens: 0, completionTokens: 0 },
+        error,
+        traceError: { code: aborted ? 'ABORTED' : 'UNKNOWN', layer: resolved.backend.id, message: error },
+      };
+      await this.deps.generations.update(generationId, { status: aborted ? 'aborted' : 'error', errorMessage: error, meta: buildMeta(result.traceError) });
       if (aborted) {
         this.deps.generationBroadcast.broadcastGenerationAborted(target.chatId, generationId);
       } else {
         this.deps.generationBroadcast.broadcastGenerationError(target.chatId, generationId, error);
       }
-      const result: GenerationResult = { finishReason: 'error', usage: { promptTokens: 0, completionTokens: 0 }, error };
       await target.abort(result);
       return result;
     } finally {
@@ -416,6 +451,7 @@ export class GenerationRunner {
         .join(''),
       finishReason: result.finishReason,
       error: result.error,
+      traceError: result.traceError,
     };
   }
 }

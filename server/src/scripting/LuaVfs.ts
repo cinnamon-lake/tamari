@@ -57,6 +57,8 @@ export function vfsRequirePrelude(files: Record<string, string>): string {
   local __sources = { ${entries.join(',\n    ')} }
   local __loaded = {}
   local __loading = {}
+  -- Read back by LuaBackendAdapter for the dry-run trace (modulesLoaded).
+  __vfsModulesLoaded = {}
   local function normalize(path)
     if type(path) ~= 'string' then return nil end
     path = path:gsub('^%./+', '')
@@ -88,6 +90,7 @@ export function vfsRequirePrelude(files: Record<string, string>): string {
     if not ok then error(result, 0) end
     if result == nil then result = true end
     __loaded[key] = result
+    table.insert(__vfsModulesLoaded, key)
     return result
   end
 end

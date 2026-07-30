@@ -7,6 +7,7 @@ import { LuaRuntime } from '../../../server/src/scripting/LuaRuntime.js';
 import { registerAssetsTemplate } from '../../../server/src/services/templates/AssetsTemplate.js';
 import { registerLuaRunnerTemplate } from '../../../server/src/services/templates/LuaRunnerTemplate.js';
 import { registerAgentTemplate } from '../../../server/src/services/templates/AgentTemplate.js';
+import { GenerationRepository } from '../../../server/src/repos/GenerationRepository.js';
 import type { ClientMessage } from '@tamari/types';
 import { getMessageText } from '@tamari/types';
 
@@ -197,6 +198,7 @@ describe('e2e default built-in tools', () => {
           toolRegistry,
           toolsetRepo: h.deps.toolsets,
         },
+        generations: new GenerationRepository(h.db),
         maxAgentDepth: 4,
       });
       client = h.connectClient();
@@ -254,6 +256,7 @@ describe('e2e default built-in tools', () => {
           toolRegistry,
           toolsetRepo: isolatedH.deps.toolsets,
         },
+        generations: new GenerationRepository(isolatedH.db),
         maxAgentDepth: 4,
       });
       // The sub-agent's generation record needs a real chat row (FK).

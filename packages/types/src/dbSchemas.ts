@@ -182,6 +182,7 @@ export const GenerationRowSchema = z.object({
   error_message: z.string().nullable(),
   kind: z.enum(['send', 'regenerate', 'continue', 'impersonate', 'quiet', 'genraw', 'subagent']),
   parent_id: z.string().nullable(),
+  meta: z.string().nullable(),
   created_at: z.number(),
   updated_at: z.number(),
 });

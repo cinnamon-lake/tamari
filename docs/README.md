@@ -48,6 +48,7 @@ This directory contains design documents, roadmaps, external specifications, and
 - [`design/scriptable-layers.md`](./design/scriptable-layers.md) — **Proposal.** tamari's answer to RisuAI TriggerScript: three single-purpose scriptable layers (custom Lua backends, memoized display transforms, `data-post-response` button protocol) under a "no render-time code, immutable displayed history" contract.
 - [`design/generation-runner.md`](./design/generation-runner.md) — **Proposal.** Unify generate/continue/regenerate/impersonate/quiet behind one `GenerationRunner` loop driven by `GenerationTarget` state — the foundation for sub-agent tool-calling and composable custom backends.
 - [`design/complex-card-scripting.md`](./design/complex-card-scripting.md) — **Implemented.** Multi-file `backend_logic` (card VFS + sandboxed `require`, Workbench `backend_logic/` directory) and script-facing structured output (`response_format`, `json.parse_result`).
+- [`design/debug-traces.md`](./design/debug-traces.md) — **Implemented.** Structured error chains across nested backends/sub-agents, `generations.meta` trace records, and trace surfacing via tool results, dry-runs, and the read-only `/generations/<id>/` workbench route.
 - [`design/character-porting.md`](./design/character-porting.md) — End-to-end flow for porting RisuAI cards (CharX + .risum) with the Character Workbench, plus a checked case study of the Touhou/Hearts bundle.
 
 ## Roadmap (`roadmap/`)

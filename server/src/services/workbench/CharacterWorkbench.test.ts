@@ -1321,6 +1321,52 @@ describe('CharacterWorkbench', () => {
       expect(outcome['ok']).toBe(true);
       expect(outcome['text']).toBe('FROM-MODULE');
     });
+
+    it('backend_logic_test returns a trace: delegation layers + modulesLoaded', async () => {
+      const { template } = makeTemplate({ characters: [makeCharacter()] });
+      await template.execute('backend_logic_set', {
+        characterId: 'char1',
+        luaSource: `
+          local wrap = require('lib/wrap')
+          function generate(prompt, ctx)
+            local res = backends.generate(prompt):await()
+            return wrap(res.text)
+          end
+        `,
+      });
+      await template.execute('backend_file_set', {
+        characterId: 'char1',
+        path: 'lib/wrap.lua',
+        luaSource: 'return function(t) return "[" .. t .. "]" end',
+      });
+      const res = await template.execute('backend_logic_test', { characterId: 'char1', input: 'hi', delegateResponse: 'CANNED' });
+      const outcome = JSON.parse(res.content as string) as Record<string, unknown>;
+      expect(outcome['ok']).toBe(true);
+      expect(outcome['text']).toBe('[CANNED]');
+      const trace = outcome['trace'] as { delegations: Array<{ layer: string; error?: string }>; modulesLoaded: string[] };
+      expect(trace.delegations).toEqual([{ layer: 'default' }]);
+      expect(trace.modulesLoaded).toEqual(['lib/wrap.lua']);
+    });
+
+    it('backend_logic_test supports failing delegations ({ error }) and traces them', async () => {
+      const { template } = makeTemplate({ characters: [makeCharacter()] });
+      const res = await template.execute('backend_logic_test', {
+        characterId: 'char1',
+        input: 'hi',
+        luaSource: `
+          function generate(prompt, ctx)
+            local res = backends.generate(prompt):await()
+            return res.text
+          end
+        `,
+        delegateResponse: { error: 'delegate died' },
+      });
+      const outcome = JSON.parse(res.content as string) as Record<string, unknown>;
+      expect(outcome['ok']).toBe(false);
+      expect(outcome['error']).toContain('delegate died');
+      const trace = outcome['trace'] as { delegations: Array<{ layer: string; error?: string }> };
+      expect(trace.delegations).toEqual([{ layer: 'default', error: 'delegate died' }]);
+    });
   });
 
   describe('backend_file tools', () => {
