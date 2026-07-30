@@ -17,6 +17,8 @@ async function initSchema() {
       prompt_tokens INTEGER,
       completion_tokens INTEGER,
       error_message TEXT,
+      kind TEXT NOT NULL DEFAULT 'send',
+      parent_id TEXT,
       created_at INTEGER DEFAULT (unixepoch()),
       updated_at INTEGER DEFAULT (unixepoch())
     )

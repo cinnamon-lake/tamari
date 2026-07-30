@@ -42,12 +42,6 @@ The composer also autocompletes **macros**: typing `{{` opens a second suggestio
 | `/sysgen` | `<text>` | Currently identical to `/gen`. |
 | `/genraw` | `<prompt>` | Truly raw generation: the prompt text goes to the model as a single user message — no chat history, no character card, no World Info. The result is appended as a system message. |
 | `/ask` | `<character> <message>` | Posts `<message>` as you, then generates a reply as the named character (exact name match). Does not switch chats — the reply lands in the current one. |
-| `/inject` | `<text>` | Queues `text` for the **next** generation: it is macro-resolved and spliced into the prompt as a synthetic system message at the end of context (depth 0). One-shot — consumed by the next generation. A toast confirms the injection. |
-| `/flushinject` | — | Discards all pending `/inject` entries. A toast reports how many were cleared. |
-
-`/inject` is the way to slip an instruction into a single generation without touching your preset or Author's Note — for example `/inject ({{char}} notices the storm outside)` before your next message. Because injections are macro-resolved, `{{char}}`, `{{user}}`, variables, and randomization all work inside them.
-
-> **Note:** Pending injections merge with any queued by Lua `st.inject` — one does not wipe the other. See [Lua Scripting](./lua-scripting.md).
 
 ### Settings & Appearance
 
@@ -120,8 +114,6 @@ Many slash commands wrap the same server operations as `st` functions, so anythi
 | `/swipe left` | `st.swipe("left")` |
 | `/cut 3` | `st.cut(3)` |
 | `/reset` | `st.reset_chat()` |
-| `/inject text` | `st.inject("text")` |
-| `/flushinject` | `st.flush_inject()` |
 | `/gen prompt` | `st.generate("prompt")` — returns the text instead of appending it |
 | `/genraw prompt` | `st.genraw("prompt")` |
 | `/ask Name msg` | `st.ask("Name", "msg")` |
@@ -138,7 +130,6 @@ Many slash commands wrap the same server operations as `st` functions, so anythi
 - **`/impersonate` is a draft, not a send.** The generated text lands in the composer so you can edit it first. It never reaches the chat until you press **Send**.
 - **`/gen` vs `/genraw`.** `/gen` sees the whole chat (character card, World Info, history) and just skips appending a user message; `/genraw` sees nothing but the prompt text. Use `/genraw` to ask the model something completely out of character.
 - **`/sysgen` is a synonym today.** It currently does exactly what `/gen` does; it exists as a separate entry point in case its behavior diverges later.
-- **Injections are one-shot.** A queued `/inject` rides along on the very next generation — whether you send a message, regenerate, or continue — and is then gone. `/flushinject` clears the queue if you change your mind.
 - **`/wi` edits are permanent.** `/wi add` and `/wi del` modify the linked lorebook itself, not just the current chat — other chats with the same character see the change too.
 - **The composer has a few markdown hotkeys** worth knowing alongside commands: `Ctrl+B` bold, `Ctrl+I` italic, `Ctrl+U` underline, `Ctrl+K` inline code, `Ctrl+Shift+` backtick` strikethrough (all wrap the current selection).
 

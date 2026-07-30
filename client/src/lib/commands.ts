@@ -4,17 +4,6 @@ import { addToast } from '../stores/toastStore.js';
 import { buildClientMessage, THEME_PRESETS } from './slashCommands.js';
 import type { ParsedCommand } from './slashCommands.js';
 
-/** Pending prompt injections (from /inject). Attached to the next action.generate. */
-const pendingInjections: string[] = [];
-
-/** Returns pending injections and clears them (one-shot). */
-export function consumePendingInjections(): string[] | undefined {
-  if (pendingInjections.length === 0) return undefined;
-  const result = [...pendingInjections];
-  pendingInjections.length = 0;
-  return result;
-}
-
 export interface CommandDeps {
   setText: (text: string) => void;
   setShowAutocomplete: (show: boolean) => void;
@@ -256,27 +245,6 @@ export function executeSlashCommand(
       }
 
       addToast('Unknown /wi subcommand. Use: list, get, add, del', 'error');
-      clearInput(deps);
-      return true;
-    }
-
-    case 'inject': {
-      const text = parsed.args.join(' ');
-      if (!text) {
-        addToast('Usage: /inject <text>', 'error');
-        clearInput(deps);
-        return true;
-      }
-      pendingInjections.push(text);
-      addToast(`Injected (pending for next generation): ${text.slice(0, 50)}${text.length > 50 ? '…' : ''}`);
-      clearInput(deps);
-      return true;
-    }
-
-    case 'flushinject': {
-      const count = pendingInjections.length;
-      pendingInjections.length = 0;
-      addToast(count > 0 ? `Cleared ${count} pending injection(s)` : 'No pending injections');
       clearInput(deps);
       return true;
     }

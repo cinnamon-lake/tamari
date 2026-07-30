@@ -1,21 +1,30 @@
 import { describe, it, expect, vi } from 'vitest';
-import { GenerationService, type GenerationServiceDeps } from './GenerationService.js';
-import { EventBus } from '../bus/EventBus.js';
-import { LuaRuntime } from '../scripting/LuaRuntime.js';
-import type { BackendAdapter, Prompt } from '../backends/BackendAdapter.js';
+import { AssistantMessageTarget, type AssistantMessageTargetDeps } from '../generation/AssistantMessageTarget.js';
+import type { ChatPromptAssembly } from '../generation/ChatPromptAssembly.js';
 import type { Message } from '@tamari/types';
 import { getMessageText } from '@tamari/types';
 import type { IChatRepository } from '../repos/ChatRepository.js';
-import type { IGenerationRepository } from '../repos/GenerationRepository.js';
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
+import type { GenerationResult } from '../backends/BackendAdapter.js';
 
-describe('GenerationService.runGeneration macroVars', () => {
-  function makeService(overrides?: {
-    chats?: Partial<IChatRepository>;
-    settings?: Partial<ISettingsRepository>;
-  }): { service: GenerationService; updatedMessages: Message[]; bus: EventBus } {
-    const bus = new EventBus();
+/**
+ * macroVars storage-macro resolution through a generation round — the legacy
+ * GenerationService.runGeneration tests, re-pointed at AssistantMessageTarget
+ * (the code's new home after the generation-runner migration). Intent
+ * unchanged: setvar in generated text lands in message.extra.macroVars,
+ * continue merges with the existing snapshot, and fresh messages inherit the
+ * parent's snapshot.
+ */
+describe('AssistantMessageTarget macroVars', () => {
+  function makeDeps(): {
+    deps: AssistantMessageTargetDeps;
+    store: Map<number, Message>;
+    updatedMessages: Message[];
+    appendedMessages: Message[];
+  } {
+    const store = new Map<number, Message>();
     const updatedMessages: Message[] = [];
+    const appendedMessages: Message[] = [];
 
     const chats: IChatRepository = {
       getChatById: vi.fn(async () => ({
@@ -30,92 +39,76 @@ describe('GenerationService.runGeneration macroVars', () => {
         createdAt: 0,
         updatedAt: 0,
       })),
-      getMessageById: vi.fn(async (id: number) => {
-        return updatedMessages.find((m) => m.id === id) ?? {
-          id,
-          parentId: null,
-          role: 'assistant',
-          extra: {},
+      getMessageById: vi.fn(async (id: number) => store.get(id)),
+      appendMessage: vi.fn(async (_chatId: string, msg) => {
+        const created: Message = {
+          id: 1,
+          parentId: (msg.parentId ?? null) as number | null,
+          role: msg.role ?? 'assistant',
+          extra: msg.extra ?? {},
           createdAt: 0,
           updatedAt: 0,
-        };
+        } as Message;
+        store.set(created.id, created);
+        appendedMessages.push(created);
+        return created;
       }),
       updateMessage: vi.fn(async (id: number, patch) => {
-        const msg = await chats.getMessageById(id);
-        const updated = { ...msg!, ...patch, extra: { ...msg!.extra, ...patch.extra } };
+        const msg = store.get(id)!;
+        const updated = { ...msg, ...patch, extra: { ...msg.extra, ...patch.extra } };
+        store.set(id, updated);
         updatedMessages.push(updated);
         return updated;
       }),
       getBulkOfMessages: vi.fn(async () => []),
-      ...overrides?.chats,
+      getActiveBranch: vi.fn(async () => []),
     } as unknown as IChatRepository;
-
-    const generations: IGenerationRepository = {
-      update: vi.fn(),
-    } as unknown as IGenerationRepository;
 
     const settings: ISettingsRepository = {
       list: vi.fn(async () => ({})),
       get: vi.fn(async () => undefined),
-      ...overrides?.settings,
     } as unknown as ISettingsRepository;
 
-    const deps: GenerationServiceDeps = {
-      bus,
+    const deps: AssistantMessageTargetDeps = {
       chats,
-      generations,
-      characters: {} as GenerationServiceDeps['characters'],
+      characters: {} as AssistantMessageTargetDeps['characters'],
+      chatMembers: {} as AssistantMessageTargetDeps['chatMembers'],
+      personas: {} as AssistantMessageTargetDeps['personas'],
       settings,
-      personas: {} as GenerationServiceDeps['personas'],
-      backendConfigs: {} as GenerationServiceDeps['backendConfigs'],
-      promptLists: {} as GenerationServiceDeps['promptLists'],
-      chatMembers: {} as GenerationServiceDeps['chatMembers'],
-      attachments: {} as GenerationServiceDeps['attachments'],
-      storage: {} as GenerationServiceDeps['storage'],
-      groupChatService: {} as GenerationServiceDeps['groupChatService'],
-      promptBuilder: {} as GenerationServiceDeps['promptBuilder'],
-      backendFactory: {} as GenerationServiceDeps['backendFactory'],
-      luaRuntime: new LuaRuntime(),
-      customBackends: {} as GenerationServiceDeps['customBackends'],
-      worldInfo: {} as GenerationServiceDeps['worldInfo'],
-      characterAssets: {} as GenerationServiceDeps['characterAssets'],
-      chatBroadcast: { broadcastSnapshot: vi.fn(), broadcastMessagePatched: vi.fn(), broadcastMessageAppended: vi.fn() } as unknown as GenerationServiceDeps['chatBroadcast'],
-      generationBroadcast: { broadcastGenerationStarted: vi.fn(), broadcastGenerationToken: vi.fn(), broadcastGenerationReasoningToken: vi.fn(), broadcastPromptAnnounced: vi.fn(), broadcastGenerationDone: vi.fn(), broadcastGenerationAborted: vi.fn(), broadcastGenerationError: vi.fn(), broadcastImpersonationComplete: vi.fn() } as unknown as GenerationServiceDeps['generationBroadcast'],
+      backendConfigs: {} as AssistantMessageTargetDeps['backendConfigs'],
+      chatBroadcast: {
+        broadcastSnapshot: vi.fn(),
+        broadcastMessageAppended: vi.fn(),
+        broadcastMessageSnapshot: vi.fn(),
+      } as unknown as AssistantMessageTargetDeps['chatBroadcast'],
+      generationBroadcast: {
+        broadcastGenerationToken: vi.fn(),
+        broadcastGenerationReasoningToken: vi.fn(),
+      } as unknown as AssistantMessageTargetDeps['generationBroadcast'],
+      assembly: {} as ChatPromptAssembly,
     };
 
-    const service = new GenerationService(deps);
-    return { service, updatedMessages, bus };
+    return { deps, store, updatedMessages, appendedMessages };
   }
 
-  function makeMockBackend(streamingText: string): BackendAdapter {
-    return {
-      id: 'mock',
-      supportsStreaming: true,
-      supportsTools: false,
-      async *stream(_prompt: Prompt, _signal: AbortSignal) {
-        for (const char of streamingText) {
-          yield { type: 'text' as const, token: char };
-        }
-        return {
-          finishReason: 'stop' as const,
-          usage: { promptTokens: 10, completionTokens: streamingText.length },
-        };
-      },
-      async listModels() {
-        return [];
-      },
-    };
+  const RESULT: GenerationResult = {
+    finishReason: 'stop',
+    usage: { promptTokens: 10, completionTokens: 5 },
+  };
+
+  async function streamText(target: AssistantMessageTarget, text: string): Promise<void> {
+    for (const char of text) {
+      target.write({ type: 'text', token: char });
+    }
+    await target.finalize(RESULT);
   }
 
   it('stores macroVars from generated text in the assistant message', async () => {
-    const { service, updatedMessages } = makeService();
-    const backend = makeMockBackend('Hello! {{setvar::mood::cheerful}}');
-    const prompt: Prompt = {
-      messages: [{ role: 'user', content: 'Hi' }],
-      tokenUsage: { prompt: 10, completion: 5 },
-    };
+    const { deps, updatedMessages } = makeDeps();
+    const target = AssistantMessageTarget.forNewMessage({ chatId: 'chat-1', character: null }, deps);
+    await target.prepare();
 
-    await (service as any).runGeneration('gen-1', 'chat-1', prompt, backend, 1);
+    await streamText(target, 'Hello! {{setvar::mood::cheerful}}');
 
     const last = updatedMessages.at(-1)!;
     expect(last.extra.parts).toEqual([{ type: 'text', text: 'Hello! ' }]);
@@ -123,28 +116,20 @@ describe('GenerationService.runGeneration macroVars', () => {
   });
 
   it('merges new macroVars with existing snapshot on continue', async () => {
-    const existingMessage: Message = {
+    const { deps, store, updatedMessages } = makeDeps();
+    store.set(1, {
       id: 1,
       parentId: null,
       role: 'assistant',
       extra: { parts: [{ type: 'text', text: 'Hello! ' }], macroVars: { mood: 'happy', topic: 'weather' } },
       createdAt: 0,
       updatedAt: 0,
-    };
-
-    const { service, updatedMessages } = makeService({
-      chats: {
-        getMessageById: vi.fn(async () => existingMessage),
-      },
     });
 
-    const backend = makeMockBackend('It is sunny. {{setvar::detail::warm}}');
-    const prompt: Prompt = {
-      messages: [{ role: 'user', content: 'Hi' }],
-      tokenUsage: { prompt: 10, completion: 5 },
-    };
+    const target = AssistantMessageTarget.continueFrom({ chatId: 'chat-1', character: null, messageId: 1 }, deps);
+    await target.prepare();
 
-    await (service as any).runGeneration('gen-1', 'chat-1', prompt, backend, 1);
+    await streamText(target, 'It is sunny. {{setvar::detail::warm}}');
 
     const last = updatedMessages.at(-1)!;
     expect(last.extra.parts).toEqual([{ type: 'text', text: 'Hello! It is sunny. ' }]);
@@ -156,29 +141,24 @@ describe('GenerationService.runGeneration macroVars', () => {
   });
 
   it('carries forward parent macroVars for fresh assistant messages', async () => {
-    // Simulate a fresh generation where the target message was created with the parent's snapshot
-    const targetMessage: Message = {
-      id: 1,
-      parentId: 2,
-      role: 'assistant',
-      extra: { macroVars: { greeting_type: 'casual' }, parts: [{ type: 'text', text: '' }] },
+    // The parent message holds the variable snapshot the fresh assistant
+    // message inherits at creation.
+    const { deps, store, updatedMessages, appendedMessages } = makeDeps();
+    store.set(2, {
+      id: 2,
+      parentId: null,
+      role: 'user',
+      extra: { macroVars: { greeting_type: 'casual' }, parts: [{ type: 'text', text: 'hi' }] },
       createdAt: 0,
       updatedAt: 0,
-    };
-
-    const { service, updatedMessages } = makeService({
-      chats: {
-        getMessageById: vi.fn(async () => targetMessage),
-      },
     });
 
-    const backend = makeMockBackend('Yo! {{setvar::tone::relaxed}}');
-    const prompt: Prompt = {
-      messages: [{ role: 'user', content: 'Hi' }],
-      tokenUsage: { prompt: 10, completion: 5 },
-    };
+    const target = AssistantMessageTarget.forNewMessage({ chatId: 'chat-1', character: null, parentId: 2 }, deps);
+    await target.prepare();
+    // prepare() inherited the parent's snapshot into the fresh message.
+    expect(appendedMessages[0]!.extra.macroVars).toEqual({ greeting_type: 'casual' });
 
-    await (service as any).runGeneration('gen-1', 'chat-1', prompt, backend, 1);
+    await streamText(target, 'Yo! {{setvar::tone::relaxed}}');
 
     const last = updatedMessages.at(-1)!;
     expect(getMessageText(last.extra.parts)).toBe('Yo! ');

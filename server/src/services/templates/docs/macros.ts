@@ -8,7 +8,7 @@ Macros are \`{{...}}\` placeholders resolved when text is processed. Arguments a
 - **Multi-pass, order-independent:** resolution loops until everything settles. \`{{setvar}}\` in one prompt can feed \`{{getvar}}\` in another within the same build.
 - **Unknown macros pass through unchanged** as literal text. Unknown \`{% blocks %}\` vanish.
 - **Non-deterministic macros** (\`{{random}}\`, \`{{pick}}\`, \`{{roll}}\`, all time/date macros) disable prompt caching for the whole generation.
-- **Where resolved:** preset prompts, character card fields, persona, World Info at-depth content, Author's Note, runtime injections, stopping strings — all at prompt-build time. Chat messages are resolved once **at write time** and stored resolved (so \`{{random}}\` in a sent message is frozen; prompts re-roll per generation).
+- **Where resolved:** preset prompts, character card fields, persona, World Info at-depth content, Author's Note, stopping strings — all at prompt-build time. Chat messages are resolved once **at write time** and stored resolved (so \`{{random}}\` in a sent message is frozen; prompts re-roll per generation).
 
 ## Reference
 

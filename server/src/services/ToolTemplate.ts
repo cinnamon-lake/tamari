@@ -1,5 +1,6 @@
 import type { InlineContentPart } from '../backends/BackendAdapter.js';
 import type { MessageExtra } from '@tamari/types';
+import type { ChatLock } from '../generation/AsyncMutex.js';
 
 export interface ToolExecuteResult {
   content: string | InlineContentPart[];
@@ -19,6 +20,14 @@ export interface ToolContext {
   clientId?: string;
   config?: Record<string, unknown>;
   messages?: ToolContextMessage[];
+  /** The generation tenure the tool runs inside (sub-agents nest under it). */
+  lock?: ChatLock;
+  /** Agent nesting depth: 0 at top level, +1 per spawned sub-agent. The spawn
+      tool enforces the cap; the runner only passes it through. */
+  depth?: number;
+  /** The generation record id of the run this tool executes in (parent
+      reference for sub-agent records). */
+  generationId?: string;
 }
 
 export interface ToolTemplateToolDef {

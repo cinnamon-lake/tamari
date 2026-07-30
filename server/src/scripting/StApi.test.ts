@@ -31,6 +31,7 @@ describe('StApi', () => {
     client = h.connectClient();
 
     generationService = {
+      heldLockFor: vi.fn((id: string) => ({ chatId: id })),
       handleSend: vi.fn(),
       handleContinue: vi.fn(),
       handleImpersonate: vi.fn(),
@@ -140,27 +141,27 @@ describe('StApi', () => {
   describe('chat actions', () => {
     it('send delegates to generationService', async () => {
       await st.send('Hello');
-      expect(generationService.handleSend).toHaveBeenCalledWith(chatId, 'Hello', undefined, ctx.id);
+      expect(generationService.handleSend).toHaveBeenCalledWith(chatId, 'Hello', undefined, { chatId });
     });
 
     it('continue delegates to generationService', async () => {
       await st.continue();
-      expect(generationService.handleContinue).toHaveBeenCalledWith(chatId, ctx.id);
+      expect(generationService.handleContinue).toHaveBeenCalledWith(chatId, { chatId });
     });
 
     it('impersonate delegates to generationService', async () => {
       await st.impersonate();
-      expect(generationService.handleImpersonate).toHaveBeenCalledWith(chatId, ctx.id);
+      expect(generationService.handleImpersonate).toHaveBeenCalledWith(chatId, { chatId });
     });
 
     it('regenerate delegates to generationService', async () => {
       await st.regenerate();
-      expect(generationService.handleRegenerate).toHaveBeenCalledWith(chatId, undefined, ctx.id);
+      expect(generationService.handleRegenerate).toHaveBeenCalledWith(chatId, undefined, { chatId });
     });
 
     it('trigger delegates to generationService', async () => {
       await st.trigger();
-      expect(generationService.handleGenerate).toHaveBeenCalledWith(chatId, ctx.id, client.connection.id);
+      expect(generationService.handleGenerate).toHaveBeenCalledWith(chatId, { chatId }, client.connection.id);
     });
 
     it('stop delegates to generationService when active generation matches chat', async () => {
@@ -1108,14 +1109,14 @@ describe('StApi', () => {
       }
     });
 
-    it('excludes chat actions, history mutation, lifecycle, and injection machinery', () => {
+    it('excludes chat actions, history mutation, and lifecycle', () => {
       const excluded = [
         'send', 'continue', 'impersonate', 'regenerate', 'trigger', 'stop',
         'swipe', 'cut', 'edit', 'delete', 'hide', 'unhide', 'set_message_role',
         'set_message_extra', 'set_reasoning', 'clear_reasoning', 'add_swipe',
         'set_active_child', 'repair_active_child', 'comment', 'send_as',
         'send_narrator', 'reset_chat', 'new_chat', 'temp_chat', 'delete_chat',
-        'branch', 'checkpoint', 'hard_fork', 'inject', 'flush_inject',
+        'branch', 'checkpoint', 'hard_fork',
       ];
       for (const key of excluded) {
         expect(toolSt[key], `"${key}" should be excluded`).toBeUndefined();

@@ -81,9 +81,6 @@ export interface BuildOptions {
     presetPromptOrder?: PromptOrderEntry[];
     /** Author's Note configuration */
     authorsNote?: AuthorsNoteConfig | null;
-    /** Runtime prompt injections (from /inject or Lua st.inject). Spliced as
-     * synthetic system messages at depth 0 (near the end of context). */
-    injections?: string[];
     /** If true, don't include mesExample dialogue in the prompt */
     stripExamples?: boolean;
   };
@@ -209,7 +206,6 @@ export class PromptBuilder {
     const an = this.spliceAuthorsNote(chatHistory, opts.prompts?.authorsNote, visibleHistory, macroCtx);
     chatHistory = an.chatHistory;
     chatHistory = this.spliceAtDepthWorldInfo(chatHistory, wi.atDepthEntries, macroCtx);
-    chatHistory = this.appendRuntimeInjections(chatHistory, opts.prompts?.injections, macroCtx);
     chatHistory = this.prependMemorySummary(chatHistory, opts.memorySummary);
 
     // Inject Author's Note as a system prompt for before/after positions
@@ -434,24 +430,6 @@ export class PromptBuilder {
         this.makeSyntheticMessage(entry.role ?? 'system', resolved),
         entry.depth ?? 0,
       );
-    }
-    return chatHistory;
-  }
-
-  /**
-   * Stage: inject runtime injections (from /inject or Lua st.inject) as
-   * synthetic system messages at the end of context (depth 0).
-   */
-  private appendRuntimeInjections(
-    chatHistory: Message[],
-    injections: string[] | undefined,
-    macroCtx: MacroContext,
-  ): Message[] {
-    if (!injections) return chatHistory;
-    for (const injection of injections) {
-      const text = this.macroResolver.resolve(injection, macroCtx).trim();
-      if (!text) continue;
-      chatHistory = [...chatHistory, this.makeSyntheticMessage('system', text)];
     }
     return chatHistory;
   }

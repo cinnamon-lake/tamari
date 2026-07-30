@@ -26,7 +26,7 @@ export const ChoicesResult: Component<ToolResultProps> = (props) => {
     if (props.disabled) return;
     const chatId = state.activeChat?.id;
     if (!chatId) return;
-    // Same intent as MessageInput.send, minus attachments/injections — one
+    // Same intent as MessageInput.send, minus attachments — one
     // atomic message so the pair can't be reordered server-side.
     bus.send({ type: 'action.sendAndGenerate', chatId, content: choice });
   };

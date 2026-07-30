@@ -1,25 +1,42 @@
+/**
+ * AgentTemplate — the `run_agent` builtin tool: delegate a task to a
+ * sub-agent and return its final text.
+ *
+ * The sub-agent is a TranscriptTarget (kind 'subagent', seed assembly) run
+ * through the same GenerationRunner loop as everything else, nested under
+ * the caller's lock tenure (docs/design/generation-runner.md §Sub-agents) —
+ * so it gets the full tool loop, a generation record with a parent
+ * reference, and consistent error routing. Recursion is bounded HERE, not
+ * in the runner: the tool refuses to spawn once context.depth reaches
+ * maxAgentDepth; the sub-agent's own tool executions receive depth + 1 via
+ * the runner's context pass-through.
+ */
+
 import { z } from 'zod';
 import type { ToolRegistry } from '../ToolRegistry.js';
 import type { ToolContext, ToolExecuteResult, ToolTemplate } from '../ToolTemplate.js';
-import type { ISettingsRepository } from '../../repos/SettingsRepository.js';
-import type { IBackendConfigRepository } from '../../repos/BackendConfigRepository.js';
-import type { BackendAdapterFactory } from '../../backends/factory.js';
-import { buildBackendSettings } from '../../backends/buildBackendSettings.js';
-import type { Prompt, GenerationResult } from '../../backends/BackendAdapter.js';
+import type { GenerationRunner } from '../../generation/GenerationRunner.js';
+import { TranscriptTarget, type TranscriptTargetDeps } from '../../generation/TranscriptTarget.js';
 import { getLogger } from '../../lib/logger.js';
 import { str } from '../../lib/coerce.js';
 
 const logger = getLogger('agent-tool');
 
+const DEFAULT_AGENT_SYSTEM_PROMPT =
+  'You are a helpful, concise assistant. Complete the task accurately and return only the result.';
+
 /** Args for `run_agent`. Single source of truth for the LLM schema and runtime validation. */
 const AgentArgs = z.object({
-  prompt: z.string().describe('The task or question to give the agent. Be specific.'),
+  prompt: z.string().describe('The task or question to give the agent. Be specific and self-contained.'),
+  system: z.string().optional().describe('Override the system prompt for this call (defaults to the toolset config).'),
+  backend: z.string().optional().describe('Backend config id for this call (defaults to the toolset config, then the active config).'),
 });
 
 export interface AgentTemplateDeps {
-  settings: ISettingsRepository;
-  backendConfigs: IBackendConfigRepository;
-  backendFactory: BackendAdapterFactory;
+  runner: GenerationRunner;
+  targetDeps: TranscriptTargetDeps;
+  /** Recursion bound: spawning at or beyond this depth returns an error. */
+  maxAgentDepth: number;
 }
 
 export function registerAgentTemplate(registry: ToolRegistry, deps: AgentTemplateDeps): void {
@@ -55,7 +72,8 @@ class AgentTemplate implements ToolTemplate {
       tools: [
         {
           name: 'run_agent',
-          description: 'Delegate a task to an autonomous agent that runs a separate LLM call. Useful for complex reasoning, research, drafting, or calculations without polluting the main chat history.',
+          description:
+            'Delegate a task to an autonomous sub-agent that runs a separate generation loop with its own tool access. Useful for complex reasoning, research, drafting, or multi-step tool work whose intermediate steps should not pollute the main chat history.',
           parameters: z.toJSONSchema(AgentArgs) as Record<string, unknown>,
         },
       ],
@@ -68,70 +86,57 @@ class AgentTemplate implements ToolTemplate {
     const userPrompt = parsed.data.prompt.trim();
     if (!userPrompt) return { content: 'Error: prompt is required' };
 
-    const allSettings = await this.deps.settings.list();
-    const toolConfig = context?.config ?? {};
-    const backendConfigId = str(toolConfig['backendConfigId']);
-    const activeBackendConfigId = String(allSettings['activeBackendConfigId']);
-    const configId = backendConfigId || activeBackendConfigId;
-    const backendConfig = configId ? await this.deps.backendConfigs.getById(configId) : null;
-
-    const backendSettings = buildBackendSettings(allSettings, backendConfig);
-
-    logger.debug({ backendProvider: backendSettings['backendProvider'], model: backendSettings['model'] }, 'AgentTemplate: creating backend');
-
-    const backend = await this.deps.backendFactory.create(backendSettings);
-    if (!backend) {
-      logger.warn({ backendSettingsKeys: Object.keys(backendSettings) }, 'AgentTemplate: backend factory returned null');
-      return { content: 'Error: no backend configured. Set API key and model in settings.' };
+    const depth = context?.depth ?? 0;
+    if (depth >= this.deps.maxAgentDepth) {
+      return {
+        content: `Error: maximum sub-agent depth (${this.deps.maxAgentDepth}) reached — cannot spawn another agent from this one. Complete the task directly instead.`,
+      };
     }
 
-    const systemPrompt =
-      str(context?.config?.systemPrompt).trim() ||
-      'You are a helpful, concise assistant. Complete the task accurately and return only the result.';
-    const maxTokens = Math.max(1, Math.min(4096, backendConfig?.maxTokens ?? 512));
-
-    const prompt: Prompt = {
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      tokenUsage: { prompt: 0, completion: maxTokens },
-      params: {
-        max_tokens: maxTokens,
-        temperature: 0.7,
-      },
-    };
-
-    logger.info({ prompt: userPrompt.slice(0, 200), maxTokens, messageCount: prompt.messages.length }, 'AgentTemplate: streaming agent task');
-
-    const agentBackend = backend;
-
-    async function runStream(p: Prompt): Promise<{ text: string; result: GenerationResult }> {
-      const streamTokens: string[] = [];
-      const gen = agentBackend.stream(p, new AbortController().signal);
-      let next = await gen.next();
-      while (!next.done) {
-        const item = next.value;
-        if (item.type === 'text') {
-          streamTokens.push(item.token);
-        }
-        next = await gen.next();
-      }
-      const text = streamTokens.join('').trim();
-      return { text, result: next.value };
+    if (!context?.chatId) {
+      return { content: 'Error: run_agent requires a chat context.' };
     }
+
+    // Per-call args override the toolset config; both default to the
+    // template's stock system prompt / the active backend config.
+    const toolConfig = context.config ?? {};
+    const system =
+      str(parsed.data.system).trim() ||
+      str(toolConfig['systemPrompt']).trim() ||
+      DEFAULT_AGENT_SYSTEM_PROMPT;
+    const backendOverride = str(parsed.data.backend) || str(toolConfig['backendConfigId']) || undefined;
+
+    const target = new TranscriptTarget(this.deps.targetDeps, {
+      chatId: context.chatId,
+      clientId: context.clientId,
+      character: null,
+      kind: 'subagent',
+      seed: userPrompt,
+      systemPrompt: system,
+      assembly: 'seed',
+      depth: depth + 1,
+      parentGenerationId: context.generationId,
+      broadcast: false,
+      backendOverride,
+    });
+
+    logger.info({ depth: depth + 1, backendOverride, prompt: userPrompt.slice(0, 200) }, 'run_agent: running sub-agent');
 
     try {
-      const { text, result } = await runStream(prompt);
-      logger.info({ finishReason: result.finishReason, textLength: text.length, hasError: !!result.error }, 'AgentTemplate: stream completed');
-
-      if (result.error) return { content: `Agent error: ${result.error}` };
-
-      if (!text) return { content: 'Agent returned empty response.' };
-      return { content: text };
+      // Nested run under the parent's tenure (context.lock may be undefined
+      // when the parent itself was top-level — the runner acquires then).
+      const outcome = await this.deps.runner.run(target, context.lock);
+      if (outcome.error) {
+        const message = outcome.error === 'NO_BACKEND'
+          ? 'no backend configured. Set API key and model in settings.'
+          : outcome.error;
+        return { content: `Agent error: ${message}` };
+      }
+      if (!outcome.text) return { content: 'Agent returned empty response.' };
+      return { content: outcome.text };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.warn({ err: message }, 'AgentTemplate: stream threw');
+      logger.warn({ err: message }, 'run_agent: sub-agent run threw');
       return { content: `Agent execution failed: ${message}` };
     }
   }

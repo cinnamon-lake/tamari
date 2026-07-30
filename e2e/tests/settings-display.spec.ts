@@ -174,13 +174,14 @@ test.describe('Settings — Display', () => {
     await setCheckbox(modal, 'Show model name in message timestamps', false);
     await expect(page.locator('.message-model')).toHaveCount(0);
 
-    // toastPosition: the container class follows the setting; /inject raises a toast.
+    // toastPosition: the container class follows the setting; an unknown
+    // /persona name raises an error toast.
     await settingSelect(modal, 'Toast position').selectOption('bottom-left');
     await expect(page.locator('.toast-container')).toHaveClass(/toast-position-bottom-left/);
 
     await app.closeSettings();
 
-    await app.messageInput().fill('/inject toastprobe');
+    await app.messageInput().fill('/persona definitively-not-a-persona');
     await page.locator('.message-input-area .send-btn').click();
     await expect(page.locator('.toast-container.toast-position-bottom-left .toast')).toBeVisible();
 

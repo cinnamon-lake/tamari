@@ -32,6 +32,8 @@ import {
   CustomBackendRepository,
 } from '../repos/index.js';
 import { GenerationService } from '../services/GenerationService.js';
+import { GenerationRunner } from '../generation/GenerationRunner.js';
+import { ChatPromptAssembly } from '../generation/ChatPromptAssembly.js';
 import type { BackendAdapterFactory } from '../backends/factory.js';
 import { LuaRuntime } from '../scripting/LuaRuntime.js';
 import { ToolRegistry } from '../services/ToolRegistry.js';
@@ -65,6 +67,12 @@ export class TestHarness {
   dispatch: ReturnType<typeof createDispatcher>;
   deps: DispatcherDeps;
   extensionData: ExtensionDataRepository;
+  /** Exposed for tests that register runner-dependent tool templates
+      (run_agent) — the SAME instance the generation service delegates to,
+      so sub-agent runs share the chat-mutex map. */
+  generationRunner!: GenerationRunner;
+  generationBroadcast!: GenerationBroadcastService;
+  chatPromptAssembly!: ChatPromptAssembly;
   private tmpDir: string;
   private clients: TestClient[] = [];
 
@@ -117,30 +125,48 @@ export class TestHarness {
 
     const generationBroadcast = new GenerationBroadcastService({ bus: this.bus });
 
-    const generationService = new GenerationService({
-      bus: this.bus,
+    const chatPromptAssembly = new ChatPromptAssembly({
       chats,
-      generations,
-      characters,
-      settings,
       personas,
-      backendConfigs,
-      promptLists,
-      chatMembers,
       attachments,
       storage,
-      groupChatService,
       promptBuilder: new PromptBuilder(worldInfoInjector),
-      backendFactory: opts?.backendFactory ?? { create: async () => null },
-      luaRuntime,
-      customBackends,
       worldInfo,
       characterAssets,
       ragService,
       toolRegistry: opts?.toolRegistry,
       toolsetRepo: toolsets,
+    });
+    const generationRunner = new GenerationRunner({
+      bus: this.bus,
+      settings,
+      generations,
+      backendConfigs,
+      promptLists,
+      backendFactory: opts?.backendFactory ?? { create: async () => null },
+      customBackends,
+      luaRuntime,
+      generationBroadcast,
+      toolRegistry: opts?.toolRegistry,
+    });
+    this.generationRunner = generationRunner;
+    this.generationBroadcast = generationBroadcast;
+    this.chatPromptAssembly = chatPromptAssembly;
+
+    const generationService = new GenerationService({
+      bus: this.bus,
+      chats,
+      characters,
+      settings,
+      personas,
+      backendConfigs,
+      chatMembers,
+      attachments,
+      groupChatService,
       chatBroadcast,
       generationBroadcast,
+      assembly: chatPromptAssembly,
+      runner: generationRunner,
     });
 
     const quickReplyService = new QuickReplyService({

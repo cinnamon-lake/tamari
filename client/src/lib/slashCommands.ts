@@ -24,8 +24,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'lock', description: 'Lock the input to prevent sends', args: [] },
   { name: 'unlock', description: 'Unlock the input', args: [] },
   { name: 'wi', description: 'World info CRUD shortcuts', args: ['subcommand'] },
-  { name: 'inject', description: 'Inject text into the next prompt', args: ['text'] },
-  { name: 'flushinject', description: 'Clear pending prompt injections', args: [] },
   { name: 'gen', description: 'Generate with chat context (no message appended)', args: ['prompt'] },
   { name: 'genraw', description: 'Raw generation (no chat context)', args: ['prompt'] },
   { name: 'ask', description: 'Generate as a specific character', args: ['character', 'message'] },
@@ -82,8 +80,6 @@ export function buildClientMessage(chatId: string, parsed: ParsedCommand): Clien
     case 'char':
     case 'lock':
     case 'unlock':
-    case 'inject':
-    case 'flushinject':
     case 'listvar':
       return null; // client-side only
     case 'gen':

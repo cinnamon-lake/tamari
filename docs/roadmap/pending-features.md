@@ -107,12 +107,12 @@ SillyTavern has ~15 built-in extensions. The new extension system (Phase 4) need
 ## 8. Slash Commands & Lua API Parity
 
 ### tamari Client Commands
-**Ported:** `/send`, `/sys`, `/reset`, `/cut`, `/continue`, `/name`, `/impersonate`, `/regenerate`, `/regen`, `/swipe`, `/persona`, `/char`, `/lock`, `/unlock`, `/bg`, `/theme`, `/wi`, `/ask`, `/sysgen`, `/gen`, `/genraw`, `/inject`, `/flushinject`.
+**Ported:** `/send`, `/sys`, `/reset`, `/cut`, `/continue`, `/name`, `/impersonate`, `/regenerate`, `/regen`, `/swipe`, `/persona`, `/char`, `/lock`, `/unlock`, `/bg`, `/theme`, `/wi`, `/ask`, `/sysgen`, `/gen`, `/genraw`.
 
 ### Lua `st` API (Quick Reply)
 The Lua API now covers the vast majority of legacy slash commands. Implemented functions include:
 
-**Chat actions:** `send`, `continue`, `impersonate`, `regenerate`, `swipe`, `cut`, `edit`, `delete`, `hide`, `unhide`, `stop`, `reset_chat`, `add_swipe`, `set_active_child`, `trigger`, `send_as`, `send_narrator`, `comment`, `delete_by_name`, `set_message_role`, `set_message_name`, `set_message_extra`, `get_message_extra`, `repair_active_child`, `new_chat`, `rename_chat`, `delete_chat`, `temp_chat`, `ask`, `sysgen`, `genraw`, `inject`, `flush_inject`.
+**Chat actions:** `send`, `continue`, `impersonate`, `regenerate`, `swipe`, `cut`, `edit`, `delete`, `hide`, `unhide`, `stop`, `reset_chat`, `add_swipe`, `set_active_child`, `trigger`, `send_as`, `send_narrator`, `comment`, `delete_by_name`, `set_message_role`, `set_message_name`, `set_message_extra`, `get_message_extra`, `repair_active_child`, `new_chat`, `rename_chat`, `delete_chat`, `temp_chat`, `ask`, `sysgen`, `genraw`.
 
 **Queries:** `get_messages`, `get_chat`, `get_characters`, `find_character`, `get_character`, `get_personas`, `get_persona`, `get_message_by_id`, `get_message_count`, `get_last_message`, `get_head`, `get_active_child`, `get_swipes`, `get_siblings`, `get_children`, `get_message_chain`, `get_chats`, `get_message_at`, `get_message_index`, `find_message_by_content`, `find_messages_by_name`, `find_messages_by_role`, `messages_as_text`, `get_message_texts`.
 
@@ -143,7 +143,6 @@ The Lua API now covers the vast majority of legacy slash commands. Implemented f
 | ~~`/ask`~~ | 🟡 ✅ | Generate a response as a specific character. | `GenerationService.handleAsk` resolves the character by name and reuses the group-chat character-override path. Lua: `st.ask`. |
 | ~~`/sysgen`~~ | 🟡 ✅ | Generate a system/narrator message via LLM. | `handleSysGen` delegates to `handleGen` and appends the result as a system message; no distinct narrator framing yet. Lua: `st.sysgen`. |
 | ~~`/gen`, `/genraw`~~ | 🟡 ✅ | Raw generation without chat context. | `handleGenRaw` builds a minimal single-message prompt, bypassing the pipeline entirely. Lua: `st.genraw`. |
-| ~~`/inject`, `/flushinject`~~ | 🟡 ✅ | Inject text into the prompt at runtime. | Client `pendingInjections` drained into the next `action.generate`; `PromptBuilder.appendRuntimeInjections` splices macro-resolved synthetic system messages into history. Lua: `st.inject` / `st.flush_inject`. |
 | ~~`/wi`~~ | 🟡 ✅ | World info CRUD shortcuts. | `WorldInfoRepository` wired into `StApiDeps`; `wi_list`, `wi_get`, `wi_add`, `wi_remove` implemented. |
 
 **Intentionally removed from core:**

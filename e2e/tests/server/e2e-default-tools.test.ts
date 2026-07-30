@@ -189,9 +189,15 @@ describe('e2e default built-in tools', () => {
       });
       await h.initSchema();
       registerAgentTemplate(toolRegistry, {
-        settings: h.deps.settings,
-        backendConfigs: h.deps.backendConfigs,
-        backendFactory: { create: async () => agentBackend },
+        runner: h.generationRunner,
+        targetDeps: {
+          chats: h.deps.chats,
+          generationBroadcast: h.generationBroadcast,
+          assembly: h.chatPromptAssembly,
+          toolRegistry,
+          toolsetRepo: h.deps.toolsets,
+        },
+        maxAgentDepth: 4,
       });
       client = h.connectClient();
     });
@@ -228,25 +234,41 @@ describe('e2e default built-in tools', () => {
 
   describe('AgentTemplate error branches with isolated deps', () => {
     let isolatedH: TestHarness;
-
-    beforeEach(async () => {
-      isolatedH = new TestHarness();
-      await isolatedH.initSchema();
-    });
+    let isolatedClient: ReturnType<TestHarness['connectClient']>;
 
     afterEach(async () => {
       await isolatedH.teardown();
     });
 
-    it('returns an error when no backend is configured', async () => {
+    async function setupIsolated(backendFactory: { create: () => Promise<unknown> }) {
       const toolRegistry = new ToolRegistry();
+      isolatedH = new TestHarness({ backendFactory: backendFactory as never, toolRegistry });
+      await isolatedH.initSchema();
+      isolatedClient = isolatedH.connectClient();
       registerAgentTemplate(toolRegistry, {
-        settings: isolatedH.deps.settings,
-        backendConfigs: isolatedH.deps.backendConfigs,
-        backendFactory: { create: async () => null },
+        runner: isolatedH.generationRunner,
+        targetDeps: {
+          chats: isolatedH.deps.chats,
+          generationBroadcast: isolatedH.generationBroadcast,
+          assembly: isolatedH.chatPromptAssembly,
+          toolRegistry,
+          toolsetRepo: isolatedH.deps.toolsets,
+        },
+        maxAgentDepth: 4,
       });
+      // The sub-agent's generation record needs a real chat row (FK).
+      await isolatedH.send(isolatedClient, {
+        type: 'chat.create',
+        data: { characterId: null, name: 'Iso Chat' },
+      } as ClientMessage);
+      const chatId = isolatedH.expectBroadcast('chat.created').chat.id;
+      return { toolRegistry, chatId };
+    }
+
+    it('returns an error when no backend is configured', async () => {
+      const { toolRegistry, chatId } = await setupIsolated({ create: async () => null });
       const agent = toolRegistry.getBuiltinTemplate('agent')!;
-      const result = await agent.execute('run_agent', { prompt: 'Hello' });
+      const result = await agent.execute('run_agent', { prompt: 'Hello' }, { chatId });
       expect(result.content).toContain('no backend configured');
     });
 
@@ -260,15 +282,10 @@ describe('e2e default built-in tools', () => {
         },
         listModels: async () => [],
       };
-      const toolRegistry = new ToolRegistry();
-      registerAgentTemplate(toolRegistry, {
-        settings: isolatedH.deps.settings,
-        backendConfigs: isolatedH.deps.backendConfigs,
-        backendFactory: { create: async () => failingBackend as any },
-      });
+      const { toolRegistry, chatId } = await setupIsolated({ create: async () => failingBackend });
       const agent = toolRegistry.getBuiltinTemplate('agent')!;
-      const result = await agent.execute('run_agent', { prompt: 'Fail me' });
-      expect(result.content).toContain('Agent execution failed');
+      const result = await agent.execute('run_agent', { prompt: 'Fail me' }, { chatId });
+      expect(result.content).toContain('Agent error');
       expect(result.content).toContain('Stream exploded');
     });
   });

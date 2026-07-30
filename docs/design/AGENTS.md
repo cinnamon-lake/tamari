@@ -356,12 +356,12 @@ Tools within a template share state via `stateKey`. After execution, the executo
 
 ### Execution Flow
 
-1. `GenerationService` calls `toolRegistry.getDefinitionsByToolsets(enabledToolsets)` to build `Prompt.tools`
+1. The target's prompt assembly calls `toolRegistry.getDefinitionsByToolsets(enabledToolsets)` to build `Prompt.tools`
 2. Backend adapter sends tool definitions to the model
-3. Model returns `toolCalls`
-4. `GenerationService` calls `toolRegistry.execute(call, context)` for each call
+3. Model returns `toolCalls` (the runner forwards them to the target, which persists them as `tool_use` parts)
+4. `GenerationRunner` calls `toolRegistry.execute(call, context)` for each call the target reports via `pendingToolCalls()`
 5. The registry finds the owning toolset, deserializes state from message history, executes the tool, serializes state into the result
-6. `role: 'tool'` result messages are appended, prompt is rebuilt, and a follow-up generation is triggered (up to a configurable maximum, default 5 rounds) — **unless** any executed tool's definition sets `endsTurn`, in which case the loop stops after persisting and broadcasting the tool results and the turn finalizes normally
+6. Tool results are written back to the target, the prompt is rebuilt, and a follow-up round runs (up to `maxToolRounds`, default 100) — **unless** any executed tool's outcome sets `endsTurn`, in which case the loop stops after persisting and broadcasting the tool results and the turn finalizes normally
 
 ### Client-Side Rendering (`renderType` contract)
 
@@ -377,7 +377,20 @@ The built-in `scene` template (`server/src/services/templates/SceneTemplate.ts`)
 
 ---
 
-## 8. Naming Conventions
+## 8. Generation Core (`server/src/generation/`)
+
+Every generation — send, regenerate, continue, impersonate, quiet (`st.generate`), genraw, sub-agents — runs through ONE loop in `GenerationRunner`. The full design (and its rationale) lives in `docs/design/generation-runner.md`; these are the load-bearing rules:
+
+- **`GenerationRunner`** owns only what is uniform across kinds: backend resolution (including the card-coupled contextual backend wrapper), the chat mutex, the tool-call loop, and the streaming engine. It is **kind-blind** — it never branches on `target.kind`.
+- **`GenerationTarget`** owns the only two policies that vary by kind: prompt assembly (`prompt(resolved)`) and persistence/broadcasting (`prepare` / `write` / `writeToolOutcome` / `finalize` / `abort`). Three implementations: `AssistantMessageTarget` (send/continue/regenerate), `DraftTarget` (impersonate), `TranscriptTarget` (quiet/genraw/sub-agents). Kind-specific data is constructor input — it never passes through the runner.
+- **The target is the source of truth.** The loop consults `target.pendingToolCalls()` — never transient result fields. "Continue on a message with un-executed tool calls" is iteration 1 of the loop, not a special case. There is no second streaming engine; the legacy `runQuietGeneration` path is deleted.
+- **Locks are passed, not counted.** Nested runs (group-chat member sequences, sub-agents, auto-continue chains) receive the held `ChatLock`; an absent lock means top-level (acquire + fire lifecycle callbacks). Cross-chat lock passing is forbidden.
+- **Sub-agents** (the `run_agent` tool) are `TranscriptTarget` runs inside a tool execution: the tool context carries the parent's `lock`, `depth`, and `generationId`; recursion is capped by `MAX_AGENT_DEPTH` (default 4); sub-agent token streams are not broadcast to clients; every run writes a generation record with `kind` + `parent_id` for traceability.
+- **`GenerationService`** is a thin facade: validates input, resolves characters, constructs the right target, delegates to the runner. Do not add generation logic there — it belongs on the runner (uniform) or a target (kind-varying).
+
+---
+
+## 9. Naming Conventions
 
 All tamari domain types, API schemas, and WebSocket messages use **camelCase** (`characterId`, `firstMes`, `avatarPath`).
 
@@ -421,7 +434,7 @@ function rowToCharacter(row: unknown): Character {
 }
 ```
 
-## 9. Checklist for New Features
+## 10. Checklist for New Features
 
 When adding a new entity type (e.g., `bookmarks`):
 
@@ -437,7 +450,7 @@ When adding a new entity type (e.g., `bookmarks`):
 
 ---
 
-## 10. Accessibility (a11y) Contract
+## 11. Accessibility (a11y) Contract
 
 The client must stay accessible. The a11y gate runs in CI: `e2e/tests/a11y.spec.ts` plus every feature spec's `expectNoAxeViolations(page)` call (`e2e/helpers/a11y.ts`), with the axe **`color-contrast` rule enabled by default**. A contrast or structural regression fails CI. Follow these rules so new code passes the gate without rework. See `docs/design/css-principles.md` for the styling side.
 
@@ -469,7 +482,7 @@ The client must stay accessible. The a11y gate runs in CI: `e2e/tests/a11y.spec.
 
 ---
 
-## 11. Code Style & Naming
+## 12. Code Style & Naming
 
 One goal: every symbol has one definition site, one name, and one grep that finds it. These are conventions the codebase already follows — keep it that way.
 

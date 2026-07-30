@@ -1,0 +1,167 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`generation golden prompts > continue: prompt carries the partial assistant message as its tail 1`] = `
+{
+  "cacheDepth": undefined,
+  "messages": [
+    {
+      "content": "Write Goldie's next reply in a fictional chat between Goldie and User.
+
+Goldie is a golden retriever scholar.
+
+Erudite, warm
+
+A library by the sea.",
+      "role": "system",
+    },
+    {
+      "content": "Hi",
+      "role": "user",
+    },
+    {
+      "content": "Woof, hello.",
+      "role": "assistant",
+    },
+    {
+      "content": "Woof. Shall we begin?",
+      "role": "assistant",
+    },
+    {
+      "content": "Tell me about tides.",
+      "role": "user",
+    },
+    {
+      "content": "Reply one.",
+      "role": "assistant",
+    },
+  ],
+  "params": {},
+  "text": undefined,
+}
+`;
+
+exports[`generation golden prompts > genraw: raw prompt reaches the backend with no pipeline assembly 1`] = `
+{
+  "cacheDepth": undefined,
+  "messages": [
+    {
+      "content": "UNIQUE_RAW_PROMPT",
+      "role": "user",
+    },
+  ],
+  "params": {},
+  "text": undefined,
+}
+`;
+
+exports[`generation golden prompts > impersonate: prompt includes the impersonation instruction; no message is persisted 1`] = `
+{
+  "cacheDepth": undefined,
+  "messages": [
+    {
+      "content": "Write Goldie's next reply in a fictional chat between Goldie and User.
+
+Goldie is a golden retriever scholar.
+
+Erudite, warm
+
+A library by the sea.",
+      "role": "system",
+    },
+    {
+      "content": "Hi",
+      "role": "user",
+    },
+    {
+      "content": "Woof, hello.",
+      "role": "assistant",
+    },
+    {
+      "content": "Woof. Shall we begin?",
+      "role": "assistant",
+    },
+    {
+      "content": "[Write your next reply from the point of view of User, using the chat history so far as a guideline for the writing style of User. Don't write as Goldie or system. Don't describe actions of Goldie.]",
+      "role": "system",
+    },
+  ],
+  "params": {},
+  "text": undefined,
+}
+`;
+
+exports[`generation golden prompts > regenerate: prompt is rebuilt from the same history as the original send 1`] = `
+{
+  "cacheDepth": undefined,
+  "messages": [
+    {
+      "content": "Write Goldie's next reply in a fictional chat between Goldie and User.
+
+Goldie is a golden retriever scholar.
+
+Erudite, warm
+
+A library by the sea.",
+      "role": "system",
+    },
+    {
+      "content": "Hi",
+      "role": "user",
+    },
+    {
+      "content": "Woof, hello.",
+      "role": "assistant",
+    },
+    {
+      "content": "Woof. Shall we begin?",
+      "role": "assistant",
+    },
+    {
+      "content": "Tell me about tides.",
+      "role": "user",
+    },
+  ],
+  "params": {},
+  "text": undefined,
+}
+`;
+
+exports[`generation golden prompts > send: full prompt assembly for a character card chat 1`] = `
+{
+  "cacheDepth": undefined,
+  "messages": [
+    {
+      "content": "Write Goldie's next reply in a fictional chat between Goldie and User.
+
+Goldie is a golden retriever scholar.
+
+Erudite, warm
+
+A library by the sea.",
+      "role": "system",
+    },
+    {
+      "content": "Hi",
+      "role": "user",
+    },
+    {
+      "content": "Woof, hello.",
+      "role": "assistant",
+    },
+    {
+      "content": "Woof. Shall we begin?",
+      "role": "assistant",
+    },
+    {
+      "content": "Tell me about tides.",
+      "role": "user",
+    },
+    {
+      "content": "",
+      "role": "assistant",
+    },
+  ],
+  "params": {},
+  "text": undefined,
+}
+`;

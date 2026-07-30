@@ -333,9 +333,7 @@ export type StApi = {
   set_active_child(messageId: number): Promise<void>;
   substitute_macros(text: string): Promise<string>;
 
-  // --- Slash-command parity: inject, genraw, ask, sysgen ---
-  inject(text: string): Promise<void>;
-  flush_inject(): Promise<void>;
+  // --- Slash-command parity: genraw, ask, sysgen ---
   genraw(prompt: string): Promise<void>;
   ask(characterName: string, content: string): Promise<void>;
   sysgen(content: string): Promise<void>;
@@ -398,22 +396,22 @@ export function createStApi(ctx: ScriptContext, deps: StApiDeps): StApi {
     send: async (text: string) => {
       checkAbort();
       if (typeof text !== 'string') throw new Error('send: expected string');
-      await generationService.handleSend(chatId, text, undefined, ctx.id);
+      await generationService.handleSend(chatId, text, undefined, generationService.heldLockFor(chatId));
     },
 
     continue: async () => {
       checkAbort();
-      await generationService.handleContinue(chatId, ctx.id);
+      await generationService.handleContinue(chatId, generationService.heldLockFor(chatId));
     },
 
     impersonate: async () => {
       checkAbort();
-      await generationService.handleImpersonate(chatId, ctx.id);
+      await generationService.handleImpersonate(chatId, generationService.heldLockFor(chatId));
     },
 
     regenerate: async () => {
       checkAbort();
-      await generationService.handleRegenerate(chatId, undefined, ctx.id);
+      await generationService.handleRegenerate(chatId, undefined, generationService.heldLockFor(chatId));
     },
 
     swipe: async (direction: string) => {
@@ -630,7 +628,7 @@ export function createStApi(ctx: ScriptContext, deps: StApiDeps): StApi {
 
     trigger: async () => {
       checkAbort();
-      await generationService.handleGenerate(chatId, ctx.id, clientId);
+      await generationService.handleGenerate(chatId, generationService.heldLockFor(chatId), clientId);
     },
 
     set_character: async (characterId: string) => {
@@ -1062,7 +1060,7 @@ export function createStApi(ctx: ScriptContext, deps: StApiDeps): StApi {
     generate: async (prompt: string, opts?: { maxTokens?: number; temperature?: number } | null) => {
       checkAbort();
       if (typeof prompt !== 'string') throw new Error('generate: expected string prompt');
-      const result = await generationService.quietGenerate(chatId, prompt, opts ?? undefined, ctx.id);
+      const result = await generationService.quietGenerate(chatId, prompt, opts ?? undefined, generationService.heldLockFor(chatId));
       if ('error' in result) {
         throw new Error(result.error);
       }
@@ -1724,25 +1722,14 @@ export function createStApi(ctx: ScriptContext, deps: StApiDeps): StApi {
       return resolver.resolve(String(text), macroCtx);
     },
 
-    // ── Slash-command parity: inject, genraw, ask, sysgen ──────────────
-
-    inject: async (text: string) => {
-      checkAbort();
-      if (typeof text !== 'string') throw new Error('inject: expected string');
-      generationService.setPendingInjection(chatId, text);
-    },
-
-    flush_inject: async () => {
-      checkAbort();
-      generationService.clearPendingInjections(chatId);
-    },
+    // ── Slash-command parity: genraw, ask, sysgen ─────────────────────
 
     genraw: async (prompt: string) => {
       checkAbort();
       if (typeof prompt !== 'string') throw new Error('genraw: expected string prompt');
-      // ctx.id is the lock HOLDER (not the client id) — without the pass-through
+      // heldLockFor shares the script's lock tenure — without the pass-through
       // the nested chat-mutex acquire deadlocks against the script's own lock.
-      await generationService.handleGenRaw(chatId, prompt, clientId, ctx.id);
+      await generationService.handleGenRaw(chatId, prompt, clientId, generationService.heldLockFor(chatId));
     },
 
     ask: async (characterName: string, content: string) => {
@@ -1750,13 +1737,13 @@ export function createStApi(ctx: ScriptContext, deps: StApiDeps): StApi {
       if (typeof characterName !== 'string' || typeof content !== 'string') {
         throw new Error('ask: expected (characterName, content)');
       }
-      await generationService.handleAsk(chatId, characterName, content, clientId, ctx.id);
+      await generationService.handleAsk(chatId, characterName, content, clientId, generationService.heldLockFor(chatId));
     },
 
     sysgen: async (content: string) => {
       checkAbort();
       if (typeof content !== 'string') throw new Error('sysgen: expected string content');
-      await generationService.handleSysGen(chatId, content, clientId, ctx.id);
+      await generationService.handleSysGen(chatId, content, clientId, generationService.heldLockFor(chatId));
     },
   };
 
@@ -1806,7 +1793,7 @@ export const TOOL_ST_WHITELIST: ReadonlySet<keyof StApi> = new Set<keyof StApi>(
   'set_author_note', 'get_author_note', 'set_chat_metadata', 'get_chat_metadata', 'rename_chat',
   // World info (character-linked book)
   'wi_list', 'wi_get', 'wi_add', 'wi_remove',
-  // Quiet one-shot generation (no tool loop; lockHolder shares the outer tenure)
+  // Quiet one-shot generation (the held ChatLock shares the outer tenure)
   'generate', 'genraw', 'ask', 'sysgen',
   // UI & timing
   'toast', 'sleep', 'delay',

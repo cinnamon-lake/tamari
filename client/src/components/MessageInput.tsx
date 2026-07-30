@@ -4,7 +4,7 @@ import { state } from '../stores/serverStore.js';
 import { addToast } from '../stores/toastStore.js';
 import { activeChatId } from '../stores/uiStore.js';
 import { parseCommand, SLASH_COMMANDS, MACROS, parseMacroAtCursor } from '../lib/slashCommands.js';
-import { executeSlashCommand, consumePendingInjections } from '../lib/commands.js';
+import { executeSlashCommand } from '../lib/commands.js';
 import { onEnterActivate } from '../lib/focusUtils.js';
 import { uploadAttachments } from '../lib/uploadAttachments.js';
 
@@ -120,10 +120,9 @@ export function MessageInput() {
           chatId,
           content,
           attachments: hasAttachments ? attachments() : undefined,
-          injections: consumePendingInjections(),
         });
       } else {
-        bus.send({ type: 'action.generate', chatId, injections: consumePendingInjections() });
+        bus.send({ type: 'action.generate', chatId });
       }
     } catch (err) {
       // materializeChat (or a command) could reject; don't eat the user's

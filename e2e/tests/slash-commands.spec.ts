@@ -5,7 +5,7 @@
  * button — MessageInput.send() runs parseCommand + executeSlashCommand.
  * Behaviors asserted here are taken from the implementations:
  *   - client-side commands: /name, /bg, /theme, /persona, /char, /lock,
- *     /unlock, /wi, /inject, /flushinject, /listvar (commands.ts)
+ *     /unlock, /wi, /listvar (commands.ts)
  *   - WS-routed commands: /send, /sys, /cut, /gen, /genraw, /ask, /sysgen
  *     (buildClientMessage in slashCommands.ts)
  *
@@ -266,35 +266,16 @@ test.describe('Slash commands', () => {
     await expect(app.lastBubble('assistant').locator('.message-role')).toHaveText(charName);
   });
 
-  test('inject: /inject, /flushinject, /listvar', async ({ page }) => {
+  test('utility: /listvar', async ({ page }) => {
     await login(page);
     await configureMockBackend(page);
-    await resetLlmRequests();
     const app = new App(page);
-    const charName = uniqueName('SlashInject Char');
-    await app.createCharacterAndChat({ name: charName, description: 'inject char', firstMes: 'Greetings from inject.' });
+    const charName = uniqueName('SlashListvar Char');
+    await app.createCharacterAndChat({ name: charName, description: 'listvar char', firstMes: 'Greetings from listvar.' });
 
     // /listvar with nothing set → info toast.
     await runCommand(page, '/listvar');
     await expect(page.locator('.toast-container')).toContainText('No variables set');
-
-    // /inject queues a one-shot prompt injection (client-side, consumed by the
-    // next action.generate from a normal send).
-    const token = `UNIQUE_TOKEN_${Date.now()}`;
-    await runCommand(page, `/inject ${token}`);
-    await expect(page.locator('.toast-container')).toContainText(`Injected (pending for next generation): ${token}`);
-
-    const before = (await getLastLlmRequest()).count;
-    await app.sendUserMessage('respond: after inject', { expectReply: true });
-    const cap = await waitForNextLlmRequest(before);
-    expect(JSON.stringify(cap.body)).toContain(token);
-
-    // /flushinject clears queued injections and reports the count.
-    await runCommand(page, `/inject SECOND_TOKEN_${Date.now()}`);
-    await runCommand(page, '/flushinject');
-    await expect(page.locator('.toast-container')).toContainText('Cleared 1 pending injection(s)');
-    await runCommand(page, '/flushinject');
-    await expect(page.locator('.toast-container')).toContainText('No pending injections');
 
     // /listvar lists global vars as {{$name}} = value.
     const varName = `e2evar${Date.now()}`;

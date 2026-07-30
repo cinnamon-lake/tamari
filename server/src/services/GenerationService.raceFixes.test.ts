@@ -10,7 +10,6 @@
  *            were silently skipped.
  *   Race C — BEFORE_GENERATION / AI_MESSAGE triggers ran inside the
  *            generation's lock tenure and could never acquire it.
- *   Issue D — an empty client injections array wiped Lua st.inject state.
  *   Issue E — st.genraw / st.ask deadlocked against the script's own lock
  *            (missing lockHolder pass-through).
  */
@@ -162,20 +161,6 @@ describe('send/generate ordering (race fixes)', () => {
     const extras = await messageExtras(chatId);
     expect(extras).toContain('QR_BEFORE_FIRED');
     expect(extras).toContain('QR_AFTER_FIRED');
-  });
-
-  it('an empty client injections array does not wipe Lua st.inject state', async () => {
-    const charId = await createCharacter('InjectBot');
-    const chatId = await createChat(charId);
-    await h.send(client, { type: 'chat.materialize', chatId });
-
-    h.deps.generationService.setPendingInjection(chatId, 'LUA_INJECT_TOKEN');
-
-    // The client always sends an injections array — possibly empty.
-    await h.send(client, { type: 'action.sendAndGenerate', chatId, content: 'go', injections: [] });
-    h.expectBroadcast('generation.done');
-
-    expect(JSON.stringify(backend.prompts[0]!.messages)).toContain('LUA_INJECT_TOKEN');
   });
 
   it('st.genraw from a quick reply completes without the 10s lock stall', async () => {

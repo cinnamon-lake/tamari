@@ -180,6 +180,8 @@ export const GenerationRowSchema = z.object({
   prompt_tokens: z.number().nullable(),
   completion_tokens: z.number().nullable(),
   error_message: z.string().nullable(),
+  kind: z.enum(['send', 'regenerate', 'continue', 'impersonate', 'quiet', 'genraw', 'subagent']),
+  parent_id: z.string().nullable(),
   created_at: z.number(),
   updated_at: z.number(),
 });

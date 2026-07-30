@@ -48,13 +48,13 @@ export function buildGenerationHandlers(
       // replies always acquire it — no more silent skip when generation wins
       // the dispatch race.
       await quickReplyService.runAutoExecute(msg.chatId, QuickReplyAutoExecute.USER_MESSAGE, client.id);
-      await generationService.handleGenerate(msg.chatId, undefined, client.id, msg.injections);
+      await generationService.handleGenerate(msg.chatId, undefined, client.id);
     },
 
     'action.generate': async (client, msg) => {
       const chat = await chats.getChatById(msg.chatId);
       if (!chat) throw new ValidationError('Chat not found');
-      await generationService.handleGenerate(msg.chatId, undefined, client.id, msg.injections);
+      await generationService.handleGenerate(msg.chatId, undefined, client.id);
     },
 
     'action.regenerate': async (client, msg) => {

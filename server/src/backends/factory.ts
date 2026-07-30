@@ -2,9 +2,11 @@
  * Backend adapter factory.
  *
  * Consumes a typed `AdapterFactoryInput` (see `buildAdapterFactoryInput`) and
- * instantiates the appropriate adapter. Supports reverse proxy URLs and proxy
+ * instantiates the appropriate adapter via the provider registry
+ * (`registerBackendProvider`). Supports reverse proxy URLs and proxy
  * passwords — we do NOT validate API key formats because that breaks
- * legitimate proxy/local setups.
+ * legitimate proxy/local setups. Unknown provider ids THROW (the legacy
+ * silent fallthrough to OpenAI is gone).
  */
 
 import { OpenAIBackendAdapter } from './OpenAIBackendAdapter.js';
@@ -22,12 +24,39 @@ import { buildBackendSettings } from './buildBackendSettings.js';
 import { str } from '../lib/coerce.js';
 
 /**
- * Async factory interface consumed by services (GenerationService,
+ * Async factory interface consumed by services (GenerationRunner,
  * MemoryService, AgentTemplate). Implementations resolve secrets, build the
  * typed factory input, and create the adapter.
  */
 export interface BackendAdapterFactory {
   create(settings: Record<string, unknown>): Promise<BackendAdapter | null>;
+}
+
+/** Resolved connection shared by every provider factory. */
+interface ProviderConnection {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  requestScript?: string;
+}
+
+/** Factory for one backend provider in the registry. */
+export type ProviderAdapterFactory = (
+  input: AdapterFactoryInput,
+  connection: ProviderConnection,
+) => BackendAdapter;
+
+const PROVIDER_REGISTRY = new Map<string, ProviderAdapterFactory>();
+
+/** Register (or replace) a backend provider. Built-ins register at module
+    load; Lua/custom backends can register additional ids later. */
+export function registerBackendProvider(id: string, factory: ProviderAdapterFactory): void {
+  PROVIDER_REGISTRY.set(id, factory);
+}
+
+/** Provider ids known to the registry (for error messages and validation). */
+export function knownBackendProviders(): string[] {
+  return [...PROVIDER_REGISTRY.keys()];
 }
 
 /** OpenRouter-specific routing/reasoning options for `AdapterFactoryInput`. */
@@ -144,51 +173,10 @@ export function createBackendAdapter(
     requestScript: input.requestScript,
   };
 
-  if (input.provider === 'openrouter') {
-    return new OpenRouterBackendAdapter({
-      ...connection,
-      // OpenRouter extends OpenAIBackendAdapter and inherits its params dump;
-      // the openai.params blob carries the per-config sampler knobs
-      // (temperature, minP → min_p, topA → top_a, repetitionPenalty → …).
-      params: input.openaiParams,
-      transforms: input.openrouter.transforms,
-      plugins: input.openrouter.plugins,
-      providerOrder: input.openrouter.providerOrder,
-      allowFallbacks: input.openrouter.allowFallbacks,
-      reasoningEffort: input.openrouter.reasoningEffort,
-      reasoningSummary: input.openrouter.reasoningSummary,
-      cacheTTL: input.cacheTTL,
-    });
-  }
-
-  if (input.provider === 'claude') {
-    return new ClaudeBackendAdapter({
-      ...connection,
-      params: input.claudeParams,
-      cacheTTL: input.cacheTTL,
-    });
-  }
-
-  if (input.provider === 'gemini') {
-    return new GeminiBackendAdapter({
-      ...connection,
-      params: input.geminiParams,
-    });
-  }
-
-  if (input.provider === 'llamacpp') {
-    return new LlamaCppBackendAdapter({
-      ...connection,
-      params: input.textgenParams,
-    });
-  }
-
-  if (input.provider === 'tabbyapi') {
-    return new TextCompletionBackendAdapter({
-      ...connection,
-      params: input.textgenParams,
-    });
-  }
+  // Providers whose dedicated adapter always wins — even in text-completion
+  // mode (this ordering preserves the legacy if-chain exactly).
+  const factory = PROVIDER_REGISTRY.get(input.provider);
+  if (factory && DIRECT_PROVIDERS.has(input.provider)) return factory(input, connection);
 
   // Text completion mode uses the generic /completions endpoint
   if (input.generationMode === 'text') {
@@ -198,30 +186,91 @@ export function createBackendAdapter(
     });
   }
 
-  if (input.provider === 'koboldcpp') {
-    return new KoboldCppBackendAdapter({
-      baseUrl: effectiveUrl,
-      apiKey: effectiveKey,
-      requestScript: input.requestScript,
-      params: input.koboldcppParams ?? input.textgenParams,
-      contextLength: input.contextLength ?? 4096,
-    });
-  }
+  if (factory) return factory(input, connection);
 
-  if (input.provider === 'moonshot') {
-    return new MoonshotBackendAdapter({
-      ...connection,
-      // buildBackendSettings maps moonshot to the openai.params blob
-      // (paramsKeyForProvider); there is no separate moonshot.params key.
-      params: input.openaiParams,
-    });
-  }
+  // The legacy silent fallthrough to OpenAI is gone: unknown ids are
+  // configuration errors and must be loud.
+  throw new Error(
+    `Unknown backend provider "${input.provider}". Known providers: ${[...PROVIDER_REGISTRY.keys()].join(', ')}`,
+  );
+}
 
-  return new OpenAIBackendAdapter({
+/** Providers whose adapter preempts text-completion mode (legacy order). */
+const DIRECT_PROVIDERS = new Set(['openrouter', 'claude', 'gemini', 'llamacpp', 'tabbyapi']);
+
+// ── Built-in providers ───────────────────────────────────────────────────
+
+registerBackendProvider('openrouter', (input, connection) =>
+  new OpenRouterBackendAdapter({
+    ...connection,
+    // OpenRouter extends OpenAIBackendAdapter and inherits its params dump;
+    // the openai.params blob carries the per-config sampler knobs
+    // (temperature, minP → min_p, topA → top_a, repetitionPenalty → …).
+    params: input.openaiParams,
+    transforms: input.openrouter.transforms,
+    plugins: input.openrouter.plugins,
+    providerOrder: input.openrouter.providerOrder,
+    allowFallbacks: input.openrouter.allowFallbacks,
+    reasoningEffort: input.openrouter.reasoningEffort,
+    reasoningSummary: input.openrouter.reasoningSummary,
+    cacheTTL: input.cacheTTL,
+  }),
+);
+
+registerBackendProvider('claude', (input, connection) =>
+  new ClaudeBackendAdapter({
+    ...connection,
+    params: input.claudeParams,
+    cacheTTL: input.cacheTTL,
+  }),
+);
+
+registerBackendProvider('gemini', (input, connection) =>
+  new GeminiBackendAdapter({
+    ...connection,
+    params: input.geminiParams,
+  }),
+);
+
+registerBackendProvider('llamacpp', (input, connection) =>
+  new LlamaCppBackendAdapter({
+    ...connection,
+    params: input.textgenParams,
+  }),
+);
+
+registerBackendProvider('tabbyapi', (input, connection) =>
+  new TextCompletionBackendAdapter({
+    ...connection,
+    params: input.textgenParams,
+  }),
+);
+
+registerBackendProvider('koboldcpp', (input, connection) =>
+  new KoboldCppBackendAdapter({
+    baseUrl: connection.baseUrl,
+    apiKey: connection.apiKey,
+    requestScript: connection.requestScript,
+    params: input.koboldcppParams ?? input.textgenParams,
+    contextLength: input.contextLength ?? 4096,
+  }),
+);
+
+registerBackendProvider('moonshot', (input, connection) =>
+  new MoonshotBackendAdapter({
+    ...connection,
+    // buildBackendSettings maps moonshot to the openai.params blob
+    // (paramsKeyForProvider); there is no separate moonshot.params key.
+    params: input.openaiParams,
+  }),
+);
+
+registerBackendProvider('openai', (input, connection) =>
+  new OpenAIBackendAdapter({
     ...connection,
     params: input.openaiParams,
-  });
-}
+  }),
+);
 
 function parseStringArray(value: unknown): string[] | undefined {
   if (Array.isArray(value)) return value.map(String);

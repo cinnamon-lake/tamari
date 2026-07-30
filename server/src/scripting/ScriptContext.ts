@@ -3,10 +3,10 @@
  *
  * Acquires the chat lock (fail-fast via tryLock) for the script's duration so
  * concurrent generations/scripts don't interleave. Service calls made from
- * within the script (st.send, etc.) pass this context's id as `lockHolder`,
- * which tells GenerationService the lock is already held and to skip
- * re-acquiring — so the script and its nested service calls share one lock
- * tenure without deadlocking.
+ * within the script (st.send, etc.) receive a ChatLock for this tenure (via
+ * `heldLockFor`), which tells GenerationService/the runner the lock is
+ * already held and to skip re-acquiring — so the script and its nested
+ * service calls share one lock tenure without deadlocking.
  */
 
 import { randomUUID } from 'node:crypto';

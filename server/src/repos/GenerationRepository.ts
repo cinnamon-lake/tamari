@@ -27,6 +27,8 @@ function rowToGeneration(row: unknown): Generation {
     promptTokens: r.prompt_tokens,
     completionTokens: r.completion_tokens,
     errorMessage: r.error_message,
+    kind: r.kind,
+    parentId: r.parent_id,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -52,8 +54,8 @@ export class GenerationRepository implements IGenerationRepository {
   async create(id: string, data: Omit<GenerationInsert, 'id'>): Promise<Generation> {
     const now = Math.floor(Date.now() / 1000);
     await this.client.execute({
-      sql: `INSERT INTO generations (id, chat_id, message_id, status, backend, prompt_tokens, completion_tokens, error_message, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO generations (id, chat_id, message_id, status, backend, prompt_tokens, completion_tokens, error_message, kind, parent_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         id,
         data.chatId,
@@ -63,6 +65,8 @@ export class GenerationRepository implements IGenerationRepository {
         data.promptTokens ?? null,
         data.completionTokens ?? null,
         data.errorMessage ?? null,
+        data.kind ?? 'send',
+        data.parentId ?? null,
         now,
         now,
       ],

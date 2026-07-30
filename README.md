@@ -27,6 +27,7 @@ LLM Frontend for Power Users
 | `WS_AUTH_REJECTION_MS` | `500` | Delay before closing an unauthenticated WebSocket connection |
 | `SHUTDOWN_TIMEOUT_MS` | `5000` | Graceful shutdown timeout before force-exit |
 | `MAX_TOOL_ROUNDS` | `100` | Tool-call rounds allowed per generation turn |
+| `MAX_AGENT_DEPTH` | `4` | Maximum nesting depth for sub-agents (`run_agent`) |
 
 ## License
 

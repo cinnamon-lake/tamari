@@ -855,12 +855,10 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     content: z.string(),
     personaId: z.string().optional(),
     attachments: z.array(AttachmentRefSchema).optional(),
-    injections: z.array(z.string()).optional(),
   }),
   z.object({
     type: z.literal('action.generate'),
     chatId: z.string(),
-    injections: z.array(z.string()).optional(),
   }),
   z.object({
     type: z.literal('action.regenerate'),

@@ -295,11 +295,19 @@ export interface Generation {
   promptTokens: number | null;
   completionTokens: number | null;
   errorMessage: string | null;
+  /** Which target kind produced this run. */
+  kind: 'send' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw' | 'subagent';
+  /** The spawning generation's id (sub-agent runs); null at top level. */
+  parentId: string | null;
   createdAt: number;
   updatedAt: number;
 }
 
-export type GenerationInsert = Omit<Generation, 'createdAt' | 'updatedAt'>;
+export type GenerationInsert = Omit<Generation, 'createdAt' | 'updatedAt' | 'kind' | 'parentId'> & {
+  /** Defaults to 'send' at insert (top-level generation). */
+  kind?: Generation['kind'];
+  parentId?: string | null;
+};
 
 export interface ExtensionData {
   extensionId: string;

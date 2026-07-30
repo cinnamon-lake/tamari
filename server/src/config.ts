@@ -42,6 +42,8 @@ export interface ServerConfig {
   shutdownTimeoutMs: number;
   /** Tool-call rounds allowed per generation turn before the loop stops. */
   maxToolRounds: number;
+  /** Maximum sub-agent nesting depth; run_agent refuses beyond this. */
+  maxAgentDepth: number;
 }
 
 export function loadConfig(): ServerConfig {
@@ -62,6 +64,7 @@ export function loadConfig(): ServerConfig {
   // 100: agentic workflows (character porting, multi-step tool sequences)
   // treat 25 as an appetizer.
   const maxToolRounds = parseInt(process.env.MAX_TOOL_ROUNDS ?? '100', 10);
+  const maxAgentDepth = parseInt(process.env.MAX_AGENT_DEPTH ?? '4', 10);
 
   return {
     port,
@@ -78,5 +81,6 @@ export function loadConfig(): ServerConfig {
     wsAuthRejectionMs,
     shutdownTimeoutMs,
     maxToolRounds,
+    maxAgentDepth,
   };
 }

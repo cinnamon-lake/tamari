@@ -484,51 +484,6 @@ test.describe('StApi Chat Actions', () => {
     });
   });
 
-  // ── 6. inject / flush_inject ─────────────────────────────────────────────
-
-  test('st.inject reaches the next request and st.flush_inject discards it', async ({ page }) => {
-    const injectLabel = uniqueName('StApi Inject');
-    const flushLabel = uniqueName('StApi Flush Inject');
-    const charName = uniqueName('StApi Inject Character');
-
-    // NOTE: st.inject used to require pairing with a script-driven generation
-    // because a UI send's action.generate REPLACED the server-side pending
-    // injections (an empty client array wiped them). handleGenerate now merges
-    // instead, so UI sends preserve Lua injections — asserted below.
-    await createGlobalQuickReply(page, injectLabel, 'st.inject("UNIQUE_INJECT_123") st.continue()');
-    await createGlobalQuickReply(page, flushLabel, 'st.inject("UNIQUE_INJECT_456") st.flush_inject() st.continue()');
-    await createCharacterAndChat(page, charName);
-
-    await sendAndWaitReply(page, 'respond: inject base', 'inject base');
-
-    let { count } = await getLastLlmRequest();
-    await clickQuickReply(page, injectLabel);
-    const injected = await waitForNextLlmRequest(count);
-    expect(JSON.stringify(injected.body)).toContain('UNIQUE_INJECT_123');
-
-    count = injected.count;
-    await clickQuickReply(page, flushLabel);
-    const flushed = await waitForNextLlmRequest(count);
-    expect(JSON.stringify(flushed.body)).not.toContain('UNIQUE_INJECT_456');
-  });
-
-  test('st.inject survives a UI-driven send (injections merge, not replace)', async ({ page }) => {
-    const injectLabel = uniqueName('StApi Inject UI');
-    const charName = uniqueName('StApi Inject UI Character');
-
-    await createGlobalQuickReply(page, injectLabel, 'st.inject("UNIQUE_INJECT_UI_789")');
-    await createCharacterAndChat(page, charName);
-    await sendAndWaitReply(page, 'respond: ui inject base', 'ui inject base');
-
-    const { count } = await getLastLlmRequest();
-    await clickQuickReply(page, injectLabel);
-    // A plain UI send must carry the Lua injection — before the merge fix the
-    // client's (empty) injections array wiped it.
-    await sendAndWaitReply(page, 'respond: after ui inject', 'after ui inject');
-    const captured = await waitForNextLlmRequest(count);
-    expect(JSON.stringify(captured.body)).toContain('UNIQUE_INJECT_UI_789');
-  });
-
   // ── 7. send_as / comment / trigger ───────────────────────────────────────
 
   test('st.send_as appends an assistant message as a character', async ({ page }) => {

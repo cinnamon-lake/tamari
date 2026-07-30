@@ -44,6 +44,8 @@ import { createStatsRouter } from './api/stats.js';
 import { createChatsRouter } from './api/chats.js';
 
 import { GenerationService } from './services/GenerationService.js';
+import { GenerationRunner } from './generation/GenerationRunner.js';
+import { ChatPromptAssembly } from './generation/ChatPromptAssembly.js';
 import { MemoryService } from './services/MemoryService.js';
 import { ChatBroadcastService } from './services/ChatBroadcastService.js';
 import { GenerationBroadcastService } from './services/GenerationBroadcastService.js';
@@ -223,7 +225,6 @@ const luaRuntime = new LuaRuntime();
 const luaToolExecutor = new LuaToolExecutor(luaRuntime, { storage, attachments });
 toolRegistry.setLuaToolExecutor(luaToolExecutor);
 registerAssetsTemplate(toolRegistry, { assets: characterAssets, chats });
-registerAgentTemplate(toolRegistry, { settings, backendConfigs, backendFactory: { create: createBackendAdapterResolved } });
 registerMemoryToolTemplate(toolRegistry, { memoryService });
 registerLuaRunnerTemplate(toolRegistry, { luaRuntime });
 registerForgeImageTemplate(toolRegistry, { storage, attachments });
@@ -254,32 +255,55 @@ const chatBroadcast = new ChatBroadcastService({
 
 const generationBroadcast = new GenerationBroadcastService({ bus });
 
+const promptBuilder = new PromptBuilder(worldInfoInjector);
+const chatPromptAssembly = new ChatPromptAssembly({
+  chats,
+  personas,
+  attachments,
+  storage,
+  promptBuilder,
+  worldInfo,
+  characterAssets,
+  ragService,
+  memoryService,
+  toolRegistry,
+  toolsetRepo: toolsets,
+});
+const generationRunner = new GenerationRunner({
+  bus,
+  settings,
+  generations,
+  backendConfigs,
+  promptLists,
+  backendFactory: { create: createBackendAdapterResolved },
+  customBackends,
+  luaRuntime,
+  generationBroadcast,
+  toolRegistry,
+  maxToolRounds: config.maxToolRounds,
+});
+
 const generationService = new GenerationService({
   bus,
   chats,
-  generations,
   characters,
   settings,
   personas,
   backendConfigs,
-  promptLists,
   chatMembers,
   attachments,
-  storage,
   groupChatService,
-  promptBuilder: new PromptBuilder(worldInfoInjector),
-  backendFactory: { create: createBackendAdapterResolved },
-  luaRuntime,
-  customBackends,
-  worldInfo,
-  characterAssets,
-  ragService,
-  toolRegistry,
-  toolsetRepo: toolsets,
-  memoryService,
-  maxToolRounds: config.maxToolRounds,
   chatBroadcast,
   generationBroadcast,
+  assembly: chatPromptAssembly,
+  runner: generationRunner,
+});
+
+// Sub-agent spawn tool (run_agent) — needs the runner, so it registers after construction.
+registerAgentTemplate(toolRegistry, {
+  runner: generationRunner,
+  targetDeps: { chats, generationBroadcast, assembly: chatPromptAssembly, toolRegistry, toolsetRepo: toolsets },
+  maxAgentDepth: config.maxAgentDepth,
 });
 
 const quickReplyService = new QuickReplyService({

@@ -51,18 +51,20 @@ These templates ship with the server. Create a toolset from one, configure it, a
 
 ### Agent (`agent`)
 
-Delegates a task to a separate, autonomous LLM call so long reasoning, research, or drafting doesn't pollute the main chat history.
+Delegates a task to a sub-agent: a separate, autonomous generation loop with its own tool access, so long reasoning, research, drafting, or multi-step tool work doesn't pollute the main chat history. Sub-agents can themselves call tools (including spawning further agents, capped by depth) and each run writes a traceable generation record linked to its parent.
 
 | Tool | Description |
 |------|-------------|
-| `run_agent` | Run a task on a separate LLM call with its own system prompt and backend. |
+| `run_agent` | Run a sub-agent on a task and return its final text. Args: `prompt` (required — the task), `system` (optional — override the system prompt for this call), `backend` (optional — backend config id for this call). |
 
-Config options:
+Config options (defaults; per-call args override them):
 
 | Option | Description |
 |--------|-------------|
 | `backendConfigId` | Backend config to use for agent calls. Empty = the main chat backend. |
 | `systemPrompt` | System prompt for the agent. Empty = a concise default. |
+
+> **Note:** Nesting is capped by the `MAX_AGENT_DEPTH` env var (default 4) — an agent at the cap gets an error result instead of spawning further agents.
 
 ### Asset Lister (`assets`)
 

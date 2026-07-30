@@ -79,4 +79,41 @@ describe('createBackendAdapter', () => {
     );
     expect(adapter).not.toBeNull();
   });
+
+  it('throws a loud error for an unknown provider (no silent OpenAI fallback)', () => {
+    expect(() =>
+      createBackendAdapter(
+        buildAdapterFactoryInput({
+          backendProvider: 'not-a-provider',
+          apiKey: 'test-key',
+          model: 'gpt-4o',
+        }),
+      ),
+    ).toThrow(/Unknown backend provider "not-a-provider"/);
+  });
+
+  it('still maps an unknown provider to text completion in text mode (legacy order)', () => {
+    const adapter = createBackendAdapter(
+      buildAdapterFactoryInput({
+        backendProvider: 'not-a-provider',
+        apiKey: 'test-key',
+        model: 'test',
+        generationMode: 'text',
+      }),
+    );
+    expect(adapter).not.toBeNull();
+  });
+
+  it('text-completion mode still wins over the koboldcpp adapter (legacy order)', () => {
+    const adapter = createBackendAdapter(
+      buildAdapterFactoryInput({
+        backendProvider: 'koboldcpp',
+        apiKey: '',
+        model: 'test',
+        generationMode: 'text',
+      }),
+    );
+    expect(adapter).not.toBeNull();
+    expect(adapter!.supportsTools).toBe(false);
+  });
 });

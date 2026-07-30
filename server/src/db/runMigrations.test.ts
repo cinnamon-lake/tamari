@@ -29,7 +29,7 @@ describe('applyMigrations', () => {
     const client = makeClient();
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(4);
+    expect(await userVersion(client)).toBe(5);
 
     const tables = await client.execute(
       "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
@@ -46,6 +46,12 @@ describe('applyMigrations', () => {
     const templateCols = await client.execute("SELECT name FROM pragma_table_info('tool_templates')");
     expect(templateCols.rows.map((r) => String(r.name))).toContain('sandbox');
 
+    // 005 columns landed.
+    const generationCols = await client.execute("SELECT name FROM pragma_table_info('generations')");
+    const generationColNames = generationCols.rows.map((r) => String(r.name));
+    expect(generationColNames).toContain('kind');
+    expect(generationColNames).toContain('parent_id');
+
     client.close();
   });
 
@@ -54,7 +60,7 @@ describe('applyMigrations', () => {
     await applyMigrations(client);
     // Second run must be a no-op: no errors, version unchanged.
     await applyMigrations(client);
-    expect(await userVersion(client)).toBe(4);
+    expect(await userVersion(client)).toBe(5);
     client.close();
   });
 
@@ -66,7 +72,7 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 1');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(4);
+    expect(await userVersion(client)).toBe(5);
     // 002's ALTER was tolerated as duplicate and its UPDATE re-ran cleanly.
     const rs = await client.execute("SELECT name FROM pragma_table_info('chats')");
     expect(rs.rows.map((r) => String(r.name))).toContain('materialized');
