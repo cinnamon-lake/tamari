@@ -22,7 +22,6 @@ export class ChatCompletionRenderer implements PromptRenderer {
       'render() called',
     );
     const budget = new TokenBudget(opts.maxContext - opts.maxResponseTokens);
-    const messages: PipelineMessage[] = [];
 
     // Reserve a tiny amount for the assistant reply priming
     budget.reserve(3);
@@ -49,42 +48,15 @@ export class ChatCompletionRenderer implements PromptRenderer {
       prompts.sort((a, b) => (a.injectionOrder ?? 0) - (b.injectionOrder ?? 0));
     }
 
-    // Second pass: assemble relative prompts into the message list
-    for (const prompt of relativePrompts) {
-      // Special handling for dialogueExamples: insert parsed example messages
-      if (prompt.identifier === 'dialogueExamples' && collection.dialogueExamples?.length) {
-        for (const ex of collection.dialogueExamples) {
-          const resolvedContent = opts.macroResolver.resolve(ex.content, opts.macroCtx);
-          if (!resolvedContent.trim()) continue;
+    // Second pass: assemble relative prompts into the message list, split at
+    // the chatHistory marker — prompts before it render before the history,
+    // prompts after it render after (the marker's position is meaningful; the
+    // preset editor's ordering is honored in both directions).
+    const markerIndex = relativePrompts.findIndex((p) => p.identifier === 'chatHistory');
+    const beforeRel = markerIndex === -1 ? relativePrompts : relativePrompts.slice(0, markerIndex);
+    const afterRel = markerIndex === -1 ? [] : relativePrompts.slice(markerIndex + 1);
 
-          // Approximate per-message cost: content + ~4 tokens overhead
-          const tokens = opts.tokenCounter.count(resolvedContent) + 4;
-          if (!budget.canAfford(tokens)) break;
-          budget.spend(tokens);
-
-          messages.push({
-            role: ex.role,
-            content: resolvedContent,
-          });
-        }
-        continue;
-      }
-
-      if (prompt.marker && !prompt.content.trim()) continue; // skip empty markers
-
-      const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
-      if (!resolvedContent.trim()) continue;
-
-      // Approximate per-message cost: content + ~4 tokens overhead
-      const tokens = opts.tokenCounter.count(resolvedContent) + 4;
-      if (!budget.canAfford(tokens)) break;
-      budget.spend(tokens);
-
-      messages.push({
-        role: prompt.role,
-        content: resolvedContent,
-      });
-    }
+    const messages = this.renderRelativePrompts(beforeRel, collection, opts, budget);
 
     // Squash consecutive system messages
     const squashed = this.squashConsecutiveSystemMessages(messages);
@@ -264,7 +236,12 @@ export class ChatCompletionRenderer implements PromptRenderer {
       }
     }
 
-    const finalMessages = [...squashed, ...historyMessages];
+    // Prompts ordered after the chatHistory marker render after the history
+    // (squash stays group-local — groups straddling history never merge).
+    const afterMessages = this.renderRelativePrompts(afterRel, collection, opts, budget);
+    const squashedAfter = this.squashConsecutiveSystemMessages(afterMessages);
+
+    const finalMessages = [...squashed, ...historyMessages, ...squashedAfter];
 
     // Accurate token count using the message-aware counter
     const promptTokens = opts.tokenCounter.countMessages(
@@ -296,6 +273,54 @@ export class ChatCompletionRenderer implements PromptRenderer {
 
     const content = markers[prompt.identifier] ?? prompt.content;
     return { ...prompt, content };
+  }
+
+  /** Render relative-position prompts in order (dialogueExamples expand into
+      their parsed example messages; empty markers are skipped; budget checks
+      apply per message with the ~4-token overhead fudge). */
+  private renderRelativePrompts(
+    prompts: PromptDef[],
+    collection: PromptCollection,
+    opts: RenderOptions,
+    budget: TokenBudget,
+  ): PipelineMessage[] {
+    const messages: PipelineMessage[] = [];
+    for (const prompt of prompts) {
+      // Special handling for dialogueExamples: insert parsed example messages
+      if (prompt.identifier === 'dialogueExamples' && collection.dialogueExamples?.length) {
+        for (const ex of collection.dialogueExamples) {
+          const resolvedContent = opts.macroResolver.resolve(ex.content, opts.macroCtx);
+          if (!resolvedContent.trim()) continue;
+
+          // Approximate per-message cost: content + ~4 tokens overhead
+          const tokens = opts.tokenCounter.count(resolvedContent) + 4;
+          if (!budget.canAfford(tokens)) break;
+          budget.spend(tokens);
+
+          messages.push({
+            role: ex.role,
+            content: resolvedContent,
+          });
+        }
+        continue;
+      }
+
+      if (prompt.marker && !prompt.content.trim()) continue; // skip empty markers
+
+      const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
+      if (!resolvedContent.trim()) continue;
+
+      // Approximate per-message cost: content + ~4 tokens overhead
+      const tokens = opts.tokenCounter.count(resolvedContent) + 4;
+      if (!budget.canAfford(tokens)) break;
+      budget.spend(tokens);
+
+      messages.push({
+        role: prompt.role,
+        content: resolvedContent,
+      });
+    }
+    return messages;
   }
 
   private squashConsecutiveSystemMessages(messages: PipelineMessage[]): PipelineMessage[] {

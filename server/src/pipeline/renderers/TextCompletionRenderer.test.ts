@@ -211,3 +211,66 @@ describe('TextCompletionRenderer', () => {
     expect(resultAssistantLast.text).not.toContain('### Response:\nHi there');
   });
 });
+
+describe('chatHistory marker position', () => {
+  function splitCollection(order: Array<{ id: string; enabled?: boolean }>): PromptCollection {
+    const pm = new PromptManager(
+      order.map(({ id }) => ({
+        identifier: id,
+        name: id,
+        content: id === 'chatHistory' ? '' : `CONTENT:${id}`,
+        role: 'system' as const,
+        enabled: true,
+        systemPrompt: true,
+        marker: id === 'chatHistory',
+      })),
+      order.map(({ id, enabled }) => ({ identifier: id, enabled: enabled ?? true })),
+    );
+    return {
+      prompts: pm.getOrderedPrompts(),
+      markers: {
+        charDescription: '',
+        charPersonality: '',
+        scenario: '',
+        personaDescription: '',
+        worldInfoBefore: '',
+        worldInfoAfter: '',
+      },
+    };
+  }
+
+  const history = () => [makeMsg(1, 'user', 'HIST_USER_TEXT'), makeMsg(2, 'assistant', 'HIST_ASSISTANT_TEXT')];
+
+  const renderOpts = (msgs: Message[]) => ({
+    macroResolver: MacroResolver.createPromptResolver(),
+    macroCtx: { userName: 'User', charName: 'Bot' } as Parameters<TextCompletionRenderer['render']>[1]['macroCtx'],
+    tokenCounter,
+    chatHistory: msgs,
+    maxContext: 8192,
+    maxResponseTokens: 512,
+  });
+
+  it('renders prompts ordered after the marker after the history, before the prefill', () => {
+    const renderer = new TextCompletionRenderer(getInstructTemplate('none'));
+    const result = renderer.render(
+      splitCollection([{ id: 'main' }, { id: 'chatHistory' }, { id: 'jailbreak' }]),
+      renderOpts(history()),
+    );
+
+    // Text mode pops the trailing non-empty assistant as a raw prefill at the
+    // very end — so the expected order is main < user < jailbreak < prefill.
+    const text = result.text;
+    expect(text.indexOf('CONTENT:main')).toBeLessThan(text.indexOf('HIST_USER_TEXT'));
+    expect(text.indexOf('HIST_USER_TEXT')).toBeLessThan(text.indexOf('CONTENT:jailbreak'));
+    expect(text.indexOf('CONTENT:jailbreak')).toBeLessThan(text.indexOf('HIST_ASSISTANT_TEXT'));
+  });
+
+  it('falls back to the legacy layout when no marker is present', () => {
+    const renderer = new TextCompletionRenderer(getInstructTemplate('none'));
+    const result = renderer.render(
+      splitCollection([{ id: 'main' }, { id: 'jailbreak' }]),
+      renderOpts(history()),
+    );
+    expect(result.text.indexOf('CONTENT:jailbreak')).toBeLessThan(result.text.indexOf('HIST_USER_TEXT'));
+  });
+});

@@ -759,3 +759,113 @@ describe('ChatCompletionRenderer', () => {
     expect(parts.some((p) => p.type === 'text' && p.text === '[Attached video]')).toBe(true);
   });
 });
+
+describe('chatHistory marker position', () => {
+  const renderer = new ChatCompletionRenderer();
+
+  function splitCollection(
+    order: Array<{ id: string; enabled?: boolean }>,
+    extras?: { dialogueExamples?: PromptCollection['dialogueExamples'] },
+  ): PromptCollection {
+    const pm = new PromptManager(
+      order.map(({ id }) => ({
+        identifier: id,
+        name: id,
+        content: id === 'chatHistory' ? '' : `CONTENT:${id}`,
+        role: 'system' as const,
+        enabled: true,
+        systemPrompt: true,
+        marker: id === 'chatHistory' || id === 'dialogueExamples',
+      })),
+      order.map(({ id, enabled }) => ({ identifier: id, enabled: enabled ?? true })),
+    );
+    return {
+      prompts: pm.getOrderedPrompts(),
+      markers: {
+        charDescription: '',
+        charPersonality: '',
+        scenario: '',
+        personaDescription: '',
+        worldInfoBefore: '',
+        worldInfoAfter: '',
+      },
+      dialogueExamples: extras?.dialogueExamples,
+    };
+  }
+
+  const history = () => [makeMsg(1, 'user', 'HIST_USER'), makeMsg(2, 'assistant', 'HIST_ASSISTANT')];
+
+  const renderOpts = (msgs: Message[]) => ({
+    macroResolver: MacroResolver.createPromptResolver(),
+    macroCtx: { userName: 'User', charName: 'Bot' } as Parameters<ChatCompletionRenderer['render']>[1]['macroCtx'],
+    tokenCounter,
+    chatHistory: msgs,
+    maxContext: 8192,
+    maxResponseTokens: 512,
+  });
+
+  /** Index of the first message whose string content contains `needle`. */
+  function indexOfText(result: ReturnType<ChatCompletionRenderer['render']>, needle: string): number {
+    return result.messages.findIndex((m) => typeof m.content === 'string' && m.content.includes(needle));
+  }
+
+  it('renders prompts ordered after the marker after the history (jailbreak case)', () => {
+    const result = renderer.render(
+      splitCollection([{ id: 'main' }, { id: 'chatHistory' }, { id: 'jailbreak' }]),
+      renderOpts(history()),
+    );
+
+    const mainIdx = indexOfText(result, 'CONTENT:main');
+    const histIdx = indexOfText(result, 'HIST_USER');
+    const jbIdx = indexOfText(result, 'CONTENT:jailbreak');
+    expect(mainIdx).toBeGreaterThanOrEqual(0);
+    expect(histIdx).toBeGreaterThan(mainIdx);
+    expect(jbIdx).toBeGreaterThan(histIdx);
+
+    // Squash stays group-local: the after-marker system prompt must NOT merge
+    // into the before-marker one.
+    const mainMsg = result.messages[mainIdx]!;
+    expect(typeof mainMsg.content === 'string' && mainMsg.content.includes('CONTENT:jailbreak')).toBe(false);
+  });
+
+  it('renders prompts ordered before the marker before the history', () => {
+    const result = renderer.render(
+      splitCollection([{ id: 'main' }, { id: 'chatHistory' }]),
+      renderOpts(history()),
+    );
+    expect(indexOfText(result, 'CONTENT:main')).toBeLessThan(indexOfText(result, 'HIST_USER'));
+  });
+
+  it('falls back to the legacy layout when no marker is present', () => {
+    const result = renderer.render(
+      splitCollection([{ id: 'main' }, { id: 'jailbreak' }]),
+      renderOpts(history()),
+    );
+    const jbIdx = indexOfText(result, 'CONTENT:jailbreak');
+    expect(jbIdx).toBeGreaterThanOrEqual(0);
+    expect(jbIdx).toBeLessThan(indexOfText(result, 'HIST_USER'));
+  });
+
+  it('falls back to the legacy layout when the marker is disabled', () => {
+    const result = renderer.render(
+      splitCollection([{ id: 'main' }, { id: 'chatHistory', enabled: false }, { id: 'jailbreak' }]),
+      renderOpts(history()),
+    );
+    const jbIdx = indexOfText(result, 'CONTENT:jailbreak');
+    expect(jbIdx).toBeGreaterThanOrEqual(0);
+    expect(jbIdx).toBeLessThan(indexOfText(result, 'HIST_USER'));
+  });
+
+  it('expands dialogueExamples after the history when ordered after the marker', () => {
+    const result = renderer.render(
+      splitCollection([{ id: 'chatHistory' }, { id: 'dialogueExamples' }], {
+        dialogueExamples: [
+          { role: 'user', content: 'EXAMPLE_Q' },
+          { role: 'assistant', content: 'EXAMPLE_A' },
+        ],
+      }),
+      renderOpts(history()),
+    );
+    expect(indexOfText(result, 'EXAMPLE_Q')).toBeGreaterThan(indexOfText(result, 'HIST_ASSISTANT'));
+  });
+});

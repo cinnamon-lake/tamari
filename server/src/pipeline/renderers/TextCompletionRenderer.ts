@@ -39,45 +39,55 @@ export class TextCompletionRenderer implements PromptRenderer {
       parts.push(this.template.bos);
     }
 
-    // Render prompt collection chunks
-    for (const prompt of collection.prompts) {
-      // Absolute-position prompts are skipped: depth injection splices into a
-      // message list, and this renderer produces a flat story string. Only the
-      // chat renderer honors them (see PromptRenderer in Renderer.ts).
-      if (prompt.injectionPosition === 'absolute') continue;
-      if (!prompt.enabled) continue;
+    // Render prompt collection chunks, split at the chatHistory marker:
+    // prompts before it render before the history, prompts after it render
+    // after (the marker's position is meaningful — see ChatCompletionRenderer).
+    const markerIndex = collection.prompts.findIndex((p) => p.identifier === 'chatHistory');
+    const beforePrompts = markerIndex === -1 ? collection.prompts : collection.prompts.slice(0, markerIndex);
+    const afterPrompts = markerIndex === -1 ? [] : collection.prompts.slice(markerIndex + 1);
 
-      // Special handling for dialogueExamples: insert parsed example messages
-      if (prompt.identifier === 'dialogueExamples' && collection.dialogueExamples?.length) {
-        for (const ex of collection.dialogueExamples) {
-          const resolved = opts.macroResolver.resolve(ex.content, opts.macroCtx);
-          if (!resolved.trim()) continue;
+    const renderPrompts = (prompts: typeof collection.prompts): void => {
+      for (const prompt of prompts) {
+        // Absolute-position prompts are skipped: depth injection splices into a
+        // message list, and this renderer produces a flat story string. Only the
+        // chat renderer honors them (see PromptRenderer in Renderer.ts).
+        if (prompt.injectionPosition === 'absolute') continue;
+        if (!prompt.enabled) continue;
 
-          const tokens = opts.tokenCounter.count(resolved);
-          if (!budget.canAfford(tokens)) break;
-          budget.spend(tokens);
-          promptTokens += tokens;
+        // Special handling for dialogueExamples: insert parsed example messages
+        if (prompt.identifier === 'dialogueExamples' && collection.dialogueExamples?.length) {
+          for (const ex of collection.dialogueExamples) {
+            const resolved = opts.macroResolver.resolve(ex.content, opts.macroCtx);
+            if (!resolved.trim()) continue;
 
-          const wrapped = this.wrap(resolved, ex.role);
-          parts.push(wrapped);
+            const tokens = opts.tokenCounter.count(resolved);
+            if (!budget.canAfford(tokens)) break;
+            budget.spend(tokens);
+            promptTokens += tokens;
+
+            const wrapped = this.wrap(resolved, ex.role);
+            parts.push(wrapped);
+          }
+          continue;
         }
-        continue;
+
+        const content = prompt.marker ? (collection.markers[prompt.identifier] ?? prompt.content) : prompt.content;
+        if (prompt.marker && !content.trim()) continue;
+
+        const resolved = opts.macroResolver.resolve(content, opts.macroCtx);
+        if (!resolved.trim()) continue;
+
+        const tokens = opts.tokenCounter.count(resolved);
+        if (!budget.canAfford(tokens)) break;
+        budget.spend(tokens);
+        promptTokens += tokens;
+
+        const wrapped = this.wrap(resolved, prompt.role);
+        parts.push(wrapped);
       }
+    };
 
-      const content = prompt.marker ? (collection.markers[prompt.identifier] ?? prompt.content) : prompt.content;
-      if (prompt.marker && !content.trim()) continue;
-
-      const resolved = opts.macroResolver.resolve(content, opts.macroCtx);
-      if (!resolved.trim()) continue;
-
-      const tokens = opts.tokenCounter.count(resolved);
-      if (!budget.canAfford(tokens)) break;
-      budget.spend(tokens);
-      promptTokens += tokens;
-
-      const wrapped = this.wrap(resolved, prompt.role);
-      parts.push(wrapped);
-    }
+    renderPrompts(beforePrompts);
 
     // Render chat history
     const history = [...opts.chatHistory];
@@ -135,6 +145,10 @@ export class TextCompletionRenderer implements PromptRenderer {
     }
 
     parts.push(...historyParts);
+
+    // Prompts ordered after the chatHistory marker render after the history,
+    // before the response prefix/prefill (post-history instructions).
+    renderPrompts(afterPrompts);
 
     // Add response prefix (the "prompt" for the model to continue)
     const responsePrefix = opts.impersonateMode
