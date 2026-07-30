@@ -183,7 +183,7 @@ All target kinds write a generation record in `finalize` — including quiet and
 
 ## Explicit non-goals (for this change)
 
-- **Pipeline staging.** `PromptBuilder.build()`'s fixed stage sequence (`PromptBuilder.ts:205-213`) stays as-is inside the chat assembly — re-homing stages as a named, ordered list is a separate, later consolidation.
+- ~~**Pipeline staging.**~~ ✅ **Done.** `PromptBuilder.build()`'s fixed stage sequence is now a named, ordered, replaceable stage list (`PromptStages.ts` — `PromptContext` threaded through `PromptStage[]`; the constructor takes an optional `stages?` splice of `createDefaultStages`). Stage bodies are unchanged; card/preset-defined stages are the intended later consumer.
 - **Renderer changes**, token-budget location, `chatHistory` marker-position semantics.
 - **Client changes beyond removing `/inject`.** WS message types and broadcasts otherwise stay wire-compatible.
 
@@ -203,6 +203,6 @@ All target kinds write a generation record in `finalize` — including quiet and
 1. **Target + Runner.** Migrate send/continue/regenerate, then impersonate/quiet/genraw; delete `runQuietGeneration`. Safety net: the six existing `GenerationService.*.test.ts` files; add golden-prompt tests per target kind *before* moving anything.
 2. **Sub-agent plumbing** — lock + depth through the `ToolRegistry` context, tool allowlists, the spawn tool.
 3. **Backend registry** replacing the if-chain.
-4. (Later, separate change) **Pipeline stages.**
+4. ~~(Later, separate change) **Pipeline stages.**~~ ✅ Done — `PromptStages.ts` (named, ordered, replaceable stage list; behavior pinned byte-identical by the golden-prompt suite).
 
 Step 1 is the only risky one; steps 2–3 are additive once it lands.

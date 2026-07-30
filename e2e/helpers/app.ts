@@ -190,7 +190,18 @@ export class App {
     await this.page.locator('input[placeholder="Search characters..."]').fill(characterName);
     const row = this.characterRow(characterName);
     await row.waitFor({ state: 'visible' });
-    await row.locator('[title="New chat"]').click({ force: true });
+
+    // The filter fill makes the list re-render (pagination + reactive recompute)
+    // — the located row can detach or be mid-transition right after it first
+    // appears, which made the old `force: true` click flake on slow runners.
+    // Wait for the row to be uniquely resolved and the button visible/stable,
+    // then click WITHOUT force so Playwright's actionability checks (stability
+    // included) do their job.
+    const button = row.locator('[title="New chat"]');
+    await expect(row).toHaveCount(1);
+    await button.waitFor({ state: 'visible', timeout: 10000 });
+    await row.hover();
+    await button.click();
 
     // The client auto-selects new chats, but explicit selection is more reliable.
     const chatItem = this.page.locator('.chat-item').filter({ hasText: new RegExp(characterName) }).first();
@@ -417,5 +428,150 @@ export class App {
       await expect(checkbox).toBeChecked({ checked: desired });
     }
     await this.closeSettings();
+  }
+
+  /**
+   * Wait until a settings.set has actually been persisted server-side.
+   *
+   * The client fires settings.set and forgets it; the server acks with a
+   * settings.changed broadcast (the ack contract — see
+   * server/src/dispatch/settingsHandlers.ts) and serves the current value via
+   * settings.get. On slow runners (Windows CI) a page.reload() raced ahead of
+   * the outgoing frame and the change silently vanished, so specs that assert
+   * persistence across a reload must wait for the server value first. Polls
+   * settings.get over one short-lived WS (same fast-path pattern as the other
+   * helpers) until the key matches `expected`.
+   */
+  async waitForSettingSaved(key: string, expected?: unknown, timeout = 10000): Promise<void> {
+    await this.page.evaluate(
+      async ({ key, expected, timeout }) => {
+        const token = localStorage.getItem('st_auth_token') ?? '';
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`);
+        const deadline = Date.now() + timeout;
+
+        const matches = (value: unknown): boolean =>
+          expected === undefined ? value !== undefined : JSON.stringify(value) === JSON.stringify(expected);
+
+        return await new Promise<void>((resolve, reject) => {
+          let lastSeen: unknown;
+          const ask = () => ws.send(JSON.stringify({ type: 'settings.get' }));
+          ws.onopen = () => {
+            ws.send(JSON.stringify({ type: 'auth' }));
+            ask();
+          };
+          ws.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data as string);
+              if (msg.type === 'settings.loaded') {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                lastSeen = (msg.settings as any)?.[key];
+                if (matches(lastSeen)) {
+                  ws.close();
+                  resolve();
+                } else if (Date.now() > deadline) {
+                  ws.close();
+                  reject(
+                    new Error(
+                      `waitForSettingSaved: "${key}" did not become ${JSON.stringify(expected)} within ${timeout}ms (last: ${JSON.stringify(lastSeen)})`,
+                    ),
+                  );
+                } else {
+                  setTimeout(ask, 150);
+                }
+              }
+              if (msg.type === 'error') {
+                ws.close();
+                reject(new Error(msg.message ?? 'settings.get failed'));
+              }
+            } catch (err) {
+              ws.close();
+              reject(err);
+            }
+          };
+          ws.onerror = () => {
+            ws.close();
+            reject(new Error('WebSocket error'));
+          };
+        });
+      },
+      { key, expected, timeout },
+    );
+  }
+
+  /**
+   * Wait until a backend config field shows `expected` server-side (same
+   * flush-race class as waitForSettingSaved, for the backendConfig autosave
+   * path used by the Backend Config modal). Resolves the active config via
+   * settings.get, then polls backendConfig.select until the field matches.
+   */
+  async waitForBackendConfigSaved(field: string, expected: unknown, timeout = 10000): Promise<void> {
+    await this.page.evaluate(
+      async ({ field, expected, timeout }) => {
+        const token = localStorage.getItem('st_auth_token') ?? '';
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`);
+        const deadline = Date.now() + timeout;
+
+        return await new Promise<void>((resolve, reject) => {
+          let configId = '';
+          const ask = () => {
+            if (!configId) {
+              ws.send(JSON.stringify({ type: 'settings.get' }));
+            } else {
+              ws.send(JSON.stringify({ type: 'backendConfig.select', backendConfigId: configId }));
+            }
+          };
+          ws.onopen = () => {
+            ws.send(JSON.stringify({ type: 'auth' }));
+            ask();
+          };
+          ws.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data as string);
+              if (msg.type === 'settings.loaded') {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                configId = String((msg.settings as any)?.activeBackendConfigId ?? '');
+                if (!configId) {
+                  ws.close();
+                  reject(new Error('waitForBackendConfigSaved: no active backend config'));
+                  return;
+                }
+                ask();
+              }
+              if (msg.type === 'backendConfig.snapshot') {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const value = (msg.backendConfig as any)?.[field];
+                if (JSON.stringify(value) === JSON.stringify(expected)) {
+                  ws.close();
+                  resolve();
+                } else if (Date.now() > deadline) {
+                  ws.close();
+                  reject(
+                    new Error(
+                      `waitForBackendConfigSaved: "${field}" did not become ${JSON.stringify(expected)} within ${timeout}ms (last: ${JSON.stringify(value)})`,
+                    ),
+                  );
+                } else {
+                  setTimeout(ask, 150);
+                }
+              }
+              if (msg.type === 'error') {
+                ws.close();
+                reject(new Error(msg.message ?? 'backendConfig poll failed'));
+              }
+            } catch (err) {
+              ws.close();
+              reject(err);
+            }
+          };
+          ws.onerror = () => {
+            ws.close();
+            reject(new Error('WebSocket error'));
+          };
+        });
+      },
+      { field, expected, timeout },
+    );
   }
 }

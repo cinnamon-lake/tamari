@@ -337,6 +337,8 @@ test.describe('Settings — Display', () => {
 
     await app.ensureSetting('Compact input area', true);
     await app.ensureSetting('Hide chat names', true);
+    await app.waitForSettingSaved('compactInputArea', true);
+    await app.waitForSettingSaved('hideChatNames', true);
 
     await page.reload();
     await page.locator('.app-shell').waitFor({ state: 'visible', timeout: 10000 });

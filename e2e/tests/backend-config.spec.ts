@@ -1,6 +1,7 @@
 import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
+import { App } from '../helpers/app.js';
 
 function uniqueName(base: string): string {
   return `${base} ${Date.now()}`;
@@ -58,6 +59,10 @@ test.describe('Backend Config', () => {
     // flush-on-close must still save.
     await page.locator('.modal-overlay:has(.modal.settings-modal:has-text("Backend Config"))').click({ position: { x: 0, y: 0 } });
     await expect(modal).not.toBeVisible();
+
+    // The flush is fire-and-forget; on slow runners the reopen raced it and
+    // the modal came back with the stale value. Wait for the server-side save.
+    await new App(page).waitForBackendConfigSaved('temperature', 0.42);
 
     await btn.click();
     await expect(modal).toBeVisible();

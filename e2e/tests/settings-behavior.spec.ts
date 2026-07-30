@@ -123,6 +123,7 @@ test.describe('Settings — Behavior', () => {
 
     // autoLoadLastChat: after a reload the last chat is auto-selected.
     await app.ensureSetting('Load last chat on startup', true);
+    await app.waitForSettingSaved('autoLoadLastChat', true);
     await page.reload();
     await page.locator('.app-shell').waitFor({ state: 'visible', timeout: 10000 });
     await expect(page.locator('.chat-view')).toBeVisible({ timeout: 15000 });
@@ -252,6 +253,7 @@ test.describe('Settings — Behavior', () => {
 
     const modal = await app.openSettings();
     await modal.locator('label.radio-row:has-text("Full whitespace manipulation") input').click();
+    await app.waitForSettingSaved('whitespaceMode', 'full');
     await app.closeSettings();
 
     await page.reload();
@@ -260,6 +262,7 @@ test.describe('Settings — Behavior', () => {
     await expect(modal2.locator('input[name="whitespaceMode"][value="full"]')).toBeChecked();
 
     await modal2.locator('label.radio-row:has-text("Essential whitespace manipulation") input').click();
+    await app.waitForSettingSaved('whitespaceMode', 'essential');
     await app.closeSettings();
 
     await page.reload();

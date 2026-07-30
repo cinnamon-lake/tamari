@@ -4,6 +4,10 @@
  * Assembles the final prompt sent to backend adapters.
  * Uses PromptManager + a PromptRenderer to build prompts for either
  * chat-completion or text-completion backends.
+ *
+ * `build()` is a thin driver over an ordered, replaceable stage list
+ * (PromptStages.ts): the stage SEQUENCE is data; the stage BODIES are the
+ * `@internal` methods below (same code as the legacy fixed build()).
  */
 
 import { getMessageText } from '@tamari/types';
@@ -14,13 +18,13 @@ import { MacroResolver, type MacroContext } from './MacroResolver.js';
 import { applyRules, filterRulesByRole } from '../services/RegexEngine.js';
 import { PromptManager, type PromptDef, type PromptOrderEntry } from './PromptManager.js';
 import { ChatCompletionRenderer } from './renderers/ChatCompletionRenderer.js';
-import { TextCompletionRenderer } from './renderers/TextCompletionRenderer.js';
-import { getInstructTemplate, type InstructTemplate } from './renderers/InstructTemplate.js';
-import { PROMPT_SEPARATOR, type RenderOptions, type PromptCollection } from './renderers/Renderer.js';
+import { PROMPT_SEPARATOR } from './renderers/Renderer.js';
+import type { InstructTemplate } from './renderers/InstructTemplate.js';
 import type { RegexRule } from '@tamari/types';
-import { TokenCounter, type ITokenCounter } from '../tokenizers/TokenCounter.js';
+import type { ITokenCounter } from '../tokenizers/TokenCounter.js';
 import type { BackendToolDefinition } from '../services/ToolRegistry.js';
 import { ExampleBuilder } from './ExampleBuilder.js';
+import { createDefaultStages, PromptContext, type PromptStage } from './PromptStages.js';
 
 /** Fraction of the total context window reserved for World Info injections. */
 const WI_CONTEXT_BUDGET_FRACTION = 0.25;
@@ -118,7 +122,7 @@ export interface BuildOptions {
 }
 
 /** Result of the World Info scan stage. */
-interface WorldInfoScanResult {
+export interface WorldInfoScanResult {
   before: string;
   after: string;
   atDepthEntries: WorldInfoEntry[];
@@ -126,7 +130,7 @@ interface WorldInfoScanResult {
 }
 
 /** Result of the Author's Note in-chat splice stage. */
-interface AuthorsNoteSpliceResult {
+export interface AuthorsNoteSpliceResult {
   chatHistory: Message[];
   /** Resolved AN content (empty when inactive this generation). */
   content: string;
@@ -135,187 +139,44 @@ interface AuthorsNoteSpliceResult {
 }
 
 export class PromptBuilder {
-  private macroResolver: MacroResolver;
-  private chatRenderer: ChatCompletionRenderer;
-  private exampleBuilder: ExampleBuilder;
+  /** @internal — stage closures read these via PromptBuilderStageHost. */
+  readonly macroResolver: MacroResolver;
+  /** @internal */
+  readonly chatRenderer: ChatCompletionRenderer;
+  /** @internal */
+  readonly exampleBuilder: ExampleBuilder;
+  private readonly stages: PromptStage[];
 
-  constructor(private worldInfo?: WorldInfoInjector) {
+  constructor(private worldInfo?: WorldInfoInjector, stages?: PromptStage[]) {
     this.macroResolver = MacroResolver.createPromptResolver();
     this.chatRenderer = new ChatCompletionRenderer();
     this.exampleBuilder = new ExampleBuilder();
+    this.stages = stages ?? createDefaultStages(this);
   }
 
   async build(opts: BuildOptions): Promise<Prompt> {
-    // Hidden messages are display-only in the UI — they never reach the prompt
-    // (macro context, WI scanning, or history). Snapshots still include them
-    // so the client's show-hidden toggle keeps working.
-    const visibleHistory = opts.chatHistory.filter((m) => !m.extra.hidden);
-
-    const macroCtx: MacroContext = {
-      userName: opts.userName,
-      charName: opts.character?.name ?? 'Character',
-      description: opts.character?.description,
-      personality: opts.character?.personality,
-      scenario: opts.character?.scenario,
-      persona: opts.personaDescription,
-      model: opts.model,
-      maxContext: opts.maxContext,
-      maxResponse: opts.maxResponseTokens,
-      messages: visibleHistory.map((m) => ({ id: m.id, role: m.role, content: getMessageText(m.extra.parts) })),
-      lastGenerationType: opts.macro?.lastGenerationType,
-      extensions: opts.macro?.extensions,
-      macroVars: opts.macro?.vars,
-      globalVars: opts.macro?.globalVars,
-      characterAssets: opts.macro?.characterAssets,
-    };
-
-    // Create a model-aware token counter for this generation
-    const tokenCounter = new TokenCounter(opts.model);
-
-    // Prepare world info strings and atDepth injections
-    const wi = this.scanWorldInfo(opts, visibleHistory, macroCtx, tokenCounter);
-
-    // Build prompt manager with defaults or preset overrides
-    const promptManager = new PromptManager(opts.prompts?.presetPrompts, opts.prompts?.presetPromptOrder);
-
-    // Apply character card overrides
-    if (opts.prompts?.systemPromptOverride) {
-      promptManager.applyOverride('main', opts.prompts.systemPromptOverride);
+    const ctx = new PromptContext(opts);
+    for (const stage of this.stages) {
+      await stage.run(ctx);
     }
-    if (opts.prompts?.jailbreakOverride) {
-      promptManager.applyOverride('jailbreak', opts.prompts.jailbreakOverride);
+    if (!ctx.result) {
+      throw new Error('PromptBuilder: the stage list produced no prompt — the render stage is required');
     }
-
-    // Inject impersonation prompt if provided
-    if (opts.impersonatePrompt) {
-      promptManager.injectPrompt({
-        identifier: 'impersonate',
-        name: 'Impersonate',
-        content: opts.impersonatePrompt,
-        role: 'system',
-        enabled: true,
-        systemPrompt: true,
-        marker: false,
-      });
-    }
-
-    // History splice stages run in a fixed order: each stage receives the
-    // history produced by the previous one, and insertion depths are computed
-    // against that already-spliced history. The ordering is load-bearing.
-    let chatHistory = await this.applyPromptRegexRules(visibleHistory, opts.regexRules);
-    const an = this.spliceAuthorsNote(chatHistory, opts.prompts?.authorsNote, visibleHistory, macroCtx);
-    chatHistory = an.chatHistory;
-    chatHistory = this.spliceAtDepthWorldInfo(chatHistory, wi.atDepthEntries, macroCtx);
-    chatHistory = this.prependMemorySummary(chatHistory, opts.memorySummary);
-
-    // Inject Author's Note as a system prompt for before/after positions
-    if (an.content && !an.inChat && opts.prompts?.authorsNote) {
-      const authorsNote = opts.prompts.authorsNote;
-      promptManager.injectPrompt({
-        identifier: 'authorsNote',
-        name: "Author's Note",
-        content: authorsNote.content,
-        role: authorsNote.role === 'assistant' ? 'assistant' : 'system',
-        enabled: true,
-        systemPrompt: true,
-        marker: false,
-      });
-      if (authorsNote.position === 'before_prompt') {
-        const entries = promptManager.getOrder().filter((e) => e.identifier !== 'authorsNote');
-        entries.unshift({ identifier: 'authorsNote', enabled: true });
-        promptManager.setOrder(entries);
-      }
-    }
-
-    // Parse dialogue examples from character card
-    const dialogueExamples = opts.prompts?.stripExamples
-      ? []
-      : opts.character?.mesExample
-        ? this.exampleBuilder.build(opts.character.mesExample)
-        : [];
-
-    // Build the collection
-    const collection: PromptCollection = {
-      prompts: promptManager.getOrderedPrompts(),
-      markers: {
-        charDescription: opts.character?.description ?? '',
-        charPersonality: opts.character?.personality ?? '',
-        scenario: opts.character?.scenario ?? '',
-        personaDescription: opts.personaDescription ?? '',
-        worldInfoBefore: wi.before,
-        worldInfoAfter: wi.after,
-      },
-      dialogueExamples,
-    };
-
-    // Compute cache depth and check for non-deterministic macros
-    const cacheDepth = this.computeCacheDepth(opts, promptManager, an.inChat);
-
-    const renderOpts: RenderOptions = {
-      macroResolver: this.macroResolver,
-      macroCtx,
-      tokenCounter,
-      chatHistory,
-      maxContext: opts.maxContext,
-      maxResponseTokens: opts.maxResponseTokens,
-      model: opts.model,
-      impersonateMode: !!opts.impersonatePrompt,
-      reasoningAddToPrompts: opts.reasoningAddToPrompts,
-      supportsImages: opts.media?.supportsImages ?? true,
-      supportsAudio: opts.media?.supportsAudio ?? true,
-      supportsVideo: opts.media?.supportsVideo ?? true,
-      mediaVerboseMode: opts.media?.verboseMode,
-    };
-
-    const params: Record<string, unknown> = {};
-    if (opts.stopStrings && opts.stopStrings.length > 0) {
-      params.stop = opts.stopStrings;
-    }
-
-    // Pick renderer based on mode
-    const mode = opts.mode ?? 'chat';
-
-    const tools = opts.toolDefinitions && opts.toolDefinitions.length > 0
-      ? opts.toolDefinitions
-      : undefined;
-
-    if (mode === 'text') {
-      const template = getInstructTemplate(opts.instructTemplate, opts.customInstructTemplates);
-      const renderer = new TextCompletionRenderer(template);
-      const result = renderer.render(collection, renderOpts);
-      return {
-        messages: [], // text adapters use prompt.text
-        text: result.text,
-        tokenUsage: result.tokenUsage,
-        params,
-        cacheDepth,
-        reasoning: template.reasoning,
-        tools,
-        wiActivations: wi.activatedEntryIds,
-      };
-    }
-
-    const result = this.chatRenderer.render(collection, renderOpts);
-    return {
-      messages: result.messages,
-      tokenUsage: result.tokenUsage,
-      params,
-      cacheDepth,
-      tools,
-      wiActivations: wi.activatedEntryIds,
-    };
+    return ctx.result;
   }
 
   // -------------------------------------------------------------------------
-  // History splice stages (called from build() in the order declared below)
+  // Stage bodies (@internal — called by the PromptStages.ts closures, not by
+  // build() directly; same code as the legacy fixed build() sequence)
   // -------------------------------------------------------------------------
 
   /**
    * Stage: scan World Info entries against the macro-resolved history.
    * Returns the before/after prompt strings, atDepth entries, and the IDs of
    * entries that activated this turn.
+   * @internal
    */
-  private scanWorldInfo(
+  scanWorldInfo(
     opts: BuildOptions,
     visibleHistory: Message[],
     macroCtx: MacroContext,
@@ -358,8 +219,8 @@ export class PromptBuilder {
     return result;
   }
 
-  /** Stage: apply prompt-only regex rules to chat history (per-message role filtering). */
-  private async applyPromptRegexRules(chatHistory: Message[], regexRules: RegexRule[] | undefined): Promise<Message[]> {
+  /** Stage: apply prompt-only regex rules to chat history (per-message role filtering). @internal */
+  async applyPromptRegexRules(chatHistory: Message[], regexRules: RegexRule[] | undefined): Promise<Message[]> {
     if (!regexRules || regexRules.length === 0) return chatHistory;
     return Promise.all(
       chatHistory.map(async (msg) => {
@@ -384,8 +245,9 @@ export class PromptBuilder {
    * Stage: splice the Author's Note into chat history when its position is
    * 'in_chat' and it fires this generation (per the interval, counted over
    * the visible — pre-regex — history).
+   * @internal
    */
-  private spliceAuthorsNote(
+  spliceAuthorsNote(
     chatHistory: Message[],
     authorsNote: AuthorsNoteConfig | null | undefined,
     visibleHistory: Message[],
@@ -416,8 +278,8 @@ export class PromptBuilder {
     return result;
   }
 
-  /** Stage: inject atDepth World Info entries as synthetic messages. */
-  private spliceAtDepthWorldInfo(
+  /** Stage: inject atDepth World Info entries as synthetic messages. @internal */
+  spliceAtDepthWorldInfo(
     chatHistory: Message[],
     atDepthEntries: WorldInfoEntry[],
     macroCtx: MacroContext,
@@ -434,8 +296,8 @@ export class PromptBuilder {
     return chatHistory;
   }
 
-  /** Stage: inject the rolling memory summary before chat history. */
-  private prependMemorySummary(chatHistory: Message[], memorySummary: MemorySummary | null | undefined): Message[] {
+  /** Stage: inject the rolling memory summary before chat history. @internal */
+  prependMemorySummary(chatHistory: Message[], memorySummary: MemorySummary | null | undefined): Message[] {
     if (!memorySummary?.summaryText) return chatHistory;
     const memoryMsg: Message = {
       id: -2,
@@ -470,8 +332,9 @@ export class PromptBuilder {
    * Compute the optimal cache depth for prompt caching.
    * Returns `undefined` when caching should be disabled (off mode,
    * non-deterministic macros detected, or dynamic WI entries present).
+   * @internal
    */
-  private computeCacheDepth(
+  computeCacheDepth(
     opts: BuildOptions,
     promptManager: PromptManager,
     authorsNoteInChat: boolean,
