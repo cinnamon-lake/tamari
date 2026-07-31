@@ -18,6 +18,8 @@ export interface CreateCharacterOptions {
   name: string;
   description?: string;
   firstMes?: string;
+  /** Card-level jailbreak override (prompt list's `jailbreak` slot). */
+  postHistoryInstructions?: string;
   /**
    * Label of an existing lorebook to link (it must already exist in World
    * Info). The fast create path cannot link an existing book, so passing this
@@ -111,7 +113,7 @@ export class App {
           };
         });
       },
-      { name: opts.name, description: opts.description ?? '', firstMes: opts.firstMes ?? '' },
+      { name: opts.name, description: opts.description ?? '', firstMes: opts.firstMes ?? '', ...(opts.postHistoryInstructions !== undefined ? { postHistoryInstructions: opts.postHistoryInstructions } : {}) },
     );
     // Filter by name before asserting: a leftover search from a prior startChat
     // (and pagination across a long suite run) can otherwise hide the new row.
