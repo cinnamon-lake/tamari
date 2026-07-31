@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { zipSync } from 'fflate';
+import { zipSync, unzipSync, strFromU8 } from 'fflate';
 import { TestHarness } from '../testing/TestHarness.js';
 import { createCharacterRouter, createPngWithMetadata } from './characters.js';
 import { buildRisum } from '../lib/risum.js';
@@ -254,6 +254,35 @@ describe('createCharacterRouter', () => {
 
     it('returns 404 for a missing character', async () => {
       await request(app).get('/characters/nonexistent/export').expect(404);
+    });
+
+    it('preserves contextualBackend (luaSource + VFS files) through CharX export', async () => {
+      // Multi-file backend_logic must survive card export — a script that
+      // silently loses its modules on export is a terrible bug. The files map
+      // rides extensions wholesale; this pins that.
+      const contextualBackend = {
+        enabled: true,
+        luaSource: "local util = require('lib/util')\nfunction generate(p, c) return util.reply() end",
+        files: { 'lib/util.lua': "local M = {}\nfunction M.reply() return 'ok' end\nreturn M" },
+      };
+      const character = await h.deps.characters.create('char-backend-export', {
+        name: 'Backend Export Test',
+        extensions: { contextualBackend },
+      });
+
+      const res = await request(app)
+        .get(`/characters/${character.id}/export?format=charx`)
+        .buffer(true)
+        .parse(binaryParser)
+        .expect(200);
+
+      const entries = unzipSync(new Uint8Array(res.body));
+      const cardEntry = Object.keys(entries).find((k) => k.toLowerCase() === 'card.json');
+      expect(cardEntry).toBeDefined();
+      const card = JSON.parse(strFromU8(entries[cardEntry!]!)) as {
+        data: { extensions: Record<string, unknown> };
+      };
+      expect(card.data.extensions['contextualBackend']).toEqual(contextualBackend);
     });
   });
 
