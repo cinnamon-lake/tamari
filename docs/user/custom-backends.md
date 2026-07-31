@@ -184,6 +184,42 @@ end
 
 Copy the incoming prompt table and swap in your own `messages` (as above) rather than hand-rolling a partial prompt — that keeps token usage and generation params intact. Because the rebuild happens every turn, changing state mid-chat retroactively reshapes the *whole* prompt the writer model sees.
 
+## Recipe: Injecting into the Prompt
+
+"Put some text at a specific position in the prompt" has three homes, in increasing order of machinery — pick the lightest one that fits:
+
+- **Static, position-agnostic text** (a standing instruction): the chat's **Author's Note**, or a `main`/`jailbreak` prompt-list entry. No Lua.
+- **Static, positioned text** (at a depth, keyword-triggered): **World Info entries** — `atDepth` entries splice into history at their depth; the `worldInfoBefore`/`worldInfoAfter` markers place book content relative to the card definitions. No Lua.
+- **Dynamic or computed text** (depends on state, dice, the last message, another backend's answer): a `backend_logic` script, as below.
+
+Injecting with `backend_logic` is just `prompt.messages` editing before you delegate — `messages` is an ordinary array of `{ role, content }`:
+
+```lua
+-- Post-history instruction (after the last real message, before the
+-- stream-target placeholder the adapter strips):
+table.insert(prompt.messages, { role = 'system', content = 'Stay in the tavern.' })
+
+-- At depth N from the end of history:
+table.insert(prompt.messages, #prompt.messages - 1, { role = 'system', content = 'Thunder rumbles.' })
+
+-- Before history (after the assembled system prompts):
+table.insert(prompt.messages, 1, { role = 'system', content = 'Era: 1342.' })
+```
+
+Then `return { __passthrough = true, prompt = prompt }` to stream natively with your edits, or `backends.generate(prompt):await()` for the blocking path. Injection composes with the rest of the stack: your inserted messages are visible to the writer model, but never persisted to the chat — the displayed history stays untouched.
+
+For computed injections, carry intermediate results in `state` and feed them forward — and when the writer model returns structured output (request it with `response_format`, see above), parse it defensively before injecting it next turn:
+
+```lua
+local parsed = json.parse_result(res.text)
+if not parsed.error then
+  state.weather = parsed.value.weather
+end
+-- next turn: table.insert(prompt.messages, { role = 'system', content = 'Weather: ' .. (state.weather or 'clear') })
+```
+
+> **Note:** there is deliberately no separate "prompt stage" hook. The pipeline's stage list is an internal extension point, and positioned injection for cards is served by the three mechanisms above — see `docs/design/generation-runner.md` for the rationale.
+
 ## State: the `state` Global
 
 Custom backends are stateful through the same branch-aware protocol as [Lua tool templates](./tools.md#branch-aware-state):

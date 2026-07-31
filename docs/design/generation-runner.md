@@ -203,6 +203,6 @@ All target kinds write a generation record in `finalize` — including quiet and
 1. **Target + Runner.** Migrate send/continue/regenerate, then impersonate/quiet/genraw; delete `runQuietGeneration`. Safety net: the six existing `GenerationService.*.test.ts` files; add golden-prompt tests per target kind *before* moving anything.
 2. **Sub-agent plumbing** — lock + depth through the `ToolRegistry` context, tool allowlists, the spawn tool.
 3. **Backend registry** replacing the if-chain.
-4. ~~(Later, separate change) **Pipeline stages.**~~ ✅ Done — `PromptStages.ts` (named, ordered, replaceable stage list; behavior pinned byte-identical by the golden-prompt suite).
+4. ~~(Later, separate change) **Pipeline stages.**~~ ✅ Done — `PromptStages.ts` (named, ordered, replaceable stage list; behavior pinned byte-identical by the golden-prompt suite). **Consumer decision:** no external stage-registration API — positioned prompt injection is served by Author's Note, World Info depth entries, and `backend_logic` prompt editing (recipe in `docs/user/custom-backends.md`). The stage list remains an internal extension point until a use case backend_logic can't serve shows up.
 
 Step 1 is the only risky one; steps 2–3 are additive once it lands.
