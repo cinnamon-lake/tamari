@@ -135,11 +135,15 @@ export async function applyRequestScript(
   }
   const allowLoopback = allowLocalhost || initialIsLoopback;
 
-  const lua = await luaFactory.createEngine({ enableProxy: false, injectObjects: true });
+  // traceAllocations routes the state through the JS allocator wrapper so
+  // setMemoryMax can reject growth — same 64 MB heap cap as LuaRuntime.
+  const lua = await luaFactory.createEngine({ enableProxy: false, injectObjects: true, traceAllocations: true });
   try {
+    lua.global.setMemoryMax(64 * 1024 * 1024);
     // Enforce execution timeout at the Lua VM level (same as LuaRuntime) so a
     // runaway script (e.g. `while true do end`) rejects instead of hanging.
-    lua.global.setTimeout(5000);
+    // setTimeout takes an ABSOLUTE epoch-ms deadline, not a duration.
+    lua.global.setTimeout(Date.now() + 5000);
 
     // Strip dangerous libraries and functions (same sandbox as QuickReply Lua)
     lua.global.set('io', undefined);

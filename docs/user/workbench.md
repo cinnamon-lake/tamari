@@ -215,7 +215,7 @@ Every writable key is also a per-field file (`meta.json/name`, `meta.json/tags`,
 |------|------|--------------|
 | `test_backend` | `{configId?, patch?, prompt?, mode: "dry"\|"live"}` | Dry-run or live-test a backend config. `configId` defaults to the active backend; `patch` applies in memory only |
 | `test_custom_backend` | `{id?\|luaSource?, input, state?, delegateResponse?}` | Dry-run a custom-backend script against a recording delegate |
-| `test_backend_logic` | `{characterId, input, luaSource?, state?, delegateResponse?}` | Dry-run a card's `backend_logic.lua` |
+| `test_backend_logic` | `{characterId, input, luaSource?, state?, delegateResponse?}` | Dry-run a card's backend_logic (main.lua + its `require`d modules) |
 | `test_luatool` | `{id?\|code?, sandbox?, toolName, args?, config?}` | Run a tool from a stored template or ad-hoc code |
 | `test_regex` | `{characterId?, text, role?}` | Preview merged regex rules (global + character) against sample text |
 | `clone_character` | `{sourceCharacterId, name?}` | Deep-copy a card: fields, lorebook, regex, modules, assets, avatar |
@@ -265,7 +265,7 @@ Risu modules on a card are read-only under `modules/`, so porting means re-creat
 ## See Also
 
 - [Tools & Toolsets](./tools.md) — the Tools modal, toolsets, and Lua tool templates
-- [Custom Backends](./custom-backends.md) — the Lua backend contract behind `backend_logic.lua` and `custom-backends/`
+- [Custom Backends](./custom-backends.md) — the Lua backend contract behind `backend_logic/` and `custom-backends/`
 - [Request Scripts](./request-scripts.md) — the request transformer applied in `test_backend` dry runs
 - [Assets](./assets.md) — attachments, character assets, and avatars
 - [Macro System](./macros.md) — `{{img::...}}` and other macros usable in card fields

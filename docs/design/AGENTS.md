@@ -371,7 +371,7 @@ The built-in `scene` template (`server/src/services/templates/SceneTemplate.ts`)
 
 ### Lua Sandbox Surfaces
 
-Every `LuaRuntime` state runs under two hard caps: an execution deadline (wasmoon's `setTimeout`, absolute epoch-ms) and a **64 MB Lua heap cap** (`traceAllocations` + `setMemoryMax` — the allocator rejects growth past the cap, so a memory bomb fails with "not enough memory" instead of ballooning WASM linear memory; `maxMemoryBytes` overrides it for tests).
+Every `LuaRuntime` state runs under two hard caps: an execution deadline (wasmoon's `setTimeout`, absolute epoch-ms) and a **64 MB Lua heap cap** (`traceAllocations` + `setMemoryMax` — the allocator rejects growth past the cap, so a memory bomb fails with "not enough memory" instead of ballooning WASM linear memory; `maxMemoryBytes` overrides it for tests). The **request-script** surface (`RequestScript.ts`, user Lua rewriting outgoing backend HTTP requests) builds its own engine but mirrors both caps; note it is a fourth sandbox surface beyond the three below, likewise with no `st`.
 
 Three distinct Lua surfaces exist, with three different `st` exposures: **quick replies** get the full `st` API; **Lua tool templates** get the curated subset (`createToolStApi` — no chat actions or lifecycle); **backend scripts** (registry custom backends and card-coupled `backend_logic`, both `LuaBackendAdapter`) get **no `st` at all** — only `backends` (credential-safe delegation), `json`, `base64`, `fetch`, and the `state` snapshot channel.
 

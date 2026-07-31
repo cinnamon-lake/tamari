@@ -78,6 +78,32 @@ describe('applyRequestScript', () => {
     ).rejects.toBeInstanceOf(RequestScriptError);
   }, 15000);
 
+  it('lets scripts past the first hook batch run to completion', async () => {
+    // Regression: setTimeout takes an ABSOLUTE epoch-ms deadline — the old
+    // `setTimeout(5000)` put it in 1970, so any script past the first
+    // 1000-instruction batch died instantly (short scripts never ticked the
+    // hook, which masked the bug).
+    const result = await applyRequestScript(
+      'http://example.com',
+      { method: 'POST', body: '{}' },
+      `local n = 0
+       for i = 1, 200000 do n = n + i % 7 end
+       request.body.checksum = n`,
+    );
+    const body = JSON.parse(result.init.body as string);
+    expect(typeof body.checksum).toBe('number');
+  });
+
+  it('rejects memory bombs via the heap cap', async () => {
+    await expect(
+      applyRequestScript(
+        'http://example.com',
+        { method: 'POST', body: '{}' },
+        `request.body.blob = string.rep('x', 70 * 1024 * 1024)`,
+      ),
+    ).rejects.toBeInstanceOf(RequestScriptError);
+  });
+
   it('injects extras as Lua globals', async () => {
     const result = await applyRequestScript(
       'http://example.com',

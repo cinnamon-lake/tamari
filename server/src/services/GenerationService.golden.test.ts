@@ -2,16 +2,14 @@
  * Golden-prompt tests — pin the exact prompt the backend receives for each
  * generation command kind (send, continue, regenerate, impersonate, genraw).
  *
- * These are the safety net for the generation-runner migration
- * (docs/design/generation-runner.md): they run at the WS level through the
- * TestHarness, so they are implementation-agnostic and must keep passing —
- * unchanged — when GenerationService's internals are replaced by
- * GenerationTarget + GenerationRunner.
+ * These are the safety net for prompt-shape regressions: they run at the WS
+ * level through the TestHarness, so they are implementation-agnostic. Snapshots
+ * are byte-exact — never regenerate with `vitest -u` unless a prompt-shape
+ * delta is explicitly intended, and review the diff when you do.
  *
- * KNOWN INTENTIONAL DELTA: impersonate moves the impersonation prompt from a
- * synthetic system slot to trailing seed content on the target. When that
- * lands, update the impersonate snapshot with `vitest -u` and review the diff
- * to confirm ONLY the impersonation prompt's position changed.
+ * The impersonate snapshot reflects the generation-runner design: the
+ * impersonation instruction is trailing seed content on the target (a system
+ * message appended after history), not a prompt-list slot.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TestHarness } from '../testing/TestHarness.js';
