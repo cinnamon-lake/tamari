@@ -436,6 +436,7 @@ export function CharacterEditor(props: CharacterEditorProps) {
               >
                 <select
                   class="select"
+                  aria-label={t('character.linkedLorebookLabel')}
                   value={worldInfoId() ?? ''}
                   onChange={(e) => {
                     const val = e.currentTarget.value;
