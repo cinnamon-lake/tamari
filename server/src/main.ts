@@ -483,7 +483,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/stats', createStatsRouter(statsService));
 
 // Chat export
-app.use('/api/chats', createChatsRouter(chats));
+app.use('/api/chats', createChatsRouter(chats, generations));
 
 // Fallback to index.html for SPA routes
 app.get('/{*path}', (_req, res) => {

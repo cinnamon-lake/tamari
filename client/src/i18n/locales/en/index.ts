@@ -29,6 +29,7 @@ import { stats } from './stats.js';
 import { schemaForm } from './schemaForm.js';
 import { secrets } from './secrets.js';
 import { customBackends } from './customBackends.js';
+import { generationTraces } from './generationTraces.js';
 
 export const dict = {
   ...core,
@@ -51,4 +52,5 @@ export const dict = {
   schemaForm,
   secrets,
   customBackends,
+  generationTraces,
 };

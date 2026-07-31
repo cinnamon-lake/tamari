@@ -1,0 +1,155 @@
+/* GenerationTracesModal — read-only generation trace viewer. */
+
+.generation-traces-modal {
+  max-width: 720px;
+  width: 90vw;
+}
+
+.generation-traces-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.generation-traces-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.generation-traces-note {
+  color: var(--color-text-secondary);
+}
+
+.generation-traces-error {
+  color: var(--color-danger);
+}
+
+.generation-traces-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.generation-trace-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.generation-trace-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.generation-trace-line.status-error .generation-trace-kind {
+  color: var(--color-danger);
+}
+
+.generation-trace-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.generation-trace-status {
+  flex-shrink: 0;
+}
+
+.generation-trace-line.status-complete .generation-trace-status {
+  color: var(--color-success);
+}
+
+.generation-trace-line.status-error .generation-trace-status {
+  color: var(--color-danger);
+}
+
+.generation-trace-line.status-aborted .generation-trace-status {
+  color: var(--color-warning);
+}
+
+.generation-trace-kind {
+  font-weight: 600;
+}
+
+.generation-trace-backend {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.generation-trace-time {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.generation-trace-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.generation-trace-child {
+  display: flex;
+  gap: var(--space-sm);
+  padding-left: var(--space-md);
+  border-left: 2px solid var(--color-border-subtle);
+}
+
+.generation-trace-child-marker {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.generation-trace-child .generation-trace-line {
+  flex: 1;
+}
+
+.generation-trace-expand-summary {
+  cursor: pointer;
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+}
+
+.generation-trace-pre {
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  font-size: var(--font-size-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.generation-trace-prompt-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  list-style: none;
+  padding: 0;
+}
+
+.generation-trace-prompt-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.generation-trace-prompt-role {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+}

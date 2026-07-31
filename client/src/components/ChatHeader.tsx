@@ -6,6 +6,7 @@ import { confirmPopup } from '../stores/popupStore.js';
 import { authenticatedUrl } from '../lib/apiFetch.js';
 import { AuthorsNotePanel } from './AuthorsNotePanel.js';
 import { CheckpointsPanel } from './CheckpointsPanel.js';
+import { GenerationTracesModal } from './GenerationTracesModal.js';
 import { useI18n } from '../i18n/index.js';
 import './ChatHeader.css';
 
@@ -14,6 +15,7 @@ export function ChatHeader() {
   const [showMenu, setShowMenu] = createSignal(false);
   const [showAN, setShowAN] = createSignal(false);
   const [showCheckpoints, setShowCheckpoints] = createSignal(false);
+  const [showTraces, setShowTraces] = createSignal(false);
   const [showSearch, setShowSearch] = createSignal(false);
 
   const activeChat = createMemo(() => state.activeChat);
@@ -129,6 +131,16 @@ export function ChatHeader() {
                 <button
                   class="dropdown-item"
                   onClick={() => {
+                    setShowTraces(true);
+                    setShowMenu(false);
+                  }}
+                  type="button"
+                >
+                  <i class="bi bi-diagram-3" /> {t('generationTraces.menuItem')}
+                </button>
+                <button
+                  class="dropdown-item"
+                  onClick={() => {
                     setShowAN(true);
                     setShowMenu(false);
                   }}
@@ -156,6 +168,7 @@ export function ChatHeader() {
       </Show>
       <AuthorsNotePanel open={showAN()} onClose={() => setShowAN(false)} />
       <CheckpointsPanel open={showCheckpoints()} onClose={() => setShowCheckpoints(false)} />
+      <GenerationTracesModal open={showTraces()} onClose={() => setShowTraces(false)} />
     </header>
   );
 }

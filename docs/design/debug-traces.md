@@ -74,12 +74,12 @@ One JSON column on the existing `generations` table — no per-round rows, no ne
 
 **Workbench VFS (read-only).** `/generations/<id>/` — `meta.json` (the full record), `error.txt` (rendered chain), `prompt.json` (when captured). Trace ids appear in `run_agent` results and in the chat UI's generation records, so the no-discovery rule holds: the id always comes from context, `ls /generations/` refuses like every other collection. No `/chats/<id>/generations` listing this round.
 
-**Human UI: deferred.** The records are queryable; a viewer ships when we know what we actually look at.
+**Human UI: deferred.** ~~The records are queryable; a viewer ships when we know what we actually look at.~~ ✅ **Shipped** — the chat header menu (⋮) has a **Generation traces** entry: a read-only, chat-scoped modal over `GET /api/chats/<id>/generations` (50 newest records) showing kind/backend/status/rounds/tool calls, sub-agent rows nested under their parent, expandable error chains (composed client-side from `meta.traceError`), and prompt snapshots when captured.
 
 ## Non-goals (this round)
 
 - Per-round generation rows or a separate events table.
-- A chat-UI trace viewer.
+- ~~A chat-UI trace viewer.~~ ✅ Shipped (chat-scoped read-only modal). Cross-chat/global views and live updates remain non-goals.
 - Workbench write access to traces (read-only, and traces are immutable anyway).
 - Prompt capture without `debugPrompts`.
 
