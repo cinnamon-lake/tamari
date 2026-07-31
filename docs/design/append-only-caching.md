@@ -13,13 +13,11 @@ Two families exist in the wild; from the outside they are indistinguishable (sam
 
 The purist append-only layout is optimal under both families, so it is the target.
 
-## Existing machinery (do not duplicate)
+## The governing principle
 
-- `claudeCacheMode` global setting (`off`/`auto`/`manual`, `packages/types/src/schemas.ts:348`) → `BuildOptions.caching` → `computeCacheDepth` (`PromptBuilder.ts:334`) → explicit `cache_control` breakpoints in the Claude/OpenRouter adapters.
-- `computeCacheDepth` already bails on non-deterministic macros (`hasNondeterministicMacros`) and non-constant WI in static positions. Both guards are reused as-is.
-- This machinery places breakpoints; it does **not** shape the request. That is the gap.
+**Next turn's bytes for already-sent content must equal last turn's bytes, verbatim.** Anything that rewrites, re-resolves, repositions, or re-derives already-sent content between turns breaks the invariant — and in this mode, it dies. The mode is deliberately destructive; users opt into it for the discount.
 
-## Config
+## Config (decided: global)
 
 One new global setting in the existing cache cluster (Settings → Behavior, next to the Claude cache mode radios):
 
@@ -27,43 +25,48 @@ One new global setting in the existing cache cluster (Settings → Behavior, nex
 appendOnlyPromptLayout: boolean   // default off
 ```
 
-Orthogonal to `claudeCacheMode`, deliberately: layout shaping benefits explicit-breakpoint users too (their breakpoints stop needing the floating-injection margin). A new enum value on `claudeCacheMode` was considered and rejected — layout and breakpoint placement are independent axes, and that enum is Claude-specific by name.
+Global, not per-backend (decided) — mixing providers with different cache leniency is accepted collateral; the user picks the mode for the strictest backend they care about. Orthogonal to `claudeCacheMode`: layout shaping benefits explicit-breakpoint users too (breakpoints stop needing the floating-injection margin).
 
-Per-backend-config was also considered and rejected for v1: the setting is global like its siblings, and "quick, simple configuration" was the brief.
+All overrides below are applied **at assembly time** — stored user settings are never rewritten. The Settings modal greys out the overridden controls with a "disabled by append-only layout" note while the mode is on, and every suppression is recorded in the generation's debug trace (`generations.meta`).
 
-## Rendering rules when enabled
+## The break list (what the mode disables)
 
-**Invariant:** the rendered request is a pure function of *(static head, verbatim message log)* and grows strictly by appends. Equivalently: given an append-only message log and unchanged inputs, turn N's render is a byte-prefix of turn N+1's.
+1. **Depth injections of any kind.** No author's-note splice, no WI atDepth, no absolute-depth preset prompts mid-history. History renders verbatim.
+2. **Non-constant lorebook entries vanish.** Keyword-triggered entries change the rendered bytes whenever the keyword set shifts — under snapshot semantics that is a full miss, so they are simply not rendered. `constant` entries keep their static head positions; constant atDepth entries hoist to the pinned block (rule 8).
+3. **The macro system is off entirely.** History must be verbatim because model output can contain arbitrary macros — re-resolving `{{roll:d20}}` (or even `{{char}}` after a rename) in an old assistant message drifts already-sent bytes. Rather than adjudicate which positions are safe, resolution is disabled wholesale: `{{char}}` in a card field renders *literally*. This is the harshest break and it is intentional — cards that rely on macros are incompatible with the mode.
+4. **Prompt-side regex rules are not applied** (global rules and character `extensions.regexScripts` with `prompt: true`). `aiOutput` rules are likewise not applied to persisted content — they would rewrite the provider's exact streamed bytes, and the next request would diverge from the provider-side snapshot. Display-only rules (`display: true`) are unaffected; they never reach the prompt.
+5. **Response post-processing is forced off** (`trimSentences`): persisted assistant text must be the raw provider stream, byte for byte.
+6. **`reasoningAddToPrompts` is forced off** — re-sent reasoning blocks do not round-trip provider serialization reliably.
+7. **Non-deterministic macros** — moot given rule 3, but the existing `hasNondeterministicMacros` scan still runs and trace-notes findings (belt and suspenders for future sources).
+8. **Volatile-but-wanted content hoists** to one pinned block at the top of history (after the system prompt, before message 1), deterministic order: author's note text → constant atDepth WI → absolute-position preset prompts. It changes only when its inputs change (note edit, constant-set change) — an occasional documented re-warm, not a per-turn bleed. Hoists are trace-noted, silent in the UI.
 
-1. **History renders verbatim.** No author's-note splice, no WI atDepth entries, no absolute-depth preset prompts injected mid-history. (Depth-scoped regex does not exist in Tamari; per-message regex that rewrites a given message identically every turn is safe and stays.)
-2. **Volatile content hoists to one pinned block at the top of history** (after the system prompt, before message 1), in deterministic order: author's note text → triggered atDepth WI entries → absolute-position preset prompts. The block changes only when its *inputs* change (note edit, WI keyword-set change) — an occasional full re-warm, documented, instead of a per-turn bleed.
-3. **Hoist-and-trace** (decided): relocation is silent in the UI; each hoist is recorded in the generation's debug trace (`generations.meta`). The user opted into the mode; per-entry warnings would just nag.
-4. **Non-deterministic macros:** the existing scan runs; findings are trace-noted (the layout still applies — it is harmless — but the cache will miss).
-5. **Memory summary** stays prepended where it is (near-top already; changes only on a summarization cycle — same re-warm class as WI changes).
+## Existing machinery (do not duplicate)
+
+- `claudeCacheMode` (`packages/types/src/schemas.ts:348`) → `BuildOptions.caching` → `computeCacheDepth` (`PromptBuilder.ts:334`) → explicit `cache_control` breakpoints in the Claude/OpenRouter adapters. That machinery places breakpoints; it does not shape the request. With nothing floating, its `maxInjectionDepth + 2` margin is simply conservative — no change needed.
+- Regex execution points: prompt rules run as the first splice stage; output rules run in the generation pipeline — both gain an early return when the mode is on.
 
 ## Accepted losses (documented, not fixed here)
 
-- **Front truncation at the context cap** — the sliding window shifts the prefix and zeroes every snapshot, every turn, exactly when contexts are big. This is the largest remaining leak and is *deliberately parked*: stable-cut/chunked truncation belongs to the summarization conversation.
+- **Front truncation at the context cap** — the sliding window shifts the prefix and zeroes every snapshot, every turn, exactly when contexts are big. The largest remaining leak; *deliberately parked* — stable-cut/chunked truncation belongs to the summarization conversation.
 - **Message edits / regenerates** — the user's own purchase; swipes keep the prefix up to the fork.
 - **Continue** is safe: the partial message is a prefix of the prior snapshot (one caveat: whether a provider's snapshot end-token serialization matches a re-sent message is empirical per provider — docs note, not a blocker).
 - **Group chats** — head content (active character card) changes per speaker; append-only is unattainable. Out of scope; the mode simply degrades there.
 
 ## Where it plugs in
 
-- `PromptStages`: `authorsNoteSplice` and `worldInfoAtDepth` collect into `ctx.volatileBlock` instead of splicing when the flag is on; same for absolute prompts in the render stage. The stage list is unchanged — stages branch on the flag.
-- Renderers (`ChatCompletionRenderer`, `TextCompletionRenderer`): emit `volatileBlock` at the pinned position, deterministic order.
-- `packages/types/src/schemas.ts`: the setting, next to `claudeCacheMode`; `SettingsModal.tsx`: a checkbox with a plain-language tooltip ("for coding-plan APIs with automatic caching; disables in-chat depth placement of Author's Note / World Info / injections").
-- `generations.meta`: hoisted entries recorded per generation.
-
-Interaction with `computeCacheDepth`: no change needed — with nothing floating, its `maxInjectionDepth + 2` margin is simply conservative.
+- `PromptStages`: `historyRegex`, `authorsNoteSplice`, `worldInfoAtDepth` early-return or collect into `ctx.volatileBlock` when the flag is on; macro resolution in the renderer is skipped. Stage list unchanged — stages branch on the flag.
+- Renderers (`ChatCompletionRenderer`, `TextCompletionRenderer`): emit `volatileBlock` at the pinned position, deterministic order; history messages pass through without macro/regex transforms.
+- Generation pipeline: `trimSentences` / output-regex / `reasoningAddToPrompts` overridden at assembly time.
+- `packages/types/src/schemas.ts`: the setting next to `claudeCacheMode`; `SettingsModal.tsx`: checkbox + greyed overridden controls.
+- `generations.meta`: suppressions and hoists recorded per generation.
 
 ## Testing
 
-- **The property test:** append a message to the log, re-render, assert turn N's serialized request is a prefix of turn N+1's (with unchanged inputs). This *is* the feature; test it directly in `PromptBuilder.test.ts` / golden snapshots (appendOnly on vs off).
-- Unit: hoist ordering determinism; note/WI/absolute-prompt collection; verbatim history.
-- E2E (Playwright): setting persists across reload (settings-behavior pattern); a generation with an author's note at depth renders the note in the top block (mock-LLM request capture, assert message order).
+- **The property test:** append a message to the log, re-render, assert turn N's serialized request is a byte-prefix of turn N+1's (unchanged inputs). This *is* the feature; test it directly (`PromptBuilder.test.ts` + golden snapshots, mode on vs off).
+- Unit: `{{char}}` in model output stays literal; non-constant WI absent while constant entries render; prompt/aiOutput regex not applied; `trimSentences` override; hoist ordering determinism.
+- E2E (Playwright): setting persists across reload (settings-behavior pattern); a generation with an author's note at depth + a keyword WI entry renders the note in the top block and the WI entry nowhere (mock-LLM request capture, assert message order/content).
 
 ## Open questions
 
 - Volatile block as one synthetic message vs. merged into the system prompt — renderer-level detail, decide at implementation.
-- Should hoisted WI entries keep their decorators (they may carry position-dependent semantics)? Default: render content only.
+- Should hoisted constant atDepth WI keep decorators? Default: content only.
