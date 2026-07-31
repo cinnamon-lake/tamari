@@ -194,6 +194,7 @@ export function SettingsModal(props: { onClose: () => void }) {
   const [claudeCacheMode, setClaudeCacheMode] = createSignal(
     (s['claudeCacheMode'] as 'off' | 'auto' | 'manual' | undefined) ?? 'off',
   );
+  const [appendOnlyLayout, setAppendOnlyLayout] = createSignal(Boolean(s['appendOnlyPromptLayout']));
   const [claudeCacheDepth, setClaudeCacheDepth] = createSignal(
     Number(s['claudeCacheDepth'] ?? 0),
   );
@@ -468,6 +469,10 @@ export function SettingsModal(props: { onClose: () => void }) {
         <section class="settings-section">
           <h3 class="section-heading">{t('settings.postProcessing.heading')}</h3>
 
+          <Show when={appendOnlyLayout()}>
+            <p class="hint-text">{t('settings.postProcessing.disabledByAppendOnly')}</p>
+          </Show>
+
           <div class="settings-radio-group">
             <span class="settings-radio-label">{t('settings.postProcessing.whitespaceHandling')}</span>
             <label class="radio-row">
@@ -476,6 +481,7 @@ export function SettingsModal(props: { onClose: () => void }) {
                 name="whitespaceMode"
                 value="none"
                 checked={whitespaceMode() === 'none'}
+                disabled={appendOnlyLayout()}
                 onChange={() => {
                   setWhitespaceMode('none');
                   sendSetting('whitespaceMode', 'none');
@@ -490,6 +496,7 @@ export function SettingsModal(props: { onClose: () => void }) {
                 name="whitespaceMode"
                 value="essential"
                 checked={whitespaceMode() === 'essential'}
+                disabled={appendOnlyLayout()}
                 onChange={() => {
                   setWhitespaceMode('essential');
                   sendSetting('whitespaceMode', 'essential');
@@ -504,6 +511,7 @@ export function SettingsModal(props: { onClose: () => void }) {
                 name="whitespaceMode"
                 value="full"
                 checked={whitespaceMode() === 'full'}
+                disabled={appendOnlyLayout()}
                 onChange={() => {
                   setWhitespaceMode('full');
                   sendSetting('whitespaceMode', 'full');
@@ -518,6 +526,7 @@ export function SettingsModal(props: { onClose: () => void }) {
             <input
               type="checkbox"
               checked={removeXML()}
+              disabled={appendOnlyLayout()}
               onChange={(e) => {
                 setRemoveXML(e.currentTarget.checked);
                 sendSetting('removeXML', e.currentTarget.checked);
@@ -530,6 +539,7 @@ export function SettingsModal(props: { onClose: () => void }) {
             <input
               type="checkbox"
               checked={singleLine()}
+              disabled={appendOnlyLayout()}
               onChange={(e) => {
                 setSingleLine(e.currentTarget.checked);
                 sendSetting('singleLine', e.currentTarget.checked);
@@ -542,6 +552,7 @@ export function SettingsModal(props: { onClose: () => void }) {
             <input
               type="checkbox"
               checked={trimSentences()}
+              disabled={appendOnlyLayout()}
               onChange={(e) => {
                 setTrimSentences(e.currentTarget.checked);
                 sendSetting('trimSentences', e.currentTarget.checked);
@@ -826,6 +837,20 @@ export function SettingsModal(props: { onClose: () => void }) {
               {t('settings.generation.claudeCachingHint')}
             </span>
           </label>
+
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={appendOnlyLayout()}
+              onChange={(e) => {
+                setAppendOnlyLayout(e.currentTarget.checked);
+                sendSetting('appendOnlyPromptLayout', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.generation.appendOnlyLayout')}
+          </label>
+          <span class="hint-text">{t('settings.generation.appendOnlyLayoutHint')}</span>
 
           <Show when={claudeCacheMode() === 'manual'}>
             <label class="field-label">

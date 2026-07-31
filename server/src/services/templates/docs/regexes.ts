@@ -40,7 +40,7 @@ end
 
 ## Execution facts
 
-- Prompt rules run as the **first** prompt-assembly splice stage, before Author's Note / World Info, and before macro resolution in the renderer — a rule can inject macros, but macro output is not re-regexed.
+- Prompt rules run as the **first** prompt-assembly splice stage, before Author's Note / World Info, and before macro resolution in the renderer — a rule can inject macros, but macro output is not re-regexed. When the append-only prompt layout setting is on, prompt rules (incl. \`aiOutput\`) are not applied; display rules are unaffected.
 - Display rules run on raw text before markdown — a rule can inject markdown or sanitized HTML (DOMPurify still applies; scripts can't smuggle XSS).
 - Each rule executes in an isolated worker with a 1s timeout — a catastrophic-backtracking rule is skipped, text unchanged.
 - Input is truncated at 100,000 characters per text part.

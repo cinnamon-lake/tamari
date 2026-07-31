@@ -1227,14 +1227,18 @@ export function BackendConfigModal(props: { onClose: () => void }) {
             />
           </label>
           <h4 class="text-sm text-muted mb-0 mt-md">{t('backendConfig.optionsSection')}</h4>
-          <label class="checkbox-row">
+          <label class="checkbox-row" title={state.settings['appendOnlyPromptLayout'] ? t('backendConfig.disabledByAppendOnly') : ''}>
             <input
               class="checkbox-input"
               type="checkbox"
               checked={reasoningAddToPrompts()}
+              disabled={Boolean(state.settings['appendOnlyPromptLayout'])}
               onChange={(e) => setReasoningAddToPrompts(e.currentTarget.checked)}
             />
             {t('backendConfig.includeReasoning')}
+            <Show when={state.settings['appendOnlyPromptLayout']}>
+              <span class="hint-text">{t('backendConfig.disabledByAppendOnly')}</span>
+            </Show>
           </label>
 
           <div class="mt-md flex-col-sm">

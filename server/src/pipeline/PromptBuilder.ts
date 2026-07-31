@@ -113,6 +113,9 @@ export interface BuildOptions {
     mode?: 'auto' | 'manual' | 'off';
     /** Manual cache depth (role-transition count) when mode is 'manual'. */
     manualDepth?: number;
+    /** Append-only layout: suppress everything that rewrites/repositions
+        already-sent bytes (docs/design/append-only-caching.md). */
+    appendOnly?: boolean;
   };
 }
 
@@ -122,6 +125,8 @@ export interface WorldInfoScanResult {
   after: string;
   atDepthEntries: WorldInfoEntry[];
   activatedEntryIds: string[] | undefined;
+  /** Append-only mode: at least one non-constant entry was excluded (trace). */
+  excludedNonConstant?: boolean;
 }
 
 /** Result of the Author's Note in-chat splice stage. */
@@ -131,6 +136,9 @@ export interface AuthorsNoteSpliceResult {
   content: string;
   /** True when the AN was spliced into chat history (in_chat position). */
   inChat: boolean;
+  /** Append-only mode: raw (macro-unresolved) note text to hoist to the
+      pinned block instead of splicing (in_chat position only). */
+  hoistedText?: string;
 }
 
 export class PromptBuilder {
@@ -204,6 +212,28 @@ export class PromptBuilder {
       tokenCounter,
       semanticMatches: opts.worldInfo?.semanticMatches,
     });
+
+    // Append-only: non-constant entries are not rendered at all — keyword-set
+    // shifts would rewrite already-sent bytes. Constant entries keep their
+    // static head positions; constant atDepth entries hoist (upstream stage).
+    if (opts.caching?.appendOnly) {
+      const constantOnly = (items: typeof wiResult.before) => items.filter((i) => i.entry.constant);
+      const totalBefore =
+        wiResult.before.length + wiResult.after.length + wiResult.top.length + wiResult.bottom.length + wiResult.atDepth.length;
+      wiResult.before = constantOnly(wiResult.before);
+      wiResult.after = constantOnly(wiResult.after);
+      wiResult.top = constantOnly(wiResult.top);
+      wiResult.bottom = constantOnly(wiResult.bottom);
+      wiResult.atDepth = constantOnly(wiResult.atDepth);
+      const totalAfter =
+        wiResult.before.length + wiResult.after.length + wiResult.top.length + wiResult.bottom.length + wiResult.atDepth.length;
+      if (totalAfter < totalBefore) result.excludedNonConstant = true;
+      result.activatedEntryIds = wiResult.activatedEntryIds.filter((id) =>
+        entries.some((e) => e.id === id && e.constant),
+      );
+    } else {
+      result.activatedEntryIds = wiResult.activatedEntryIds;
+    }
     result.before = wiResult.before.map((i) => i.entry.content).join(PROMPT_SEPARATOR);
     result.after = wiResult.after.map((i) => i.entry.content).join(PROMPT_SEPARATOR);
     // Include top/bottom entries alongside before/after (they were previously dropped).
@@ -212,7 +242,6 @@ export class PromptBuilder {
     if (topContent) result.before = (result.before ? result.before + PROMPT_SEPARATOR : '') + topContent;
     if (bottomContent) result.after = (result.after ? result.after + PROMPT_SEPARATOR : '') + bottomContent;
     result.atDepthEntries = wiResult.atDepth.map((i) => i.entry);
-    result.activatedEntryIds = wiResult.activatedEntryIds;
     return result;
   }
 
@@ -249,6 +278,7 @@ export class PromptBuilder {
     authorsNote: AuthorsNoteConfig | null | undefined,
     visibleHistory: Message[],
     macroCtx: MacroContext,
+    appendOnly = false,
   ): AuthorsNoteSpliceResult {
     const result: AuthorsNoteSpliceResult = { chatHistory, content: '', inChat: false };
     if (!authorsNote || !authorsNote.content || authorsNote.interval === 0) {
@@ -260,8 +290,18 @@ export class PromptBuilder {
       return result;
     }
 
-    const resolved = this.macroResolver.resolve(authorsNote.content, macroCtx).trim();
+    // Append-only: macros are off wholesale — the note's raw text renders literally.
+    const resolved = appendOnly
+      ? authorsNote.content.trim()
+      : this.macroResolver.resolve(authorsNote.content, macroCtx).trim();
     if (!resolved) return result;
+
+    if (appendOnly && authorsNote.position === 'in_chat') {
+      // No mid-history splice: hoist to the pinned block (the caller emits it);
+      // content stays empty so the authorsNoteSlot stage doesn't double-fire.
+      result.hoistedText = resolved;
+      return result;
+    }
 
     result.content = resolved;
     if (authorsNote.position === 'in_chat') {

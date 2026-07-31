@@ -348,6 +348,10 @@ const _AppSettingsSchema = z.object({
   claudeCacheMode: z.enum(['off', 'auto', 'manual']).default('off'),
   claudeCacheDepth: z.number().int().default(0),
   claudeCacheTTL: z.string().nullable().default(null),
+  // Append-only prompt layout: render turns as strict byte-prefixes of each
+  // other (snapshot-cache friendly) by disabling depth injections, non-constant
+  // WI, macros, prompt/output regex, and output post-processing.
+  appendOnlyPromptLayout: z.boolean().default(false),
 
   // Post-processing
   whitespaceMode: z.string().default('none'),

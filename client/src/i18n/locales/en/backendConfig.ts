@@ -74,6 +74,7 @@ export const backendConfig = {
 
   // Reasoning
   includeReasoning: 'Include reasoning blocks in prompt context',
+  disabledByAppendOnly: '(forced on by append-only prompt layout)',
   openrouterReasoning: 'OpenRouter Reasoning',
   reasoningEffort: 'Reasoning Effort',
   reasoningSummary: 'Reasoning Summary',

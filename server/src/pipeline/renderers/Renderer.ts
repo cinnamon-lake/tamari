@@ -30,6 +30,15 @@ export interface RenderOptions {
   supportsVideo?: boolean;
   /** When true, replace media attachments with text placeholders */
   mediaVerboseMode?: boolean;
+  /**
+   * Append-only layout (docs/design/append-only-caching.md): history renders
+   * verbatim, absolute-depth prompts hoist into the pinned volatile block
+   * instead of splicing mid-history, and `volatileBlock` (author's note,
+   * constant atDepth WI — raw text, deterministic order) is emitted as one
+   * synthetic system message right after the prompt-list head.
+   */
+  appendOnly?: boolean;
+  volatileBlock?: string[];
 }
 
 export interface ExampleMessage {

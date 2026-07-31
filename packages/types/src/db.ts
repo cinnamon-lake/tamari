@@ -315,6 +315,9 @@ export interface GenerationMeta {
   traceError?: TraceError;
   /** Round-1 prompt snapshot — only when the debugPrompts setting is on. */
   prompt?: Prompt;
+  /** Append-only layout: what the mode suppressed/hoisted for this run
+      (docs/design/append-only-caching.md). Present only when the mode is on. */
+  appendOnly?: { suppressed: string[]; hoisted: string[] };
 }
 
 export type GenerationInsert = Omit<Generation, 'createdAt' | 'updatedAt' | 'kind' | 'parentId'> & {

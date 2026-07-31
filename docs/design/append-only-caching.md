@@ -1,6 +1,6 @@
 # Append-Only Prompt Layout — Design Proposal
 
-**Status:** proposed (not yet implemented).
+**Status:** implemented (global setting `appendOnlyPromptLayout`, default off; Settings → Generation next to Claude Prompt Caching).
 **Motivation:** coding-plan APIs with automatic prompt caching (discounted input tokens on cache hits) are becoming a primary backend for power users. Their caching is only profitable when the rendered request grows strictly by appends — and several Tamari prompt features violate that every single turn.
 
 ## Provider cache models

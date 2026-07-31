@@ -307,7 +307,10 @@ export class ChatPromptAssembly {
 
     const customTemplates = this.extractCustomInstructTemplates(allSettings);
     const regexRules = this.extractRegexRules(allSettings, character);
-    const reasoningAddToPrompts = allSettings.reasoningAddToPrompts;
+    // Append-only: reasoning always re-sent verbatim (the provider's snapshot
+    // includes it); stop strings stay literal (macros are off wholesale).
+    const appendOnly = allSettings.appendOnlyPromptLayout;
+    const reasoningAddToPrompts = allSettings.reasoningAddToPrompts || appendOnly;
 
     const macroCtx = {
       userName: persona?.name || allSettings.userName || 'User',
@@ -322,7 +325,7 @@ export class ChatPromptAssembly {
     const stopStrings = this.resolveStopStrings(
       backendConfig?.stopStrings,
       allSettings.customStoppingStrings,
-      allSettings.customStoppingStringsMacro,
+      allSettings.customStoppingStringsMacro && !appendOnly,
       macroCtx,
     );
 
@@ -393,6 +396,7 @@ export class ChatPromptAssembly {
       caching: {
         mode: allSettings.claudeCacheMode,
         manualDepth: allSettings.claudeCacheDepth,
+        appendOnly: allSettings.appendOnlyPromptLayout,
       },
     });
 

@@ -40,6 +40,7 @@ export const settings = {
     singleLine: 'Single-line mode (trim to first newline)',
     trimSentences: 'Trim to end of last complete sentence',
     autoFixMarkdown: 'Auto-fix generated markdown (close unclosed backticks, code blocks)',
+    disabledByAppendOnly: 'Overridden while append-only prompt layout is on (Settings → Generation).',
     showTimer: 'Show generation timer per message',
   },
   generation: {
@@ -59,6 +60,9 @@ export const settings = {
     claudeCachingManual: 'Manual',
     claudeCachingHint:
       'Auto computes optimal cache depth from injections. Manual uses the depth below.',
+    appendOnlyLayout: 'Append-only prompt layout',
+    appendOnlyLayoutHint:
+      'Snapshot-cache friendly: every turn is a strict byte-prefix of the next. Disables depth injections, non-constant World Info, macros, prompt/output regex, and output post-processing; reasoning is always re-sent verbatim.',
     manualCacheDepth: 'Manual Cache Depth',
     manualCacheDepthHint: 'Role-transition count at which to place the cache breakpoint',
     cacheTtl: 'Cache TTL',

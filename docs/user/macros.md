@@ -68,6 +68,8 @@ Macros are resolved by a multi-pass engine, and a few of its behaviors are worth
 
 - **Non-deterministic macros disable prompt caching.** `{{random}}`, `{{pick}}`, `{{roll}}`, and all time/date macros change on every build, so tamari automatically turns off Claude prompt caching for any generation whose inputs contain them. See [Preventing Cache Issues](#preventing-cache-issues).
 
+- **Append-only prompt layout disables macros wholesale.** When Settings → Generation → **Append-only prompt layout** is on, no macro is resolved anywhere — `{{char}}` renders literally in history, card fields, and every prompt. Cards that depend on macros are incompatible with the mode.
+
 - **Write-time vs build-time resolution.** Chat messages are resolved **once, when they are written** (sent, edited, or generated) and stored already resolved — a `{{random}}` in a message is frozen forever. Prompts, character card fields, World Info, and Author's Note are resolved **fresh on every generation**, so they re-roll each time. Each message also stores a snapshot of its variables, so swipes and branches keep their own variable state.
 
 ## Macro Reference

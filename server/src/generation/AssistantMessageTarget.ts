@@ -492,6 +492,11 @@ export class AssistantMessageTarget implements GenerationTarget {
 
   // ── Internals ──────────────────────────────────────────────────────────
 
+  /** Append-only layout is on (global setting, read at prepare/prompt time). */
+  private isAppendOnly(): boolean {
+    return this.allSettings['appendOnlyPromptLayout'] === true;
+  }
+
   private buildMacroCtx(vars: Record<string, string>) {
     return {
       userName: this.userName,
@@ -526,9 +531,15 @@ export class AssistantMessageTarget implements GenerationTarget {
     this.flushTimeout = null;
     return this.chain(async () => {
       const flushExtra: MessageExtra = { ...this.baseExtra };
-      const { parts: resolvedParts, vars } = this.resolveStorageMacros(this.streamingParts, this.currentVars);
-      flushExtra.parts = resolvedParts;
-      flushExtra.macroVars = vars;
+      if (this.isAppendOnly()) {
+        // Append-only: macros are off wholesale — persist the raw provider bytes.
+        flushExtra.parts = this.streamingParts;
+        flushExtra.macroVars = this.currentVars;
+      } else {
+        const { parts: resolvedParts, vars } = this.resolveStorageMacros(this.streamingParts, this.currentVars);
+        flushExtra.parts = resolvedParts;
+        flushExtra.macroVars = vars;
+      }
       if (this.character) flushExtra.characterId = this.character.id;
       if (this.model) flushExtra.model = this.model;
       try {
@@ -606,8 +617,9 @@ export class AssistantMessageTarget implements GenerationTarget {
     }
 
     // Apply post-processing to the last text part (all prior text was
-    // already post-processed in earlier generation rounds).
-    const lastTextPart = lastTextPartIndex !== -1
+    // already post-processed in earlier generation rounds). Append-only:
+    // skipped wholesale — persisted text must be the raw provider stream.
+    const lastTextPart = lastTextPartIndex !== -1 && !this.isAppendOnly()
       ? (parts[lastTextPartIndex] as { type: 'text'; text: string })
       : null;
     if (lastTextPart) {
@@ -645,10 +657,13 @@ export class AssistantMessageTarget implements GenerationTarget {
 
     // Resolve storage macros on the whole message; the resolved parts become
     // the message state (the legacy code re-loaded resolved parts from the DB
-    // at every round boundary).
-    const { parts: resolvedParts, vars } = this.resolveStorageMacros(parts, this.currentVars);
-    this.streamingParts = resolvedParts;
-    this.currentVars = vars;
+    // at every round boundary). Append-only: skipped — parts persist raw and
+    // macroVars pass through unchanged (macros are off wholesale).
+    if (!this.isAppendOnly()) {
+      const { parts: resolvedParts, vars } = this.resolveStorageMacros(parts, this.currentVars);
+      this.streamingParts = resolvedParts;
+      this.currentVars = vars;
+    }
 
     // Reset round accumulators.
     this.streamingText = '';

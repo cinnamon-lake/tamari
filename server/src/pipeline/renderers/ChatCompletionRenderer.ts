@@ -61,6 +61,32 @@ export class ChatCompletionRenderer implements PromptRenderer {
     // Squash consecutive system messages
     const squashed = this.squashConsecutiveSystemMessages(messages);
 
+    // Append-only layout: the pinned volatile block — author's note, constant
+    // atDepth WI (from the stages), then absolute-position preset prompts
+    // (deterministic order: depth asc, then injectionOrder) — emitted as ONE
+    // synthetic system message right after the prompt-list head, so nothing
+    // floats mid-history. Macros are already a pass-through in this mode.
+    let volatileMessages: PipelineMessage[] = [];
+    if (opts.appendOnly) {
+      const blockParts: string[] = [...(opts.volatileBlock ?? [])];
+      for (const depth of [...absoluteByDepth.keys()].sort((a, b) => a - b)) {
+        const prompts = absoluteByDepth.get(depth);
+        if (!prompts) continue;
+        for (const prompt of prompts) {
+          const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
+          if (resolvedContent.trim()) blockParts.push(resolvedContent);
+        }
+      }
+      if (blockParts.length > 0) {
+        const content = blockParts.join(PROMPT_SEPARATOR);
+        const tokens = opts.tokenCounter.count(content) + MESSAGE_OVERHEAD_TOKENS;
+        if (budget.canAfford(tokens)) {
+          budget.spend(tokens);
+          volatileMessages = [{ role: 'system', content }];
+        }
+      }
+    }
+
     // Identify the latest assistant message (the streaming target) so we can
     // preserve its reasoning / tool blocks even when stripping them from older
     // messages.  The target is always the last assistant in the branch — for a
@@ -85,22 +111,25 @@ export class ChatCompletionRenderer implements PromptRenderer {
     let messagesProcessed = 0;
 
     for (const msg of history) {
-      // Inject any absolute prompts that belong at this depth
-      const depthPrompts = absoluteByDepth.get(messagesProcessed);
-      if (depthPrompts) {
-        // Iterate in reverse injectionOrder so unshift preserves ascending order
-        for (let i = depthPrompts.length - 1; i >= 0; i--) {
-          const prompt = depthPrompts[i];
-          if (!prompt) continue;
-          const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
-          if (!resolvedContent.trim()) continue;
-          const tokens = opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS;
-          if (!budget.canAfford(tokens)) break;
-          budget.spend(tokens);
-          historyMessages.unshift({
-            role: prompt.role,
-            content: resolvedContent,
-          });
+      // Inject any absolute prompts that belong at this depth (suppressed in
+      // append-only mode — they hoist into the volatile block instead).
+      if (!opts.appendOnly) {
+        const depthPrompts = absoluteByDepth.get(messagesProcessed);
+        if (depthPrompts) {
+          // Iterate in reverse injectionOrder so unshift preserves ascending order
+          for (let i = depthPrompts.length - 1; i >= 0; i--) {
+            const prompt = depthPrompts[i];
+            if (!prompt) continue;
+            const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
+            if (!resolvedContent.trim()) continue;
+            const tokens = opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS;
+            if (!budget.canAfford(tokens)) break;
+            budget.spend(tokens);
+            historyMessages.unshift({
+              role: prompt.role,
+              content: resolvedContent,
+            });
+          }
         }
       }
 
@@ -218,20 +247,23 @@ export class ChatCompletionRenderer implements PromptRenderer {
     }
 
     // Inject any remaining absolute prompts whose depth exceeds history length
-    for (const [depth, prompts] of absoluteByDepth) {
-      if (depth >= messagesProcessed) {
-        for (let i = prompts.length - 1; i >= 0; i--) {
-          const prompt = prompts[i];
-          if (!prompt) continue;
-          const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
-          if (!resolvedContent.trim()) continue;
-          const tokens = opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS;
-          if (!budget.canAfford(tokens)) break;
-          budget.spend(tokens);
-          historyMessages.unshift({
-            role: prompt.role,
-            content: resolvedContent,
-          });
+    // (suppressed in append-only mode — they hoist into the volatile block).
+    if (!opts.appendOnly) {
+      for (const [depth, prompts] of absoluteByDepth) {
+        if (depth >= messagesProcessed) {
+          for (let i = prompts.length - 1; i >= 0; i--) {
+            const prompt = prompts[i];
+            if (!prompt) continue;
+            const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
+            if (!resolvedContent.trim()) continue;
+            const tokens = opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS;
+            if (!budget.canAfford(tokens)) break;
+            budget.spend(tokens);
+            historyMessages.unshift({
+              role: prompt.role,
+              content: resolvedContent,
+            });
+          }
         }
       }
     }
@@ -241,7 +273,7 @@ export class ChatCompletionRenderer implements PromptRenderer {
     const afterMessages = this.renderRelativePrompts(afterRel, collection, opts, budget);
     const squashedAfter = this.squashConsecutiveSystemMessages(afterMessages);
 
-    const finalMessages = [...squashed, ...historyMessages, ...squashedAfter];
+    const finalMessages = [...squashed, ...volatileMessages, ...historyMessages, ...squashedAfter];
 
     // Accurate token count using the message-aware counter
     const promptTokens = opts.tokenCounter.countMessages(

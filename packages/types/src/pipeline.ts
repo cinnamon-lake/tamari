@@ -121,4 +121,11 @@ export interface Prompt {
    * Stored in message extra for branch-aware sticky/cooldown/delay state.
    */
   wiActivations?: string[];
+  /**
+   * Append-only layout trace (docs/design/append-only-caching.md): which
+   * features were suppressed and which volatile blocks were hoisted for this
+   * prompt. Present only when appendOnlyPromptLayout is on; the runner copies
+   * it into generations.meta.
+   */
+  appendOnlyTrace?: { suppressed: string[]; hoisted: string[] };
 }

@@ -89,6 +89,8 @@ Prompt rules run on the server during prompt assembly, as the **first** stage th
 
 The rewrite is ephemeral: it's built fresh for that generation and never written back to the chat. Prompt rules also run on your *outgoing* message as it enters the history being sent — a **Prompt** + **User Input** rule can rewrite what the model sees of your own text while your displayed message stays as typed.
 
+> **Note:** When Settings → Generation → **Append-only prompt layout** is on, prompt-side rules (including output-side `aiOutput` rules) are not applied at all — they would rewrite already-sent bytes. Display rules are unaffected.
+
 ### Display rules
 
 Display rules run on the server whenever a message's HTML is computed — when a chat loads and whenever messages are broadcast (new generations, swipes, edits) — on the raw text **before** markdown rendering. Consequences:

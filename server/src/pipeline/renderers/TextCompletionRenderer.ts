@@ -8,7 +8,7 @@
 
 import { getMessageText } from '@tamari/types';
 import type { RenderOptions, PromptCollection, TextRenderResult, PromptRenderer } from './Renderer.js';
-import { FRAME_RESERVE_TOKENS, TokenBudget, promptBudgetTotal } from './Renderer.js';
+import { FRAME_RESERVE_TOKENS, PROMPT_SEPARATOR, TokenBudget, promptBudgetTotal } from './Renderer.js';
 import type { InstructTemplate } from './InstructTemplate.js';
 import type { ContentPart } from '../../backends/BackendAdapter.js';
 import { reconstructWithReasoning } from '../../services/ReasoningEngine.js';
@@ -88,6 +88,30 @@ export class TextCompletionRenderer implements PromptRenderer {
     };
 
     renderPrompts(beforePrompts);
+
+    // Append-only layout: the pinned volatile block (author's note, constant
+    // atDepth WI from the stages, then absolute-position prompts, which this
+    // renderer normally skips) — one system block right after the head
+    // prompts, so nothing floats mid-history.
+    if (opts.appendOnly) {
+      const blockParts: string[] = [...(opts.volatileBlock ?? [])];
+      const absolutePrompts = collection.prompts
+        .filter((p) => p.enabled && p.injectionPosition === 'absolute')
+        .sort((a, b) => (a.injectionDepth ?? 0) - (b.injectionDepth ?? 0) || (a.injectionOrder ?? 0) - (b.injectionOrder ?? 0));
+      for (const prompt of absolutePrompts) {
+        const resolved = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
+        if (resolved.trim()) blockParts.push(resolved);
+      }
+      if (blockParts.length > 0) {
+        const content = blockParts.join(PROMPT_SEPARATOR);
+        const tokens = opts.tokenCounter.count(content);
+        if (budget.canAfford(tokens)) {
+          budget.spend(tokens);
+          promptTokens += tokens;
+          parts.push(this.wrap(content, 'system'));
+        }
+      }
+    }
 
     // Render chat history
     const history = [...opts.chatHistory];

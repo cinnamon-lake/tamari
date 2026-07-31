@@ -22,7 +22,7 @@ import type { BuildOptions, WorldInfoScanResult, AuthorsNoteSpliceResult, Author
 import { PromptManager } from './PromptManager.js';
 import type { PromptCollection, RenderOptions } from './renderers/Renderer.js';
 import type { MacroContext } from './MacroResolver.js';
-import type { MacroResolver } from './MacroResolver.js';
+import { MacroResolver } from './MacroResolver.js';
 import { TokenCounter, type ITokenCounter } from '../tokenizers/TokenCounter.js';
 import type { ExampleMessage, ExampleBuilder } from './ExampleBuilder.js';
 import type { ChatCompletionRenderer } from './renderers/ChatCompletionRenderer.js';
@@ -42,6 +42,7 @@ export interface PromptBuilderStageHost {
     authorsNote: AuthorsNoteConfig | null | undefined,
     visibleHistory: Message[],
     macroCtx: MacroContext,
+    appendOnly?: boolean,
   ): AuthorsNoteSpliceResult;
   spliceAtDepthWorldInfo(history: Message[], entries: WorldInfoEntry[], macroCtx: MacroContext): Message[];
   prependMemorySummary(history: Message[], memorySummary: MemorySummary | null | undefined): Message[];
@@ -71,6 +72,14 @@ export class PromptContext {
   cacheDepth?: number;
   /** Set by the render stage (the only stage that must never be dropped). */
   result?: Prompt;
+  /**
+   * Append-only layout: volatile content hoisted to the pinned block at the
+   * top of history (raw, macro-unresolved text — author's note, then constant
+   * atDepth WI; absolute preset prompts are appended by the renderer).
+   */
+  volatileBlock: string[] = [];
+  /** Append-only trace notes (debug trace → generations.meta.appendOnly). */
+  appendOnlyNotes: { suppressed: string[]; hoisted: string[] } = { suppressed: [], hoisted: [] };
 
   constructor(opts: BuildOptions) {
     this.opts = opts;
@@ -80,6 +89,17 @@ export class PromptContext {
 export interface PromptStage {
   readonly id: string;
   run(ctx: PromptContext): Promise<void> | void;
+}
+
+/**
+ * Append-only layout: macros are off wholesale, so the renderer gets a
+ * pass-through resolver (a real MacroResolver instance with `resolve`
+ * overridden — no structural hacks).
+ */
+function identityMacroResolver(): MacroResolver {
+  const resolver = MacroResolver.createPromptResolver();
+  resolver.resolve = (text: string) => text;
+  return resolver;
 }
 
 /**
@@ -134,6 +154,9 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
       run(ctx) {
         // Prepare world info strings and atDepth injections
         ctx.wi = host.scanWorldInfo(ctx.opts, ctx.visibleHistory, ctx.macroCtx, ctx.tokenCounter);
+        if (ctx.wi.excludedNonConstant) {
+          ctx.appendOnlyNotes.suppressed.push('nonConstantWorldInfo');
+        }
       },
     },
     {
@@ -155,20 +178,53 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
     {
       id: 'historyRegex',
       async run(ctx) {
+        // Append-only: prompt-side regex rewrites already-sent bytes — suppressed.
+        if (ctx.opts.caching?.appendOnly) {
+          if (ctx.opts.regexRules && ctx.opts.regexRules.length > 0) {
+            ctx.appendOnlyNotes.suppressed.push('promptRegex');
+          }
+          ctx.chatHistory = ctx.visibleHistory;
+          return;
+        }
         ctx.chatHistory = await host.applyPromptRegexRules(ctx.visibleHistory, ctx.opts.regexRules);
       },
     },
     {
       id: 'authorsNoteSplice',
       run(ctx) {
-        const an = host.spliceAuthorsNote(ctx.chatHistory, ctx.opts.prompts?.authorsNote, ctx.visibleHistory, ctx.macroCtx);
+        const an = host.spliceAuthorsNote(
+          ctx.chatHistory,
+          ctx.opts.prompts?.authorsNote,
+          ctx.visibleHistory,
+          ctx.macroCtx,
+          ctx.opts.caching?.appendOnly === true,
+        );
         ctx.chatHistory = an.chatHistory;
         ctx.authorsNote = { content: an.content, inChat: an.inChat };
+        // Append-only: an in-chat note doesn't splice mid-history — its raw
+        // (macro-unresolved) text hoists to the pinned block instead.
+        if (ctx.opts.caching?.appendOnly && an.hoistedText) {
+          ctx.volatileBlock.push(an.hoistedText);
+          ctx.appendOnlyNotes.hoisted.push('authorsNote');
+        }
       },
     },
     {
       id: 'worldInfoAtDepth',
       run(ctx) {
+        // Append-only: constant atDepth entries hoist (raw, macro-unresolved);
+        // non-constant entries were already excluded by the worldInfo scan.
+        if (ctx.opts.caching?.appendOnly) {
+          let hoisted = false;
+          for (const entry of ctx.wi.atDepthEntries) {
+            const text = entry.content.trim();
+            if (!text) continue;
+            ctx.volatileBlock.push(text);
+            hoisted = true;
+          }
+          if (hoisted) ctx.appendOnlyNotes.hoisted.push('worldInfoAtDepth');
+          return;
+        }
         ctx.chatHistory = host.spliceAtDepthWorldInfo(ctx.chatHistory, ctx.wi.atDepthEntries, ctx.macroCtx);
       },
     },
@@ -244,24 +300,45 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
       id: 'render',
       run(ctx) {
         const { opts } = ctx;
+        const appendOnly = opts.caching?.appendOnly === true;
         const renderOpts: RenderOptions = {
-          macroResolver: host.macroResolver,
+          macroResolver: appendOnly ? identityMacroResolver() : host.macroResolver,
           macroCtx: ctx.macroCtx,
           tokenCounter: ctx.tokenCounter,
           chatHistory: ctx.chatHistory,
           maxContext: opts.maxContext,
           maxResponseTokens: opts.maxResponseTokens,
           model: opts.model,
-          reasoningAddToPrompts: opts.reasoningAddToPrompts,
+          // Append-only: reasoning is always re-sent verbatim (the provider's
+          // snapshot includes it).
+          reasoningAddToPrompts: appendOnly ? true : opts.reasoningAddToPrompts,
           supportsImages: opts.media?.supportsImages ?? true,
           supportsAudio: opts.media?.supportsAudio ?? true,
           supportsVideo: opts.media?.supportsVideo ?? true,
           mediaVerboseMode: opts.media?.verboseMode,
+          appendOnly,
+          volatileBlock: ctx.volatileBlock,
         };
 
         const params: Record<string, unknown> = {};
         if (opts.stopStrings && opts.stopStrings.length > 0) {
           params.stop = opts.stopStrings;
+        }
+
+        // Append-only trace (→ generations.meta.appendOnly): prompt-assembly
+        // suppressions and hoists collected by the earlier stages, plus the
+        // wholesale macro kill and the output-side override (enforced by the
+        // message target, noted here for completeness).
+        let appendOnlyTrace: Prompt['appendOnlyTrace'];
+        if (appendOnly) {
+          const hoisted = [...ctx.appendOnlyNotes.hoisted];
+          if (ctx.collection.prompts.some((p) => p.enabled && p.injectionPosition === 'absolute')) {
+            hoisted.push('absolutePresetPrompts');
+          }
+          appendOnlyTrace = {
+            suppressed: [...ctx.appendOnlyNotes.suppressed, 'macros', 'outputPostProcessing'],
+            hoisted,
+          };
         }
 
         // Pick renderer based on mode
@@ -284,6 +361,7 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
             reasoning: template.reasoning,
             tools,
             wiActivations: ctx.wi.activatedEntryIds,
+            ...(appendOnlyTrace ? { appendOnlyTrace } : {}),
           };
           return;
         }
@@ -296,6 +374,7 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
           cacheDepth: ctx.cacheDepth,
           tools,
           wiActivations: ctx.wi.activatedEntryIds,
+          ...(appendOnlyTrace ? { appendOnlyTrace } : {}),
         };
       },
     },

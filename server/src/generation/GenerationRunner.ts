@@ -272,6 +272,8 @@ export class GenerationRunner {
         ...(toolCallsMeta.length > 0 ? { toolCalls: toolCallsMeta } : {}),
         ...(traceError ? { traceError } : {}),
         ...(debugPromptsOn && firstPrompt ? { prompt: firstPrompt } : {}),
+        // Append-only layout: suppressions/hoists recorded by prompt assembly.
+        ...(firstPrompt?.appendOnlyTrace ? { appendOnly: firstPrompt.appendOnlyTrace } : {}),
       });
 
       while (rounds < maxToolRounds) {

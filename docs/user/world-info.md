@@ -68,7 +68,7 @@ Entries with **Recursive** enabled feed the next round: their *content* replaces
 | **Bottom** (`bottom`) | Appended to the *after* content. |
 | **At Depth** (`atDepth`) | Spliced into the chat history as a synthetic message — see [At-Depth Injection](#at-depth-injection). |
 
-> **Warning:** Non-constant entries in static positions (everything except **At Depth**) inject into the system prompt, which changes the cache prefix every time a different set of entries fires — so their presence **disables Claude prompt caching for that generation**. If caching matters to you, prefer `constant` entries or **At Depth** placement.
+> **Warning:** Non-constant entries in static positions (everything except **At Depth**) inject into the system prompt, which changes the cache prefix every time a different set of entries fires — so their presence **disables Claude prompt caching for that generation**. If caching matters to you, prefer `constant` entries or **At Depth** placement. (When **Append-only prompt layout** is on, non-constant entries don't render at all; constant **At Depth** entries hoist to a pinned block at the top of history.)
 
 ## `@@` Decorators
 
