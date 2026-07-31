@@ -15,7 +15,7 @@ The purist append-only layout is optimal under both families, so it is the targe
 
 ## The governing principle
 
-**Next turn's bytes for already-sent content must equal last turn's bytes, verbatim.** Anything that rewrites, re-resolves, repositions, or re-derives already-sent content between turns breaks the invariant — and in this mode, it dies. The mode is deliberately destructive; users opt into it for the discount.
+**Next turn's bytes for already-sent content must equal last turn's bytes, verbatim.** Anything that rewrites, re-resolves, repositions, or re-derives already-sent content between turns breaks the invariant — and in this mode, it dies. Append-only semantics are a **commitment**: the mode is deliberately destructive, and users opt into it for the discount.
 
 ## Config (decided: global)
 
@@ -35,8 +35,8 @@ All overrides below are applied **at assembly time** — stored user settings ar
 2. **Non-constant lorebook entries vanish.** Keyword-triggered entries change the rendered bytes whenever the keyword set shifts — under snapshot semantics that is a full miss, so they are simply not rendered. `constant` entries keep their static head positions; constant atDepth entries hoist to the pinned block (rule 8).
 3. **The macro system is off entirely.** History must be verbatim because model output can contain arbitrary macros — re-resolving `{{roll:d20}}` (or even `{{char}}` after a rename) in an old assistant message drifts already-sent bytes. Rather than adjudicate which positions are safe, resolution is disabled wholesale: `{{char}}` in a card field renders *literally*. This is the harshest break and it is intentional — cards that rely on macros are incompatible with the mode.
 4. **Prompt-side regex rules are not applied** (global rules and character `extensions.regexScripts` with `prompt: true`). `aiOutput` rules are likewise not applied to persisted content — they would rewrite the provider's exact streamed bytes, and the next request would diverge from the provider-side snapshot. Display-only rules (`display: true`) are unaffected; they never reach the prompt.
-5. **Response post-processing is forced off** (`trimSentences`): persisted assistant text must be the raw provider stream, byte for byte.
-6. **`reasoningAddToPrompts` is forced off** — re-sent reasoning blocks do not round-trip provider serialization reliably.
+5. **Response post-processing is forced off** — `trimSentences`, `removeXML`, `singleLine`, and `whitespaceMode` pinned to `'none'`: persisted assistant text must be the raw provider stream, byte for byte.
+6. **`reasoningAddToPrompts` is forced ON** — the provider's snapshot includes the reasoning it generated; stripping it from re-sent history diverges from that snapshot just as surely as editing the text would. Replay everything the provider produced, verbatim.
 7. **Non-deterministic macros** — moot given rule 3, but the existing `hasNondeterministicMacros` scan still runs and trace-notes findings (belt and suspenders for future sources).
 8. **Volatile-but-wanted content hoists** to one pinned block at the top of history (after the system prompt, before message 1), deterministic order: author's note text → constant atDepth WI → absolute-position preset prompts. It changes only when its inputs change (note edit, constant-set change) — an occasional documented re-warm, not a per-turn bleed. Hoists are trace-noted, silent in the UI.
 
@@ -56,7 +56,7 @@ All overrides below are applied **at assembly time** — stored user settings ar
 
 - `PromptStages`: `historyRegex`, `authorsNoteSplice`, `worldInfoAtDepth` early-return or collect into `ctx.volatileBlock` when the flag is on; macro resolution in the renderer is skipped. Stage list unchanged — stages branch on the flag.
 - Renderers (`ChatCompletionRenderer`, `TextCompletionRenderer`): emit `volatileBlock` at the pinned position, deterministic order; history messages pass through without macro/regex transforms.
-- Generation pipeline: `trimSentences` / output-regex / `reasoningAddToPrompts` overridden at assembly time.
+- Generation pipeline: `trimSentences` / `removeXML` / `singleLine` / `whitespaceMode='none'` / output-regex forced off, `reasoningAddToPrompts` forced on — all at assembly time.
 - `packages/types/src/schemas.ts`: the setting next to `claudeCacheMode`; `SettingsModal.tsx`: checkbox + greyed overridden controls.
 - `generations.meta`: suppressions and hoists recorded per generation.
 
