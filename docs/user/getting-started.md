@@ -45,7 +45,20 @@ tamari is single-user but still requires a login: every API call and WebSocket c
 
 Where the token comes from:
 
-- **Set `TAMARI_SECRET` yourself (recommended).** Pick any long random string and start the server with it. That's your login token, and it survives restarts:
+- **Just start the server (the normal way).** On the first interactive run — nothing set, no `.env` yet — the server asks you to choose a password right in the terminal:
+
+  ```
+  First run: no TAMARI_SECRET found.
+  This password logs you into tamari and encrypts API keys stored in
+  the vault. Losing it means re-entering every stored provider key.
+  Please choose a password:
+  Repeat to confirm:
+  Password saved to /path/to/tamari/.env — it will be picked up on every restart.
+  ```
+
+  The password is written to `.env` in the working directory (created with owner-only permissions if it doesn't exist) and loaded automatically from then on. That password *is* your login token.
+
+- **Or set `TAMARI_SECRET` yourself.** Any long random string in the environment works and takes precedence over `.env`:
 
   ```sh
   # Linux / macOS
@@ -64,14 +77,9 @@ Where the token comes from:
   npm start
   ```
 
-- **If `TAMARI_SECRET` is unset**, the server generates a random secret on every boot and logs a warning — but only a **masked** form of it:
+- **Non-interactive runs** (docker, systemd, CI — no terminal to prompt on) can't ask, so without `TAMARI_SECRET` they fall back to a random secret per boot, with a loud warning: bearer tokens and vault-encrypted API keys will **not** survive a restart. Set `TAMARI_SECRET` in the environment (or mount/provide a `.env`) for anything you care about.
 
-  ```
-  No TAMARI_SECRET set. Generated random secret: ab12...yz90
-  Set TAMARI_SECRET environment variable to persist the secret across restarts.
-  ```
-
-  The full token is never printed, so there is nothing to copy into the login screen — and the secret changes on every restart, logging out any stored session. Treat this as a nudge, not a login method: set `TAMARI_SECRET` before your first real run.
+`.env` files are simple `KEY=VALUE` lines (`#` comments allowed) and are loaded from the working directory at startup; real environment variables always win over `.env` entries.
 
 > **Note:** `SILLYTAVERN_SECRET` is still accepted as a pre-rebrand fallback when `TAMARI_SECRET` is unset.
 
@@ -79,7 +87,7 @@ The token is checked against `TAMARI_SECRET` with a timing-safe comparison, and 
 
 ## Configuration
 
-Everything is configured with environment variables. These are the defaults from the server (`server/src/config.ts`):
+Everything is configured with environment variables (or a `.env` file in the working directory — see above). These are the defaults from the server (`server/src/config.ts`):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -87,7 +95,7 @@ Everything is configured with environment variables. These are the defaults from
 | `HOST` | `::` | HTTP server bind address (all interfaces, IPv4 + IPv6) |
 | `DATA_DIR` | `./data-v2` | Path to the SQLite database (`tamari.db`) and file storage, relative to the working directory |
 | `LOG_LEVEL` | `info` | Server log level: `debug`, `info`, `warn`, `error` |
-| `TAMARI_SECRET` | *(random per boot)* | Shared auth secret for bearer tokens; also keys the secrets vault |
+| `TAMARI_SECRET` | *(prompted on first run)* | Shared auth secret for bearer tokens; also keys the secrets vault. Random per boot only on non-interactive runs with nothing set |
 | `DISABLE_CSRF` | `false` | When `true`, allows WebSocket connections from any `localhost`/`127.0.0.1` port (dev mode) |
 | `WS_ORIGINS` | *(empty)* | Comma-separated list of additional allowed WebSocket origins, e.g. `http://myhost:3000,https://myhost` |
 | `HTTP_JSON_LIMIT` | `5mb` | Max body size for JSON HTTP requests |

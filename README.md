@@ -18,7 +18,7 @@ LLM Frontend for Power Users
 | `HOST` | `::` | HTTP server bind address |
 | `DATA_DIR` | `./data-v2` | Path to SQLite database and file storage |
 | `LOG_LEVEL` | `info` | Server log level (`debug`, `info`, `warn`, `error`) |
-| `TAMARI_SECRET` | *(random)* | Auth secret for bearer tokens |
+| `TAMARI_SECRET` | *(prompted)* | Auth secret for bearer tokens and the API-key vault. On first interactive run you're asked to choose a password, which is saved to `.env`; non-interactive runs without it fall back to a random secret that does not survive restarts |
 | `DISABLE_CSRF` | `false` | When `true`, allows WebSocket connections from any `localhost`/`127.0.0.1` port (dev mode) |
 | `WS_ORIGINS` | *(empty)* | Comma-separated list of additional allowed WebSocket origins (e.g. `http://myhost:3000,https://myhost`) |
 | `HTTP_JSON_LIMIT` | `5mb` | Max body size for JSON HTTP requests |

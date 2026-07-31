@@ -8,6 +8,8 @@ import express from 'express';
 import helmet from 'helmet';
 import { WebSocketServer } from 'ws';
 import { loadConfig } from './config.js';
+import { loadEnvFile } from './envFile.js';
+import { canPromptInteractively, promptAndPersistSecret } from './secretPrompt.js';
 import { initDatabase } from './db/index.js';
 import { ProfiledClient } from './db/profiler.js';
 import { EventBus } from './bus/EventBus.js';
@@ -109,19 +111,27 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const config = loadConfig();
 const log = getLogger('main');
+
+// Load .env (real environment variables always win), then bootstrap
+// TAMARI_SECRET: on the first interactive run the user chooses a password
+// and it is persisted to .env (see secretPrompt.ts).
+loadEnvFile(join(process.cwd(), '.env'));
+if (!process.env.TAMARI_SECRET && !process.env.SILLYTAVERN_SECRET && canPromptInteractively()) {
+  await promptAndPersistSecret();
+}
+
+const config = loadConfig();
 
 // Authentication service
 const auth = new AuthService(config.secret);
 
-// Log the secret (masked) so the user can copy it
-if (!process.env.TAMARI_SECRET) {
-  const masked = config.secret.length > 8
-    ? `${config.secret.slice(0, 4)}...${config.secret.slice(-4)}`
-    : '****';
-  log.warn(`No TAMARI_SECRET set. Generated random secret: ${masked}`);
-  log.warn('Set TAMARI_SECRET environment variable to persist the secret across restarts.');
+// Without a persistent secret (non-interactive run with nothing set), bearer
+// tokens and vault-encrypted API keys die with the process — say so honestly.
+if (!process.env.TAMARI_SECRET && !process.env.SILLYTAVERN_SECRET) {
+  log.warn('No TAMARI_SECRET set and no terminal to prompt for one — using a random secret.');
+  log.warn('Bearer tokens and vault-encrypted API keys will NOT survive a restart.');
+  log.warn('Set TAMARI_SECRET in your environment or .env to fix this.');
 }
 
 // Ensure data directory exists
