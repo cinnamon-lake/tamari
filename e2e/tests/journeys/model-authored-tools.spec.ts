@@ -16,6 +16,11 @@
 import { journeyTest as test, expect } from '../../fixtures/journey.js';
 import { enableBuiltinToolset, deleteToolset } from '../../helpers/tools.js';
 
+// Ports follow the harness (E2E_PORT / MOCK_LLM_PORT) so the journey also runs
+// against non-default targets — e.g. the Docker container (playwright.docker.config.ts).
+const APP_PORT = Number(process.env.E2E_PORT ?? 8765);
+const MOCK_PORT = Number(process.env.MOCK_LLM_PORT ?? 9876);
+
 // Compact Lua template (whitespace-separated statements, no nested-brace
 // imbalance so the mock's tool: parser can split args correctly).
 const DOCS_LUA =
@@ -25,10 +30,10 @@ const DOCS_LUA =
   'description = "Downloads the Sacred Scrolls of Mocktopia, saves them as an attachment, and prints an excerpt re-read from the attachment.", ' +
   'parameters = { type = "object", properties = {} } } } } end ' +
   'function Tool.execute(args, context, toolName) ' +
-  'local res = fetch("http://127.0.0.1:9876/sacred-scrolls.md"):await() ' +
+  `local res = fetch("http://127.0.0.1:${MOCK_PORT}/sacred-scrolls.md"):await() ` +
   'if res.status ~= 200 then return "Error: fetch failed with status " .. tostring(res.status) end ' +
   'local att = attachments.create(base64.encode(res.body), "text/markdown"):await() ' +
-  'local back = fetch("http://127.0.0.1:8765/api/attachments/" .. att.id):await() ' +
+  `local back = fetch("http://127.0.0.1:${APP_PORT}/api/attachments/" .. att.id):await() ` +
   'local excerpt = string.sub(back.body or "", 1, 400) ' +
   'return "Downloaded " .. tostring(#res.body) .. " chars. Saved as {{attachment::" .. att.id .. "}} at " .. att.url .. ". ' +
   'Excerpt re-read from the attachment: " .. excerpt ' +
@@ -98,7 +103,7 @@ test.describe('Model-Authored Tools Journey', () => {
       });
 
       await test.step('the attachment bytes are independently verifiable over HTTP', async () => {
-        const response = await page.request.get(`http://127.0.0.1:8765/api/attachments/${attachmentId}`);
+        const response = await page.request.get(`http://127.0.0.1:${APP_PORT}/api/attachments/${attachmentId}`);
         expect(response.status()).toBe(200);
         expect(response.headers()['content-type']).toContain('text/markdown');
         const body = await response.text();
