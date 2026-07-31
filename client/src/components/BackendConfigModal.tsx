@@ -602,7 +602,7 @@ export function BackendConfigModal(props: { onClose: () => void }) {
 
   return (
     <div class="modal-overlay" onClick={close}>
-      <div class="modal settings-modal" role="dialog" aria-modal="true" aria-label={t('backendConfig.ariaLabel')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
+      <div class="modal settings-modal" role="dialog" aria-modal="true" aria-label={t('backendConfig.ariaLabel')} data-form-loaded={formLoaded() ? 'true' : 'false'} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
         <h2 class="modal-title">{t('backendConfig.title')} {saving() && <span class="text-sm text-muted">{t('backendConfig.saving')}</span>}</h2>
 
         {/* Config Selector */}

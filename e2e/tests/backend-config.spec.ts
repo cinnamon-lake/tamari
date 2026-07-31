@@ -23,10 +23,12 @@ test.describe('Backend Config', () => {
     await expect(modal).toBeVisible();
     await expect(modal.locator('.modal-title')).toContainText('Backend Config');
 
-    // The name input fills in when activeBackendConfig lands — on slow runners
-    // the modal opens before it, and driving an unloaded form either drops the
-    // edit or (pre-formLoaded-guard) saved defaults over the real config.
-    await expect(modal.locator('input.input').first()).not.toHaveValue('');
+    // The name input fills from the summary list (arrives early) — it does NOT
+    // prove the full config loaded. Wait for the modal's own form-loaded flag:
+    // filling before then races the first backendConfig.snapshot, which
+    // legitimately reloads the form (an edit against unloaded defaults can't
+    // merge) and resets the field.
+    await expect(modal).toHaveAttribute('data-form-loaded', 'true');
 
     await expectNoAxeViolations(page);
 
@@ -54,9 +56,9 @@ test.describe('Backend Config', () => {
 
     const modal = page.locator('.modal.settings-modal').filter({ hasText: 'Backend Config' });
     await expect(modal).toBeVisible();
-    // Wait for the form to load the config (see the first test's note) —
-    // filling before then races the first backendConfig.snapshot.
-    await expect(modal.locator('input.input').first()).not.toHaveValue('');
+    // Wait for the modal's own form-loaded flag (see the first test's note) —
+    // a non-empty name field does not mean the full config has loaded.
+    await expect(modal).toHaveAttribute('data-form-loaded', 'true');
 
     // Drive the temperature sampler through the UI only.
     const temp = modal.locator('#sampler-temperature');
