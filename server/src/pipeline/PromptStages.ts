@@ -150,19 +150,6 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
         if (opts.prompts?.jailbreakOverride) {
           ctx.promptManager.applyOverride('jailbreak', opts.prompts.jailbreakOverride);
         }
-
-        // Inject impersonation prompt if provided
-        if (opts.impersonatePrompt) {
-          ctx.promptManager.injectPrompt({
-            identifier: 'impersonate',
-            name: 'Impersonate',
-            content: opts.impersonatePrompt,
-            role: 'system',
-            enabled: true,
-            systemPrompt: true,
-            marker: false,
-          });
-        }
       },
     },
     {
@@ -265,7 +252,6 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
           maxContext: opts.maxContext,
           maxResponseTokens: opts.maxResponseTokens,
           model: opts.model,
-          impersonateMode: !!opts.impersonatePrompt,
           reasoningAddToPrompts: opts.reasoningAddToPrompts,
           supportsImages: opts.media?.supportsImages ?? true,
           supportsAudio: opts.media?.supportsAudio ?? true,

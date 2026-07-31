@@ -22,8 +22,6 @@ export interface RenderOptions {
   maxContext: number;
   maxResponseTokens: number;
   model?: string;
-  /** When true, the model should generate as the user (impersonation) */
-  impersonateMode?: boolean;
   /** Whether to include past reasoning blocks in prompt context */
   reasoningAddToPrompts?: boolean;
   /** Media types supported by the active backend */
@@ -71,6 +69,31 @@ export type RenderResult = ChatRenderResult | TextRenderResult;
  */
 export interface PromptRenderer {
   render(collection: PromptCollection, opts: RenderOptions): RenderResult;
+}
+
+/**
+ * Token-budget authority for the whole pipeline. The renderers fit content
+ * into `promptBudgetTotal`, and the World Info scan claims at most
+ * `worldInfoBudget` of it — both derived here so the numbers can't drift
+ * apart (previously WI took 25% of maxContext while renderers budgeted
+ * maxContext - maxResponseTokens, double-counting the completion reserve).
+ */
+
+/** Per-message framing overhead (role tokens etc.) charged on top of content. */
+export const MESSAGE_OVERHEAD_TOKENS = 4;
+/** Fudge reserve for wrapper tokens the counter can't see (template frame). */
+export const FRAME_RESERVE_TOKENS = 3;
+/** Fraction of the usable prompt budget World Info may claim. */
+export const WI_BUDGET_FRACTION = 0.25;
+
+/** Usable prompt budget: context window minus the reserved completion. */
+export function promptBudgetTotal(maxContext: number, maxResponseTokens: number): number {
+  return maxContext - maxResponseTokens;
+}
+
+/** World Info's share of the usable prompt budget. */
+export function worldInfoBudget(maxContext: number, maxResponseTokens: number): number {
+  return Math.round(promptBudgetTotal(maxContext, maxResponseTokens) * WI_BUDGET_FRACTION);
 }
 
 /**

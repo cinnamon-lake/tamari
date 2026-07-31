@@ -10,7 +10,7 @@ import { str } from '../../lib/coerce.js';
 import type { PipelineMessage, ContentPart, TextPart } from '../../backends/BackendAdapter.js';
 import type { PromptDef } from '../PromptManager.js';
 import type { RenderOptions, PromptCollection, ChatRenderResult, PromptRenderer } from './Renderer.js';
-import { PROMPT_SEPARATOR, TokenBudget } from './Renderer.js';
+import { FRAME_RESERVE_TOKENS, MESSAGE_OVERHEAD_TOKENS, PROMPT_SEPARATOR, TokenBudget, promptBudgetTotal } from './Renderer.js';
 import { getLogger } from '../../lib/logger.js';
 
 const rendererLog = getLogger('ChatCompletionRenderer');
@@ -21,10 +21,10 @@ export class ChatCompletionRenderer implements PromptRenderer {
       { chatHistoryLength: opts.chatHistory.length, chatHistoryIds: opts.chatHistory.map((m) => m.id), chatHistoryRoles: opts.chatHistory.map((m) => m.role), maxContext: opts.maxContext, maxResponseTokens: opts.maxResponseTokens },
       'render() called',
     );
-    const budget = new TokenBudget(opts.maxContext - opts.maxResponseTokens);
+    const budget = new TokenBudget(promptBudgetTotal(opts.maxContext, opts.maxResponseTokens));
 
     // Reserve a tiny amount for the assistant reply priming
-    budget.reserve(3);
+    budget.reserve(FRAME_RESERVE_TOKENS);
 
     // First pass: resolve content for marker prompts from runtime data
     const resolvedPrompts = collection.prompts.map((p) => this.resolveMarkerContent(p, collection.markers));
@@ -94,7 +94,7 @@ export class ChatCompletionRenderer implements PromptRenderer {
           if (!prompt) continue;
           const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
           if (!resolvedContent.trim()) continue;
-          const tokens = opts.tokenCounter.count(resolvedContent) + 4;
+          const tokens = opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS;
           if (!budget.canAfford(tokens)) break;
           budget.spend(tokens);
           historyMessages.unshift({
@@ -106,8 +106,8 @@ export class ChatCompletionRenderer implements PromptRenderer {
 
       const messageText = getMessageText(msg.extra.parts);
       const resolvedText = opts.macroResolver.resolve(messageText, opts.macroCtx);
-      // Approximate per-message cost: content + ~4 tokens overhead
-      const tokens = opts.tokenCounter.count(resolvedText) + 4;
+      // Approximate per-message cost: content + framing overhead
+      const tokens = opts.tokenCounter.count(resolvedText) + MESSAGE_OVERHEAD_TOKENS;
       if (!budget.canAfford(tokens)) break;
       budget.spend(tokens);
 
@@ -225,7 +225,7 @@ export class ChatCompletionRenderer implements PromptRenderer {
           if (!prompt) continue;
           const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
           if (!resolvedContent.trim()) continue;
-          const tokens = opts.tokenCounter.count(resolvedContent) + 4;
+          const tokens = opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS;
           if (!budget.canAfford(tokens)) break;
           budget.spend(tokens);
           historyMessages.unshift({
@@ -277,7 +277,7 @@ export class ChatCompletionRenderer implements PromptRenderer {
 
   /** Render relative-position prompts in order (dialogueExamples expand into
       their parsed example messages; empty markers are skipped; budget checks
-      apply per message with the ~4-token overhead fudge). */
+      apply per message with the MESSAGE_OVERHEAD_TOKENS framing fudge). */
   private renderRelativePrompts(
     prompts: PromptDef[],
     collection: PromptCollection,
@@ -292,8 +292,8 @@ export class ChatCompletionRenderer implements PromptRenderer {
           const resolvedContent = opts.macroResolver.resolve(ex.content, opts.macroCtx);
           if (!resolvedContent.trim()) continue;
 
-          // Approximate per-message cost: content + ~4 tokens overhead
-          const tokens = opts.tokenCounter.count(resolvedContent) + 4;
+          // Approximate per-message cost: content + framing overhead
+          const tokens = opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS;
           if (!budget.canAfford(tokens)) break;
           budget.spend(tokens);
 
@@ -310,8 +310,8 @@ export class ChatCompletionRenderer implements PromptRenderer {
       const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
       if (!resolvedContent.trim()) continue;
 
-      // Approximate per-message cost: content + ~4 tokens overhead
-      const tokens = opts.tokenCounter.count(resolvedContent) + 4;
+      // Approximate per-message cost: content + framing overhead
+      const tokens = opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS;
       if (!budget.canAfford(tokens)) break;
       budget.spend(tokens);
 

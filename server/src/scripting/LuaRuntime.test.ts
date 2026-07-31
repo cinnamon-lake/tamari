@@ -41,6 +41,43 @@ describe('LuaRuntime timeout', () => {
   });
 });
 
+describe('LuaRuntime memory limit', () => {
+  it('fails a memory bomb with "not enough memory" instead of crashing', async () => {
+    const rt = new LuaRuntime();
+    // 1 MB cap — the loop below would otherwise grow the heap unbounded.
+    const { lua, cleanup } = await rt.createState({ maxMemoryBytes: 1024 * 1024 }, 5000);
+    try {
+      await expect(
+        lua.doString(`
+          local chunks = {}
+          local i = 0
+          while true do
+            i = i + 1
+            chunks[i] = string.rep('x', 65536)
+          end
+        `),
+      ).rejects.toThrow(/memory/i);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('lets scripts under the cap run normally', async () => {
+    const rt = new LuaRuntime();
+    const { lua, cleanup } = await rt.createState({ maxMemoryBytes: 1024 * 1024 }, 5000);
+    try {
+      const result = await lua.doString(`
+        local t = {}
+        for i = 1, 100 do t[i] = string.rep('y', 256) end
+        return #table.concat(t)
+      `);
+      expect(result).toBe(100 * 256);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
 describe('json.parse_result', () => {
   async function evalLua(source: string): Promise<unknown> {
     const rt = new LuaRuntime();

@@ -8,7 +8,7 @@
 
 import { getMessageText } from '@tamari/types';
 import type { RenderOptions, PromptCollection, TextRenderResult, PromptRenderer } from './Renderer.js';
-import { TokenBudget } from './Renderer.js';
+import { FRAME_RESERVE_TOKENS, TokenBudget, promptBudgetTotal } from './Renderer.js';
 import type { InstructTemplate } from './InstructTemplate.js';
 import type { ContentPart } from '../../backends/BackendAdapter.js';
 import { reconstructWithReasoning } from '../../services/ReasoningEngine.js';
@@ -25,12 +25,12 @@ export class TextCompletionRenderer implements PromptRenderer {
   constructor(private template: InstructTemplate) {}
 
   render(collection: PromptCollection, opts: RenderOptions): TextRenderResult {
-    const budget = new TokenBudget(opts.maxContext - opts.maxResponseTokens);
+    const budget = new TokenBudget(promptBudgetTotal(opts.maxContext, opts.maxResponseTokens));
     let promptTokens = 0;
 
     // Reserve space for assistant reply
-    budget.reserve(3);
-    promptTokens += 3;
+    budget.reserve(FRAME_RESERVE_TOKENS);
+    promptTokens += FRAME_RESERVE_TOKENS;
 
     const parts: string[] = [];
 
@@ -151,11 +151,8 @@ export class TextCompletionRenderer implements PromptRenderer {
     renderPrompts(afterPrompts);
 
     // Add response prefix (the "prompt" for the model to continue)
-    const responsePrefix = opts.impersonateMode
-      ? (this.template.userPrefix ?? this.template.responsePrefix)
-      : this.template.responsePrefix;
-    if (responsePrefix) {
-      parts.push(responsePrefix);
+    if (this.template.responsePrefix) {
+      parts.push(this.template.responsePrefix);
     }
 
     // Append prefill content raw (unwrapped) so the model continues from it

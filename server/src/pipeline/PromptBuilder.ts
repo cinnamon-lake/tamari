@@ -18,16 +18,13 @@ import { MacroResolver, type MacroContext } from './MacroResolver.js';
 import { applyRules, filterRulesByRole } from '../services/RegexEngine.js';
 import { PromptManager, type PromptDef, type PromptOrderEntry } from './PromptManager.js';
 import { ChatCompletionRenderer } from './renderers/ChatCompletionRenderer.js';
-import { PROMPT_SEPARATOR } from './renderers/Renderer.js';
+import { PROMPT_SEPARATOR, worldInfoBudget } from './renderers/Renderer.js';
 import type { InstructTemplate } from './renderers/InstructTemplate.js';
 import type { RegexRule } from '@tamari/types';
 import type { ITokenCounter } from '../tokenizers/TokenCounter.js';
 import type { BackendToolDefinition } from '../services/ToolRegistry.js';
 import { ExampleBuilder } from './ExampleBuilder.js';
 import { createDefaultStages, PromptContext, type PromptStage } from './PromptStages.js';
-
-/** Fraction of the total context window reserved for World Info injections. */
-const WI_CONTEXT_BUDGET_FRACTION = 0.25;
 
 /** Author's Note configuration. */
 export interface AuthorsNoteConfig {
@@ -54,8 +51,6 @@ export interface BuildOptions {
   instructTemplate?: string;
   /** User-defined instruct templates (keyed by template ID) */
   customInstructTemplates?: Record<string, InstructTemplate>;
-  /** Impersonation system prompt (injected when generating as the user) */
-  impersonatePrompt?: string;
   /** Custom stopping strings for this generation */
   stopStrings?: string[];
   /** Whether to include reasoning blocks in prompt context */
@@ -193,7 +188,9 @@ export class PromptBuilder {
       return result;
     }
 
-    const wiBudget = Math.round(opts.maxContext * WI_CONTEXT_BUDGET_FRACTION);
+    // WI claims at most its share of the usable prompt budget (Renderer.ts is
+    // the single authority — the completion reserve is already subtracted).
+    const wiBudget = worldInfoBudget(opts.maxContext, opts.maxResponseTokens);
     // Resolve macros on a COPY of chat history so WI keyword matching works
     // against expanded names ({{char}} → Seraphina) without mutating originals
     const resolvedHistoryForWI = visibleHistory.map((msg) => ({

@@ -10,6 +10,12 @@ import { luaFetch } from './LuaFetch.js';
 import { vfsRequirePrelude } from './LuaVfs.js';
 const MAX_EXECUTION_MS = 5000;
 
+/** Default Lua heap cap per execution — wasmoon enforces it in the allocator
+    (traceAllocations), so a memory bomb fails with "not enough memory" instead
+    of growing WASM linear memory until the tab/process dies. 64 MB is generous
+    for card scripts while staying far below a fatal WASM allocation. */
+const DEFAULT_MAX_MEMORY_BYTES = 64 * 1024 * 1024;
+
 /**
  * VM-level sandbox flags — the only options `LuaRuntime.createState` reads.
  * They gate Lua stdlibs and host functions inside the VM itself.
@@ -20,6 +26,9 @@ export interface LuaVmSandboxOptions {
   allowDebug?: boolean;
   allowRequire?: boolean;
   allowNet?: boolean;
+  /** Lua heap cap in bytes (default DEFAULT_MAX_MEMORY_BYTES). Tests can pass
+      a tiny value to exercise the limit without allocating 64 MB. */
+  maxMemoryBytes?: number;
   /** Card-scoped module map for the sandboxed VFS `require` (LuaVfs.ts).
       When present, `require` resolves ONLY against these sources. */
   vfsFiles?: Record<string, string>;
@@ -48,10 +57,14 @@ export class LuaRuntime {
   }
 
   async createState(opts: LuaVmSandboxOptions = {}, timeoutMs: number = MAX_EXECUTION_MS): Promise<{ lua: LuaEngine; cleanup: () => void }> {
+    // traceAllocations routes the Lua state through a JS allocator wrapper so
+    // setMemoryMax can actually reject allocations (see wasmoon Global).
     const lua = await this.factory.createEngine({
       enableProxy: false,
       injectObjects: true,
+      traceAllocations: true,
     });
+    lua.global.setMemoryMax(opts.maxMemoryBytes ?? DEFAULT_MAX_MEMORY_BYTES);
 
     // Enforce execution timeout at the Lua VM level via lua_sethook.
     // wasmoon's setTimeout takes an ABSOLUTE epoch-ms deadline, not a duration —
