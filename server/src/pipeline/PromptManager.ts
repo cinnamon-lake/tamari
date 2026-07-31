@@ -200,7 +200,7 @@ export class PromptManager {
     for (const entry of this.order) {
       const prompt = this.prompts.get(entry.identifier);
       if (!prompt) continue;
-      if (!entry.enabled && prompt.identifier !== 'main') continue;
+      if (!entry.enabled) continue;
       result.push({ ...prompt, enabled: entry.enabled });
     }
     return result;

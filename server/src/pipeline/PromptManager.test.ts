@@ -17,12 +17,16 @@ describe('PromptManager', () => {
     expect(ordered[1]!.identifier).toBe('worldInfoBefore');
   });
 
-  it('skips disabled prompts except main', () => {
-    const order = DEFAULT_ORDER.map((o) => (o.identifier === 'nsfw' ? { ...o, enabled: false } : { ...o }));
+  it('skips disabled prompts, main included — the enable checkbox is honored', () => {
+    const order = DEFAULT_ORDER.map((o) =>
+      o.identifier === 'nsfw' || o.identifier === 'main' ? { ...o, enabled: false } : { ...o },
+    );
     const pm = new PromptManager(DEFAULT_PROMPTS, order);
     const ordered = pm.getOrderedPrompts();
     expect(ordered.find((p) => p.identifier === 'nsfw')).toBeUndefined();
-    expect(ordered.find((p) => p.identifier === 'main')).toBeDefined();
+    // Disabling Main Prompt in the preset editor really excludes it (the old
+    // always-on special case made the checkbox a no-op).
+    expect(ordered.find((p) => p.identifier === 'main')).toBeUndefined();
   });
 
   it('applies overrides', () => {
