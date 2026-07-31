@@ -185,7 +185,7 @@ The Lua API now covers the vast majority of legacy slash commands. Implemented f
 
 | Feature | Priority | Notes |
 |---|---|---|
-| **Image metadata indexing** | 🟢 | SHA-256 hash, aspect ratio, animated detection, dominant color via Jimp. Old `src/endpoints/image-metadata.js`. Centralized index with virtual folders. Distinct from avatar thumbnails, which are already implemented. |
+| **Image metadata indexing** | 🟢 | SHA-256 hash, aspect ratio, animated detection, dominant color via sharp. Old `src/endpoints/image-metadata.js`. Centralized index with virtual folders. Distinct from avatar thumbnails, which are already implemented. |
 | **Image swipe / gallery** | 🟢 | Navigate between multiple media attachments in a message. |
 | **Content seeding / seed manager** | 🟢 | Seed default content (characters, presets, themes, sprites, backgrounds, workflows, error pages, stylesheets, scaffolds) from `default/content/` and `default/scaffold/` on first run. Old `src/endpoints/content-manager.js`. |
 
