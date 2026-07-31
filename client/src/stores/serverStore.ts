@@ -151,6 +151,10 @@ bus.on('client.assigned', (msg) => {
 bus.on('snapshot', (msg) => {
   const chats = msg.state.chats;
   const settings = msg.state.settings;
+  // Test/debug observability: marks that the initial server state has been
+  // applied — e2e waits on this after reload before opening modals, whose
+  // form state initializes from state.settings.
+  document.body.dataset['snapshotApplied'] = 'true';
   const autoLoad = settings['autoLoadLastChat'] === true;
   const lastChatId = typeof settings['lastChatId'] === 'string' ? settings['lastChatId'] : '';
   if (autoLoad && lastChatId && chats.some((c) => c.id === lastChatId)) {

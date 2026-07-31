@@ -23,6 +23,11 @@ test.describe('Backend Config', () => {
     await expect(modal).toBeVisible();
     await expect(modal.locator('.modal-title')).toContainText('Backend Config');
 
+    // The name input fills in when activeBackendConfig lands — on slow runners
+    // the modal opens before it, and driving an unloaded form either drops the
+    // edit or (pre-formLoaded-guard) saved defaults over the real config.
+    await expect(modal.locator('input.input').first()).not.toHaveValue('');
+
     await expectNoAxeViolations(page);
 
     // Change the config name (first text input under the Edit section)
@@ -49,6 +54,9 @@ test.describe('Backend Config', () => {
 
     const modal = page.locator('.modal.settings-modal').filter({ hasText: 'Backend Config' });
     await expect(modal).toBeVisible();
+    // Wait for the form to load the config (see the first test's note) —
+    // filling before then races the first backendConfig.snapshot.
+    await expect(modal.locator('input.input').first()).not.toHaveValue('');
 
     // Drive the temperature sampler through the UI only.
     const temp = modal.locator('#sampler-temperature');

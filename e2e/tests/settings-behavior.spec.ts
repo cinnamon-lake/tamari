@@ -258,6 +258,10 @@ test.describe('Settings — Behavior', () => {
 
     await page.reload();
     await page.locator('.app-shell').waitFor({ state: 'visible', timeout: 10000 });
+    // The modal's signals initialize from state.settings at open time — wait
+    // for the post-reload snapshot or the radio renders defaults (slow-runner
+    // read race, seen on Windows CI).
+    await app.waitForInitialSnapshot();
     const modal2 = await app.openSettings();
     await expect(modal2.locator('input[name="whitespaceMode"][value="full"]')).toBeChecked();
 
@@ -267,6 +271,7 @@ test.describe('Settings — Behavior', () => {
 
     await page.reload();
     await page.locator('.app-shell').waitFor({ state: 'visible', timeout: 10000 });
+    await app.waitForInitialSnapshot();
     const modal3 = await app.openSettings();
     await expect(modal3.locator('input[name="whitespaceMode"][value="essential"]')).toBeChecked();
 

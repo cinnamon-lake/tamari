@@ -151,6 +151,10 @@ export function BackendConfigModal(props: { onClose: () => void }) {
   const [supportsVideo, setSupportsVideo] = createSignal(activeBackendConfig()?.supportsVideo ?? true);
   const [saving, setSaving] = createSignal(false);
   const [dirty, setDirty] = createSignal(false);
+  /** True once loadConfigData has run at least once this session. A whole-form
+      save before then would write defaults over the real config — saveConfig
+      refuses until the form has seen server values. */
+  const [formLoaded, setFormLoaded] = createSignal(false);
   const [loadedConfigId, setLoadedConfigId] = createSignal<string | null>(null);
 
   // Advanced sampler knobs (provider-gated) — stored in providerParams.
@@ -362,20 +366,22 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     }
     setAdvancedParams(seeded);
     setSamplerDisabled({ ...existingDisabled, ...disabled });
+    setFormLoaded(true);
   };
 
   // Refresh editor fields from the active config whenever it changes and the
   // user is not mid-edit: config switches, the first backendConfig.snapshot
   // of the session, and save round-trips from OTHER clients. The dirty()
-  // guard is absolute — a first snapshot arriving after the user has already
-  // typed must not clobber their input either. Own save round-trips are
-  // skipped: the store applied the canonical config, but the form already
-  // holds these values — reloading would only churn the DOM (and rebuild the
-  // advanced-params objects, forcing a re-render of the whole knobs section).
+  // guard applies only AFTER the first load — a first snapshot always loads,
+  // even if the user already typed: an edit made against unloaded defaults
+  // cannot be merged into a whole-form save (every untouched field would be
+  // a default), so showing the real values is the only safe move. Own save
+  // round-trips are skipped: the store applied the canonical config, but the
+  // form already holds these values — reloading would only churn the DOM.
   createEffect(() => {
     const config = state.activeBackendConfig;
     if (!config) return;
-    if (dirty()) return;
+    if (formLoaded() && dirty()) return;
     if (loadedConfigId() === config.id && state.activeBackendConfigOrigin === state.clientId) return;
     loadConfigData(config);
     setLoadedConfigId(config.id);
@@ -424,6 +430,9 @@ export function BackendConfigModal(props: { onClose: () => void }) {
   };
 
   const saveConfig = () => {
+    // Never save an unloaded form: the whole-form patch would write defaults
+    // over every field the user didn't touch.
+    if (!formLoaded()) return;
     const config = activeBackendConfig();
     // Fall back to the selected id when the backendConfig.snapshot for this
     // session hasn't landed yet — otherwise early edits are silently dropped.

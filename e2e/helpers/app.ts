@@ -388,6 +388,21 @@ export class App {
 
   // ── settings ────────────────────────────────────────────────────────────
 
+  /**
+   * Wait until the client's initial server snapshot has been applied
+   * (data-snapshot-applied on <body>, set by the serverStore snapshot
+   * handler). Required after page.reload() before opening modals — their
+   * form state initializes from state.settings at open time, and on slow
+   * runners the snapshot lands after the modal would otherwise open.
+   */
+  async waitForInitialSnapshot(timeout = 15000): Promise<void> {
+    await this.page.waitForFunction(
+      () => document.body.dataset['snapshotApplied'] === 'true',
+      undefined,
+      { timeout },
+    );
+  }
+
   async openSettings(): Promise<Locator> {
     await this.page.locator('button.settings-btn:has-text("Settings")').click();
     const modal = this.page.locator('.settings-modal');

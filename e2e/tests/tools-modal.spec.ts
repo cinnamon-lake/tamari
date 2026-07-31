@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
+import { App } from '../helpers/app.js';
 import type { Locator, Page } from '@playwright/test';
 
 test.describe.configure({ mode: 'serial' });
@@ -275,6 +276,9 @@ test.describe('Tools Modal', () => {
     // updates on snapshot, not on toolTemplate.* broadcasts).
     await page.reload();
     await page.locator('.app-shell').waitFor({ state: 'visible', timeout: 10000 });
+    // Same slow-runner read race as the settings modal: the tools modal reads
+    // state.tools at open — wait for the post-reload snapshot.
+    await new App(page).waitForInitialSnapshot();
 
     const modal = await openToolsModal(page);
     await modal.locator('button:has-text("New Toolset")').click();
