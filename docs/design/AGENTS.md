@@ -371,6 +371,8 @@ The built-in `scene` template (`server/src/services/templates/SceneTemplate.ts`)
 
 ### Lua Sandbox Surfaces
 
+Every `LuaRuntime` state runs under two hard caps: an execution deadline (wasmoon's `setTimeout`, absolute epoch-ms) and a **64 MB Lua heap cap** (`traceAllocations` + `setMemoryMax` — the allocator rejects growth past the cap, so a memory bomb fails with "not enough memory" instead of ballooning WASM linear memory; `maxMemoryBytes` overrides it for tests).
+
 Three distinct Lua surfaces exist, with three different `st` exposures: **quick replies** get the full `st` API; **Lua tool templates** get the curated subset (`createToolStApi` — no chat actions or lifecycle); **backend scripts** (registry custom backends and card-coupled `backend_logic`, both `LuaBackendAdapter`) get **no `st` at all** — only `backends` (credential-safe delegation), `json`, `base64`, `fetch`, and the `state` snapshot channel.
 
 Backend scripts additionally get a **sandboxed `require`** (`server/src/scripting/LuaVfs.ts`): a card carries a virtual filesystem at `extensions.contextualBackend.files` (path → Lua source, edited as the workbench's `/characters/<id>/backend_logic/` directory), and `require` resolves against it only — per-state module cache, circular/missing modules raise named errors, the real filesystem is never touched. The entry point stays `luaSource` (`backend_logic/main.lua`); the legacy `backend_logic.lua` workbench path aliases it. Type A registry backends stay single-blob by design.

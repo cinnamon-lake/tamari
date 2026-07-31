@@ -248,5 +248,5 @@ Still open (the genuinely unimplemented parts):
 Resolved while implementing (kept for the record):
 
 - ~~**Display-rule storage**~~ — settled by not adding a store: rules live where plain regexes already lived (global `settings.regexRules`, character-scoped `character.extensions.regexScripts`); named rule lists never materialized.
-- ~~**Lua timeout/memory limits**~~ — settled: 10 min for `generate()`, 10 s for `list_models()`, 5 s for `replaceLua`; wasmoon deadline aborts are mapped to clean "script timed out" errors (`isLuaTimeoutError`). In-VM abort still relies on the timeout rather than `ctx.signal`.
+- ~~**Lua timeout/memory limits**~~ — settled: 10 min for `generate()`, 10 s for `list_models()`, 5 s for `replaceLua`; wasmoon deadline aborts are mapped to clean "script timed out" errors (`isLuaTimeoutError`). Memory: a 64 MB Lua heap cap per state (`traceAllocations` + `setMemoryMax`) turns memory bombs into catchable "not enough memory" errors. In-VM abort still relies on the timeout rather than `ctx.signal`.
 - ~~**Dry-run surface**~~ — settled: `backends/customBackendDryRun.ts` runs a script against a recording delegate and returns text/state/delegations; exposed as the Workbench `run test_backend_logic` verb and the `BackendDryRunPanel` UI (custom-backends modal + character editor).
