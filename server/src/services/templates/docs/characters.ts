@@ -25,7 +25,7 @@ A character is a card: named text fields, plus optional avatar, assets, characte
 Feature data attached to a card is edited through dedicated Workbench fs paths (topic \`workbench\`), never through \`meta.json\`:
 
 - Character-scoped regex rules — \`/characters/<id>/regex/\` (see topic \`regexes\`).
-- Card-coupled Lua backend — \`/characters/<id>/backend_logic.lua\`: a script that wraps the user's active adapter (see topic \`custom_backends\`). Workbench writes author the script only; the active flag is not writable through the fs, so imported cards never activate silently.
+- Card-coupled Lua backend — \`/characters/<id>/backend_logic/\` (\`main.lua\` + \`require\`d module files; \`backend_logic.lua\` aliases \`main.lua\`): a script that wraps the user's active adapter (see topic \`custom_backends\`). Workbench writes author the script only; the active flag is not writable through the fs, so imported cards never activate silently.
 - RisuAI modules — \`/characters/<id>/modules/\` (read-only). **Effectively inert:** nothing in v2 executes module triggers, regexes, or lore; the raw module JSON is preserved purely as porting source material.
 - Default \`{{getvar}}\` variables — imported cards may carry variables that seed when greetings materialize; not editable via the Workbench fs.
 

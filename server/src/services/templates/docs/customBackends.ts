@@ -6,11 +6,11 @@ A custom backend is a Lua script that owns the prompt. It runs instead of a buil
 ## Two kinds
 
 - **Type A — registry (global).** Named scripts in the \`custom_backends\` registry, selected on a backend config via \`backendProvider: "custom"\` + \`providerParams.customBackendId\`, with \`providerParams.delegateConfigId\` as the default delegate. Author/test via the Workbench fs: \`/custom-backends/<id>/source.lua\` (+ \`meta.json\`) and \`run {"verb":"test_custom_backend",...}\` (topic \`workbench\`).
-- **Type B — contextual (card-coupled).** A Lua script stored on the card; travels with card export. Wraps the user's active adapter as its default delegate. Ignored when the active config is itself \`custom\` (explicit Type A wins). Activation is opt-in — never activate silently; the fs authors the script only, it cannot flip the active flag. Author/test via the Workbench fs: \`/characters/<id>/backend_logic.lua\` and \`run {"verb":"test_backend_logic",...}\` (topic \`workbench\`).
+- **Type B — contextual (card-coupled).** A Lua script stored on the card; travels with card export. Wraps the user's active adapter as its default delegate. Ignored when the active config is itself \`custom\` (explicit Type A wins). Activation is opt-in — never activate silently; the fs authors the script only, it cannot flip the active flag. Lives in the Workbench fs as the \`/characters/<id>/backend_logic/\` directory — \`main.lua\` entry point plus module files behind a sandboxed \`require\` (see Modules); \`backend_logic.lua\` is a legacy alias for \`main.lua\`. Author/test via the fs and \`run {"verb":"test_backend_logic",...}\` (topic \`workbench\`).
 
 ## Script contract
 
-The script defines \`generate(prompt, ctx)\` and optionally \`list_models()\`. \`prompt\` is the fully-built prompt (a mutable copy: \`prompt.messages\`, \`prompt.tools\`, …); \`ctx\` is \`{ chatId, characterId, generationType }\` where generationType is \`'normal' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw'\`. Available globals: \`prompt\`, \`ctx\`, \`backends\`, \`json\`, \`base64\`, \`fetch\`. The \`st\` API is NOT injected.
+The script defines \`generate(prompt, ctx)\` and optionally \`list_models()\`. \`prompt\` is the fully-built prompt (a mutable copy: \`prompt.messages\`, \`prompt.tools\`, …); \`ctx\` is \`{ chatId, characterId, generationType }\` where generationType is \`'normal' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw'\`. Available globals: \`prompt\`, \`ctx\`, \`backends\`, \`json\`, \`base64\`, \`fetch\`; Type B scripts also get a sandboxed \`require\` (see Modules). The \`st\` API is NOT injected. \`prompt.response_format\` carries the caller's structured-output request, if any (see Structured output).
 
 A complete example — a high-card table where **Lua owns the deck and the score** (hidden, branch-aware state) and the delegate model only writes table-talk flavored by how badly the player is losing:
 
@@ -175,6 +175,48 @@ end
 
 Repeated siblings collapse to last-wins in this recipe; match them directly if you need lists. Recognize your own root element, and check \`ctx.generationType\` — a \`regenerate\`/\`continue\` must not re-fire a submitted action. On a plain backend the block reaches the model as-is (models parse simple XML fine), so forms degrade gracefully.
 
+## Modules — sandboxed \`require\` (Type B)
+
+A card carries a virtual filesystem: path → Lua source, edited as the \`/characters/<id>/backend_logic/\` directory and traveling with card export. \`require('lib/utils')\` resolves ONLY against that map — the real filesystem is never touched, and Type A registry scripts stay single-blob by design.
+
+- Paths are relative and slash-separated; \`.lua\` is appended when omitted (\`require('lib/utils')\` → \`lib/utils.lua\`). Segments: letters, digits, \`_\`, \`-\` only.
+- A module executes once per turn (fresh Lua state per turn) and its result is cached like \`package.loaded\` — return a table, e.g. \`local M = {} ... return M\`.
+- Missing modules, circular requires, and load failures raise named Lua errors — the turn fails loudly.
+- Only \`main.lua\` must define \`generate()\`; modules just need to load. The dry-run (\`test_backend_logic\` / the editor's test panel) runs the full module set, so use it after editing ANY file, not just \`main.lua\`.
+
+\`\`\`lua
+-- /characters/<id>/backend_logic/lib/dice.lua
+local M = {}
+function M.roll(sides) return math.random(1, sides) end
+return M
+
+-- main.lua
+local dice = require('lib/dice')
+function generate(prompt, ctx)
+  return "You rolled " .. dice.roll(20)
+end
+\`\`\`
+
+## Structured output (\`response_format\`)
+
+\`prompt.response_format\` is the canonical structured-output field, honored by the OpenAI/Claude/Gemini adapters as a json_schema request. Nothing built-in sets it; scripts REQUEST it by setting \`response_format\` on a delegate (or \`__passthrough\`) prompt table — \`{ type = "json_schema", schema = { ... } }\` — and INSPECT it on their own incoming \`prompt\`.
+
+json_schema is a request, not a guarantee — reverse proxies and local backends emit invalid JSON often enough that pattern-matching beats pcall. Consume with \`json.parse_result(text)\` → \`{ value = ... }\` or \`{ error = "..." }\`. There is no adapter-level validation or retry, by design: the script owns the failure semantics.
+
+\`\`\`lua
+local sub = {}
+for k, v in pairs(prompt) do sub[k] = v end
+sub.tools = nil
+sub.response_format = {
+  type = "json_schema",
+  schema = { type = "object", properties = { total = { type = "number" } }, required = { "total" } },
+}
+local res = backends.generate(sub):await()
+local parsed = json.parse_result(res.text)
+if parsed.error then return "The dice spirits mumbled: " .. parsed.error end
+return "You rolled " .. parsed.value.total
+\`\`\`
+
 ## Return shapes (blocking mode)
 
 - \`string\` — the reply text.
@@ -218,5 +260,5 @@ Before \`generate()\`, the newest \`message.extra._toolState[backend.id]\` snaps
 
 ## Timeouts
 
-\`generate()\` 10 minutes (simulator backends run long); \`list_models()\` 10 seconds. Abort relies on the timeout inside the VM.
+\`generate()\` 10 minutes (simulator backends run long); \`list_models()\` 10 seconds. Abort relies on the timeout inside the VM. Memory: each script state is capped at 64 MB of Lua heap — a memory bomb fails the turn with a "not enough memory" error.
 `;

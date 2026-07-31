@@ -7,7 +7,7 @@ The \`workbench\` template is ONE filesystem-style surface over characters, back
 
 **Collections cannot be listed.** \`ls\` on \`/characters/\`, \`/backends/\`, \`/toolsets/\`, \`/luatools/\`, \`/custom-backends/\`, \`/quickreplies/\` (or \`/quickreplies/<scope>/\`) is refused: \`Error: cannot list collections — ids come from the user or chat context\`. There is no list/find anywhere — **entity ids come from the user or chat context**, or from create results (creation returns the real assigned path). \`grep\` follows the same rule: it searches WITHIN one entity and refuses collection paths.
 
-What \`ls\` CAN list: \`/\` (the six domain names), a specific entity dir (\`/characters/<id>/\`, \`/custom-backends/<id>/\`, \`/luatools/<id>/\`), entity sub-collections (\`/characters/<id>/lorebook/\`, \`greetings/\`, \`regex/\`, \`assets/\`, \`modules/\`), and a scoped quick-reply collection (\`/quickreplies/<scope>/<scopeId>/\` — scope + scopeId are context you supply).
+What \`ls\` CAN list: \`/\` (the six domain names), a specific entity dir (\`/characters/<id>/\`, \`/custom-backends/<id>/\`, \`/luatools/<id>/\`), entity sub-collections (\`/characters/<id>/lorebook/\`, \`greetings/\`, \`regex/\`, \`assets/\`, \`modules/\`, \`backend_logic/\`), and a scoped quick-reply collection (\`/quickreplies/<scope>/<scopeId>/\` — scope + scopeId are context you supply).
 
 ## Layout
 
@@ -24,8 +24,10 @@ What \`ls\` CAN list: \`/\` (the six domain names), a specific entity dir (\`/ch
 /characters/<id>/assets/<assetId>.json     metadata only; the binary is not readable
 /characters/<id>/modules/<moduleId>.json[/<section>]   Risu modules; read + rm only —
                                            section: info | triggers | trigger/<n> | regex | lorebook | assets
-/characters/<id>/backend_logic.lua         card-coupled backend script (topic \`custom_backends\`);
+/characters/<id>/backend_logic/            card-coupled backend script dir (topic \`custom_backends\`):
+                                           main.lua entry point + module files behind \`require\`;
                                            listed only when enabled or non-empty
+/characters/<id>/backend_logic.lua         legacy alias for backend_logic/main.lua
 /backends/<configId>.json                  backend config; apiKey redacted to hasApiKey (topic \`backends\`)
 /custom-backends/<id>/meta.json            { name, description, updatedAt }
 /custom-backends/<id>/source.lua           registry custom-backend script (topic \`custom_backends\`)
@@ -61,9 +63,9 @@ grep {"pattern": "generate", "path": "/characters/abc123/"}
 
 **write { path, content }** — full-file create/replace. Text and \`.lua\` files are stored verbatim; \`.json\` bodies must be valid JSON and are schema-validated. \`.lua\` writes are load-validated before saving — invalid source is rejected unsaved. \`meta.json\` accepts only its writable keys (below). Modules and asset files are read-only. Per-field files (above) store string fields verbatim and parse a JSON value for everything else — prefer them over whole-file writes for regex patterns, scripts, and long content.
 
-**edit { path, oldString, newString, replaceAll? }** — surgical replace in a text or \`.lua\` file; \`oldString\` must match exactly once unless \`replaceAll: true\`. JSON files: \`Error: use write for JSON files\`. The edited \`.lua\` source is re-validated before saving (\`backend_logic.lua\` must load and define \`generate\`; luatool \`code.lua\` must load) — invalid edits are NOT saved. edit also works on per-field files (e.g. \`.../lorebook/<entryId>.json/content\`, \`.../regex/<ruleId>.json/find_regex\`) — the precise way to tweak one pattern or paragraph.
+**edit { path, oldString, newString, replaceAll? }** — surgical replace in a text or \`.lua\` file; \`oldString\` must match exactly once unless \`replaceAll: true\`. JSON files: \`Error: use write for JSON files\`. The edited \`.lua\` source is re-validated before saving (\`backend_logic/main.lua\` must load and define \`generate\`; other \`backend_logic/\` modules must only load; luatool \`code.lua\` must load) — invalid edits are NOT saved. edit also works on per-field files (e.g. \`.../lorebook/<entryId>.json/content\`, \`.../regex/<ruleId>.json/find_regex\`) — the precise way to tweak one pattern or paragraph.
 
-**rm { path }** — deletes lorebook entries, greetings, regex rules, assets, modules, and \`/custom-backends/<id>/\`. Refused (with an explanation): character dirs (no character delete), backend configs (no delete — overwrite with \`write\` or switch the active config), toolsets (disable via \`write\` with \`{"enabled": false}\`), quick replies and Lua tool templates (no delete, by policy), \`meta.json\` files, text fields and \`backend_logic.lua\` (clear via \`write\` with empty content), collections.
+**rm { path }** — deletes lorebook entries, greetings, regex rules, assets, modules, \`backend_logic/\` module files, and \`/custom-backends/<id>/\`. Refused (with an explanation): character dirs (no character delete), backend configs (no delete — overwrite with \`write\` or switch the active config), toolsets (disable via \`write\` with \`{"enabled": false}\`), quick replies and Lua tool templates (no delete, by policy), \`meta.json\` files, text fields and \`backend_logic/main.lua\` (clear via \`write\` with empty content), collections.
 
 **run { verb, args? }** — escape hatch for non-file actions: \`run {"verb": "<name>", "args": {...}}\`. An unknown or omitted verb returns the verb menu.
 
@@ -71,7 +73,7 @@ grep {"pattern": "generate", "path": "/characters/abc123/"}
 |---|---|
 | \`test_backend\` | \`{configId?, patch?, prompt?, mode: "dry"|"live"}\` — dry-run or live-test a backend config; configId defaults to the active backend; \`patch\` applies in memory only |
 | \`test_custom_backend\` | \`{id?|luaSource?, input, state?, delegateResponse?}\` — dry-run a custom-backend script against a recording delegate |
-| \`test_backend_logic\` | \`{characterId, input, luaSource?, state?, delegateResponse?}\` — dry-run a card's backend_logic.lua |
+| \`test_backend_logic\` | \`{characterId, input, luaSource?, state?, delegateResponse?}\` — dry-run a card's backend_logic (main.lua + its \`require\`d modules) |
 | \`test_luatool\` | \`{id?|code?, sandbox?, toolName, args?, config?}\` — run a tool from a stored template or ad-hoc code |
 | \`test_regex\` | \`{characterId?, text, role?}\` — preview merged regex rules (global + character) against sample text |
 | \`clone_character\` | \`{sourceCharacterId, name?}\` — deep-copy a card (fields, lorebook, regex, modules, assets, avatar) |
