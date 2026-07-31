@@ -225,6 +225,83 @@
   gap: var(--space-sm);
 }
 
+.backend-file-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.backend-file-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.backend-file-tab.active {
+  border-color: var(--color-accent);
+  color: var(--color-text-primary);
+  background: var(--color-accent-soft);
+}
+
+.backend-file-tab-name {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.backend-file-tab-delete {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.backend-file-tab-delete:hover {
+  color: var(--color-danger);
+}
+
+.backend-file-add {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px dashed var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.backend-file-add:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.backend-file-path-input {
+  width: 14rem;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.backend-file-path-error {
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
 /* `.character-editor-modal` relies on the shared `.modal` base (utilities.css);
    kept on the DOM as a §16 styling hook + mobile-override target. */
 @media (max-width: 768px) {

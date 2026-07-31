@@ -22,6 +22,9 @@ export interface BackendDryRunPanelProps {
   luaSource: string;
   /** Type B only: character whose description/firstMes seed the sample prompt. */
   characterId?: string;
+  /** Type B only: the card's module map for the sandboxed require — sent
+   *  verbatim (explicit files win server-side over the stored map). */
+  files?: Record<string, string>;
 }
 
 /** Shared <pre> styling for outcome blobs (wrap long Lua/JSON lines, cap height). */
@@ -62,6 +65,7 @@ export function BackendDryRunPanel(props: BackendDryRunPanelProps) {
       type: 'custombackend.test',
       luaSource: props.luaSource,
       ...(props.characterId ? { characterId: props.characterId } : {}),
+      ...(props.files ? { files: props.files } : {}),
       input: trimmed,
       ...(stateText().trim() ? { state: stateText() } : {}),
       ...(delegateResponse() ? { delegateResponse: delegateResponse() } : {}),

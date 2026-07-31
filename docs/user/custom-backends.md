@@ -60,7 +60,7 @@ Available globals: `backends` (delegation, below), `json`, `base64`, and `fetch`
 
 ### Multi-file scripts: `require` and the card VFS (Type B)
 
-A card-coupled script doesn't have to live in one blob. The card carries a small virtual filesystem (`extensions.contextualBackend.files`, edited through the workbench's `backend_logic/` directory — see [Workbench](./workbench.md)) and `require` resolves against it:
+A card-coupled script doesn't have to live in one blob. The card carries a small virtual filesystem (`extensions.contextualBackend.files`) and `require` resolves against it:
 
 ```lua
 -- backend_logic/main.lua
@@ -70,10 +70,12 @@ function generate(prompt, ctx)
 end
 ```
 
+**Editing.** The character editor's **Logic & Rules → Backend Logic** section has a file-tab bar above the Lua textarea: `main.lua` first (the entry point — this is the same content as the old single `luaSource` textarea), then each module, then **+** to add one (paths validate: slash-separated `[A-Za-z0-9_-]` segments, `.lua` appended when omitted). The dry-run panel below the editor tests the whole set — main plus every module — exactly as generation will run it. The same files are editable by the model through the workbench's `backend_logic/` directory (see [Workbench](./workbench.md)).
+
 - Path rules: slash-separated segments of `[A-Za-z0-9_-]`, `.lua` appended when omitted, no `..`, no leading `/`. `require('./lib/utils')` also works.
 - A module is a plain Lua chunk whose **return value is the module** (top-level `return` is expected). Modules execute **once** per generation (cached); circular requires raise `circular require: <path>`.
 - Resolution is against the card's files **only** — the real filesystem is never touched, and anything the card doesn't contain is `module not found: <path>`.
-- The workbench dry-run (`test_backend_logic`) sees the same files, so what you test is what generation runs.
+- Both dry-runs (the editor panel and the workbench's `test_backend_logic`) see the same files, so what you test is what generation runs.
 
 ### Structured output: `response_format`
 

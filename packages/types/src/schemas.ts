@@ -1057,6 +1057,9 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     luaSource: z.string().optional(),
     customBackendId: z.string().optional(),
     characterId: z.string().optional(),
+    // Module map for the sandboxed require. Explicit files win over the
+    // character's stored extensions.contextualBackend.files.
+    files: z.record(z.string(), z.string()).optional(),
     input: z.string().min(1),
     state: z.string().optional(),
     delegateResponse: z.string().optional(),

@@ -92,12 +92,32 @@ export function buildCustomBackendHandlers(
         return fail('Pass luaSource, customBackendId, or characterId');
       }
 
+      // Module map for the sandboxed require: explicit files win; otherwise
+      // fall back to the character's stored map (read the blob directly —
+      // getCharacterBackendScript returns null while the script is disabled,
+      // and the dry-run panel is exactly where you develop before enabling).
+      let files = msg.files;
+      if (!files && character) {
+        const raw = character.extensions['contextualBackend'];
+        const rawFiles = raw && typeof raw === 'object'
+          ? (raw as Record<string, unknown>)['files']
+          : undefined;
+        if (rawFiles && typeof rawFiles === 'object' && !Array.isArray(rawFiles)) {
+          const stored: Record<string, string> = {};
+          for (const [key, value] of Object.entries(rawFiles as Record<string, unknown>)) {
+            if (typeof value === 'string') stored[key] = value;
+          }
+          if (Object.keys(stored).length > 0) files = stored;
+        }
+      }
+
       try {
         const outcome = await dryRunBackendScript(deps.luaRuntime, {
           luaSource,
           input: msg.input,
           state: msg.state,
           delegateResponse: msg.delegateResponse,
+          files,
           character: character
             ? { id: character.id, name: character.name, description: character.description, firstMes: character.firstMes }
             : undefined,

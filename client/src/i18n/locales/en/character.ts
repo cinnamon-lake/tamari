@@ -39,6 +39,13 @@ export const character = {
   backendEnabledLabel: 'Enable backend logic',
   backendLuaSourceLabel: 'Lua Source',
   backendLuaSourceHint: 'The script must define generate(prompt, ctx).',
+  backendFilesTabMain: 'main.lua',
+  backendFileAdd: 'Add module file',
+  backendFileDelete: 'Delete module',
+  backendFilePathPlaceholder: 'lib/utils.lua',
+  backendFileInvalidPath:
+    'Invalid path — use slash-separated segments of letters, digits, _ and - (e.g. lib/utils.lua).',
+  backendFileModuleHint: "A module: its return value is what require('path') gets.",
   // RisuModuleViewer — attach + read-only viewer for imported .risum modules
   risuModulesToggle: 'RisuAI modules (imported) ({{count}})',
   risuModulesDescription: 'Raw .risum modules attached to this card — read-only reference for porting.',

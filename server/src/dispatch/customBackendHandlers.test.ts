@@ -113,4 +113,53 @@ describe('custombackend.test handler', () => {
     const err = lastError();
     expect(err!.type === 'error' && err!.message).toContain('no stored backend logic');
   });
+
+  it('explicit files let the script require a module during the dry-run', async () => {
+    await h.send(client, {
+      type: 'custombackend.test',
+      luaSource: "local u = require('lib/util') function generate(p, c) return u.reply() end",
+      files: { 'lib/util.lua': "local M = {} function M.reply() return 'MODULE-OK' end return M" },
+      input: 'hi',
+      requestId: 'req-files',
+    } as never);
+    const result = lastTestResult();
+    expect(result!.requestId).toBe('req-files');
+    expect(result!.outcome.ok).toBe(true);
+    expect(result!.outcome.text).toBe('MODULE-OK');
+  });
+
+  it('characterId path picks up the stored module map (even while disabled)', async () => {
+    const character = await h.deps.characters.create('char-files', {
+      name: 'VFS Char',
+      extensions: {
+        contextualBackend: {
+          enabled: true,
+          luaSource: "local u = require('lib/util') function generate(p, c) return u.reply() end",
+          files: { 'lib/util.lua': "local M = {} function M.reply() return 'STORED-MODULE' end return M" },
+        },
+      },
+    });
+    await h.send(client, { type: 'custombackend.test', characterId: character.id, input: 'hi' } as never);
+    expect(lastTestResult()!.outcome.text).toBe('STORED-MODULE');
+  });
+
+  it('explicit files override the character’s stored module map', async () => {
+    const character = await h.deps.characters.create('char-override', {
+      name: 'Override Char',
+      extensions: {
+        contextualBackend: {
+          enabled: true,
+          luaSource: "local u = require('lib/util') function generate(p, c) return u.reply() end",
+          files: { 'lib/util.lua': "local M = {} function M.reply() return 'STORED' end return M" },
+        },
+      },
+    });
+    await h.send(client, {
+      type: 'custombackend.test',
+      characterId: character.id,
+      files: { 'lib/util.lua': "local M = {} function M.reply() return 'EXPLICIT' end return M" },
+      input: 'hi',
+    } as never);
+    expect(lastTestResult()!.outcome.text).toBe('EXPLICIT');
+  });
 });
