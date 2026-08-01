@@ -40,7 +40,7 @@ end
 
 ## Execution facts
 
-- Prompt rules run as the **first** prompt-assembly splice stage, before Author's Note / World Info, and before macro resolution in the renderer — a rule can inject macros, but macro output is not re-regexed. When the append-only prompt layout setting is on, prompt rules (incl. \`aiOutput\`) are not applied; display rules are unaffected.
+- Prompt rules run as the **first** prompt-assembly splice stage, before Author's Note / World Info, and before macro resolution in the renderer — a rule can inject macros, but macro output is not re-regexed.
 - Display rules run on raw text before markdown — a rule can inject markdown or sanitized HTML (DOMPurify still applies; scripts can't smuggle XSS).
 - Each rule executes in an isolated worker with a 1s timeout — a catastrophic-backtracking rule is skipped, text unchanged.
 - Input is truncated at 100,000 characters per text part.
@@ -75,6 +75,8 @@ end
 3. Leave the tag visible to the model in the prompt — it is useful, updateable state. (Do NOT strip it with a prompt rule unless it confuses the model.)
 
 Resist the alternatives: emitting fully-rendered HTML from the backend bloats the prompt and invites imitation; giving \`replaceLua\` access to live backend state would re-render OLD messages with CURRENT state (displayed history must stay immutable). If a panel ever needs aggregates that no single message carries, the answer is a per-message vars snapshot, not live state.
+
+The same recipe styles USER inputs — set the rule's \`userInput\` role filter and the tag can be something the user sent. It pairs naturally with \`data-post-response\`: a button click or form submit posts a compact machine string (\`choice__3\`, a fenced XML block), and a display rule renders it as a readable bubble in the log while the stored text — and the model — keep the raw form. The inverse also works: a display rule can render a script-only tag like \`[sys]…[/sys]\` as nothing at all, hiding chrome from the log (see topic \`custom_backends\`).
 
 ## Authoring
 

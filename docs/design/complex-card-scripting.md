@@ -1,6 +1,6 @@
 # Complex Card Scripting — Design Proposal
 
-**Status:** implemented on `main` (all three pillars: card VFS + sandboxed `require`, Workbench `backend_logic/` directory, `response_format` ergonomics + `json.parse_result`). Trace/debug surface remains deferred.
+**Status:** implemented on `main` (all three pillars: card VFS + sandboxed `require`, Workbench `backend_logic/` directory, `response_format` ergonomics + `json.parse_result`). The trace/debug surface has also landed since (structured error chains + generation records; Workbench `/generations/<id>/` read-only route).
 **Goal:** let models author cards with genuinely complicated scripting. Two pillars: multi-file `backend_logic`, and structured output (`response_format`) that scripts can actually use. Trace/debug surface is acknowledged but deferred.
 
 ## Background

@@ -15,6 +15,8 @@ const EXPECTED_ANCHORS: Record<(typeof DOCS_TOPICS)[number], string> = {
   toolsets: '# Toolsets',
   quick_replies: '# Quick Replies',
   chats: '# Chats',
+  game_cards: '# Game Cards',
+  game_cards_factory: '# The Sunken Crypt',
 };
 
 describe('DocsTemplate', () => {

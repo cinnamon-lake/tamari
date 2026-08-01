@@ -1,7 +1,7 @@
 /** Reference doc for the `custom_backends` topic, served by the Docs tool. */
 export const CUSTOM_BACKENDS_DOC = `# Custom Backends (Lua)
 
-A custom backend is a Lua script that owns the prompt. It runs instead of a built-in adapter and may delegate generation to real backends.
+A custom backend is a Lua script that owns the prompt. It runs instead of a built-in adapter and may delegate generation to real backends. The spectrum runs from near-passthrough (delegate every turn, maybe post-process the text) to no model at all — a hypothetical ELIZA backend could pattern-match the user's last message and return a canned reflective question, never delegating once. Most real scripts sit in between: some turns handled locally, the rest delegated.
 
 ## Two kinds
 
@@ -10,7 +10,7 @@ A custom backend is a Lua script that owns the prompt. It runs instead of a buil
 
 ## Script contract
 
-The script defines \`generate(prompt, ctx)\` and optionally \`list_models()\`. \`prompt\` is the fully-built prompt (a mutable copy: \`prompt.messages\`, \`prompt.tools\`, …); \`ctx\` is \`{ chatId, characterId, generationType }\` where generationType is \`'normal' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw'\`. Available globals: \`prompt\`, \`ctx\`, \`backends\`, \`json\`, \`base64\`, \`fetch\`; Type B scripts also get a sandboxed \`require\` (see Modules). The \`st\` API is NOT injected. \`prompt.response_format\` carries the caller's structured-output request, if any (see Structured output).
+The script defines \`generate(prompt, ctx)\` and optionally \`list_models()\`. \`prompt\` is the fully-built prompt (a mutable copy: \`prompt.messages\`, \`prompt.tools\`, …); \`ctx\` is \`{ chatId, characterId, generationType }\` where generationType is \`'normal' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw'\`. Available globals: \`prompt\`, \`ctx\`, \`backends\`, \`chat\`, \`json\`, \`base64\`, \`fetch\`; Type B scripts also get a sandboxed \`require\` (see Modules). The \`st\` API is NOT injected. \`prompt.response_format\` carries the caller's structured-output request, if any (see Structured output).
 
 A complete example — a high-card table where **Lua owns the deck and the score** (hidden, branch-aware state) and the delegate model only writes table-talk flavored by how badly the player is losing:
 
@@ -75,11 +75,13 @@ What it demonstrates: parsing commands from \`prompt.messages\`; hidden state in
 
 ## Middleware example: slash commands (intercept, configure, filter)
 
-A second pattern — a **middleware** backend that mostly passes the chat through to the delegate, but intercepts \`/command\` messages: it answers them locally (no delegation), reflects the new state in the system prompt, and filters command messages out of all future delegations so the writer model never sees them:
+A second pattern — a **middleware** backend that mostly passes the chat through to the delegate, but intercepts \`/command\` messages: it answers them locally (no delegation), reflects the new state in the system prompt, and filters BOTH sides of the interaction out of all future delegations. The chrome discipline: **commands go out bare, acks come back wrapped** —
+
+- Commands are plain \`/hard\`, typed or posted by a button: \`<button data-post-response="/hard">Hard mode</button>\`. NEVER put \`[sys]\` inside \`data-post-response\`: display regexes are structure-blind — a \`[sys]\`-hiding rule cannot tell chrome text from the inside of an attribute, and it will mangle the payload and kill the button. Not sometimes-fixable, don't try.
+- Acks are wrapped in \`[sys]…[/sys]\` — that tag survives ONLY in text the script fully controls (its own replies, no attributes at stake).
 
 \`\`\`lua
 local DIFFICULTIES = { easy = "Easy", hard = "Hard", nightmare = "Nightmare" }
-local ACK_PREFIX = "[sys] " -- marks our own acknowledgement messages
 
 local function ensureState()
   if type(state) ~= "table" then state = {} end
@@ -92,21 +94,22 @@ local function parseCommand(text)
   return text:match("^/(%a+)%s*$")
 end
 
--- Rebuild the prompt for delegation: drop command messages AND our own tagged
--- acknowledgements from history (the writer model never sees the chrome)
--- and make the system prompt state-aware.
+-- Rebuild the prompt for delegation: drop bare command messages AND strip
+-- every [sys]...[/sys] block (our acks), trim, drop empties — the writer
+-- model never sees either side of the chrome. Then make the system prompt
+-- state-aware.
 local function buildDelegatedPrompt(prompt)
   local sub = {}
   for k, v in pairs(prompt) do sub[k] = v end
   sub.tools = nil
   sub.messages = {}
   for _, m in ipairs(prompt.messages) do
-    local isCommand = m.role == "user" and parseCommand(m.content)
-    local isAck = m.role == "assistant" and type(m.content) == "string"
-      and m.content:sub(1, #ACK_PREFIX) == ACK_PREFIX
-    if not isCommand and not isAck then
-      sub.messages[#sub.messages + 1] = m
+    local skip = m.role == "user" and parseCommand(m.content) ~= nil
+    if not skip and type(m.content) == "string" then
+      m.content = m.content:gsub("%s*%[sys%].-%[/sys%]%s*", "\\n\\n"):gsub("^%s*(.-)%s*$", "%1")
+      if m.content == "" then skip = true end
     end
+    if not skip then sub.messages[#sub.messages + 1] = m end
   end
   for _, m in ipairs(sub.messages) do
     if m.role == "system" and type(m.content) == "string" then
@@ -127,15 +130,16 @@ function generate(prompt, ctx)
     if m.role == "user" and type(m.content) == "string" then input = m.content break end
   end
 
-  -- Intercept: answer locally, no delegation. The returned text is stored
-  -- as the assistant message like any other reply.
+  -- Intercept: answer locally, no delegation. The wrapped reply is stored as
+  -- the assistant message like any other — and vanishes from future prompts
+  -- and (via the display rule) from the user's log.
   local cmd = parseCommand(input)
   if cmd then
     if DIFFICULTIES[cmd] then
       state.difficulty = DIFFICULTIES[cmd]
-      return ACK_PREFIX .. "Difficulty set to **" .. state.difficulty .. "**."
+      return "[sys]Difficulty set to **" .. state.difficulty .. "**.[/sys]"
     end
-    return ACK_PREFIX .. "Unknown command: /" .. cmd
+    return "[sys]Unknown command: /" .. cmd .. "[/sys]"
   end
 
   -- Normal turn: delegate with the filtered, state-aware prompt.
@@ -146,9 +150,10 @@ end
 
 What it demonstrates:
 
-- **Intercepting without delegating** — a command turn returns a locally-computed acknowledgement, stored as the assistant message like any reply. Acks carry a marker prefix (\`[sys] \`) and \`buildDelegatedPrompt\` filters them along with the commands, so the writer model sees neither side of the chrome. The marker is visible text to the user (honest UI); a one-line display regex (\`/\\[sys\\] /g\` → \`""\`) hides it if you'd rather show clean text.
-- **Rebuilding history every turn** — \`buildDelegatedPrompt\` drops command messages and rewrites the system message, so the writer model always sees a clean, state-aware prompt. Because this happens per turn, changing state mid-chat retroactively reshapes the *whole* prompt.
-- **This is the answer to "interactive greeting" / setup screens.** A greeting containing \`<button data-post-response="/hard">Hard mode</button>\` posts \`/hard\` as the user's next message when clicked — the backend intercepts it exactly like a typed command. Language toggles, feature flags, difficulty, "Start" buttons: all of them are just commands arriving as user messages. No modal dialogs needed; the chat log is the UI.
+- **Both sides vanish from the writer model.** \`buildDelegatedPrompt\` drops bare command messages and strips \`[sys]…[/sys]\` acks with one \`gsub\`, trims, and drops messages left empty — ~12 lines and the model never sees either side of the script interaction.
+- **Display is two separate rules, one optional.** Acks hide behind \`/\\s*\\[sys\\].*?\\[\\/sys\\]\\s*/gis\` → \`"\\n\\n"\` (always). Commands arrive as honest user text — interaction is honest text, so leaving them visible is a legitimate default; to hide them, a \`userInput\`-scoped whole-message rule (\`/^\\s*\\/\\w+.*$/s\` → \`""\`) is safe precisely because the posted message contains no HTML for the regex to mangle.
+- **Rebuilding history every turn** — \`buildDelegatedPrompt\` rewrites the prompt per turn, so changing state mid-chat retroactively reshapes the *whole* prompt.
+- **This is the answer to "interactive greeting" / setup screens.** A greeting containing \`<button data-post-response="/hard">Hard mode</button>\` posts a bare command as the user's next message when clicked — intercepted exactly like a typed one. Language toggles, feature flags, difficulty, "Start" buttons: all of them are just commands arriving as user messages. No modal dialogs needed; the chat log is the UI.
 - Acknowledgements are idempotent — regenerating a command turn recomputes the same answer from the same state, so \`regenerate\` is safe here.
 
 ## Parsing response forms
@@ -203,6 +208,8 @@ end
 
 json_schema is a request, not a guarantee — reverse proxies and local backends emit invalid JSON often enough that pattern-matching beats pcall. Consume with \`json.parse_result(text)\` → \`{ value = ... }\` or \`{ error = "..." }\`. There is no adapter-level validation or retry, by design: the script owns the failure semantics.
 
+One decode gotcha: \`json.decode\`/\`parse_result\` map JSON \`null\` to a truthy js_null userdata, NOT Lua nil — \`if result.optional then\` takes the wrong branch and concatenating it errors. Sanitize decoded tables before use (drop any value that isn't a table/string/number/boolean — see \`cleanNulls\` in topic \`game_cards_factory\`).
+
 \`\`\`lua
 local sub = {}
 for k, v in pairs(prompt) do sub[k] = v end
@@ -230,11 +237,63 @@ return "You rolled " .. parsed.value.total
 - Default delegate: the config's \`delegateConfigId\` (Type A) or the user's active adapter (Type B).
 - Custom → custom chains are depth-capped at 4.
 - A failed delegation with no usable text **throws into Lua** — wrap in \`pcall\` to recover.
+- Delegate results carry \`toolCalls\` when the delegate wants to call tools (\`res.toolCalls\`, \`{ id, name, arguments }\`) — see Giving the delegate tools.
+- Always END delegate sub-prompts with a \`user\` message (the \`Narrate: …\` pattern). Some providers reject prompts with no user message or an assistant-final sequence — Zhipu GLM answers HTTP 400 (code 1214, "messages parameter is illegal"); OpenAI tolerates both, so cards that skip this break only when they change hands.
 - Exportable cards should delegate by default (\`backends.generate(prompt)\`); explicit ids are local-install only.
 
 ## Tools from a custom backend
 
 No tool schemas are advertised while a custom backend is active (the script decides everything), but a blocking return of \`{ toolCalls = { { name = "speak", arguments = {...} } } }\` is honored: calls execute through the normal tool registry, results become \`tool_result\` content parts on the latest assistant message, and the follow-up round re-enters \`generate()\`. Optional per-call \`id\` (defaults to \`lua_call_<n>\`); \`text\` may accompany the calls. Round-capped like any backend.
+
+## Giving the delegate tools (script-owned tool loop)
+
+A sub-prompt can carry tool schemas the SCRIPT defined — set \`sub.tools\` and the delegate adapter sends them (OpenAI/Claude/Gemini honor them; the rest ignore them). When the delegate answers with tool calls instead of text, they arrive as \`res.toolCalls\` (\`{ id, name, arguments }\`) alongside \`res.text\`: execute them in Lua and continue the loop yourself by appending ONE assistant message whose content is an array of parts — the \`tool_use\` part(s), then the matching \`tool_result\` part(s) — and calling \`backends.generate\` again. Part keys are camelCase (\`toolUseId\`, \`isError\`), and \`function\` is a Lua keyword, so tool definitions need bracket indexing:
+
+\`\`\`lua
+local sub = {}
+for k, v in pairs(prompt) do sub[k] = v end
+sub.messages = {
+  { role = "system", content = "You are the narrator. Query the game engine with tools whenever you need rules or dice." },
+  { role = "user", content = userInput },
+}
+sub.tools = { {
+  type = "function",
+  ["function"] = {
+    name = "roll_dice",
+    description = "Roll NdS dice, return the total",
+    parameters = { type = "object", properties = {
+      n = { type = "integer" }, sides = { type = "integer" } }, required = { "n", "sides" } },
+  },
+} }
+
+local res = backends.generate(sub):await()
+local rounds = 0
+while res.toolCalls and #res.toolCalls > 0 and rounds < 8 do
+  rounds = rounds + 1
+  local content = {}
+  for _, call in ipairs(res.toolCalls) do
+    content[#content + 1] = { type = "tool_use", id = call.id, name = call.name, input = call.arguments }
+    local total = 0
+    for _ = 1, tonumber(call.arguments.n) or 1 do total = total + math.random(1, tonumber(call.arguments.sides) or 6) end
+    content[#content + 1] = { type = "tool_result", toolUseId = call.id, name = call.name, content = tostring(total) }
+  end
+  sub.messages[#sub.messages + 1] = { role = "assistant", content = content }
+  res = backends.generate(sub):await()
+end
+return res.text
+\`\`\`
+
+The whole loop is invisible sub-generation inside one turn — the calls and results never touch the chat log, and the writer model gets to *query the game* (dice, inventory, lookup tables) while the script keeps every answer deterministic. Self-cap the rounds: the only hard limit is the 10-minute \`generate()\` budget. This is the complement of the blocking \`{ toolCalls = ... }\` return above: THAT path runs the caller's registered tools through the engine (results land in the chat); THIS path is for script-defined tools that should stay inside the script.
+
+## Full branch history (the \`chat\` global)
+
+\`prompt.messages\` is the budgeted view — capped by \`promptHistoryLimit\`/\`chatTruncation\` and the token budget, because it is assembled FOR the model. The script itself is not so limited: the \`chat\` global serves the FULL current branch (active swipes resolved), loaded lazily at most once per turn and only when called:
+
+- \`chat.count():await()\` → branch length.
+- \`chat.get(index):await()\` → 1-based, chronological: \`{ id, role, content, characterId?, personaId? }\`; out of range → nil.
+- \`chat.find(query, limit?):await()\` → newest-first substring matches (case-insensitive) \`{ index, id, role, content }\`; limit defaults to 10, capped at 50.
+
+\`chat\` is NIL outside a live chat generation (dry-runs without canned history, list_models) — always \`if chat then ... end\`. Read-only by construction. The canonical use is a \`recall\` delegate tool: the script compresses the delegate's view of history itself (never with an engine prompt rule — that would blind the script too, since the script's own prompt is regex-processed) and answers \`recall({ query })\` from \`chat.find\` with the verbatim old text. See topic \`game_cards\` (Compaction) for the full pattern. Dry-run it with the \`history\` option on \`test_backend_logic\` / \`test_custom_backend\` (\`[{ role, content }, ...]\`, oldest first; omit → \`chat\` is nil).
 
 ## Porting event-driven scripts (RisuAI triggers)
 
