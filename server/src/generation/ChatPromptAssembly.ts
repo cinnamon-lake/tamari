@@ -64,8 +64,11 @@ export interface ChatPromptBuildArgs {
   character: Character | null;
   /** The runner's resolved backend bundle (adapter itself is unused here). */
   resolved: Omit<ResolvedGenerationBackend, 'backend'>;
-  /** Regenerate builds from the bulk message list (no active-child filter). */
-  useBulkOnly?: boolean;
+  /** Anchor the branch on THIS message id (walk its parent chain, inclusive)
+      instead of the chat's head/active-child pointers. Generation targets
+      always pass the id of the message being generated — one rule for send,
+      regenerate, and continue alike, with no pointer-state dependence. */
+  anchorMessageId?: number;
   /** quietGenerate's per-call maxTokens override. */
   maxResponseTokensOverride?: number;
   lastGenerationType?: string;
@@ -256,8 +259,8 @@ export class ChatPromptAssembly {
     const maxResponseTokens = args.maxResponseTokensOverride !== undefined
       ? Math.max(1, Math.floor(args.maxResponseTokensOverride))
       : Math.max(1, backendConfig?.maxTokens ?? allSettings.maxResponseTokens);
-    const historySource = args.useBulkOnly
-      ? await chats.getBulkOfMessages(chatId, { limit: promptHistoryLimit })
+    const historySource = args.anchorMessageId !== undefined
+      ? await chats.getBulkOfMessages(chatId, { limit: promptHistoryLimit, beforeId: args.anchorMessageId })
       : await chats.getActiveBranch(chatId, { limit: promptHistoryLimit });
     const chatHistory = await this.resolveAttachments(historySource);
 

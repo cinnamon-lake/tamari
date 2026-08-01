@@ -401,6 +401,68 @@ describe('custom backend tool calls (e2e)', () => {
       await h.teardown();
     }
   });
+
+  it('regenerate: the tool_result part reaches the follow-up prompt (regression: bulk-only branch dropped the new swipe)', async () => {
+    const REGEN_TOOL_LUA = `
+      function generate(prompt, ctx)
+        for i = #prompt.messages, 1, -1 do
+          local m = prompt.messages[i]
+          if type(m.content) == "table" then
+            for _, p in ipairs(m.content) do
+              if p.type == "tool_result" then
+                return "The tool said: " .. tostring(p.content)
+              end
+            end
+          end
+        end
+        if ctx.generationType == "regenerate" then
+          return { toolCalls = { { name = "announce", arguments = { text = "round trip" } } } }
+        end
+        return "plain answer"
+      end
+    `;
+    const { writer } = makeCountingWriter();
+    const executed: Array<{ name: string }> = [];
+    const toolRegistry = {
+      setToolsetRepository: () => {},
+      setTemplateRepository: () => {},
+      execute: async (call: { id: string; name: string; arguments: Record<string, unknown> }) => {
+        executed.push(call);
+        return { id: call.id, name: call.name, content: `ANNOUNCED[${String(call.arguments['text'])}]` };
+      },
+    } as never;
+
+    const h = new TestHarness({ backendFactory: { create: async () => writer }, toolRegistry });
+    await h.initSchema();
+    try {
+      const character = await h.deps.characters.create('char-regen-tools', {
+        name: 'Regen Herald',
+        extensions: { contextualBackend: { enabled: true, luaSource: REGEN_TOOL_LUA } },
+      });
+      const chatId = crypto.randomUUID();
+      await h.deps.chats.createChat(chatId, {
+        characterId: character.id,
+        personaId: null,
+        name: 'regen-tools',
+        headMessageId: null,
+        metadata: {},
+      });
+
+      await h.deps.generationService.handleSend(chatId, 'hello');
+      await h.deps.generationService.handleGenerate(chatId);
+      await h.deps.generationService.handleRegenerate(chatId);
+
+      // The loop must run exactly ONE tool round: round 2 re-enters with the
+      // tool_result part visible on the new swipe's prompt message.
+      expect(executed).toHaveLength(1);
+
+      const chain = await h.deps.chats.getMessageChain(chatId);
+      const assistant = [...chain].reverse().find((m) => m.role === 'assistant');
+      expect(getMessageText(assistant?.extra.parts)).toBe('The tool said: ANNOUNCED[round trip]');
+    } finally {
+      await h.teardown();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -452,6 +514,67 @@ describe('group chat with one scripted character (e2e)', () => {
       // …and the unscripted one fell through to the plain writer backend.
       expect(getMessageText(assistants[1]!.extra.parts)).toContain('THE WRITER MODEL WAS CALLED');
       expect(writerCalls()).toBe(1);
+    } finally {
+      await h.teardown();
+    }
+  });
+});
+
+describe('full branch history (chat global + full-branch script-state scan)', () => {
+  /**
+   * The marker script: increments a state counter and reports chat.count().
+   * With promptHistoryLimit = 4, after one card turn + five plain user
+   * messages, the _toolState snapshot sits BEYOND the bounded branch read —
+   * only the full-branch scan restores it, and only the full-branch loader
+   * gives chat.count() the real branch length.
+   */
+  const MARKER_LUA = `
+    function generate(prompt, ctx)
+      if type(state) ~= "table" then state = {} end
+      state.marker = (state.marker or 0) + 1
+      local n = chat and chat.count():await() or -1
+      return "marker=" .. state.marker .. " count=" .. n
+    end
+  `;
+
+  it('restores script state and counts history beyond promptHistoryLimit', async () => {
+    const { writer } = makeCountingWriter();
+    const h = new TestHarness({ backendFactory: { create: async () => writer } });
+    await h.initSchema();
+    try {
+      await h.deps.settings.setValue('promptHistoryLimit', 4);
+      const character = await h.deps.characters.create('char-marker', {
+        name: 'Marker',
+        extensions: { contextualBackend: { enabled: true, luaSource: MARKER_LUA } },
+      });
+      const chatId = crypto.randomUUID();
+      await h.deps.chats.createChat(chatId, {
+        characterId: character.id,
+        personaId: null,
+        name: 'marker',
+        headMessageId: null,
+        metadata: {},
+      });
+
+      const lastText = async (): Promise<string> => {
+        const chain = await h.deps.chats.getMessageChain(chatId);
+        const msg = [...chain].reverse().find((m) => m.role === 'assistant');
+        return msg ? getMessageText(msg.extra.parts) : '';
+      };
+
+      await h.deps.generationService.handleSend(chatId, 'one');
+      await h.deps.generationService.handleGenerate(chatId);
+      expect(await lastText()).toContain('marker=1');
+
+      // Five plain user messages push the snapshot-bearing assistant message
+      // past the 4-message cap.
+      for (let i = 0; i < 5; i++) await h.deps.generationService.handleSend(chatId, `ping ${i}`);
+      await h.deps.generationService.handleGenerate(chatId);
+
+      const text = await lastText();
+      expect(text).toContain('marker=2'); // state restored from the FULL branch
+      const count = Number(text.match(/count=(\d+)/)?.[1]);
+      expect(count).toBeGreaterThan(4); // the chat global sees beyond the cap
     } finally {
       await h.teardown();
     }

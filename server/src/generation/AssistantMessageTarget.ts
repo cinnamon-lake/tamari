@@ -40,6 +40,7 @@ import { MacroResolver } from '../pipeline/MacroResolver.js';
 import { getChatSnapshotMessages } from '../lib/swipeInfo.js';
 import type { ChatPromptAssembly } from './ChatPromptAssembly.js';
 import type { GenerationTarget, ResolvedGenerationBackend, ToolContextMessage } from './GenerationTarget.js';
+import { FULL_BRANCH_MESSAGE_LIMIT } from './GenerationTarget.js';
 
 const log = getLogger('AssistantMessageTarget');
 
@@ -60,8 +61,6 @@ interface FreshAnchor {
   /** Explicit parent (group chaining, /ask, regenerate sibling). Undefined =
       link against the chat's current leaf. */
   parentId?: number | null;
-  /** Regenerate: prompt builds from the bulk message list. */
-  useBulkOnly: boolean;
 }
 
 interface ContinueAnchor {
@@ -132,7 +131,6 @@ export class AssistantMessageTarget implements GenerationTarget {
     return new AssistantMessageTarget(deps, identity.chatId, identity.clientId, identity.character, 'send', {
       anchor: 'fresh',
       parentId: identity.parentId,
-      useBulkOnly: false,
     });
   }
 
@@ -153,7 +151,6 @@ export class AssistantMessageTarget implements GenerationTarget {
     return new AssistantMessageTarget(deps, identity.chatId, identity.clientId, identity.character, 'regenerate', {
       anchor: 'fresh',
       parentId: identity.parentId,
-      useBulkOnly: true,
     });
   }
 
@@ -254,7 +251,10 @@ export class AssistantMessageTarget implements GenerationTarget {
       chat: chat ?? null,
       character: this.character,
       resolved,
-      useBulkOnly: this.anchorData.anchor === 'fresh' ? this.anchorData.useBulkOnly : false,
+      // One rule for every kind: the branch is computed from the message being
+      // generated (its parent chain, inclusive) — no chat-pointer dependence,
+      // no per-kind special cases. Regenerate is not a separate action.
+      anchorMessageId: this.message?.id,
       lastGenerationType: this.kind,
     });
 
@@ -294,6 +294,16 @@ export class AssistantMessageTarget implements GenerationTarget {
     const limit = this.lastPromptHistoryLimit ?? (await this.defaultHistoryLimit());
     const toolBranch = await this.deps.chats.getActiveBranch(this.chatId, { limit });
     return toolBranch.map((m) => ({
+      id: String(m.id),
+      role: m.role,
+      content: getMessageText(m.extra.parts),
+      extra: m.extra,
+    }));
+  }
+
+  async fullBranchMessages(): Promise<ToolContextMessage[]> {
+    const branch = await this.deps.chats.getActiveBranch(this.chatId, { limit: FULL_BRANCH_MESSAGE_LIMIT });
+    return branch.map((m) => ({
       id: String(m.id),
       role: m.role,
       content: getMessageText(m.extra.parts),
