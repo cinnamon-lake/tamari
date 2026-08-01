@@ -122,6 +122,10 @@ const CustomBackendTestArgs = z.object({
   input: z.string().min(1).describe('Sample user message fed to generate() as the last prompt message.'),
   state: z.string().optional().describe('Canned script-state snapshot (JSON string) injected as the `state` global, e.g. the stateOut of a previous dry-run.'),
   delegateResponse: z.string().optional().describe('Canned text returned by every delegated backends.generate() call. Defaults to a placeholder.'),
+  history: z
+    .array(z.object({ role: z.string(), content: z.string() }))
+    .optional()
+    .describe('Canned full branch history (oldest first) backing the `chat` global. Omit → `chat` is nil in the dry-run.'),
 });
 
 /** Replace the apiKey with a boolean marker so secrets never reach the model. */
@@ -404,7 +408,7 @@ export class BackendWorkbench {
   private async customBackendTest(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = CustomBackendTestArgs.safeParse(args);
     if (!parsed.success) return { content: 'Error: invalid arguments' };
-    const { id, luaSource, input, state, delegateResponse } = parsed.data;
+    const { id, luaSource, input, state, delegateResponse, history } = parsed.data;
 
     let source = luaSource;
     if (source === undefined) {
@@ -419,6 +423,7 @@ export class BackendWorkbench {
       input,
       state,
       delegateResponse,
+      history,
     });
     return { content: JSON.stringify(outcome) };
   }

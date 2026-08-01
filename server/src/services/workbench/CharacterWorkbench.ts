@@ -295,6 +295,10 @@ const BackendLogicTestArgs = z.object({
     .union([z.string(), z.object({ error: z.string() })])
     .optional()
     .describe('Canned answer for every delegated backends.generate() call — text, or { "error": "..." } to test delegation failures. Defaults to a placeholder.'),
+  history: z
+    .array(z.object({ role: z.string(), content: z.string() }))
+    .optional()
+    .describe('Canned full branch history (oldest first) backing the `chat` global. Omit → `chat` is nil in the dry-run.'),
 });
 
 const BackendFilePathArgs = z.object({
@@ -1107,6 +1111,15 @@ export class CharacterWorkbench {
       luaSource: luaSource ?? (typeof existing['luaSource'] === 'string' ? existing['luaSource'] : ''),
     };
 
+    // Source writes are load-validated (against the card's module map, so
+    // top-level require resolves) before saving — a bare enabled toggle is not.
+    if (luaSource !== undefined) {
+      const invalid = await this.validateBackendSource(next.luaSource, this.getBackendFiles(character));
+      if (invalid !== null) {
+        return { content: `Error: write rejected (NOT saved) — the script fails to load: ${invalid}` };
+      }
+    }
+
     const updated = await this.deps.characters.update(characterId, {
       extensions: { ...character.extensions, [CHARACTER_BACKEND_EXTENSION_KEY]: next },
     });
@@ -1114,20 +1127,35 @@ export class CharacterWorkbench {
     return { content: JSON.stringify(next) };
   }
 
-  /** Load-check a backend script in a fresh sandbox: must parse and define generate(). Returns an error string or null. */
-  private async validateBackendSource(source: string): Promise<string | null> {
-    const { lua, cleanup } = await this.deps.luaRuntime.createState({}, 10_000);
-    try {
-      await lua.doString(source);
-      if (typeof lua.global.get('generate') !== 'function') {
-        return 'script must define generate(prompt, ctx)';
+  /** Load-check Lua in a fresh sandbox WITH the card's module map: the chunk
+      must parse, requires against EXISTING modules must resolve and load, and
+      (for main.lua) generate() must be defined. A "module not found" error is
+      tolerated — main-before-modules is a legal authoring order; the dry-run
+      (test_backend_logic) validates the full set. Returns error string | null. */
+  private async validateLuaSource(source: string, files: Record<string, string>, needsGenerate: boolean): Promise<string | null> {
+    const attempt = async (withMap: boolean, stubRequire: boolean): Promise<string | null> => {
+      const { lua, cleanup } = await this.deps.luaRuntime.createState(withMap ? { vfsFiles: files } : {}, 10_000);
+      try {
+        if (stubRequire) lua.global.set('require', () => ({}));
+        await lua.doString(source);
+        if (needsGenerate && typeof lua.global.get('generate') !== 'function') {
+          return 'script must define generate(prompt, ctx)';
+        }
+        return null;
+      } catch (err) {
+        return err instanceof Error ? err.message : String(err);
+      } finally {
+        cleanup();
       }
-      return null;
-    } catch (err) {
-      return err instanceof Error ? err.message : String(err);
-    } finally {
-      cleanup();
-    }
+    };
+    const err = await attempt(true, false);
+    if (err === null || !err.includes('module not found:')) return err;
+    return attempt(false, true);
+  }
+
+  /** Load-check a backend script: must load and define generate(). */
+  private validateBackendSource(source: string, files: Record<string, string>): Promise<string | null> {
+    return this.validateLuaSource(source, files, true);
   }
 
   private async backendLogicEdit(args: Record<string, unknown>): Promise<ToolExecuteResult> {
@@ -1153,7 +1181,7 @@ export class CharacterWorkbench {
     }
     const nextSource = source.split(oldString).join(newString);
 
-    const invalid = await this.validateBackendSource(nextSource);
+    const invalid = await this.validateBackendSource(nextSource, this.getBackendFiles(character));
     if (invalid !== null) {
       return { content: `Error: edit rejected (NOT saved) — the edited script fails to load: ${invalid}` };
     }
@@ -1171,7 +1199,7 @@ export class CharacterWorkbench {
   private async backendLogicTest(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = BackendLogicTestArgs.safeParse(args);
     if (!parsed.success) return invalidArgs(parsed.error);
-    const { characterId, input, luaSource, state, delegateResponse } = parsed.data;
+    const { characterId, input, luaSource, state, delegateResponse, history } = parsed.data;
     const character = await this.deps.characters.getById(characterId);
     if (!character) return { content: `Error: character "${characterId}" not found` };
 
@@ -1191,6 +1219,7 @@ export class CharacterWorkbench {
       input,
       state,
       delegateResponse,
+      history,
       files: Object.keys(files).length > 0 ? files : undefined,
       character: {
         id: character.id,
@@ -1247,18 +1276,10 @@ export class CharacterWorkbench {
     return { content: JSON.stringify({ path: key, luaSource }) };
   }
 
-  /** Load-check a module in a fresh sandbox: the chunk must parse (top-level
-      return allowed — the generate() requirement applies to main.lua only). */
-  private async validateModuleSource(source: string): Promise<string | null> {
-    const { lua, cleanup } = await this.deps.luaRuntime.createState({}, 10_000);
-    try {
-      await lua.doString(source);
-      return null;
-    } catch (err) {
-      return err instanceof Error ? err.message : String(err);
-    } finally {
-      cleanup();
-    }
+  /** Load-check a module: the chunk must load (top-level return allowed —
+      the generate() requirement applies to main.lua only). */
+  private validateModuleSource(source: string, files: Record<string, string>): Promise<string | null> {
+    return this.validateLuaSource(source, files, false);
   }
 
   private async backendFileSet(args: Record<string, unknown>): Promise<ToolExecuteResult> {
@@ -1271,12 +1292,12 @@ export class CharacterWorkbench {
     const character = await this.deps.characters.getById(parsed.data.characterId);
     if (!character) return { content: `Error: character "${parsed.data.characterId}" not found` };
 
-    const invalid = await this.validateModuleSource(parsed.data.luaSource);
+    const files = { ...this.getBackendFiles(character), [key]: parsed.data.luaSource };
+    const invalid = await this.validateModuleSource(parsed.data.luaSource, files);
     if (invalid !== null) {
       return { content: `Error: write rejected (NOT saved) — the module fails to load: ${invalid}` };
     }
 
-    const files = { ...this.getBackendFiles(character), [key]: parsed.data.luaSource };
     await this.setBackendFiles(character, files);
     return { content: JSON.stringify({ path: key, lines: parsed.data.luaSource.split('\n').length }) };
   }
@@ -1318,12 +1339,12 @@ export class CharacterWorkbench {
     }
     const nextSource = source.split(oldString).join(newString);
 
-    const invalid = await this.validateModuleSource(nextSource);
+    const files = { ...this.getBackendFiles(character), [key]: nextSource };
+    const invalid = await this.validateModuleSource(nextSource, files);
     if (invalid !== null) {
       return { content: `Error: edit rejected (NOT saved) — the edited module fails to load: ${invalid}` };
     }
 
-    const files = { ...this.getBackendFiles(character), [key]: nextSource };
     await this.setBackendFiles(character, files);
     return {
       content: JSON.stringify({ path: key, replacements: occurrences, lines: nextSource.split('\n').length }),

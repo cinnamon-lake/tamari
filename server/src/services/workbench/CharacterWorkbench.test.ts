@@ -1106,9 +1106,9 @@ describe('CharacterWorkbench', () => {
 
     it('backend_logic_set toggles enabled and preserves the script', async () => {
       const { template, charStore, bus } = makeTemplate({ characters: [makeCharacter()] });
-      await template.execute('backend_logic_set', { characterId: 'char1', luaSource: 'return 1' });
+      await template.execute('backend_logic_set', { characterId: 'char1', luaSource: 'function generate(p, c) return "x" end' });
       const res = await template.execute('backend_logic_set', { characterId: 'char1', enabled: true });
-      expect(JSON.parse(res.content as string)).toEqual({ enabled: true, luaSource: 'return 1' });
+      expect(JSON.parse(res.content as string)).toEqual({ enabled: true, luaSource: 'function generate(p, c) return "x" end' });
       const ext = charStore.get('char1')!.extensions['contextualBackend'] as Record<string, unknown>;
       expect(ext['enabled']).toBe(true);
       const types = broadcastTypes(bus);
@@ -1135,6 +1135,58 @@ describe('CharacterWorkbench', () => {
       ext = charStore.get('char1')!.extensions['contextualBackend'] as Record<string, unknown>;
       expect(ext['files']).toEqual(files);
       expect(ext['luaSource']).toBe('function generate(p, c) return "z" end');
+    });
+
+    it('validates main.lua against the module map: top-level require works on write and edit', async () => {
+      const files = { 'lib/answer.lua': 'return 42' };
+      const { template } = makeTemplate({
+        characters: [makeCharacter({ extensions: { contextualBackend: { enabled: false, luaSource: 'function generate(p, c) return "a" end', files } } })],
+      });
+      const src = 'local answer = require("lib/answer")\nfunction generate(p, c) return tostring(answer) end';
+      const setRes = await template.execute('backend_logic_set', { characterId: 'char1', luaSource: src });
+      expect(setRes.content).not.toContain('Error');
+      const editRes = await template.execute('backend_logic_edit', {
+        characterId: 'char1',
+        oldString: 'tostring(answer)',
+        newString: '"the answer is " .. tostring(answer)',
+      });
+      expect(editRes.content).not.toContain('Error');
+    });
+
+    it('backend_logic_set load-validates source writes: missing generate rejected, not-yet-written modules tolerated', async () => {
+      const { template, charStore } = makeTemplate({ characters: [makeCharacter()] });
+      const noGenerate = await template.execute('backend_logic_set', { characterId: 'char1', luaSource: 'return 1' });
+      expect(noGenerate.content).toContain('write rejected (NOT saved)');
+      expect(noGenerate.content).toContain('must define generate');
+      let ext = charStore.get('char1')!.extensions['contextualBackend'] as Record<string, unknown> | undefined;
+      expect(ext?.['luaSource'] ?? '').toBe('');
+
+      // main-before-modules is a legal authoring order: an unresolved require
+      // is tolerated at write time (the dry-run validates the full set).
+      const early = await template.execute('backend_logic_set', {
+        characterId: 'char1',
+        luaSource: 'local x = require("lib/later")\nfunction generate(p, c) return "x" end',
+      });
+      expect(early.content).not.toContain('Error');
+      ext = charStore.get('char1')!.extensions['contextualBackend'] as Record<string, unknown>;
+      expect(ext['luaSource']).toContain('lib/later');
+    });
+
+    it('backend_file_set validates a module against the map: sibling require works, not-yet-written siblings tolerated', async () => {
+      const { template } = makeTemplate({ characters: [makeCharacter()] });
+      await template.execute('backend_file_set', { characterId: 'char1', path: 'lib/a.lua', luaSource: 'return 1' });
+      const res = await template.execute('backend_file_set', {
+        characterId: 'char1',
+        path: 'lib/b.lua',
+        luaSource: 'local a = require("lib/a")\nreturn a + 1',
+      });
+      expect(res.content).not.toContain('Error');
+      const early = await template.execute('backend_file_set', {
+        characterId: 'char1',
+        path: 'lib/c.lua',
+        luaSource: 'local nope = require("lib/later")\nreturn nope',
+      });
+      expect(early.content).not.toContain('Error');
     });
 
     it('backend_logic_set errors for an unknown character', async () => {
