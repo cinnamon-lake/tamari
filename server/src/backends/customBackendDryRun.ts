@@ -26,6 +26,9 @@ export interface DryRunOptions {
   input: string;
   /** Canned script-state snapshot (raw string, same format as _toolState values). */
   state?: string;
+  /** Canned full branch history backing the `chat` global (oldest first).
+      Omit → `chat` is nil in the dry-run, exactly like a branchless generation. */
+  history?: Array<{ role: string; content: string }>;
   /** Canned answer for every delegated backends.generate() call — text, or
       `{ error }` to test delegation-failure paths (the bridge throws into Lua,
       exactly like a real failed delegation). */
@@ -122,6 +125,12 @@ export async function dryRunBackendScript(runtime: LuaRuntime, opts: DryRunOptio
       characterId: opts.character?.id,
       generationType: 'normal',
       scriptState: opts.state,
+      ...(opts.history
+        ? {
+            branchHistory: async () =>
+              opts.history!.map((h, i) => ({ id: `dry-${i + 1}`, role: h.role, content: h.content })),
+          }
+        : {}),
     }),
   );
 

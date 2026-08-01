@@ -26,6 +26,7 @@ import type { IToolsetRepository } from '../repos/ToolsetRepository.js';
 import type { IChatRepository } from '../repos/ChatRepository.js';
 import type { ChatPromptAssembly } from './ChatPromptAssembly.js';
 import type { GenerationTarget, ResolvedGenerationBackend, ToolContextMessage } from './GenerationTarget.js';
+import { FULL_BRANCH_MESSAGE_LIMIT } from './GenerationTarget.js';
 
 export interface TranscriptTargetDeps {
   chats: IChatRepository;
@@ -210,6 +211,32 @@ export class TranscriptTarget implements GenerationTarget {
     }
     if (this.kind === 'genraw') return transcript;
     const branch = await this.deps.chats.getActiveBranch(this.chatId, { limit: 100 });
+    return [
+      ...branch.map((m) => ({
+        id: String(m.id),
+        role: m.role,
+        content: getMessageText(m.extra.parts),
+        extra: m.extra,
+      })),
+      ...transcript,
+    ];
+  }
+
+  /** Full-history variant: same span, but the parent branch is uncapped. */
+  async fullBranchMessages(): Promise<ToolContextMessage[]> {
+    const transcript: ToolContextMessage[] = [
+      { id: 'seed', role: 'user', content: this.seed },
+    ];
+    if (this.parts.length > 0) {
+      transcript.push({
+        id: 'transcript',
+        role: 'assistant',
+        content: getMessageText(this.parts),
+        extra: { parts: this.parts },
+      });
+    }
+    if (this.kind === 'genraw') return transcript;
+    const branch = await this.deps.chats.getActiveBranch(this.chatId, { limit: FULL_BRANCH_MESSAGE_LIMIT });
     return [
       ...branch.map((m) => ({
         id: String(m.id),

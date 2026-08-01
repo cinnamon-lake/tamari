@@ -74,6 +74,10 @@ export class DraftTarget implements GenerationTarget {
     return [];
   }
 
+  async fullBranchMessages(): Promise<ToolContextMessage[]> {
+    return [];
+  }
+
   write(item: BackendStreamItem): void {
     if (item.type === 'text') {
       this.streamingText += item.token;

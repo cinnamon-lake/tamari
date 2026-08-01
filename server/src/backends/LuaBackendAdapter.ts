@@ -42,6 +42,7 @@ import type {
   BackendAdapter,
   BackendCallContext,
   BackendStreamItem,
+  BranchHistoryMessage,
   GenerationResult,
   Prompt,
   ToolCall,
@@ -66,6 +67,8 @@ export interface DelegatedGenerateResult {
   usage: { promptTokens: number; completionTokens: number };
   /** Structured error chain from the delegate (propagated, never re-wrapped). */
   traceError?: TraceError;
+  /** Tool calls the delegate wants to make (surfaced so scripts can run their own tool loop). */
+  toolCalls?: ToolCall[];
 }
 
 /**
@@ -269,6 +272,43 @@ export class LuaBackendAdapter implements BackendAdapter {
       // pressure in string-heavy scripts (gsub on proxy-backed strings panics
       // the engine), and card scripts live on string ops.
       lua.global.set('backends', backendsGlobal);
+
+      // The `chat` global: FULL branch history (unbudgeted — unlike
+      // prompt.messages, which is capped by promptHistoryLimit/chatTruncation
+      // and the token budget). Lazy: the branch loads at most once per turn,
+      // and only when the script actually calls chat.* — this is the recall
+      // source for scripts that compress the delegate's view of history.
+      // Absent entirely when the generation has no branch (scripts must
+      // branch on `if chat then ... end`).
+      if (ctx?.branchHistory) {
+        const load = ctx.branchHistory;
+        let memo: Promise<BranchHistoryMessage[]> | undefined;
+        const branch = () => (memo ??= load());
+        lua.global.set('chat', {
+          count: async () => (await branch()).length,
+          get: async (index: unknown) => {
+            const i = typeof index === 'number' ? Math.floor(index) : NaN;
+            const messages = await branch();
+            if (i < 1 || i > messages.length) return undefined; // Lua nil
+            return messages[i - 1];
+          },
+          find: async (query: unknown, limit: unknown) => {
+            const q = typeof query === 'string' ? query.toLowerCase() : '';
+            if (!q) return [];
+            const cap = Math.min(typeof limit === 'number' && limit > 0 ? Math.floor(limit) : 10, 50);
+            const messages = await branch();
+            const out: Array<{ index: number; id: string; role: string; content: string }> = [];
+            for (let i = messages.length - 1; i >= 0 && out.length < cap; i--) {
+              const m = messages[i]!;
+              if (m.content.toLowerCase().includes(q)) {
+                out.push({ index: i + 1, id: m.id, role: m.role, content: m.content });
+              }
+            }
+            return out;
+          },
+        });
+      }
+
       await lua.doString(
         `__prompt = ${toLuaLiteral(prompt)}\n__ctx = ${toLuaLiteral({
           chatId: ctx?.chatId ?? null,
@@ -468,5 +508,6 @@ export async function runAdapterBlocking(
     // Propagate the delegate's structured chain as-is — never re-wrap here;
     // the delegating adapter wraps it as DELEGATE_ERROR cause at the bridge.
     traceError: result.traceError,
+    ...(result.toolCalls && result.toolCalls.length > 0 ? { toolCalls: result.toolCalls } : {}),
   };
 }

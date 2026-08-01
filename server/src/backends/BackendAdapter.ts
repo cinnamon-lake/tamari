@@ -40,6 +40,15 @@ export interface ToolCall {
 
 // ---------- Call context ----------
 
+/** One message of the full (unbudgeted) branch history, for Lua backend scripts. */
+export interface BranchHistoryMessage {
+  id: string;
+  role: string;
+  content: string;
+  characterId?: string;
+  personaId?: string;
+}
+
 /**
  * Optional context about the generation call, passed to adapters that care
  * (currently only LuaBackendAdapter — custom backends expose it to the script
@@ -53,9 +62,18 @@ export interface BackendCallContext {
   /**
    * Latest branch-aware script state snapshot (raw string, from
    * `message.extra._toolState[backend.id]`) for stateful custom backends.
-   * Scanned by GenerationService; consumed only by LuaBackendAdapter.
+   * Scanned by GenerationRunner over the full branch; consumed only by
+   * LuaBackendAdapter.
    */
   scriptState?: string;
+  /**
+   * Lazy loader for the FULL branch history (unbounded by promptHistoryLimit /
+   * chatTruncation / the token budget) — exposed to Lua scripts as the `chat`
+   * global. Absent when there is no branch (dry-run without canned history,
+   * non-chat targets). Supplied by GenerationRunner; consumed only by
+   * LuaBackendAdapter; the loader runs at most once per call when scripts use it.
+   */
+  branchHistory?: () => Promise<BranchHistoryMessage[]>;
 }
 
 // ---------- Streaming ----------

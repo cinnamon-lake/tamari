@@ -229,6 +229,114 @@ describe('LuaBackendAdapter', () => {
     expect(result.usage).toEqual({ promptTokens: 6, completionTokens: 14 });
   });
 
+  it('surfaces delegate toolCalls to the script', async () => {
+    const delegate = makeDelegate({
+      generate: vi.fn(async (): Promise<DelegatedGenerateResult> => ({
+        text: '',
+        finishReason: 'stop',
+        usage: { promptTokens: 1, completionTokens: 1 },
+        toolCalls: [{ id: 'call_1', name: 'roll_dice', arguments: { sides: 20 } }],
+      })),
+    });
+    const adapter = makeAdapter(`
+      function generate(prompt, ctx)
+        local res = backends.generate(prompt):await()
+        if res.toolCalls and #res.toolCalls > 0 then
+          local call = res.toolCalls[1]
+          return call.id .. "|" .. call.name .. "|" .. tostring(call.arguments.sides)
+        end
+        return "no-calls"
+      end
+    `, delegate);
+    const { items } = await run(adapter);
+    expect(items).toEqual([{ type: 'text', token: 'call_1|roll_dice|20' }]);
+  });
+
+  it('round-trips a script-owned tool loop through the delegate', async () => {
+    const seen: Prompt[] = [];
+    const delegate = makeDelegate({
+      generate: vi.fn(async (_configId: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
+        seen.push(JSON.parse(JSON.stringify(prompt)) as Prompt);
+        if (seen.length === 1) {
+          return {
+            text: '',
+            finishReason: 'stop',
+            usage: { promptTokens: 1, completionTokens: 1 },
+            toolCalls: [{ id: 'call_1', name: 'roll_dice', arguments: { sides: 20 } }],
+          };
+        }
+        return { text: 'You rolled 17.', finishReason: 'stop', usage: { promptTokens: 1, completionTokens: 1 } };
+      }),
+    });
+    const adapter = makeAdapter(`
+      function generate(prompt, ctx)
+        local sub = {}
+        for k, v in pairs(prompt) do sub[k] = v end
+        sub.tools = { { type = "function", ["function"] = { name = "roll_dice", description = "Roll dice", parameters = { type = "object" } } } }
+        local res = backends.generate(sub):await()
+        while res.toolCalls and #res.toolCalls > 0 do
+          local content = {}
+          for _, call in ipairs(res.toolCalls) do
+            content[#content + 1] = { type = "tool_use", id = call.id, name = call.name, input = call.arguments }
+            content[#content + 1] = { type = "tool_result", toolUseId = call.id, name = call.name, content = "17" }
+          end
+          sub.messages[#sub.messages + 1] = { role = "assistant", content = content }
+          res = backends.generate(sub):await()
+        end
+        return res.text
+      end
+    `, delegate);
+    const { items } = await run(adapter);
+    expect(items).toEqual([{ type: 'text', token: 'You rolled 17.' }]);
+    expect(seen).toHaveLength(2);
+    // Script-defined tool schemas cross as ToolDefinition[].
+    expect(seen[0]!.tools).toEqual([
+      { type: 'function', function: { name: 'roll_dice', description: 'Roll dice', parameters: { type: 'object' } } },
+    ]);
+    // The continuation message carries tool_use + tool_result parts (camelCase keys).
+    const messages = seen[1]!.messages;
+    const last = messages[messages.length - 1]!;
+    expect(last.role).toBe('assistant');
+    expect(last.content).toEqual([
+      { type: 'tool_use', id: 'call_1', name: 'roll_dice', input: { sides: 20 } },
+      { type: 'tool_result', toolUseId: 'call_1', name: 'roll_dice', content: '17' },
+    ]);
+  });
+
+  it('exposes full branch history via the chat global (lazy, memoized)', async () => {
+    const branch = [
+      { id: '1', role: 'user', content: 'hello there' },
+      { id: '2', role: 'assistant', content: 'five goblins attack' },
+      { id: '3', role: 'user', content: 'I fight the goblins' },
+    ];
+    const branchHistory = vi.fn(async () => branch);
+    const adapter = makeAdapter(`
+      function generate(prompt, ctx)
+        local n = chat.count():await()
+        local m2 = chat.get(2):await()
+        local missing = chat.get(99):await()
+        local hits = chat.find("GOBLINS"):await()
+        return table.concat({ tostring(n), m2.content, tostring(missing), tostring(#hits), tostring(hits[1].index), tostring(hits[2].index) }, "|")
+      end
+    `);
+    const { items } = await consumeStream(
+      adapter.stream(makePrompt(), new AbortController().signal, { chatId: 'chat1', generationType: 'normal', branchHistory }),
+    );
+    expect(items).toEqual([{ type: 'text', token: '3|five goblins attack|nil|2|3|2' }]);
+    expect(branchHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves chat nil when no branchHistory is provided', async () => {
+    const adapter = makeAdapter(`
+      function generate(prompt, ctx)
+        if chat then return "present" end
+        return "absent"
+      end
+    `);
+    const { items } = await run(adapter);
+    expect(items).toEqual([{ type: 'text', token: 'absent' }]);
+  });
+
   it('normalizes response_format to responseFormat on delegate calls', async () => {
     const delegate = makeDelegate();
     const adapter = makeAdapter(`

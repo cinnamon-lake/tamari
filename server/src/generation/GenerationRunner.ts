@@ -32,13 +32,14 @@ import type { GenerationMeta } from '@tamari/types';
 import { buildBackendSettings } from '../backends/buildBackendSettings.js';
 import type { BackendAdapterFactory } from '../backends/factory.js';
 import { createContextualBackendAdapter, getCharacterBackendScript } from '../backends/customBackendFactory.js';
+import { LuaBackendAdapter } from '../backends/LuaBackendAdapter.js';
 import type { LuaRuntime } from '../scripting/LuaRuntime.js';
 import type { ICustomBackendRepository } from '../repos/CustomBackendRepository.js';
 import type { ToolRegistry } from '../services/ToolRegistry.js';
 import type { GenerationBroadcastService } from '../services/GenerationBroadcastService.js';
 import { findLatestStateSnapshot } from '../services/toolState.js';
 import { AsyncMutex, type ChatLock } from './AsyncMutex.js';
-import type { GenerationTarget, ResolvedGenerationBackend } from './GenerationTarget.js';
+import type { GenerationTarget, ResolvedGenerationBackend, ToolContextMessage } from './GenerationTarget.js';
 
 const log = getLogger('GenerationRunner');
 
@@ -383,11 +384,28 @@ export class GenerationRunner {
         this.deps.generationBroadcast.broadcastPromptAnnounced(target.chatId, generationId, prompt);
       }
 
+      // Full branch (unbudgeted) is loaded at most once per round and only
+      // when needed: Lua backends get their script-state scan over the WHOLE
+      // branch (a _toolState snapshot older than promptHistoryLimit must still
+      // restore — the bounded toolContextMessages read would miss it), and the
+      // lazy branchHistory loader backs the Lua `chat` global. Built-in
+      // adapters consume neither, so the scan is skipped for them entirely.
+      const isLuaBackend = resolved.backend instanceof LuaBackendAdapter;
+      let fullBranch: Promise<ToolContextMessage[]> | undefined;
+      const loadFullBranch = () => (fullBranch ??= target.fullBranchMessages());
       const stream = resolved.backend.stream(prompt, abortController.signal, {
         chatId: target.chatId,
         characterId: target.character?.id,
         generationType: target.kind,
-        scriptState: findLatestStateSnapshot(resolved.backend.id, await target.toolContextMessages()),
+        ...(isLuaBackend ? { scriptState: findLatestStateSnapshot(resolved.backend.id, await loadFullBranch()) } : {}),
+        branchHistory: async () =>
+          (await loadFullBranch()).map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            ...(m.extra?.characterId ? { characterId: m.extra.characterId } : {}),
+            ...(m.extra?.personaId ? { personaId: m.extra.personaId } : {}),
+          })),
       });
       let next = await stream.next();
       while (!next.done) {

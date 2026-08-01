@@ -23,6 +23,10 @@ import type { Character, SettingsMap, BackendConfig, PromptList } from '@tamari/
 import type { ToolResult } from '../services/ToolRegistry.js';
 import type { ToolContextMessage } from '../services/ToolTemplate.js';
 
+/** Effectively-uncapped branch read for full-history consumers (Lua backends,
+    StApi) — mirrors StApi's FULL_BRANCH_MESSAGE_LIMIT. */
+export const FULL_BRANCH_MESSAGE_LIMIT = 10000;
+
 /** The runner's resolved backend bundle, handed down to `target.prompt()`. */
 export interface ResolvedGenerationBackend {
   allSettings: SettingsMap;
@@ -76,6 +80,13 @@ export interface GenerationTarget {
   /** Conversation context for tool execution (branch read for chat targets,
       accumulated messages for transcript targets). */
   toolContextMessages(): Promise<ToolContextMessage[]>;
+
+  /** The FULL branch — unbounded by promptHistoryLimit / chatTruncation /
+      token budget (FULL_BRANCH_MESSAGE_LIMIT applies). Powers Lua-backend
+      history access (the `chat` global) and full-branch script-state scans.
+      Chat targets: uncapped branch read; transcript targets: same span as
+      toolContextMessages(); ephemeral targets: empty. */
+  fullBranchMessages(): Promise<ToolContextMessage[]>;
 
   // ── Policy 2: persistence & broadcasting ───────────────────────────────
 
