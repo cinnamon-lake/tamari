@@ -12,6 +12,7 @@ import { QUICK_REPLIES_DOC } from './quickReplies.js';
 import { CHATS_DOC } from './chats.js';
 import { GAME_CARDS_DOC } from './gameCards.js';
 import { GAME_CARDS_FACTORY_DOC } from './gameCardsFactory.js';
+import { GAME_CARDS_EVENTS_DOC } from './gameCardsEvents.js';
 
 export const DOCS_TOPICS = [
   'characters',
@@ -28,6 +29,7 @@ export const DOCS_TOPICS = [
   'chats',
   'game_cards',
   'game_cards_factory',
+  'game_cards_events',
 ] as const;
 
 export type DocsTopic = (typeof DOCS_TOPICS)[number];
@@ -47,4 +49,5 @@ export const DOCS_CONTENT: Record<DocsTopic, string> = {
   chats: CHATS_DOC,
   game_cards: GAME_CARDS_DOC,
   game_cards_factory: GAME_CARDS_FACTORY_DOC,
+  game_cards_events: GAME_CARDS_EVENTS_DOC,
 };

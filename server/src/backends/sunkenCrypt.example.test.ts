@@ -16,6 +16,14 @@ import { consumeStream, type BackendStreamItem, type Prompt } from './BackendAda
 
 const luaSource = readFileSync(new URL('../../../docs/design/examples/sunken-crypt/main.lua', import.meta.url), 'utf8');
 
+// The card VFS: main.lua requires the vendored game lib as lib/*.lua.
+const LIB_FILES: Record<string, string> = Object.fromEntries(
+  ['loop', 'collapse', 'transcript', 'sanitize', 'chrome', 'ledger', 'toolset', 'todo', 'registry', 'summarize', 'maptag'].map((m) => [
+    `lib/${m}.lua`,
+    readFileSync(new URL(`../../../docs/design/examples/game-lib/${m}.lua`, import.meta.url), 'utf8'),
+  ]),
+);
+
 const USAGE = { promptTokens: 1, completionTokens: 1 };
 
 interface CryptState {
@@ -57,6 +65,7 @@ function makeAdapter(delegate: CustomBackendDelegate, source = luaSource): LuaBa
     luaSource: source,
     runtime: new LuaRuntime(),
     delegate,
+    vfsFiles: LIB_FILES,
   });
 }
 
@@ -170,6 +179,50 @@ describe('The Sunken Crypt (factory-ratio card)', () => {
     expect(pack.interactables['r1:crate']!.effect!.gold).toBe(5);
     expect(state.room).toBe('f1:r1'); // placed at the designed entrance
     expect('pack' in state).toBe(false); // hot state only
+    // The map tag is fog-of-war: only the entrance is known, the frontier
+    // shows as "?", and the stairs marker waits until the stairs are seen.
+    expect(text).toContain('[MAP|cur=r1|ent=r1|rooms=r1=Collapsed Nave;r2=?|edges=r1>north>r2|stairs=]');
+  });
+
+  it('delegate self-planning: set_todo round-trips through the planning tool loop', async () => {
+    const calls: Prompt[] = [];
+    let round = 0;
+    const delegate: CustomBackendDelegate = {
+      generate: vi.fn(async (_configId: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
+        calls.push(JSON.parse(JSON.stringify(prompt)) as Prompt);
+        round++;
+        if (round === 1) {
+          return {
+            text: '', finishReason: 'stop', usage: USAGE,
+            toolCalls: [{ id: 'p1', name: 'set_todo', arguments: { items: ['lay out the map', 'place the stairs', 'write the intro'] } }],
+          };
+        }
+        if (round === 2) {
+          return {
+            text: '', finishReason: 'stop', usage: USAGE,
+            toolCalls: [
+              { id: 'd1', name: 'todo_done', arguments: { index: 1 } },
+              { id: 't2', name: 'add_rooms', arguments: { rooms: [
+                { id: 'r1', name: 'Collapsed Nave', desc: 'Dust and old bones.', exits: { down: 'DOWN' } },
+              ] } },
+            ],
+          };
+        }
+        return { text: 'You stand in the Collapsed Nave.', finishReason: 'stop', usage: USAGE };
+      }),
+      resolveAdapter: noPassthrough(),
+    };
+    const { state, text } = await runTurn(makeAdapter(delegate), 'look', undefined);
+    // The plan persisted in branch-aware state; the first item is done.
+    const todos = (state as unknown as { todos: Array<{ text: string; done: boolean }> }).todos;
+    expect(todos).toHaveLength(3);
+    expect(todos[0]).toEqual({ text: 'lay out the map', done: true });
+    expect(todos[1]!.done).toBe(false);
+    // The tool result echoed the remaining plan back into the next round.
+    const round2 = JSON.stringify(calls[1]!.messages);
+    expect(round2).toContain('plan set');
+    expect(round2).toContain('place the stairs');
+    expect(text).toContain('You stand in the Collapsed Nave.');
   });
 
   it('graph validation: dangling exits dropped, unreachable rooms pruned, stairs guaranteed', async () => {
@@ -228,6 +281,12 @@ describe('The Sunken Crypt (factory-ratio card)', () => {
       ]);
     expect(state.room).toBe('f1:r3'); // only possible if the v2 pack was read
     expect(text).toContain('Stone seats in rows.');
+    // Fog-of-war: the path taken is named, r2 is frontier "?", and now that
+    // the stairs room itself has been reached, the marker shows.
+    expect(text).toContain('r1=Collapsed Nave');
+    expect(text).toContain('r3=Silent Choir');
+    expect(text).toContain('r2=?');
+    expect(text).toContain('|stairs=r3]');
   });
 
   it('random encounters: Lua rolls the floor roster on room entry, kills quiet the room', async () => {
@@ -359,6 +418,39 @@ describe('The Sunken Crypt (factory-ratio card)', () => {
     expect(transcript).toContain('not carried: bomb');
     expect(transcript).toContain('rejected');
     expect(state.inventory['bomb']).toBeUndefined();
+  });
+
+  it('a finished fight closes its span with a delegate-written gist over the mechanical blows', async () => {
+    const luaAlways = luaSource.replace('local ENCOUNTER_CHANCE = 0.3', 'local ENCOUNTER_CHANCE = 1');
+    const history = [{ role: 'assistant', content: F1_BLOB }];
+
+    // t1: the encounter rolls — no delegate, and the [fight …] span opens.
+    const t1 = await runTurn(makeAdapter(neverDelegate(), luaAlways), '/go north', JSON.stringify({ room: 'f1:r1' }), history);
+    expect(t1.text).toContain('It lunges.');
+    expect(t1.text).toContain('[fight Crypt Rat]');
+
+    // t2: the killing blow. The gist sub-gen fires — the ONLY delegate call —
+    // sees the fight span (open tag visible in history), and the close tag
+    // carries its line.
+    const gistPrompts: Prompt[] = [];
+    const delegate: CustomBackendDelegate = {
+      generate: vi.fn(async (_configId: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
+        gistPrompts.push(JSON.parse(JSON.stringify(prompt)) as Prompt);
+        return { text: 'You barely beat the rat, and it cost you.', finishReason: 'stop', usage: USAGE };
+      }),
+      resolveAdapter: noPassthrough(),
+    };
+    const t2 = await runTurn(
+      makeAdapter(delegate, luaAlways), 'attack', t1.scriptState,
+      history, 'normal',
+      [{ role: 'assistant', content: t1.text }], // the open tag rides the branch's prompt messages
+    );
+    expect(t2.text).toContain('The rat twitches and is still.');
+    expect(t2.text).toContain('[/fight Crypt Rat summary="You barely beat the rat, and it cost you."]');
+    expect(gistPrompts).toHaveLength(1);
+    const span = JSON.stringify(gistPrompts[0]!.messages);
+    expect(span).toContain('It lunges.');
+    expect(span).not.toContain('[pack f1]'); // the span is the fight, not the pack
   });
 
   it('combat is served from canned lines with zero delegate calls', async () => {

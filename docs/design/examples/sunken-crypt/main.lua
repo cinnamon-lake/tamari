@@ -13,12 +13,33 @@
 -- extra steps. Make the model lay out a whole map, then let the player get
 -- lost in it for free.
 --
+-- Built on the game lib (docs/design/examples/game-lib/, vendored into this
+-- card as backend_logic/lib/*.lua): loop (tool loop), collapse + transcript
+-- (delegate view), sanitize (decoded-JSON hygiene), chrome (buttons/acks),
+-- ledger (plot promises), todo (delegate self-planning), toolset (tool
+-- composition), registry (add_encounter's validate-clamp-file pipeline).
+--
 -- Companion display rules:
---   /\s*\[sys\].*?\[\/sys\]\s*/gis → "\n\n" (hide [sys] acks)
+--   /\s*\[sys\].*?\[\/sys\]\s*/gis → "\n\n" (hide [sys] acks — a UNIVERSAL
+--   prompt+display rule: [sys] is script chrome hidden from BOTH the player
+--   AND the prompt. In-fiction results of player actions are served as
+--   VISIBLE text instead — not every ack should be hidden. See "The chrome
+--   contract" in topic `game_cards_factory`.)
 --   optional: /^\s*\/\w+.*$/s with role userInput → "" (hide command messages;
 --   safe because posted commands are bare text with no HTML to mangle)
 --   /\[HUD\|([^\]]+)\]/g → panel HTML (HUD recipe, topic `regexes`)
 --   /\[pack (\w[\w ]*)\][\s\S]*?\[\/pack \1 summary="([^"]*)"\]/g → plot-log div
+
+local loop = require("lib/loop")
+local transcript = require("lib/transcript")
+local sanitize = require("lib/sanitize")
+local chrome = require("lib/chrome")
+local ledger = require("lib/ledger")
+local todo = require("lib/todo")
+local toolset = require("lib/toolset")
+local registry = require("lib/registry")
+local summarize = require("lib/summarize")
+local maptag = require("lib/maptag")
 
 local WIN_ITEM = "relic"
 
@@ -53,6 +74,7 @@ local function ensureState()
   state.combat = state.combat or nil -- { name, hp, maxHp, atk, lines, reward }
   state.turn = state.turn or 0
   state.escalations = state.escalations or 0
+  state.seen = state.seen or {} -- fog-of-war: full room ids ("f2:r5") the player has visited
   state.won = state.won or false
   state.dead = state.dead or false
 end
@@ -73,13 +95,6 @@ local function lastUserText(prompt)
   return ""
 end
 
--- "[sys]/go north[/sys]" (legacy) or "go north" / "/go north" → "go north"
-local function unwrap(text)
-  local inner = text:match("^%s*%[sys%](.-)%[/sys%]%s*$") or text
-  inner = inner:gsub("^%s*(.-)%s*$", "%1")
-  return (inner:gsub("^/", ""))
-end
-
 local function hud(pack)
   local where = state.room
   if pack then
@@ -90,10 +105,35 @@ local function hud(pack)
     where, state.hp, state.maxHp, state.atk, state.gold)
 end
 
-local function btn(cmd, label)
-  -- Bare command payloads — NEVER [sys]-wrapped: display regexes are
-  -- structure-blind and would mangle the attribute, killing the button.
-  return '<button data-post-response="/' .. cmd .. '">' .. label .. "</button>"
+-- The map as a compact tag: the floor's room graph in one line, FOG-OF-WAR
+-- edition — only rooms the player has actually visited get names, rooms on
+-- the frontier show as "?", and the stairs marker waits until the stairs
+-- room is seen. A display rule (topic `regexes`, HUD recipe) lays it out
+-- and renders it; stored text stays small and the map is branch- and
+-- era-correct for free.
+local function mapTag(pack)
+  if not pack then return "" end
+  local fid = floorOf(state.room)
+  local seen = {}
+  for rid in pairs(state.seen) do
+    if floorOf(rid) == fid then seen[subOf(rid)] = true end
+  end
+  return maptag.tag(pack.rooms, {
+    cur = subOf(state.room),
+    entrance = pack.entrance,
+    stairs = pack.stairsDown,
+    seen = seen,
+  })
+end
+
+local function statusTags(pack)
+  return hud(pack) .. "\n" .. mapTag(pack)
+end
+
+-- Fog-of-war: every turn that leaves the player somewhere marks the room as
+-- seen. Called from each return path (planning, continue, serve/escalate).
+local function markSeen()
+  state.seen[state.room] = true
 end
 
 local function buttonsHtml(pack)
@@ -102,8 +142,8 @@ local function buttonsHtml(pack)
   if state.combat then
     -- Combat is a MODE: the only verbs are attack and flee, so the only
     -- buttons are Attack and Flee. No exit buttons while a monster lives.
-    out[#out + 1] = btn("attack", "Attack " .. state.combat.name)
-    out[#out + 1] = btn("flee", "Flee")
+    out[#out + 1] = chrome.btn("attack", "Attack " .. state.combat.name)
+    out[#out + 1] = chrome.btn("flee", "Flee")
     return table.concat(out, " ")
   end
   if pack then
@@ -114,14 +154,14 @@ local function buttonsHtml(pack)
       table.sort(dirs)
       for _, d in ipairs(dirs) do
         if room.exits[d] == "down" then
-          out[#out + 1] = btn("go down", "Descend")
+          out[#out + 1] = chrome.btn("go down", "Descend")
         else
-          out[#out + 1] = btn("go " .. d, "Go " .. d)
+          out[#out + 1] = chrome.btn("go " .. d, "Go " .. d)
         end
       end
     end
     if depthOfFloor(floorOf(state.room)) > 1 then
-      out[#out + 1] = btn("up", "Climb up")
+      out[#out + 1] = chrome.btn("up", "Climb up")
     end
   end
   return table.concat(out, " ")
@@ -151,19 +191,6 @@ local function composeSummary(pack, repairs)
   return s:gsub('"', "'")
 end
 
--- json.decode maps JSON null to a truthy js_null userdata, NOT Lua nil —
--- `if pack.encounter then` would take the wrong branch and `..` on it errors.
--- Strip anything that isn't plain data before using decoded JSON.
-local function cleanNulls(t)
-  if type(t) ~= "table" then return t end
-  for k, v in pairs(t) do
-    local tv = type(v)
-    if tv == "table" then cleanNulls(v)
-    elseif tv ~= "string" and tv ~= "number" and tv ~= "boolean" then t[k] = nil end
-  end
-  return t
-end
-
 -- Find the NEWEST pack blob for a floor in the full branch (chat global).
 local function findPack(id)
   if not chat then return nil end
@@ -173,307 +200,139 @@ local function findPack(id)
   if not body then return nil end
   local ok, pack = pcall(json.decode, body)
   if not ok or type(pack) ~= "table" then return nil end
-  return cleanNulls(pack)
-end
-
--- ---------- the shared tool loop ----------
-
-local function runLoop(sub, res, exec, maxRounds)
-  local rounds = 0
-  local cap = maxRounds or 8
-  while res.toolCalls and #res.toolCalls > 0 and rounds < cap do
-    rounds = rounds + 1
-    local content = {}
-    for _, call in ipairs(res.toolCalls) do
-      content[#content + 1] = { type = "tool_use", id = call.id, name = call.name, input = call.arguments }
-      content[#content + 1] = { type = "tool_result", toolUseId = call.id, name = call.name, content = exec(call.name, call.arguments) }
-    end
-    sub.messages[#sub.messages + 1] = { role = "assistant", content = content }
-    res = backends.generate(sub):await()
-  end
-  return res
-end
-
--- ---------- compaction: summary-tagged blocks ----------
-
--- Collapse [/TAG summary="..."] blocks in a message list — script-side
--- compaction of a delegate's view; stored text is never touched. Cases:
---   pair visible   → the span is replaced by the close tag's summary
---   orphan close   → window start..close replaced (history cuts drop OLD
---                    messages first, so the visible prefix IS the block's tail)
---   orphan open    → still open on THIS branch → left untouched
--- Oldest-close-first, so interleaved blocks can never mismatch.
-local CLOSE_PAT = "%[/([%w][%w%s_%-]-)%s*summary=\"(.-)\"%s*%]"
-
-local function findCloseWithSummary(msgs)
-  for i = 1, #msgs do
-    local s, e, name, summary = msgs[i].content:find(CLOSE_PAT)
-    if s then return i, s, e, name, summary end
-  end
-  return nil
-end
-
-local function findOpen(msgs, closeMsg, closeS, name)
-  local pat = "%[" .. name:gsub("(%W)", "%%%1") .. "%]"
-  for i = closeMsg, 1, -1 do
-    local limit = (i == closeMsg) and (closeS - 1) or #msgs[i].content
-    local foundS
-    local pos = 1
-    while true do
-      local s, e = msgs[i].content:find(pat, pos)
-      if not s or s > limit then break end
-      foundS = s
-      pos = e + 1
-    end
-    if foundS then return i, foundS end
-  end
-  return nil
-end
-
-local function collapseBlocks(messages)
-  local msgs = {}
-  for _, m in ipairs(messages) do msgs[#msgs + 1] = m end
-  while true do
-    local closeMsg, closeS, closeE, name, summary = findCloseWithSummary(msgs)
-    if not closeMsg then return msgs end
-    local openMsg, openS = findOpen(msgs, closeMsg, closeS, name)
-    local out = {}
-    if openMsg then
-      for i = 1, openMsg - 1 do out[#out + 1] = msgs[i] end
-      local before = msgs[openMsg].content:sub(1, openS - 1)
-      if before:match("%S") then out[#out + 1] = { role = msgs[openMsg].role, content = before } end
-    end
-    out[#out + 1] = { role = msgs[closeMsg].role, content = summary }
-    local after = msgs[closeMsg].content:sub(closeE + 1)
-    if after:match("%S") then out[#out + 1] = { role = msgs[closeMsg].role, content = after } end
-    for i = closeMsg + 1, #msgs do out[#out + 1] = msgs[i] end
-    msgs = out
-  end
-end
-
--- Recent turns for a delegate: chrome-stripped, block-collapsed (pack blobs
--- arrive as their one-line summaries, not kilobytes of JSON), capped. Bare
--- slash-command user messages are dropped — the DM never sees the chrome.
-local function recentTranscript(prompt, n)
-  local msgs = {}
-  for _, m in ipairs(prompt.messages) do
-    if type(m.content) == "string" then
-      local cleaned = m.content
-        :gsub("%s*%[sys%].-%[/sys%]%s*", "\n\n")
-        :gsub("%s*<button.-></button>", "")
-        :gsub("%[HUD[^%]]*%]", "")
-        :gsub("^%s*(.-)%s*$", "%1")
-      local isCommand = m.role == "user" and cleaned:match("^/") ~= nil
-      if cleaned ~= "" and not isCommand then msgs[#msgs + 1] = { role = m.role, content = cleaned } end
-    end
-  end
-  msgs = collapseBlocks(msgs)
-  while #msgs > (n or 6) do table.remove(msgs, 1) end
-  local lines = {}
-  for _, m in ipairs(msgs) do lines[#lines + 1] = m.role .. ": " .. m.content end
-  return table.concat(lines, "\n")
-end
-
--- ---------- the ledger (plot debts) ----------
-
-local LEDGER_TOOLS = { {
-  type = "function",
-  ["function"] = {
-    name = "promise",
-    description = "File a plot debt for your future self: something that MUST happen at a later turn (foreshadowing, a scheduled event, a threat that matures).",
-    parameters = { type = "object", properties = {
-      id = { type = "string" }, what = { type = "string" }, turn = { type = "integer" } }, required = { "id", "what", "turn" } },
-  },
-}, {
-  type = "function",
-  ["function"] = {
-    name = "resolve_promise",
-    description = "Mark a plot-ledger entry as kept or failed once it comes due.",
-    parameters = { type = "object", properties = {
-      id = { type = "string" }, outcome = { type = "string" } }, required = { "id" } },
-  },
-} }
-
-local RECALL_TOOL = {
-  type = "function",
-  ["function"] = {
-    name = "recall",
-    description = "Search the FULL chat history (far beyond this prompt) for exact past text — what was actually said or done earlier.",
-    parameters = { type = "object", properties = { query = { type = "string" } }, required = { "query" } },
-  },
-}
-
--- Shared ledger executor for both toolsets (planning plants, the DM resolves).
--- Returns a result string when the name was a ledger tool, nil otherwise.
-local function tryLedger(name, args)
-  if name == "promise" then
-    local id = tostring(args.id or ""):sub(1, 30)
-    local what = tostring(args.what or ""):sub(1, 120)
-    local turn = tonumber(args.turn)
-    -- The critical validation: a concrete due anchor. No "later".
-    if id == "" or what == "" or turn == nil then
-      return "rejected: id, what, and a concrete due turn are required"
-    end
-    turn = math.max(state.turn + 1, math.min(math.floor(turn), state.turn + 50))
-    for _, p in ipairs(state.promises) do
-      if p.id == id and not p.status then return "already pending: " .. id end
-      state.promises[#state.promises + 1] = { id = id, what = what, turn = turn }
-      return json.encode({ promised = id, turn = turn })
-    end
-  end
-  if name == "resolve_promise" then
-    local id = tostring(args.id or "")
-    for _, p in ipairs(state.promises) do
-      if p.id == id and not p.status then
-        p.status = args.outcome == "failed" and "failed" or "kept"
-        return json.encode({ resolved = id, outcome = p.status })
-      end
-    end
-    return "no pending promise: " .. id
-  end
-  return nil
-end
-
--- The ledger rides in every delegate prompt; Lua computes due-ness and escalates.
-local function ledgerBlock()
-  local lines = {}
-  for _, p in ipairs(state.promises) do
-    if not p.status then
-      local tag = "pending"
-      if state.turn >= p.turn then tag = "DUE NOW"
-      elseif state.turn == p.turn - 1 then tag = "due next turn" end
-      lines[#lines + 1] = string.format("- [%s] %s (turn %d): %s", tag, p.id, p.turn, p.what)
-    end
-  end
-  if #lines == 0 then return "" end
-  return "\nPLOT LEDGER (canon — honor it, resolve with resolve_promise when due):\n" .. table.concat(lines, "\n")
+  return sanitize.data(pack)
 end
 
 -- ---------- planning: ONE sub-gen per floor, the floor as a GRAPH ----------
 
-local PLANNING_TOOLS = { {
-  type = "function",
-  ["function"] = { name = "add_description", description = "Set the floor's one-paragraph overview.",
-    parameters = { type = "object", properties = { text = { type = "string" } }, required = { "text" } } },
-}, {
-  type = "function",
-  ["function"] = { name = "add_rooms", description = "Add a batch of rooms to the floor graph (make several calls for a big floor). Each room: id (short, like r3), name, desc (ONE line), exits (direction -> room id; the one stairs room gets down -> \"DOWN\"). The FIRST room of your FIRST call is the entrance.",
-    parameters = { type = "object", properties = {
-      rooms = { type = "array", items = { type = "object", properties = {
-        id = { type = "string" }, name = { type = "string" }, desc = { type = "string" },
-        exits = { type = "object" } },
-        required = { "id", "name", "desc" } } } },
-      required = { "rooms" } } },
-}, {
-  type = "function",
-  ["function"] = { name = "add_interactable", description = "Place an object in a room. responses[1] fires on first use (with its effect), responses[2] on repeats.",
-    parameters = { type = "object", properties = {
-      room = { type = "string" },
-      name = { type = "string" },
-      responses = { type = "array", items = { type = "string" } },
-      effect = { type = "object", properties = { gold = { type = "integer" }, hp = { type = "integer" }, item = { type = "string" } } },
-    }, required = { "room", "name", "responses" } } },
-}, {
-  type = "function",
-  ["function"] = { name = "add_ambient", description = "Add rotating ambient flavor lines.",
-    parameters = { type = "object", properties = { lines = { type = "array", items = { type = "string" } } }, required = { "lines" } } },
-}, {
-  type = "function",
-  ["function"] = { name = "add_encounter", description = "Add a monster to the floor's roster (max " .. MAX_ROSTER .. ") with canned combat lines. Lua rolls roster monsters as RANDOM encounters while the player explores. hp/atk/reward clamp to the depth budget.",
-    parameters = { type = "object", properties = {
-      name = { type = "string" }, hp = { type = "integer" }, atk = { type = "integer" }, reward = { type = "integer" },
-      lines = { type = "object", properties = { intro = { type = "string" }, hit = { type = "string" }, death = { type = "string" } } },
-    }, required = { "name", "lines" } } },
-} }
--- The factory files its own story debts: planning can plant plot promises too.
-for _, t in ipairs(LEDGER_TOOLS) do PLANNING_TOOLS[#PLANNING_TOOLS + 1] = t end
-
-local function planningExec(draft, fid)
+-- The planning toolset: ledger (the factory files its own story debts) and
+-- todo (the model plans the design out loud) come from the lib; the floor
+-- tools are ad-hoc handlers over the draft; the roster is a REGISTRY in
+-- draft mode — declare the fields and budgets, the lib owns validation,
+-- clamping, the roster cap, and the canonical result.
+local function planningToolset(draft, fid)
   local depth = depthOfFloor(fid)
-  return function(name, args)
-    args = args or {}
-    local ledgerResult = tryLedger(name, args)
-    if ledgerResult then return ledgerResult end
-    if name == "add_description" then
-      draft.description = tostring(args.text or ""):sub(1, 400)
-      return "ok"
-    end
-    if name == "add_rooms" then
-      if type(args.rooms) ~= "table" then return "rejected: rooms array required" end
-      local added = {}
-      for _, r in ipairs(args.rooms) do
-        if type(r) == "table" then
-          local id = tostring(r.id or ""):lower():sub(1, 12)
-          if id == "" or draft.rooms[id] then
-            return "rejected: empty or duplicate room id '" .. id .. "' (added so far: " .. table.concat(added, ", ") .. ")"
-          end
-          local exits = {}
-          if type(r.exits) == "table" then
-            for dir, to in pairs(r.exits) do
-              exits[tostring(dir):lower():sub(1, 12)] = tostring(to):lower():sub(1, 12)
-            end
-          end
-          draft.rooms[id] = {
-            name = tostring(r.name or id):sub(1, 30),
-            desc = tostring(r.desc or ""):sub(1, 140),
-            exits = exits,
-          }
-          draft.roomOrder[#draft.roomOrder + 1] = id
-          added[#added + 1] = id
+  local ts = toolset.new()
+  ts:use(ledger)
+  ts:use(todo)
+
+  ts:handle("add_description", function(args)
+    draft.description = tostring(args.text or ""):sub(1, 400)
+    return "ok"
+  end, {
+    type = "function",
+    ["function"] = { name = "add_description", description = "Set the floor's one-paragraph overview.",
+      parameters = { type = "object", properties = { text = { type = "string" } }, required = { "text" } } },
+  })
+
+  ts:handle("add_rooms", function(args)
+    if type(args.rooms) ~= "table" then return "rejected: rooms array required" end
+    local added = {}
+    for _, r in ipairs(args.rooms) do
+      if type(r) == "table" then
+        local id = tostring(r.id or ""):lower():sub(1, 12)
+        if id == "" or draft.rooms[id] then
+          return "rejected: empty or duplicate room id '" .. id .. "' (added so far: " .. table.concat(added, ", ") .. ")"
         end
+        local exits = {}
+        if type(r.exits) == "table" then
+          for dir, to in pairs(r.exits) do
+            exits[tostring(dir):lower():sub(1, 12)] = tostring(to):lower():sub(1, 12)
+          end
+        end
+        draft.rooms[id] = {
+          name = tostring(r.name or id):sub(1, 30),
+          desc = tostring(r.desc or ""):sub(1, 140),
+          exits = exits,
+        }
+        draft.roomOrder[#draft.roomOrder + 1] = id
+        added[#added + 1] = id
       end
-      -- Targets are NOT checked here — later batches may define them. The
-      -- graph pass after planning drops dangling exits and prunes strays.
-      return "ok: " .. table.concat(added, ", ")
     end
-    if name == "add_interactable" then
-      local room = tostring(args.room or ""):lower():sub(1, 12)
-      local iname = tostring(args.name or ""):lower():sub(1, 30)
-      if room == "" or iname == "" then return "rejected: room and name required" end
-      local responses = {}
-      if type(args.responses) == "table" then
-        for _, r in ipairs(args.responses) do responses[#responses + 1] = tostring(r):sub(1, 200) end
-      end
-      if #responses == 0 then responses = { "Nothing happens." } end
-      local effect
-      if type(args.effect) == "table" then
-        effect = {}
-        if tonumber(args.effect.gold) then effect.gold = math.min(math.floor(tonumber(args.effect.gold)), 5 * depth) end
-        if tonumber(args.effect.hp) then effect.hp = math.max(-10, math.min(10, math.floor(tonumber(args.effect.hp)))) end
-        if type(args.effect.item) == "string" then effect.item = args.effect.item:lower():sub(1, 30) end
-      end
-      draft.interactables[room .. ":" .. iname] = { responses = responses, effect = effect }
-      return "ok: " .. room .. ":" .. iname
+    -- Targets are NOT checked here — later batches may define them. The
+    -- graph pass after planning drops dangling exits and prunes strays.
+    return "ok: " .. table.concat(added, ", ")
+  end, {
+    type = "function",
+    ["function"] = { name = "add_rooms", description = "Add a batch of rooms to the floor graph (make several calls for a big floor). Each room: id (short, like r3), name, desc (ONE line), exits (direction -> room id; the one stairs room gets down -> \"DOWN\"). The FIRST room of your FIRST call is the entrance.",
+      parameters = { type = "object", properties = {
+        rooms = { type = "array", items = { type = "object", properties = {
+          id = { type = "string" }, name = { type = "string" }, desc = { type = "string" },
+          exits = { type = "object" } },
+          required = { "id", "name", "desc" } } } },
+        required = { "rooms" } } },
+  })
+
+  ts:handle("add_interactable", function(args)
+    local room = tostring(args.room or ""):lower():sub(1, 12)
+    local iname = tostring(args.name or ""):lower():sub(1, 30)
+    if room == "" or iname == "" then return "rejected: room and name required" end
+    local responses = {}
+    if type(args.responses) == "table" then
+      for _, r in ipairs(args.responses) do responses[#responses + 1] = tostring(r):sub(1, 200) end
     end
-    if name == "add_ambient" then
-      if type(args.lines) == "table" then
-        for _, l in ipairs(args.lines) do draft.ambient[#draft.ambient + 1] = tostring(l):sub(1, 200) end
-      end
-      return "ok"
+    if #responses == 0 then responses = { "Nothing happens." } end
+    local effect
+    if type(args.effect) == "table" then
+      effect = {}
+      if tonumber(args.effect.gold) then effect.gold = math.min(math.floor(tonumber(args.effect.gold)), 5 * depth) end
+      if tonumber(args.effect.hp) then effect.hp = math.max(-10, math.min(10, math.floor(tonumber(args.effect.hp)))) end
+      if type(args.effect.item) == "string" then effect.item = args.effect.item:lower():sub(1, 30) end
     end
-    if name == "add_encounter" then
-      if #draft.encounterTable >= MAX_ROSTER then
-        return "rejected: roster full (" .. MAX_ROSTER .. " monsters per floor)"
-      end
-      local hp = math.max(1, math.min(tonumber(args.hp) or 6, 6 + depth * 4))
-      local atk = math.max(1, math.min(tonumber(args.atk) or 2, 1 + depth))
-      local lines = type(args.lines) == "table" and args.lines or {}
-      draft.encounterTable[#draft.encounterTable + 1] = {
-        name = tostring(args.name or "crypt thing"):sub(1, 40),
-        hp = hp, maxHp = hp, atk = atk,
-        lines = {
-          intro = tostring(lines.intro or "It lunges from the dark."):sub(1, 200),
-          hit = tostring(lines.hit or "It shrieks."):sub(1, 200),
-          death = tostring(lines.death or "It collapses."):sub(1, 200),
-        },
-        reward = math.min(tonumber(args.reward) or 5, 5 * depth),
+    draft.interactables[room .. ":" .. iname] = { responses = responses, effect = effect }
+    return "ok: " .. room .. ":" .. iname
+  end, {
+    type = "function",
+    ["function"] = { name = "add_interactable", description = "Place an object in a room. responses[1] fires on first use (with its effect), responses[2] on repeats.",
+      parameters = { type = "object", properties = {
+        room = { type = "string" },
+        name = { type = "string" },
+        responses = { type = "array", items = { type = "string" } },
+        effect = { type = "object", properties = { gold = { type = "integer" }, hp = { type = "integer" }, item = { type = "string" } } },
+      }, required = { "room", "name", "responses" } } },
+  })
+
+  ts:handle("add_ambient", function(args)
+    if type(args.lines) == "table" then
+      for _, l in ipairs(args.lines) do draft.ambient[#draft.ambient + 1] = tostring(l):sub(1, 200) end
+    end
+    return "ok"
+  end, {
+    type = "function",
+    ["function"] = { name = "add_ambient", description = "Add rotating ambient flavor lines.",
+      parameters = { type = "object", properties = { lines = { type = "array", items = { type = "string" } } }, required = { "lines" } } },
+  })
+
+  -- The roster, declared as a registry: budgets and the cap are data, the
+  -- validate-clamp-file pipeline is the lib's. Draft mode: records land in
+  -- draft.encounterTable, not `state` — the pack is written at the boundary.
+  local roster = registry.new({
+    tool = "add_encounter",
+    description = "Add a monster to the floor's roster (max " .. MAX_ROSTER .. ") with canned combat lines. Lua rolls roster monsters as RANDOM encounters while the player explores. hp/atk/reward clamp to the depth budget.",
+    key = "encounterTable",
+    id_from = "name",
+    cap = MAX_ROSTER,
+    store = { get = function() return draft.encounterTable end },
+    fields = {
+      { name = "name", type = "string", required = true, max = 40 },
+      { name = "hp", type = "integer", min = 1, max = function() return 6 + depth * 4 end, default = 6 },
+      { name = "atk", type = "integer", min = 1, max = function() return 1 + depth end, default = 2 },
+      { name = "reward", type = "integer", min = 0, max = function() return 5 * depth end, default = 5 },
+      { name = "lines", type = "table" },
+    },
+    on_register = function(rec)
+      rec.maxHp = rec.hp
+      local lines = type(rec.lines) == "table" and rec.lines or {}
+      rec.lines = {
+        intro = tostring(lines.intro or "It lunges from the dark."):sub(1, 200),
+        hit = tostring(lines.hit or "It shrieks."):sub(1, 200),
+        death = tostring(lines.death or "It collapses."):sub(1, 200),
       }
-      -- The tool result is the canonical record: what was ACTUALLY filed.
-      return json.encode({ roster = #draft.encounterTable,
-        clamped = { hp = hp, atk = atk, reward = draft.encounterTable[#draft.encounterTable].reward } })
-    end
-    return "unknown tool: " .. tostring(name)
-  end
+    end,
+  })
+  ts:use(roster)
+
+  return ts
 end
 
 -- Judgment as data, graph edition. The model's layout is a PROPOSAL; Lua
@@ -550,7 +409,11 @@ local function validateGraph(draft)
 end
 
 -- Lua rolls the roster, not the model. The entrance is safe; a room goes
--- quiet for ENCOUNTER_COOLDOWN turns after a fight there.
+-- quiet for ENCOUNTER_COOLDOWN turns after a fight there. A rolled encounter
+-- also OPENS a summary-tagged span (state.fightTag): the mechanical blows
+-- land in the log as served text, and when the fight ends the delegate
+-- writes the one line that survives ("the player BARELY beat the goblin") —
+-- the one intentional live call in serve land.
 local function maybeRollEncounter(pack)
   if state.combat then return nil end
   local rid = subOf(state.room)
@@ -561,23 +424,40 @@ local function maybeRollEncounter(pack)
   if math.random() >= ENCOUNTER_CHANCE then return nil end
   local e = pack.encounterTable[math.random(#pack.encounterTable)]
   state.combat = { name = e.name, hp = e.hp, maxHp = e.maxHp, atk = e.atk, lines = e.lines, reward = e.reward }
-  return e.lines.intro
+  state.fightTag = "fight " .. e.name
+  return e.lines.intro .. "\n" .. summarize.open(state.fightTag)
+end
+
+-- Close the fight's span with a delegate-written gist over the mechanical
+-- turns. Fail-soft: a delegate error never eats a winning blow — the fight
+-- closes with a fallback gist. Fights that started without a span (a
+-- spawn_enemy consequence, legacy state) get NO close tag — an orphan close
+-- would make collapse eat the window before it.
+local function endFight(prompt)
+  local tag = state.fightTag
+  state.fightTag = nil
+  if not tag then return "" end
+  local ok, gist = pcall(summarize.summarize, tag, prompt)
+  if not ok then gist = nil end
+  return "\n" .. summarize.close(tag, gist or "The crypt keeps the details.")
 end
 
 -- ONE planning sub-gen per floor: the model lays out the whole map through
 -- tool calls (increments, not a one-shot blob), then writes the intro.
 local function planFloor(prompt, fid)
   local floor = FLOORS[fid]
-  if not floor then return "[sys]Nowhere to go.[/sys]" end
+  if not floor then return chrome.ack("Nowhere to go.") end
   local draft = { id = fid, name = floor.name, description = "", rooms = {}, roomOrder = {},
     stairsDown = nil, encounterTable = {}, interactables = {}, ambient = {} }
+  local ts = planningToolset(draft, fid)
   local sub = {}
   for k, v in pairs(prompt) do sub[k] = v end
-  sub.tools = PLANNING_TOOLS
+  sub.tools = ts:schemas()
   sub.messages = {
     { role = "system", content = "You are the content designer for a terse dark-fantasy dungeon crawler. "
       .. "Design the floor '" .. floor.name .. "' (" .. floor.theme .. "; depth " .. floor.depth
       .. ") as a GRAPH of " .. ROOMS_PER_FLOOR .. " rooms, using ONLY the tools — no prose until the design is done. "
+      .. "Plan the work with set_todo first, then execute the plan. "
       .. "Layout: a real map, not a corridor — branches, a loop or two, dead ends. "
       .. "The FIRST room you add is the entrance (safe — no encounters roll there). "
       .. "Both sides of a passage need their exit. Exactly ONE room holds the stairs down "
@@ -591,11 +471,11 @@ local function planFloor(prompt, fid)
       .. "Terse, concrete, atmospheric. "
       .. (floor.hint and (floor.hint .. " ") or "")
       .. "When the design is done, write the floor intro: 2-3 terse sentences, second person."
-      .. ledgerBlock() },
+      .. ledger.briefing() },
     { role = "user", content = "Design " .. floor.name .. " now." },
   }
   local res = backends.generate(sub):await()
-  res = runLoop(sub, res, planningExec(draft, fid), 12)
+  res = loop.run(sub, res, ts:exec(), 12)
   local repairs = validateGraph(draft)
   if not draft.entrance then
     -- The model filed nothing usable: a skeleton floor keeps the game moving.
@@ -609,8 +489,9 @@ local function planFloor(prompt, fid)
   if draft.description == "" then draft.description = floor.name .. ": " .. floor.theme .. "." end
   local intro = type(res.text) == "string" and res.text:match("^%s*(.-)%s*$") or ""
   if intro == "" then intro = draft.description end
+  markSeen()
   return intro .. "\n\n" .. packBlob(draft, composeSummary(draft, repairs))
-    .. "\n\n" .. hud(draft) .. "\n" .. buttonsHtml(draft)
+    .. "\n\n" .. statusTags(draft) .. "\n" .. buttonsHtml(draft)
 end
 
 -- ---------- serving (deterministic, zero model) ----------
@@ -644,13 +525,13 @@ local function serve(cmd, pack)
       if math.random(1, 20) + state.atk >= dc then
         state.combat = nil
         state.room = floorOf(state.room) .. ":" .. pack.entrance
-        return { text = "You break and scramble back to the " .. (pack.rooms[pack.entrance].name or "entrance") .. ".", moved = true }
+        return { text = "You break and scramble back to the " .. (pack.rooms[pack.entrance].name or "entrance") .. ".", moved = true, fightEnded = true }
       end
       local counter = state.combat.atk + math.random(0, 1)
       state.hp = state.hp - counter
       if state.hp <= 0 then
         state.dead = true
-        return { text = state.combat.lines.hit .. " You fall. THE CRYPT KEEPS YOU." }
+        return { text = state.combat.lines.hit .. " You fall. THE CRYPT KEEPS YOU.", fightEnded = true }
       end
       return { text = "You stumble — no escape. " .. state.combat.lines.hit .. " (-" .. counter .. " hp)" }
     end
@@ -687,13 +568,13 @@ local function serve(cmd, pack)
       state.flags["quiet:" .. state.room] = state.turn
       state.combat = nil
       state.gold = state.gold + reward
-      return { text = line .. " (+" .. reward .. " gold)" }
+      return { text = line .. " (+" .. reward .. " gold)", fightEnded = true }
     end
     local counter = state.combat.atk + math.random(0, 1)
     state.hp = state.hp - counter
     if state.hp <= 0 then
       state.dead = true
-      return { text = state.combat.lines.hit .. " You fall. THE CRYPT KEEPS YOU." }
+      return { text = state.combat.lines.hit .. " You fall. THE CRYPT KEEPS YOU.", fightEnded = true }
     end
     return { text = state.combat.lines.hit .. " You hit for " .. dmg .. "; it answers for " .. counter .. "." }
   end
@@ -729,102 +610,111 @@ end
 
 -- ---------- escalation (DM on demand, with a cost structure) ----------
 
-local DM_TOOLS = { {
-  type = "function",
-  ["function"] = { name = "attempt", description = "Resolve a risky action. The ENGINE rolls (d20+atk vs difficulty) and decides — narrate the result it returns.",
-    parameters = { type = "object", properties = { action = { type = "string" }, difficulty = { type = "integer" } }, required = { "action" } } },
-}, {
-  type = "function",
-  ["function"] = { name = "remove_item", description = "Consume items from the player's inventory. The result is canonical: if it says not carried, the player never had it.",
-    parameters = { type = "object", properties = { name = { type = "string" }, n = { type = "integer" } }, required = { "name" } } },
-}, {
-  type = "function",
-  ["function"] = { name = "add_exit", description = "Add a NEW exit from the player's current room to another room ON THIS FLOOR (a new pack version is written). For changed circumstances: blown walls, revealed passages.",
-    parameters = { type = "object", properties = {
-      direction = { type = "string" }, to = { type = "string" }, via = { type = "string" } }, required = { "direction", "to" } } },
-}, {
-  type = "function",
-  ["function"] = { name = "set_flag", description = "Set a story flag.",
-    parameters = { type = "object", properties = { key = { type = "string" }, value = { type = "boolean" } }, required = { "key" } } },
-}, {
-  type = "function",
-  ["function"] = { name = "spawn_enemy", description = "Spawn an enemy into the current room (depth-budget clamped). For consequences.",
-    parameters = { type = "object", properties = { name = { type = "string" }, hp = { type = "integer" }, atk = { type = "integer" } }, required = { "name" } } },
-} }
--- The DM gets the ledger tools and recall (verbatim lookup over the full branch).
-for _, t in ipairs(LEDGER_TOOLS) do DM_TOOLS[#DM_TOOLS + 1] = t end
-DM_TOOLS[#DM_TOOLS + 1] = RECALL_TOOL
-
 local DM_PROMPT = "You are the dungeon master of a terse dungeon crawler, adjudicating ONE novel player action. "
   .. "Rules: use attempt() for anything risky — the ENGINE rolls and decides; honor its result. "
   .. "Use remove_item/add_exit/set_flag/spawn_enemy to make consequences REAL — costs are deducted by the engine, "
   .. "and the tool result is the canonical record. Never grant what the tools can't express. "
   .. "After the tools, narrate the outcome in 1-3 terse sentences, second person."
 
-local function dmExec(ctx)
-  return function(name, args)
-    args = args or {}
-    local ledgerResult = tryLedger(name, args)
-    if ledgerResult then return ledgerResult end
-    if name == "recall" then
-      if not chat then return "recall is unavailable outside a live chat" end
-      local query = tostring(args.query or "")
-      if query == "" then return "rejected: query required" end
-      local hits = chat.find(query, 3):await()
-      if #hits == 0 then return "no matches for: " .. query end
-      local out = {}
-      for _, h in ipairs(hits) do
-        out[#out + 1] = "[" .. h.role .. " #" .. tostring(h.index) .. "] " .. tostring(h.content):sub(1, 800)
-      end
-      return table.concat(out, "\n\n")
+-- The DM toolset: the ledger and recall from the lib, the mutation economy
+-- as ad-hoc handlers over the pack draft. What the model can call is what's
+-- possible; everything else it may only narrate failing at.
+local function dmToolset(ctx)
+  local ts = toolset.new()
+  ts:use(ledger)
+
+  ts:handle("attempt", function(args)
+    local difficulty = math.max(5, math.min(20, tonumber(args.difficulty) or 10))
+    local roll = math.random(1, 20)
+    local total = roll + state.atk
+    local outcome = total >= difficulty and "success" or "failure"
+    if outcome == "failure" then state.hp = math.max(0, state.hp - 2) end -- failure stings
+    return json.encode({ outcome = outcome, roll = roll, total = total, difficulty = difficulty,
+      note = "the dice are the engine's, not yours — narrate THIS result" })
+  end, {
+    type = "function",
+    ["function"] = { name = "attempt", description = "Resolve a risky action. The ENGINE rolls (d20+atk vs difficulty) and decides — narrate the result it returns.",
+      parameters = { type = "object", properties = { action = { type = "string" }, difficulty = { type = "integer" } }, required = { "action" } } },
+  })
+
+  ts:handle("remove_item", function(args)
+    local iname = tostring(args.name or ""):lower()
+    local n = math.max(1, tonumber(args.n) or 1)
+    local have = state.inventory[iname] or 0
+    if have < n then return "not carried: " .. iname .. " (has " .. have .. ")" end
+    state.inventory[iname] = have - n > 0 and have - n or nil
+    return json.encode({ consumed = iname, n = n, left = state.inventory[iname] or 0 })
+  end, {
+    type = "function",
+    ["function"] = { name = "remove_item", description = "Consume items from the player's inventory. The result is canonical: if it says not carried, the player never had it.",
+      parameters = { type = "object", properties = { name = { type = "string" }, n = { type = "integer" } }, required = { "name" } } },
+  })
+
+  ts:handle("add_exit", function(args)
+    local dir = tostring(args.direction or ""):lower():sub(1, 12)
+    local to = tostring(args.to or ""):lower()
+    local room = ctx.packDraft.rooms[subOf(state.room)]
+    if dir == "" or not room or not ctx.packDraft.rooms[to] then
+      local ids = {}
+      for k in pairs(ctx.packDraft.rooms) do ids[#ids + 1] = k end
+      table.sort(ids)
+      return "rejected: destination must be a room on this floor (" .. table.concat(ids, ", ") .. ")"
     end
-    if name == "attempt" then
-      local difficulty = math.max(5, math.min(20, tonumber(args.difficulty) or 10))
-      local roll = math.random(1, 20)
-      local total = roll + state.atk
-      local outcome = total >= difficulty and "success" or "failure"
-      if outcome == "failure" then state.hp = math.max(0, state.hp - 2) end -- failure stings
-      return json.encode({ outcome = outcome, roll = roll, total = total, difficulty = difficulty,
-        note = "the dice are the engine's, not yours — narrate THIS result" })
+    room.exits[dir] = to
+    ctx.dirty = true
+    return json.encode({ added = dir .. " -> " .. to, via = tostring(args.via or "") })
+  end, {
+    type = "function",
+    ["function"] = { name = "add_exit", description = "Add a NEW exit from the player's current room to another room ON THIS FLOOR (a new pack version is written). For changed circumstances: blown walls, revealed passages.",
+      parameters = { type = "object", properties = {
+        direction = { type = "string" }, to = { type = "string" }, via = { type = "string" } }, required = { "direction", "to" } } },
+  })
+
+  ts:handle("set_flag", function(args)
+    local key = tostring(args.key or ""):sub(1, 30)
+    if key == "" then return "rejected: key required" end
+    state.flags[key] = args.value == nil and true or args.value
+    return "ok: " .. key
+  end, {
+    type = "function",
+    ["function"] = { name = "set_flag", description = "Set a story flag.",
+      parameters = { type = "object", properties = { key = { type = "string" }, value = { type = "boolean" } }, required = { "key" } } },
+  })
+
+  ts:handle("spawn_enemy", function(args)
+    local depth = depthOfFloor(floorOf(state.room))
+    local hp = math.max(1, math.min(tonumber(args.hp) or 6, 6 + depth * 4))
+    local atk = math.max(1, math.min(tonumber(args.atk) or 2, 1 + depth))
+    state.combat = { name = tostring(args.name or "crypt thing"):sub(1, 40), hp = hp, maxHp = hp, atk = atk,
+      lines = { intro = "It arrives.", hit = "It strikes.", death = "It falls." }, reward = 0 }
+    return json.encode({ spawned = state.combat.name, clamped = { hp = hp, atk = atk } })
+  end, {
+    type = "function",
+    ["function"] = { name = "spawn_enemy", description = "Spawn an enemy into the current room (depth-budget clamped). For consequences.",
+      parameters = { type = "object", properties = { name = { type = "string" }, hp = { type = "integer" }, atk = { type = "integer" } }, required = { "name" } } },
+  })
+
+  ts:handle("recall", function(args)
+    if not chat then return "recall is unavailable outside a live chat" end
+    local query = tostring(args.query or "")
+    if query == "" then return "rejected: query required" end
+    local hits = chat.find(query, 3):await()
+    if #hits == 0 then return "no matches for: " .. query end
+    local out = {}
+    for _, h in ipairs(hits) do
+      out[#out + 1] = "[" .. h.role .. " #" .. tostring(h.index) .. "] " .. tostring(h.content):sub(1, 800)
     end
-    if name == "remove_item" then
-      local iname = tostring(args.name or ""):lower()
-      local n = math.max(1, tonumber(args.n) or 1)
-      local have = state.inventory[iname] or 0
-      if have < n then return "not carried: " .. iname .. " (has " .. have .. ")" end
-      state.inventory[iname] = have - n > 0 and have - n or nil
-      return json.encode({ consumed = iname, n = n, left = state.inventory[iname] or 0 })
-    end
-    if name == "add_exit" then
-      local dir = tostring(args.direction or ""):lower():sub(1, 12)
-      local to = tostring(args.to or ""):lower()
-      local room = ctx.packDraft.rooms[subOf(state.room)]
-      if dir == "" or not room or not ctx.packDraft.rooms[to] then
-        local ids = {}
-        for k in pairs(ctx.packDraft.rooms) do ids[#ids + 1] = k end
-        table.sort(ids)
-        return "rejected: destination must be a room on this floor (" .. table.concat(ids, ", ") .. ")"
-      end
-      room.exits[dir] = to
-      ctx.dirty = true
-      return json.encode({ added = dir .. " -> " .. to, via = tostring(args.via or "") })
-    end
-    if name == "set_flag" then
-      local key = tostring(args.key or ""):sub(1, 30)
-      if key == "" then return "rejected: key required" end
-      state.flags[key] = args.value == nil and true or args.value
-      return "ok: " .. key
-    end
-    if name == "spawn_enemy" then
-      local depth = depthOfFloor(floorOf(state.room))
-      local hp = math.max(1, math.min(tonumber(args.hp) or 6, 6 + depth * 4))
-      local atk = math.max(1, math.min(tonumber(args.atk) or 2, 1 + depth))
-      state.combat = { name = tostring(args.name or "crypt thing"):sub(1, 40), hp = hp, maxHp = hp, atk = atk,
-        lines = { intro = "It arrives.", hit = "It strikes.", death = "It falls." }, reward = 0 }
-      return json.encode({ spawned = state.combat.name, clamped = { hp = hp, atk = atk } })
-    end
-    return "unknown tool: " .. tostring(name)
-  end
+    return table.concat(out, "\n\n")
+  end, {
+    type = "function",
+    ["function"] = {
+      name = "recall",
+      description = "Search the FULL chat history (far beyond this prompt) for exact past text — what was actually said or done earlier.",
+      parameters = { type = "object", properties = { query = { type = "string" } }, required = { "query" } },
+    },
+  })
+
+  return ts
 end
 
 local function copyPack(pack)
@@ -834,19 +724,20 @@ end
 local function escalate(prompt, input, pack)
   state.escalations = state.escalations + 1
   local ctx = { packDraft = copyPack(pack), dirty = false }
+  local ts = dmToolset(ctx)
   local sub = {}
   for k, v in pairs(prompt) do sub[k] = v end
-  sub.tools = DM_TOOLS
+  sub.tools = ts:schemas()
   sub.messages = {
     { role = "system", content = DM_PROMPT .. "\n\nFLOOR PACK (current design):\n" .. json.encode(pack)
       .. "\n\nPLAYER: hp " .. state.hp .. "/" .. state.maxHp .. ", atk " .. state.atk
       .. ", gold " .. state.gold .. ", at " .. state.room .. ", inventory: " .. invList()
-      .. ledgerBlock()
-      .. "\n\nRECENT TURNS:\n" .. recentTranscript(prompt, 6) },
+      .. ledger.briefing()
+      .. "\n\nRECENT TURNS:\n" .. transcript.recent(prompt, 6) },
     { role = "user", content = 'The player attempts: "' .. input .. '"' },
   }
   local res = backends.generate(sub):await()
-  res = runLoop(sub, res, dmExec(ctx))
+  res = loop.run(sub, res, ts:exec())
   local text = type(res.text) == "string" and res.text:match("^%s*(.-)%s*$") or "Nothing comes of it."
   if text == "" then text = "Nothing comes of it." end
   -- Pack mutations are append-only: the new version goes in THIS message.
@@ -860,9 +751,11 @@ end
 
 function generate(prompt, ctx)
   ensureState()
+  ledger.bind(function() return state.turn end)
+  markSeen() -- the room you are standing in is seen by definition
 
-  if state.dead then return "[sys]The crypt keeps you. Swipe back to try another fate.[/sys]" end
-  if state.won then return "[sys]The relic is yours. The crypt is done with you.[/sys]" end
+  if state.dead then return chrome.ack("The crypt keeps you. Swipe back to try another fate.") end
+  if state.won then return chrome.ack("The relic is yours. The crypt is done with you.") end
 
   -- Boundary: first contact with a floor triggers the planning sub-gen.
   local fid = floorOf(state.room)
@@ -872,11 +765,12 @@ function generate(prompt, ctx)
 
   -- continue never resolves rules or effects — an ambient line only.
   if ctx and ctx.generationType == "continue" then
-    return ambientLine(pack) .. "\n\n" .. hud(pack) .. "\n" .. buttonsHtml(pack)
+    markSeen()
+    return ambientLine(pack) .. "\n\n" .. statusTags(pack) .. "\n" .. buttonsHtml(pack)
   end
 
   local input = lastUserText(prompt)
-  local cmd = unwrap(input)
+  local cmd = chrome.unwrap(input)
   state.turn = state.turn + 1
 
   local text
@@ -910,7 +804,14 @@ function generate(prompt, ctx)
     pack = findPack(fid) or pack -- a new pack version may exist now
   end
 
-  return text .. "\n\n" .. hud(pack) .. "\n" .. buttonsHtml(pack)
+  -- A fight that just ended (kill, flee, or death) closes its summary span:
+  -- the delegate writes the one gist line over the mechanical blows.
+  if served and served.fightEnded then
+    text = text .. endFight(prompt)
+  end
+
+  markSeen()
+  return text .. "\n\n" .. statusTags(pack) .. "\n" .. buttonsHtml(pack)
 end
 
 function list_models()

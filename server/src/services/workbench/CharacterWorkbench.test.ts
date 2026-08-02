@@ -588,6 +588,41 @@ describe('CharacterWorkbench', () => {
       expect(charStore.get('char1')?.extensions['regexScripts'] ?? []).toHaveLength(0);
     });
 
+    it('creates an inert placeholder rule from a name alone (empty findRegex)', async () => {
+      const { template, charStore } = makeTemplate({ characters: [makeCharacter()] });
+      const add = await template.execute('regex_add', { characterId: 'char1', rule: { name: 'Hide system acks' } });
+      const created = JSON.parse(add.content as string) as { id: string; findRegex: string };
+      expect(created.id).toBeTruthy();
+      expect(created.findRegex).toBe('');
+      // The placeholder stays listable/editable, and a later patch can set the pattern.
+      const list = await template.execute('regex_list', { characterId: 'char1' });
+      expect(JSON.parse(list.content as string)).toHaveLength(1);
+      const upd = await template.execute('regex_update', {
+        characterId: 'char1',
+        ruleId: created.id,
+        patch: { findRegex: '/\\s*\\[sys\\].*?\\[\\/sys\\]\\s*/gis', replaceString: '\n\n' },
+      });
+      expect(JSON.parse(upd.content as string)).toMatchObject({ findRegex: '/\\s*\\[sys\\].*?\\[\\/sys\\]\\s*/gis' });
+      expect(charStore.get('char1')?.extensions['regexScripts']).toHaveLength(1);
+    });
+
+    it('accepts an explicit empty findRegex on add and update', async () => {
+      const { template } = makeTemplate({ characters: [makeCharacter()] });
+      const add = await template.execute('regex_add', { characterId: 'char1', rule: { ...ruleInput, findRegex: '' } });
+      const created = JSON.parse(add.content as string) as { id: string; findRegex: string };
+      expect(created.findRegex).toBe('');
+      const upd = await template.execute('regex_update', { characterId: 'char1', ruleId: created.id, patch: { findRegex: '' } });
+      expect(JSON.parse(upd.content as string)).toMatchObject({ findRegex: '' });
+    });
+
+    it('still rejects a bare pattern on update', async () => {
+      const { template } = makeTemplate({ characters: [makeCharacter()] });
+      const add = await template.execute('regex_add', { characterId: 'char1', rule: ruleInput });
+      const created = JSON.parse(add.content as string) as { id: string };
+      const res = await template.execute('regex_update', { characterId: 'char1', ruleId: created.id, patch: { findRegex: 'hello' } });
+      expect(res.content).toContain('Error: invalid findRegex');
+    });
+
     it('accepts a Lua-only rule without replaceString, defaulting it to empty', async () => {
       const { template } = makeTemplate({ characters: [makeCharacter()] });
       const add = await template.execute('regex_add', {
@@ -1334,6 +1369,30 @@ describe('CharacterWorkbench', () => {
       expect(delegations[0]!.promptPreview).toContain('user: draw me something');
     });
 
+    it('backend_logic_test accepts state as a plain object and delegateResponse as { text }', async () => {
+      const { template } = makeTemplate({ characters: [makeCharacter()] });
+      // Models naturally pass the stateOut snapshot as a PARSED object and the
+      // canned delegate answer as { text } — both are normalized, not rejected.
+      const res = await template.execute('backend_logic_test', {
+        characterId: 'char1',
+        input: 'hi',
+        luaSource: `
+          function generate(prompt, ctx)
+            local turns = (type(state) == "table" and state.turns or 0) + 1
+            state = { turns = turns }
+            local res = backends.generate(prompt):await()
+            return res.text .. " (turn " .. turns .. ")"
+          end
+        `,
+        state: { turns: 41 },
+        delegateResponse: { text: 'CANNED' },
+      });
+      const outcome = JSON.parse(res.content as string) as Record<string, unknown>;
+      expect(outcome['ok']).toBe(true);
+      expect(outcome['text']).toBe('CANNED (turn 42)');
+      expect(JSON.parse(outcome['stateOut'] as string)).toEqual({ turns: 42 });
+    });
+
     it('backend_logic_test errors without a stored script or luaSource', async () => {
       const { template } = makeTemplate({ characters: [makeCharacter()] });
       const res = await template.execute('backend_logic_test', { characterId: 'char1', input: 'hi' });
@@ -1423,6 +1482,46 @@ describe('CharacterWorkbench', () => {
 
   describe('backend_file tools', () => {
     const MODULE = 'local M = {}\nfunction M.reply() return "FROM-MODULE" end\nreturn M';
+
+    it('backend_logic_add_game_lib vendors the lib, preserving the card script and its own modules', async () => {
+      const { template, charStore } = makeTemplate({
+        characters: [
+          makeCharacter({
+            extensions: {
+              contextualBackend: {
+                enabled: true,
+                luaSource: 'function generate(p, c) return "x" end',
+                files: { 'lib/custom.lua': 'return 42', 'lib/loop.lua': '-- hacked copy' },
+              },
+            },
+          }),
+        ],
+      });
+      const res = await template.execute('backend_logic_add_game_lib', { characterId: 'char1' });
+      const out = JSON.parse(res.content as string) as { added: string[]; total: number };
+      expect(out.added).toHaveLength(12);
+      expect(out.total).toBe(13); // the 12 lib modules + the card's own lib/custom.lua
+      const ext = charStore.get('char1')!.extensions['contextualBackend'] as {
+        enabled: boolean;
+        luaSource: string;
+        files: Record<string, string>;
+      };
+      expect(ext.enabled).toBe(true);
+      expect(ext.luaSource).toContain('generate');
+      expect(ext.files['lib/custom.lua']).toBe('return 42'); // the card's own module survives
+      expect(ext.files['lib/loop.lua']).toContain('the delegate tool loop'); // canonical copy restored
+    });
+
+    it('backend_logic_add_game_lib starts a fresh module map without enabling anything', async () => {
+      const { template, charStore } = makeTemplate({ characters: [makeCharacter()] });
+      const res = await template.execute('backend_logic_add_game_lib', { characterId: 'char1' });
+      expect(JSON.parse(res.content as string)).toMatchObject({ total: 12 });
+      const ext = charStore.get('char1')!.extensions['contextualBackend'] as Record<string, unknown>;
+      expect(ext['enabled']).toBeUndefined(); // vendoring never activates the card logic
+      expect(Object.keys(ext['files'] as Record<string, string>)).toHaveLength(12);
+      expect((await template.execute('backend_logic_add_game_lib', { characterId: 'nope' })).content).toContain('not found');
+    });
+
 
     it('backend_file_set/get/remove round-trips a module', async () => {
       const { template } = makeTemplate({ characters: [makeCharacter()] });
