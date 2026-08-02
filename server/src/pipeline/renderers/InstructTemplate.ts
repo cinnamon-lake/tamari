@@ -223,6 +223,51 @@ const BUILTIN_TEMPLATES: Map<string, InstructTemplate> = new Map([
       },
     },
   ],
+  // Moonshot Kimi K3 (XTML message format; see encoding_k3.py). Each message is
+  // wrapped as <|open|>message role="..."<|sep|>...<|close|>message<|sep|><|end_of_msg|>.
+  // Non-thinking: assistant turns nest a <response> channel only — the <think>
+  // channel is dropped entirely per encoding_k3.py. No separator between
+  // messages, so separator is ''.
+  [
+    'kimi-k3',
+    {
+      name: 'Kimi K3',
+      separator: '',
+      systemPrefix: '<|open|>message role="system"<|sep|>',
+      systemSuffix: '<|close|>message<|sep|><|end_of_msg|>',
+      userPrefix: '<|open|>message role="user"<|sep|>',
+      userSuffix: '<|close|>message<|sep|><|end_of_msg|>',
+      assistantPrefix: '<|open|>message role="assistant"<|sep|><|open|>response<|sep|>',
+      assistantSuffix: '<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|>',
+      responsePrefix: '<|open|>message role="assistant"<|sep|><|open|>response<|sep|>',
+    },
+  ],
+  [
+    'kimi-k3-thinking',
+    {
+      name: 'Kimi K3 (Thinking)',
+      separator: '',
+      systemPrefix: '<|open|>message role="system"<|sep|>',
+      systemSuffix: '<|close|>message<|sep|><|end_of_msg|>',
+      userPrefix: '<|open|>message role="user"<|sep|>',
+      userSuffix: '<|close|>message<|sep|><|end_of_msg|>',
+      // Every assistant turn carries the structural <think>/<response> channels,
+      // even when empty (see encoding_k3.py), so the empty think + response open
+      // is baked into the prefix — messages without stored reasoning stay well-formed.
+      assistantPrefix: '<|open|>message role="assistant"<|sep|><|open|>think<|sep|><|close|>think<|sep|><|open|>response<|sep|>',
+      assistantSuffix: '<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|>',
+      // The response prefix opens the <think> channel; the model closes it and
+      // opens <response> before the visible content, so the reasoning block's
+      // suffix spans both tokens.
+      responsePrefix: '<|open|>message role="assistant"<|sep|><|open|>think<|sep|>',
+      reasoning: {
+        pattern: '(.*?<\\|close\\|>think<\\|sep\\|><\\|open\\|>response<\\|sep\\|>)?(.*)',
+        prefix: '<|open|>think<|sep|>',
+        suffix: '<|close|>think<|sep|><|open|>response<|sep|>',
+        separator: '',
+      },
+    },
+  ],
   // Z.ai GLM 5.1
   [
     'glm-5.1',

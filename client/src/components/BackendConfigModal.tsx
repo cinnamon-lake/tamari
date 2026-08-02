@@ -837,6 +837,8 @@ export function BackendConfigModal(props: { onClose: () => void }) {
                 <option class="select-option" value="granite-4.0">IBM Granite 4.0 / 4.1</option>
                 <option class="select-option" value="kimi-k2.6">Kimi K2.6</option>
                 <option class="select-option" value="kimi-k2.6-thinking">Kimi K2.6 (Thinking)</option>
+                <option class="select-option" value="kimi-k3">Kimi K3</option>
+                <option class="select-option" value="kimi-k3-thinking">Kimi K3 (Thinking)</option>
                 <option class="select-option" value="llama2">Llama 2</option>
                 <option class="select-option" value="llama3">Llama 3</option>
                 <option class="select-option" value="llama4">Llama 4</option>

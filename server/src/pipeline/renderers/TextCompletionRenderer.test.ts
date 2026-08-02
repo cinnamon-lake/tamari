@@ -3,6 +3,7 @@ import { TextCompletionRenderer } from './TextCompletionRenderer.js';
 import { PromptManager } from '../PromptManager.js';
 import { MacroResolver } from '../MacroResolver.js';
 import { getInstructTemplate } from './InstructTemplate.js';
+import { extractReasoning } from '../../services/ReasoningEngine.js';
 import type { Message } from '@tamari/types';
 import type { PromptCollection } from './Renderer.js';
 
@@ -112,6 +113,75 @@ describe('TextCompletionRenderer', () => {
     });
 
     expect(result.text.startsWith('<|begin_of_text|>')).toBe(true);
+  });
+
+  it('wraps content with kimi-k3 XTML format', () => {
+    const renderer = new TextCompletionRenderer(getInstructTemplate('kimi-k3'));
+    const macroResolver = MacroResolver.createPromptResolver();
+
+    const result = renderer.render(makeCollection(), {
+      macroResolver,
+      macroCtx: { userName: 'User', charName: 'Bot' },
+      tokenCounter,
+      chatHistory: [makeMsg(1, 'user', 'Hello')],
+      maxContext: 4096,
+      maxResponseTokens: 512,
+    });
+
+    // Each message is an XTML block; the response prefix opens the <response>
+    // channel (no <think> channel in non-thinking mode).
+    expect(result.text).toContain('<|open|>message role="user"<|sep|>Hello<|close|>message<|sep|><|end_of_msg|>');
+    expect(result.text).toContain('<|open|>message role="assistant"<|sep|><|open|>response<|sep|>');
+    // No separator between messages: the assistant block directly follows the user's end_of_msg.
+    expect(result.text).toContain('<|end_of_msg|><|open|>message role="assistant"<|sep|>');
+  });
+
+  it('opens the think channel for kimi-k3-thinking', () => {
+    const renderer = new TextCompletionRenderer(getInstructTemplate('kimi-k3-thinking'));
+    const macroResolver = MacroResolver.createPromptResolver();
+
+    const result = renderer.render(makeCollection(), {
+      macroResolver,
+      macroCtx: { userName: 'User', charName: 'Bot' },
+      tokenCounter,
+      chatHistory: [makeMsg(1, 'user', 'Hello')],
+      maxContext: 4096,
+      maxResponseTokens: 512,
+    });
+
+    expect(result.text.endsWith('<|open|>message role="assistant"<|sep|><|open|>think<|sep|>')).toBe(true);
+  });
+
+  it('emits an empty think channel for kimi-k3-thinking assistant turns', () => {
+    const renderer = new TextCompletionRenderer(getInstructTemplate('kimi-k3-thinking'));
+    const macroResolver = MacroResolver.createPromptResolver();
+
+    const result = renderer.render(makeCollection(), {
+      macroResolver,
+      macroCtx: { userName: 'User', charName: 'Bot' },
+      tokenCounter,
+      chatHistory: [makeMsg(1, 'user', 'Hello'), makeMsg(2, 'assistant', 'Hi there'), makeMsg(3, 'user', 'Bye')],
+      maxContext: 4096,
+      maxResponseTokens: 512,
+    });
+
+    // The structural <think> channel is present (empty) even with no stored reasoning.
+    expect(result.text).toContain(
+      '<|open|>message role="assistant"<|sep|><|open|>think<|sep|><|close|>think<|sep|><|open|>response<|sep|>Hi there<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|>',
+    );
+  });
+
+  it('extracts kimi-k3-thinking reasoning from model output', () => {
+    const template = getInstructTemplate('kimi-k3-thinking');
+    const r = template.reasoning!;
+    const parsed = extractReasoning(
+      'Let me consider.<|close|>think<|sep|><|open|>response<|sep|>Final answer.',
+      r.pattern,
+      r.prefix,
+      r.suffix,
+    );
+    expect(parsed.reasoning).toBe('Let me consider.');
+    expect(parsed.content).toBe('Final answer.');
   });
 
   it('respects token budget', () => {
