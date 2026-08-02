@@ -136,6 +136,23 @@ describe('RegexEngine', () => {
       ];
       expect(await applyRules('foo', rules)).toBe('foo');
     });
+
+    it('treats an empty findRegex as inert (placeholder rules do nothing)', async () => {
+      const rules: RegexRule[] = [
+        {
+          id: '1',
+          name: 'Placeholder',
+          findRegex: '',
+          replaceString: 'bar',
+          disabled: false,
+          userInput: false,
+          aiOutput: false,
+          prompt: true,
+          display: true,
+        },
+      ];
+      expect(await applyRules('hello', rules)).toBe('hello');
+    });
   });
 
   describe('applyRules with replaceLua (Layer 2)', () => {

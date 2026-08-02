@@ -367,5 +367,31 @@ describe('BackendWorkbench', () => {
 
       expect((await template.execute('custom_backend_test', { input: 'hi' })).content).toContain('either id');
     });
+
+    it('custom_backend_test accepts state as a plain object and delegateResponse as { text } / { error }', async () => {
+      const { template } = makeTemplate([], stubAdapter());
+      const res = JSON.parse(
+        (await template.execute('custom_backend_test', {
+          luaSource:
+            'function generate(p, c) local n = (type(state) == "table" and state.turns or 0) + 1 state = { turns = n } local r = backends.generate(p):await() return r.text .. " (turn " .. n .. ")" end',
+          input: 'hi',
+          state: { turns: 2 },
+          delegateResponse: { text: 'CANNED' },
+        })).content as string,
+      ) as { ok: boolean; text?: string; stateOut?: string };
+      expect(res.ok).toBe(true);
+      expect(res.text).toBe('CANNED (turn 3)');
+      expect(JSON.parse(res.stateOut!)).toEqual({ turns: 3 });
+
+      const failing = JSON.parse(
+        (await template.execute('custom_backend_test', {
+          luaSource: 'function generate(p, c) local r = backends.generate(p):await() return r.text end',
+          input: 'hi',
+          delegateResponse: { error: 'delegate died' },
+        })).content as string,
+      ) as { ok: boolean; error?: string };
+      expect(failing.ok).toBe(false);
+      expect(failing.error).toContain('delegate died');
+    });
   });
 });

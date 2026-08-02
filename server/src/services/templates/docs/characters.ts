@@ -20,6 +20,8 @@ A character is a card: named text fields, plus optional avatar, assets, characte
 | \`tags\` | String array for filtering/organization; never sent to the model. |
 | \`worldInfoId\` | The character's linked lorebook (1:1 by convention). |
 
+**An authoring aside that is also plumbing:** put all of the card-global context in \`description\` and don't overthink the other fields. Where a string lands is mechanical, not cosmetic — \`description\` sits inert in the system-prompt zone, but \`systemPrompt\`/\`postHistoryInstructions\` OVERRIDE the list's instruction layers, and the jailbreak lands as the LAST thing in the prompt, after history. A card script that scans the prompt backward for the player's latest input finds the jailbreak instead, can't parse it as a command, and dutifully escalates it to the delegate as if the player had said it.
+
 ## Character-scoped feature data
 
 Feature data attached to a card is edited through dedicated Workbench fs paths (topic \`workbench\`), never through \`meta.json\`:

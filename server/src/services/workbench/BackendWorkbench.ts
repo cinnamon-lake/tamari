@@ -120,8 +120,19 @@ const CustomBackendTestArgs = z.object({
   id: z.string().optional().describe('Custom backend id to test. Omit when passing luaSource directly.'),
   luaSource: z.string().optional().describe('Test this Lua source instead of a stored script — iterate without saving.'),
   input: z.string().min(1).describe('Sample user message fed to generate() as the last prompt message.'),
-  state: z.string().optional().describe('Canned script-state snapshot (JSON string) injected as the `state` global, e.g. the stateOut of a previous dry-run.'),
-  delegateResponse: z.string().optional().describe('Canned text returned by every delegated backends.generate() call. Defaults to a placeholder.'),
+  state: z
+    .union([z.string(), z.record(z.string(), z.unknown())])
+    .optional()
+    // Models keep passing the snapshot as a parsed object — accept both and
+    // normalize to the raw string format dryRunBackendScript expects.
+    .transform((v) => (typeof v === 'string' || v === undefined ? v : JSON.stringify(v)))
+    .describe('Canned script-state snapshot injected as the `state` global — a JSON string OR a plain object (serialized for you), e.g. the stateOut of a previous dry-run.'),
+  delegateResponse: z
+    .union([z.string(), z.object({ error: z.string() }), z.object({ text: z.string() })])
+    .optional()
+    // { text } unwraps to a plain canned-text response.
+    .transform((v) => (typeof v === 'object' && 'text' in v ? v.text : v))
+    .describe('Canned answer for every delegated backends.generate() call — text, { "text": "..." }, or { "error": "..." } to test delegation failures. Defaults to a placeholder.'),
   history: z
     .array(z.object({ role: z.string(), content: z.string() }))
     .optional()

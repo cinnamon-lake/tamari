@@ -5,6 +5,9 @@
  *   "/foo/"     → /foo/g
  *   "/foo/gi"   → /foo/gi
  * Bare patterns without delimiters are rejected (parseRegexString returns null).
+ * Empty or invalid patterns are INERT, never errors: the rule is skipped and
+ * the text passes through unchanged. This is the shield that makes stored
+ * placeholder rules (empty findRegex, e.g. created via the workbench) safe.
  *
  * Replacement string supports standard JS back-references:
  *   $1, $2      → capture groups

@@ -24,7 +24,10 @@ export function getCharacterRegexRules(character: Character | null | undefined):
   for (const entry of raw) {
     if (!entry || typeof entry !== 'object') continue;
     const r = entry as Record<string, unknown>;
-    if (typeof r['findRegex'] !== 'string' || r['findRegex'].length === 0) continue;
+    // findRegex must be a string but may be EMPTY: an empty pattern is an
+    // inert placeholder (the engine skips it) kept so the workbench can list
+    // and patch it. Non-string entries are malformed and dropped.
+    if (typeof r['findRegex'] !== 'string') continue;
     rules.push({
       id: typeof r['id'] === 'string' && r['id'].length > 0 ? r['id'] : randomUUID(),
       name: typeof r['name'] === 'string' ? r['name'] : '',

@@ -78,7 +78,11 @@ Resist the alternatives: emitting fully-rendered HTML from the backend bloats th
 
 The same recipe styles USER inputs — set the rule's \`userInput\` role filter and the tag can be something the user sent. It pairs naturally with \`data-post-response\`: a button click or form submit posts a compact machine string (\`choice__3\`, a fenced XML block), and a display rule renders it as a readable bubble in the log while the stored text — and the model — keep the raw form. The inverse also works: a display rule can render a script-only tag like \`[sys]…[/sys]\` as nothing at all, hiding chrome from the log (see topic \`custom_backends\`).
 
+## Appending constant chrome (display-only)
+
+A display-only rule (\`prompt: false\`) can APPEND fixed text the model never sees — reminders, hints, footers. Anchor on a tag the message already carries and re-emit it with the addition: findRegex \`/\\[HUD\\|[^\\]]+\\]/g\`, replaceString \`$&\\n\\n*Remember: /help lists your options.*\`, \`display: true, prompt: false\`. Stored text and the prompt keep only the compact tag; the reminder is pure render — restylable anytime, era-correct per message for free, and it can never leak into the model's context or be imitated by it. Set \`aiOutput: true\` to keep it off user bubbles. (The inverse — constant text the MODEL sees but the player doesn't — is a prompt-only rule, same shape.)
+
 ## Authoring
 
-Use the Workbench fs: \`write /characters/<id>/regex/new.json\` to add and \`write /characters/<id>/regex/<ruleId>.json\` to update (character-scoped), then always \`run {"verb":"test_regex",...}\` to preview both placements — including \`replaceLua\` — before saving. New character-scoped rules default to \`prompt: true, display: true\` (v1 "universal" parity); set the placement flags deliberately.
+Use the Workbench fs: \`write /characters/<id>/regex/new.json\` to add and \`write /characters/<id>/regex/<ruleId>.json\` to update (character-scoped), then always \`run {"verb":"test_regex",...}\` to preview both placements — including \`replaceLua\` — before saving. New character-scoped rules default to \`prompt: true, display: true\` (v1 "universal" parity); set the placement flags deliberately. \`findRegex\` may be omitted (or empty) to create an inert placeholder rule — it is stored and listed but does nothing until a pattern is set; empty or invalid patterns are always skipped at apply time, never errors.
 `;

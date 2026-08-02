@@ -74,6 +74,8 @@ grep {"pattern": "generate", "path": "/characters/abc123/"}
 | \`test_backend\` | \`{configId?, patch?, prompt?, mode: "dry"|"live"}\` — dry-run or live-test a backend config; configId defaults to the active backend; \`patch\` applies in memory only |
 | \`test_custom_backend\` | \`{id?|luaSource?, input, state?, delegateResponse?}\` — dry-run a custom-backend script against a recording delegate |
 | \`test_backend_logic\` | \`{characterId, input, luaSource?, state?, delegateResponse?}\` — dry-run a card's backend_logic (main.lua + its \`require\`d modules) |
+
+For both dry-run verbs: \`state\` takes a JSON string OR a plain object (serialized for you — e.g. paste a previous run's \`stateOut\` either way), and \`delegateResponse\` takes plain text, \`{"text": "..."}\`, or \`{"error": "..."}\` to rehearse delegation failures.
 | \`test_luatool\` | \`{id?|code?, sandbox?, toolName, args?, config?}\` — run a tool from a stored template or ad-hoc code |
 | \`test_regex\` | \`{characterId?, text, role?}\` — preview merged regex rules (global + character) against sample text |
 | \`clone_character\` | \`{sourceCharacterId, name?}\` — deep-copy a card (fields, lorebook, regex, modules, assets, avatar) |
@@ -81,6 +83,7 @@ grep {"pattern": "generate", "path": "/characters/abc123/"}
 | \`copy_assets\` | \`{characterId, sourceCharacterId, assetId?}\` — omit assetId to copy all |
 | \`copy_module_assets\` | \`{characterId, sourceCharacterId, moduleId}\` — copy a Risu module's stored assets onto a card |
 | \`move_lorebook_entry\` | \`{characterId, entryId, index}\` — move an entry to a 0-based position |
+| \`add_game_lib\` | \`{characterId}\` — vendor the game lib (\`lib/*.lua\`: loop, transcript, ledger, todo, registry, …; topic \`game_cards\`) into the card's \`backend_logic/\` VFS. Overwrites \`lib/\` keys only; the card's own modules and main.lua are preserved |
 
 ## Creating entities: write to .../new(.json)
 

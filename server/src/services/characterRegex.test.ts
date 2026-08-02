@@ -44,6 +44,14 @@ describe('getCharacterRegexRules', () => {
     );
     expect(rules[0]).toMatchObject({ id: 'x', prompt: false, display: true, userInput: true, disabled: true });
   });
+
+  it('keeps rules with an empty findRegex (inert placeholders)', () => {
+    const rules = getCharacterRegexRules(
+      makeCharacter({ regexScripts: [{ id: 'p', name: 'placeholder', findRegex: '' }] }),
+    );
+    expect(rules).toHaveLength(1);
+    expect(rules[0]).toMatchObject({ id: 'p', findRegex: '' });
+  });
 });
 
 describe('mergeRegexRules', () => {

@@ -31,6 +31,7 @@ import type { RAGService } from '../RAGService.js';
 import { createCharacter, updateCharacter } from '../characterMutations.js';
 import { setCharacterAvatarFromBuffer } from '../characterAvatar.js';
 import { validateVfsPath } from '../../scripting/LuaVfs.js';
+import { gameLibFiles } from './gameLib.js';
 import { getCharacterRegexRules, mergeRegexRules, getGlobalRegexRules, CHARACTER_REGEX_EXTENSION_KEY } from '../characterRegex.js';
 import { applyRules, filterRulesByRole, parseRegexString } from '../RegexEngine.js';
 import {
@@ -154,7 +155,12 @@ const LorebookEntryMoveArgs = z.object({
 
 const RegexRuleInput = z.object({
   name: z.string().min(1).describe('Rule name.'),
-  findRegex: z.string().min(1).describe('JS-style delimited pattern, e.g. "/foo/gi". Bare patterns are rejected.'),
+  findRegex: z
+    .string()
+    .optional()
+    .describe(
+      'JS-style delimited pattern, e.g. "/foo/gi". Bare patterns are rejected. Omit (or pass "") to create an inert placeholder rule — it is stored but does nothing until a pattern is set.',
+    ),
   replaceString: z
     .string()
     .optional()
@@ -290,11 +296,19 @@ const BackendLogicTestArgs = z.object({
   characterId: z.string().describe(CHARACTER_ID),
   input: z.string().min(1).describe('Sample user message fed to generate() as the last prompt message.'),
   luaSource: z.string().optional().describe('Test this Lua source instead of the character\'s stored script — iterate without saving.'),
-  state: z.string().optional().describe('Canned script-state snapshot (JSON string) injected as the `state` global, e.g. the stateOut of a previous dry-run.'),
-  delegateResponse: z
-    .union([z.string(), z.object({ error: z.string() })])
+  state: z
+    .union([z.string(), z.record(z.string(), z.unknown())])
     .optional()
-    .describe('Canned answer for every delegated backends.generate() call — text, or { "error": "..." } to test delegation failures. Defaults to a placeholder.'),
+    // Models keep passing the snapshot as a parsed object — accept both and
+    // normalize to the raw string format dryRunBackendScript expects.
+    .transform((v) => (typeof v === 'string' || v === undefined ? v : JSON.stringify(v)))
+    .describe('Canned script-state snapshot injected as the `state` global — a JSON string OR a plain object (serialized for you), e.g. the stateOut of a previous dry-run.'),
+  delegateResponse: z
+    .union([z.string(), z.object({ error: z.string() }), z.object({ text: z.string() })])
+    .optional()
+    // { text } unwraps to a plain canned-text response.
+    .transform((v) => (typeof v === 'object' && 'text' in v ? v.text : v))
+    .describe('Canned answer for every delegated backends.generate() call — text, { "text": "..." }, or { "error": "..." } to test delegation failures. Defaults to a placeholder.'),
   history: z
     .array(z.object({ role: z.string(), content: z.string() }))
     .optional()
@@ -324,6 +338,10 @@ const BackendFileEditArgs = z.object({
     .boolean()
     .optional()
     .describe('Replace every occurrence. Default false — a non-unique oldString is an error.'),
+});
+
+const BackendLogicAddGameLibArgs = z.object({
+  characterId: z.string().describe(CHARACTER_ID),
 });
 
 /** Map a MIME type to a file extension for asset storage/URLs. */
@@ -412,6 +430,8 @@ export class CharacterWorkbench {
           return await this.backendFileRemove(args);
         case 'backend_file_edit':
           return await this.backendFileEdit(args);
+        case 'backend_logic_add_game_lib':
+          return await this.backendLogicAddGameLib(args);
         default:
           return { content: `Error: unknown tool ${toolName}` };
       }
@@ -751,15 +771,18 @@ export class CharacterWorkbench {
     const parsed = RegexAddArgs.safeParse(args);
     if (!parsed.success) return invalidArgs(parsed.error);
     const { characterId, rule } = parsed.data;
-    const invalid = this.validateFindRegex(rule.findRegex);
-    if (invalid) return { content: invalid };
+    // Empty findRegex is allowed (inert placeholder); non-empty must parse.
+    if (rule.findRegex) {
+      const invalid = this.validateFindRegex(rule.findRegex);
+      if (invalid) return { content: invalid };
+    }
 
     const character = await this.deps.characters.getById(characterId);
     if (!character) return { content: `Error: character "${characterId}" not found` };
     const newRule: RegexRule = {
       id: randomUUID(),
       name: rule.name,
-      findRegex: rule.findRegex,
+      findRegex: rule.findRegex ?? '',
       replaceString: rule.replaceString ?? '',
       ...(rule.replaceLua !== undefined ? { replaceLua: rule.replaceLua } : {}),
       disabled: rule.disabled ?? false,
@@ -776,7 +799,7 @@ export class CharacterWorkbench {
     const parsed = RegexUpdateArgs.safeParse(args);
     if (!parsed.success) return invalidArgs(parsed.error);
     const { characterId, ruleId, patch } = parsed.data;
-    if (patch.findRegex !== undefined) {
+    if (patch.findRegex) {
       const invalid = this.validateFindRegex(patch.findRegex);
       if (invalid) return { content: invalid };
     }
@@ -1349,5 +1372,24 @@ export class CharacterWorkbench {
     return {
       content: JSON.stringify({ path: key, replacements: occurrences, lines: nextSource.split('\n').length }),
     };
+  }
+
+  /**
+   * Vendor the game lib (docs/design/examples/game-lib/*.lua) into the card's
+   * backend_logic/lib/ VFS. Overwrites lib/<module>.lua keys only — the card's
+   * own modules, luaSource, and enabled flag are preserved. Re-running after
+   * editing a lib copy restores the canonical module; editing lib/loop.lua
+   * afterward keeps the card's copy pinned until then.
+   */
+  private async backendLogicAddGameLib(args: Record<string, unknown>): Promise<ToolExecuteResult> {
+    const parsed = BackendLogicAddGameLibArgs.safeParse(args);
+    if (!parsed.success) return invalidArgs(parsed.error);
+    const character = await this.deps.characters.getById(parsed.data.characterId);
+    if (!character) return { content: `Error: character "${parsed.data.characterId}" not found` };
+
+    const lib = gameLibFiles();
+    const files = { ...this.getBackendFiles(character), ...lib };
+    await this.setBackendFiles(character, files);
+    return { content: JSON.stringify({ added: Object.keys(lib).sort(), total: Object.keys(files).length }) };
   }
 }

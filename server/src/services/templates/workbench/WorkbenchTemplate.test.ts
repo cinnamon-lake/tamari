@@ -852,9 +852,10 @@ describe('run', () => {
     'copy_assets',
     'copy_module_assets',
     'move_lorebook_entry',
+    'add_game_lib',
   ];
 
-  it('returns the verb menu listing all 10 verbs when the verb is omitted', async () => {
+  it('returns the verb menu listing all 11 verbs when the verb is omitted', async () => {
     const { template } = setup();
     const content = await exec(template, 'run', {});
     expect(content.startsWith('run verbs (usage: run {"verb": "<name>", "args": {...}}):')).toBe(true);
@@ -881,6 +882,7 @@ describe('run', () => {
     { verb: 'copy_assets', fake: 'character', tool: 'character_assets_copy', args: { characterId: 'c1', sourceCharacterId: 'c2' } },
     { verb: 'copy_module_assets', fake: 'character', tool: 'risu_module_assets_copy', args: { characterId: 'c1', sourceCharacterId: 'c2', moduleId: 'm1' } },
     { verb: 'move_lorebook_entry', fake: 'character', tool: 'lorebook_entry_move', args: { characterId: 'c1', entryId: 'e1', index: 0 } },
+    { verb: 'add_game_lib', fake: 'character', tool: 'backend_logic_add_game_lib', args: { characterId: 'c1' } },
   ];
   for (const { verb, fake, tool, args } of dispatch) {
     it(`dispatches ${verb} (${tool === 'character_assets_copy' ? 'no assetId' : tool}) to ${tool}`, async () => {
