@@ -34,4 +34,6 @@ RUN mkdir -p /app/data-v2
 EXPOSE 8000
 
 ENTRYPOINT ["tini", "--"]
-CMD ["node", "server/dist/main.js"]
+# See start.sh: --no-wasm-tier-up works around a V8/wasm teardown crash
+# triggered by wasmoon's per-callback module churn.
+CMD ["node", "--no-wasm-tier-up", "server/dist/main.js"]
