@@ -1,4 +1,7 @@
-FROM node:24-alpine
+# Node 26 (V8 14.x): reworked the wasm wrapper teardown path that CHECK-crashed
+# under wasmoon's module churn on Node 24's V8 13.6 (ThreadIsolation
+# UnregisterWasmAllocation fatals — see start.sh note).
+FROM node:26-alpine
 
 # glibc compatibility for native modules (libsql, etc.)
 # tini for proper signal handling
