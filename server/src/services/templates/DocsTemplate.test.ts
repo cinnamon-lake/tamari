@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { DocsTemplate } from './DocsTemplate.js';
 import { DOCS_CONTENT, DOCS_TOPICS } from './docs/index.js';
+import { GAME_LIB_MODULES } from '../workbench/gameLib.js';
+import { GAME_CARDS_EXAMPLE_DOC } from './docs/gameCardsExample.js';
 
 const EXPECTED_ANCHORS: Record<(typeof DOCS_TOPICS)[number], string> = {
   characters: '# Characters',
@@ -16,8 +19,7 @@ const EXPECTED_ANCHORS: Record<(typeof DOCS_TOPICS)[number], string> = {
   quick_replies: '# Quick Replies',
   chats: '# Chats',
   game_cards: '# Game Cards',
-  game_cards_factory: '# The Sunken Crypt',
-  game_cards_events: '# The Guildhall',
+  game_cards_example: '# The Guildhall',
 };
 
 describe('DocsTemplate', () => {
@@ -64,5 +66,34 @@ describe('DocsTemplate', () => {
   it('is stateless', () => {
     expect(template.serialize()).toBe('');
     expect(() => template.deserialize('anything')).not.toThrow();
+  });
+});
+
+describe('gameCardsExample embedded sources match canonical files', () => {
+  // The doc ships display copies of the lib + the Guildhall main inside a
+  // template literal. They MUST stay byte-identical to the canonical files the
+  // card actually vendors (gameLib.ts reads docs/design/examples/), or the doc
+  // lies about the code. Locking it here beats hoping editors stay in sync.
+  // After editing the canonical Lua, re-sync with:
+  //   npx tsx scripts/sync-game-cards-example.ts   (from server/)
+  const EXAMPLES_DIR = new URL('../../../../docs/design/examples/', import.meta.url);
+  const blocks = [...GAME_CARDS_EXAMPLE_DOC.matchAll(/```lua\n([\s\S]*?)```/g)].map((m) => m[1]!);
+
+  it('embeds exactly the 11 lib modules + the Guildhall main (12 lua blocks)', () => {
+    expect(blocks.length).toBe(12);
+  });
+
+  it.each(GAME_LIB_MODULES)('lib/%s.lua embedded copy == canonical file', (name) => {
+    const block = blocks.find((b) => b.startsWith(`-- lib/${name}.lua`));
+    expect(block, `no embedded block for lib/${name}.lua`).toBeDefined();
+    const canonical = readFileSync(new URL(`game-lib/${name}.lua`, EXAMPLES_DIR), 'utf8');
+    expect(block!.replace(/\s+$/, '')).toBe(canonical.replace(/\s+$/, ''));
+  });
+
+  it('Guildhall main.lua embedded copy == canonical file', () => {
+    const block = blocks.find((b) => !b.startsWith('-- lib/') && b.split('\n').length > 200);
+    expect(block, 'no embedded Guildhall main block').toBeDefined();
+    const canonical = readFileSync(new URL('guildhall/main.lua', EXAMPLES_DIR), 'utf8');
+    expect(block!.replace(/\s+$/, '')).toBe(canonical.replace(/\s+$/, ''));
   });
 });

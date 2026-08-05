@@ -208,7 +208,7 @@ end
 
 json_schema is a request, not a guarantee — reverse proxies and local backends emit invalid JSON often enough that pattern-matching beats pcall. Consume with \`json.parse_result(text)\` → \`{ value = ... }\` or \`{ error = "..." }\`. There is no adapter-level validation or retry, by design: the script owns the failure semantics.
 
-One decode gotcha: \`json.decode\`/\`parse_result\` map JSON \`null\` to a truthy js_null userdata, NOT Lua nil — \`if result.optional then\` takes the wrong branch and concatenating it errors. Sanitize decoded tables before use (drop any value that isn't a table/string/number/boolean — see \`cleanNulls\` in topic \`game_cards_factory\`).
+One decode gotcha: \`json.decode\`/\`parse_result\` map JSON \`null\` to a truthy js_null userdata, NOT Lua nil — \`if result.optional then\` takes the wrong branch and concatenating it errors. Sanitize decoded tables before use (drop any value that isn't a table/string/number/boolean — see \`sanitize.data\` in topic \`game_cards_example\`).
 
 \`\`\`lua
 local sub = {}
@@ -240,6 +240,7 @@ return "You rolled " .. parsed.value.total
 - Delegate results carry \`toolCalls\` when the delegate wants to call tools (\`res.toolCalls\`, \`{ id, name, arguments }\`) — see Giving the delegate tools.
 - Always END delegate sub-prompts with a \`user\` message (the \`Narrate: …\` pattern). Some providers reject prompts with no user message or an assistant-final sequence — Zhipu GLM answers HTTP 400 (code 1214, "messages parameter is illegal"); OpenAI tolerates both, so cards that skip this break only when they change hands.
 - Exportable cards should delegate by default (\`backends.generate(prompt)\`); explicit ids are local-install only.
+- **You own the delegate's prompt — card definition fields do NOT auto-appear.** A card-coupled backend builds each delegate sub-prompt itself (\`sub.messages = { … }\`). The character's \`description\`, \`personality\`, \`persona\`, and other card-definition fields are NOT injected into those sub-prompts — only what you put in \`sub.messages\` reaches the model. (They ARE in the script's *incoming* \`prompt\` if you want to pull them out, but the delegates see only what you forward.) So put worldbuilding, tone, and persona into your prompt constants or the event context — not into the card fields expecting the delegate to read them. This is the single most common surprise for cards that drive their own sub-generations.
 
 ## Tools from a custom backend
 
@@ -293,7 +294,22 @@ The whole loop is invisible sub-generation inside one turn — the calls and res
 - \`chat.get(index):await()\` → 1-based, chronological: \`{ id, role, content, characterId?, personaId? }\`; out of range → nil.
 - \`chat.find(query, limit?):await()\` → newest-first substring matches (case-insensitive) \`{ index, id, role, content }\`; limit defaults to 10, capped at 50.
 
-\`chat\` is NIL outside a live chat generation (dry-runs without canned history, list_models) — always \`if chat then ... end\`. Read-only by construction. The canonical use is a \`recall\` delegate tool: the script compresses the delegate's view of history itself (never with an engine prompt rule — that would blind the script too, since the script's own prompt is regex-processed) and answers \`recall({ query })\` from \`chat.find\` with the verbatim old text. See topic \`game_cards\` (Compaction) for the full pattern. Dry-run it with the \`history\` option on \`test_backend_logic\` / \`test_custom_backend\` (\`[{ role, content }, ...]\`, oldest first; omit → \`chat\` is nil).
+\`chat\` is NIL outside a live chat generation (dry-runs without canned history, list_models) — always \`if chat then ... end\`. Read-only by construction. It is the raw escape hatch for verbatim history: when a script compresses the delegate's view itself (never with an engine prompt rule — that would blind the script too, since the script's own prompt is regex-processed), \`chat.find\` answers "what was actually said" from the full branch. The STRUCTURED pattern is lib/rolling + \`inspect_summary\` (topic \`game_cards\`) — summaries filed with their content, zoomed by id — but nothing stops a script from querying the raw branch. Dry-run it with the \`history\` option on \`test_backend_logic\` / \`test_custom_backend\` (\`[{ role, content }, ...]\`, oldest first; omit → \`chat\` is nil).
+
+## The blob heap (the \`store\` global)
+
+\`state\` is snapshotted per message, so anything big you put in it is duplicated into every message from then on. Kilobyte-scale script-authored data — generated content packs, big designs — belongs in the \`store\` global instead: a global append-only blob heap.
+
+- \`store.put(name, text):await()\` → the new blob's id, \`"<name>#<seq>"\`. The name is ONLY a debug-readable prefix (it shows up in state dumps and error messages); it is never queryable. Names cap at 60 chars, content at 64KB — over-cap throws.
+- \`store.get(id):await()\` → the blob's text, or nil.
+- \`store.putJson(name, value):await()\` → id. The value is a Lua table, encoded JS-side — no \`json.encode\` dance.
+- \`store.getJson(id):await()\` → the validated JSON string (\`json.decode\` it Lua-side — the decode cannot fail, it was validated; a corrupt blob throws instead). Missing → nil.
+- \`store.append(prevId, item):await()\` → the new head id. Persistent linked list: one node \`{ item, prev }\` per call, exactly one item — but the item MAY be an array, and that's the batching idiom (a turn's entries as one node, one await).
+- \`store.readArray(id):await()\` → the whole chain as a validated JSON string: nodes oldest-first, array items recursively FLATTENED. \`readArray(nil)\` → \`[]\`.
+
+The recursive-array idiom — a growing, branch-correct log that never copies: \`state.head = store.append(state.head, entries):await()\` per turn (state holds only the head id; old branches still point at their old head), \`json.decode(store.readArray(state.head):await())\` to read it all back. This is what the event engine's scene span is built on (topic \`game_cards\`). Appending to a missing \`prevId\` or reading a chain with a missing node throws — a pointer to nothing is a bug, not bad luck.
+
+No list, no search, no edits — lookup is by exact id only, and there is no way to enumerate the heap. The discipline that keeps swipes correct: **the blob lives in the store, the pointer lives in \`state\`.** Your branch-aware state maps your own logical keys to blob ids (\`state.packIds = { f1 = "pack:f1#3" }\`); a "mutation" is a fresh \`put\` plus moving the pointer — old branches still point at their version, and a swiped-away branch's blobs are simply unreferenced. A pointer whose blob is missing or garbled is a bug (blobs are script-written) — fail loudly, don't "recover" by regenerating. \`store\` is always present; in dry-runs and tests it is an in-memory heap that lives as long as the adapter.
 
 ## Porting event-driven scripts (RisuAI triggers)
 
@@ -304,7 +320,7 @@ RisuAI triggers are event-driven (\`onOutput\`, \`onInput\`, \`onButtonClick\`, 
 | \`onOutput\` post-processing | Delegate, then post-process: \`local res = backends.generate(prompt):await()\` — parse game-state tags out of \`res.text\`, update \`state\`, rewrite or append, and return the final text. The script owns the reply; this is where a game loop lives. |
 | \`onInput\` / input rewriting | Read the incoming user message from \`prompt.messages\` (last \`role == "user"\` entry), parse commands, and transform it before assembling the delegated prompt. |
 | \`risu-btn\` / \`risu-trigger\` buttons | Emit \`<button data-post-response="command">Label</button>\` in the reply text (directly, or via a display regex rule). A click posts \`command\` as the user's next message and triggers generation — recognize your own protocol strings (\`choice__3\`, \`lb-reroll__12\`) in the incoming user message, act on them, and strip them from the delegated prompt. Check \`ctx.generationType\`: a \`regenerate\`/\`continue\` must NOT re-fire a captured command. The seeded \`present_choices\` tool offers model-generated clickable choices through the same channel. Buttons survive the default (permissive) sanitization; the strict-sanitization setting strips them. |
-| Save/load blobs in chat text | The script controls its own output: append a \`<SaveData>…</SaveData>\` blob to the returned text and parse it back out of \`prompt.messages\` on later turns (the branch history — branch-aware by construction). For hidden state, prefer the \`state\` global (see Branch-aware state). |
+| Save/load blobs in chat text | Don't parse your own data back out of history. Small engine state goes in the \`state\` global (branch-aware — see Branch-aware state); kilobyte-scale blobs go in the \`store\` global (\`store.put(name, text)\` → id, pointer kept in \`state\`, \`store.get(id)\` to read back — see The blob heap). History is the record of what was SAID, not a data channel. |
 | \`getChatVar\` / \`setChatVar\` | Use the \`state\` global for engine state. For values that lorebook entries and prompts must read via \`{{getvar}}\`, emit \`{{setvar::key::value}}\` in the returned text — assistant messages are macro-resolved at write time and the vars are stored on the message. |
 | \`getFullChat\` / history scanning | \`prompt.messages\` is the current branch's history as assembled for the model (context-window bound). Scan it the same way. |
 | Rewriting stored messages | Not possible — displayed history is immutable by design. Append corrections or new state in your own output instead. |

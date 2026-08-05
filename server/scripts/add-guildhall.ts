@@ -1,7 +1,8 @@
 /**
  * One-off: install "The Guildhall" (docs/design/examples/guildhall/main.lua)
- * as a real character card in the live database, so the event-engine example
- * can be played in the UI.
+ * as a real character card in the live database — the complete game card
+ * (event-engine hall + factory-ratio dungeon), so the worked example from
+ * docs topic `game_cards_example` can be played in the UI.
  *
  * Idempotent: re-running updates the existing card's fields, regex rules, and
  * backend script in place. Run from server/:  npx tsx scripts/add-guildhall.ts
@@ -18,112 +19,120 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DATA_DIR = process.env.DATA_DIR ?? join(ROOT, 'data-v2');
 const LUA_PATH = join(ROOT, 'docs', 'design', 'examples', 'guildhall', 'main.lua');
 const LIB_DIR = join(ROOT, 'docs', 'design', 'examples', 'game-lib');
-const LIB_MODULES = ['loop', 'collapse', 'transcript', 'chrome', 'ledger', 'toolset', 'registry', 'events'];
+const LIB_MODULES = ['loop', 'sanitize', 'chrome', 'ledger', 'toolset', 'todo', 'registry', 'summarize', 'maptag', 'events', 'rolling'];
 
 const CARD_NAME = 'The Guildhall';
 
 const DESCRIPTION = [
-  'The Guildhall is an event engine wearing a tavern. You idle in the hall with a menu — delve',
-  'the dungeon, visit the store, see the blacksmith — until you do something nobody planned for.',
-  'Then the hall comes alive: a dungeon master frames the scene, and whoever you went looking for',
-  'is cast, written, and remembered. Characters you meet keep their own account of you — what',
-  'THEY carried away from your last encounter — and bring it up next time. Type anything, or use',
-  'the buttons; Leave always works.',
+  'The Guildhall is a complete game card: a social hub (event engine) over a procedurally-designed',
+  'dungeon (factory ratio). Idle in the hall with a menu — delve the dungeon, visit the store, see the',
+  'blacksmith — or say anything to anyone. /delve drops you into a dungeon whose floors the model',
+  'designs as room-graphs and Lua serves for free: movement, combat, loot, and a fog-of-war map, until',
+  'you do something nobody planned for (a dungeon DM with a cost economy, who may even open a',
+  'conversation mid-fight). The people you meet keep dossiers — what THEY carried away — and bring it',
+  'up next time. Death and the relic end the delve, not the game: you crawl back to the hall.',
 ].join(' ');
 
+// The opener is the receptionist's registration beat — flavor, then "name and
+// trade?" No menu buttons: the script never runs for firstMes, and the player's
+// first message should be their answer. The first generate() opens the
+// registration event script-side; the hall menu appears once it closes.
 const FIRST_MES = [
-  'Firelight, pipe smoke, the low roar of a guild hall at dusk. A quest board by the far wall,',
-  'a barkeep polishing the same glass, and the usual business of the place laid out before you.',
+  'The guildhall’s reception desk is a slab of oak lost under forms. Behind it sits a woman with',
+  'ink to the elbows, eating a donut — powdered sugar on her collar — who does not look up.',
   '',
-  '*Type what you do — talk to anyone, cause trouble, anything — or use the buttons.*',
+  '“Donut? No? Your loss. Best in Thornwall, and I’m not telling you where I get them.” She licks',
+  'a finger and slides a blank form your way. “Welcome to the Guildhall. Name and trade, newcomer',
+  '— let’s get you registered.”',
   '',
-  // Every message ends with buttons — including the greeting: the script
-  // never runs for firstMes, so the opener's buttons are hardcoded.
-  '<button data-post-response="/delve">Delve into the dungeon</button>',
-  '<button data-post-response="/shop">Visit the store</button>',
-  '<button data-post-response="/smith">See the blacksmith</button>',
+  '*Tell her your name and trade.*',
 ].join(' ');
 
 const CREATOR_NOTES = [
-  'Event-engine game card — the worked example from the docs topic `game_cards_events`.',
-  'The card-coupled backend (backend_logic/main.lua) is ENABLED: it wraps your active backend as',
-  'its delegate. Idle menu turns are free; the DM frames events; a scene-runner writes every',
-  'participant with an append-only (prefix-cache-friendly) prompt. Characters file dossiers on',
-  'you. Companion character-scoped regex rules are preinstalled ([sys] hider, HUD panel, event',
-  'plot-log, tag hiders).',
+  'Complete game card — the worked example from docs topic `game_cards_example`. The card-coupled',
+  'backend (backend_logic/main.lua) is ENABLED: it wraps your active backend as its delegate. Hall',
+  'idle turns and dungeon serve turns are free; the hall DM frames events, a scene-runner writes every',
+  'participant with an append-only (prefix-cache-friendly) prompt; the dungeon plans each floor in one',
+  'sub-gen and serves it deterministically. An event can open mid-combat and resumes the fight on close.',
+  'Companion character-scoped regex rules are preinstalled (HUD panel, fog-of-war map, event/fight/pack',
+  'plot-logs, tag hiders).',
 ].join(' ');
 
-/** Renders the [HUD|gold=..|party=..] tag as a panel (display-only). */
+/** Renders [HUD|where=..|gold=..(|hp=..|atk=..)] — hall shows gold, the dungeon adds the rest. */
 const HUD_REPLACE_LUA = `function replace(match, captures)
   local fields = {}
   for pair in captures[1]:gmatch("[^|]+") do
     local k, v = pair:match("^(%w+)=(.+)$")
     if k then fields[k] = v end
   end
-  local party = fields.party and fields.party ~= "none" and (" &middot; party: " .. fields.party) or ""
-  return string.format('<div class="hud"><strong>%s gold</strong>%s</div>', fields.gold or "?", party)
+  local parts = {}
+  if fields.name then parts[#parts + 1] = "<strong>" .. fields.name .. "</strong>" end
+  if fields.where then parts[#parts + 1] = fields.where end
+  if fields.hp then parts[#parts + 1] = "hp " .. fields.hp end
+  if fields.atk then parts[#parts + 1] = "atk " .. fields.atk end
+  if fields.gold then parts[#parts + 1] = "<strong>" .. fields.gold .. " gold</strong>" end
+  return '<div class="hud">' .. table.concat(parts, " &middot; ") .. "</div>"
 end`;
 
-const REGEX_RULES = [
-  {
-    id: randomUUID(),
-    name: 'Hide system acks',
-    findRegex: '/\\s*\\[sys\\].*?\\[\\/sys\\]\\s*/gis',
-    replaceString: '\n\n',
-    disabled: false,
-    userInput: false,
-    aiOutput: false,
-    prompt: true,
-    display: true,
-  },
-  {
-    id: randomUUID(),
-    name: 'HUD panel',
-    findRegex: '/\\[HUD\\|([^\\]]+)\\]/g',
-    replaceString: '',
-    replaceLua: HUD_REPLACE_LUA,
-    disabled: false,
-    userInput: false,
-    aiOutput: true,
-    prompt: false,
-    display: true,
-  },
-  // Structural markup (topic `game_cards_events`): visible to the model,
-  // hidden from the player. Event opens and chat tags are chrome; the event
-  // close's gist is a plot-log line.
-  {
-    id: randomUUID(),
-    name: 'Hide event open',
-    findRegex: '/\\[event [\\w ]+\\]/g',
-    replaceString: '',
-    disabled: false,
-    userInput: false,
-    aiOutput: true,
-    prompt: false,
-    display: true,
-  },
-  {
-    id: randomUUID(),
-    name: 'Event plot log',
-    findRegex: '/\\[\\/event (\\w[\\w ]*) summary="([^"]*)"\\]/g',
-    replaceString: '<div class="plot-log">$2</div>',
-    disabled: false,
-    userInput: false,
-    aiOutput: true,
-    prompt: false,
-    display: true,
-  },
-  {
-    id: randomUUID(),
-    name: 'Hide chat markup',
-    findRegex: '/\\[\\/?chat[^\\]]*\\]/g',
-    replaceString: '',
-    disabled: false,
-    userInput: false,
-    aiOutput: true,
-    prompt: false,
-    display: true,
-  },
+/** Renders [MAP|cur=..|ent=..|rooms=..|edges=..|stairs=..] as a compact room list (you/stairs marked). */
+const MAP_REPLACE_LUA = `function replace(match, captures)
+  local cur, stairs = "", ""
+  local rooms = {}
+  for pair in captures[1]:gmatch("[^|]+") do
+    local k, v = pair:match("^(%w+)=(.*)$")
+    if k == "cur" then cur = v
+    elseif k == "stairs" then stairs = v
+    elseif k == "rooms" then
+      for rid, name in v:gmatch("(%w+)=([^;]*)") do rooms[#rooms + 1] = { rid = rid, name = name } end
+    end
+  end
+  local out = { '<div class="map">' }
+  for _, r in ipairs(rooms) do
+    local mark = ""
+    if r.rid == cur then mark = " <strong>(you)</strong>" end
+    if stairs ~= "" and r.rid == stairs then mark = mark .. " &#9660;" end
+    out[#out + 1] = '<div class="map-room">' .. r.name .. mark .. '</div>'
+  end
+  out[#out + 1] = '</div>'
+  return table.concat(out, "")
+end`;
+
+interface RegexRule {
+  id: string;
+  name: string;
+  findRegex: string;
+  replaceString: string;
+  replaceLua?: string;
+  disabled: boolean;
+  userInput: boolean;
+  aiOutput: boolean;
+  prompt: boolean;
+  display: boolean;
+}
+
+const REGEX_RULES: RegexRule[] = [
+  // Optional: hide bare slash-command messages the player posted.
+  { id: randomUUID(), name: 'Hide command messages', findRegex: '/^\\s*\\/\\w+.*$/s', replaceString: '',
+    disabled: false, userInput: true, aiOutput: false, prompt: false, display: true },
+  // HUD panel (hall: gold; dungeon: where/hp/atk/gold).
+  { id: randomUUID(), name: 'HUD panel', findRegex: '/\\[HUD\\|([^\\]]+)\\]/g', replaceString: '', replaceLua: HUD_REPLACE_LUA,
+    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
+  // Fog-of-war floor map.
+  { id: randomUUID(), name: 'Floor map', findRegex: '/\\[MAP\\|([^\\]]+)\\]/g', replaceString: '', replaceLua: MAP_REPLACE_LUA,
+    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
+  // Fight spans: hide the open, plot-log the close's gist (the blows are visible prose; only tags are chrome).
+  { id: randomUUID(), name: 'Hide fight open', findRegex: '/\\[fight [\\w ]+\\]/g', replaceString: '',
+    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
+  { id: randomUUID(), name: 'Fight plot log', findRegex: '/\\[\\/fight [\\w ]+ summary="([^"]*)"\\]/g', replaceString: '<div class="plot-log">⚔ $1</div>',
+    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
+  // Pack blobs → one plot-log line.
+  { id: randomUUID(), name: 'Pack plot log', findRegex: '/\\[pack (\\w[\\w ]*)\\][\\s\\S]*?\\[\\/pack \\1 summary="([^"]*)"\\]/g', replaceString: '<div class="plot-log">$2</div>',
+    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
+  // Event structural markup: hide the open, plot-log the close's gist.
+  { id: randomUUID(), name: 'Hide event open', findRegex: '/\\[event [\\w ]+\\]/g', replaceString: '',
+    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
+  { id: randomUUID(), name: 'Event plot log', findRegex: '/\\[\\/event (\\w[\\w ]*) summary="([^"]*)"\\]/g', replaceString: '<div class="plot-log">$2</div>',
+    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
 ];
 
 /** The vendored game lib, as the card's backend_logic/lib/*.lua VFS map. */
@@ -150,7 +159,7 @@ async function main(): Promise<void> {
     creatorNotes: CREATOR_NOTES,
     creator: 'tamari',
     characterVersion: '1.0',
-    tags: ['game', 'event-engine', 'social'],
+    tags: ['game', 'event-engine', 'factory-ratio'],
   };
 
   const existing = await repo.getByName(CARD_NAME);

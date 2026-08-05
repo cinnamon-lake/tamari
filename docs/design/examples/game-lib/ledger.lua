@@ -10,10 +10,10 @@
 -- due-ness from `now` and escalates to DUE NOW. Lifecycle includes failure:
 -- pending → kept / failed, and failure is canon too.
 --
--- `now` is the card's current turn counter. Bind it once per turn with
--- ledger.bind(fn) (toolset composition calls exec without a `now`), or pass
--- `now` explicitly to exec/briefing. The lib never touches `state` beyond
--- its own key.
+-- `now` is the card's current turn counter; bind it once per turn with
+-- ledger.bind(fn). A filed due date is clamped to now+1 … now+50 — a promise
+-- can never be filed for the same turn, nor further than 50 turns out. The
+-- lib never touches `state` beyond its own key.
 
 local M = {}
 
@@ -35,7 +35,7 @@ function M.tools()
       name = "promise",
       description = "File a plot debt for your future self: something that MUST happen at a later turn (foreshadowing, a scheduled event, a threat that matures).",
       parameters = { type = "object", properties = {
-        id = { type = "string" }, what = { type = "string" }, turn = { type = "integer" } }, required = { "id", "what", "turn" } },
+        id = { type = "string" }, what = { type = "string" }, due = { type = "integer" } }, required = { "id", "what", "due" } },
     },
   }, {
     type = "function",
@@ -50,26 +50,26 @@ end
 
 --- Answers promise/resolve_promise; returns nil when the name is not a ledger
 --- tool (so toolset composition can try the next module).
-function M.exec(name, args, now)
-  now = now or getNow()
+function M.exec(name, args)
+  local now = getNow()
   if name == "promise" then
     local id = tostring(args.id or ""):sub(1, 30)
     local what = tostring(args.what or ""):sub(1, 120)
-    local turn = tonumber(args.turn)
+    local due = tonumber(args.due)
     -- The critical validation: a concrete due anchor. No "later".
-    if id == "" or what == "" or turn == nil then
-      return "rejected: id, what, and a concrete due turn are required"
+    if id == "" or what == "" or due == nil then
+      return "rejected: id, what, and a concrete due are required"
     end
-    turn = math.max(now + 1, math.min(math.floor(turn), now + 50))
+    due = math.max(now + 1, math.min(math.floor(due), now + 50))
     for _, p in ipairs(promises()) do
       if p.id == id and not p.status then return "already pending: " .. id end
     end
     local list = promises()
-    list[#list + 1] = { id = id, what = what, turn = turn }
-    return json.encode({ promised = id, turn = turn })
+    list[#list + 1] = { id = id, what = what, due = due }
+    return json.encode({ promised = id, due = due })
   end
   if name == "resolve_promise" then
-    local id = tostring(args.id or "")
+    local id = tostring(args.id or ""):sub(1, 30)
     for _, p in ipairs(promises()) do
       if p.id == id and not p.status then
         p.status = args.outcome == "failed" and "failed" or "kept"
@@ -82,15 +82,19 @@ function M.exec(name, args, now)
 end
 
 --- The briefing is the memory: pending debts with due-ness computed by Lua.
-function M.briefing(now)
-  now = now or getNow()
+function M.briefing()
+  local now = getNow()
   local lines = {}
   for _, p in ipairs(promises()) do
-    if not p.status then
+    if p.status == "failed" then
+      -- Failure is canon: it stays on screen so the model honors the consequence
+      -- (a closed route, a broken oath) instead of forgetting it ever happened.
+      lines[#lines + 1] = string.format("- [FAILED — canon] %s: %s", p.id, p.what)
+    elseif not p.status then
       local tag = "pending"
-      if now >= p.turn then tag = "DUE NOW"
-      elseif now == p.turn - 1 then tag = "due next turn" end
-      lines[#lines + 1] = string.format("- [%s] %s (turn %d): %s", tag, p.id, p.turn, p.what)
+      if now >= p.due then tag = "DUE NOW"
+      elseif now == p.due - 1 then tag = "due next turn" end
+      lines[#lines + 1] = string.format("- [%s] %s (due %d): %s", tag, p.id, p.due, p.what)
     end
   end
   if #lines == 0 then return "" end

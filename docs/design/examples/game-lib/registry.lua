@@ -32,12 +32,12 @@
 --     on_register = function(rec) ... end,  -- optional: reshape/side effects
 --   })
 --
--- Instance surface (conforms to the lib module contract — plain dot calls.
--- get() is colon-tolerant; the composed contract (tools/exec, via toolset)
--- is dot-only, so make dots the habit):
+-- Instance surface (conforms to the lib module contract — plain dot calls):
 --   enemies.tools() -> array            enemies.exec(name, args) -> string|nil
---   enemies.get(id) -> record|nil       enemies.all() -> array
---   enemies.briefing() -> string
+--   enemies.get(id) -> record|nil       enemies.all() -> array (LIVE — mutate
+--     records in place and every consumer sees it; don't reorder or remove)
+--   enemies.briefing() -> string        -- one line per record, for delegate
+--     briefings ("" when empty); lib/events builds list_characters on it
 
 local M = {}
 
@@ -68,8 +68,8 @@ local function coerce(fields, args)
         rec[f.name] = n
       end
     elseif f.type == "array" then
-      local arr = {}
       if type(v) == "table" then
+        local arr = {}
         for _, item in ipairs(v) do
           local s = tostring(item)
           if f.closed then
@@ -82,8 +82,11 @@ local function coerce(fields, args)
             arr[#arr + 1] = s
           end
         end
+        rec[f.name] = arr
+      elseif not f.required then
+        rec[f.name] = {}
       end
-      rec[f.name] = arr
+      -- a required array passed as a non-table stays nil → reported missing
     elseif f.type == "table" then
       if type(v) == "table" then rec[f.name] = v end
     else -- string
@@ -186,9 +189,7 @@ function M.new(def)
     return nil
   end
 
-  -- Colon-tolerant: a colon call (enemies:get(id)) passes the instance as the
-  -- first argument — shift it off instead of silently missing every lookup.
-  function R.get(a, b) return findRecord(a == R and b or a) end
+  function R.get(id) return findRecord(id) end
 
   function R.all() return records() end
 

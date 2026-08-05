@@ -83,7 +83,7 @@ For both dry-run verbs: \`state\` takes a JSON string OR a plain object (seriali
 | \`copy_assets\` | \`{characterId, sourceCharacterId, assetId?}\` — omit assetId to copy all |
 | \`copy_module_assets\` | \`{characterId, sourceCharacterId, moduleId}\` — copy a Risu module's stored assets onto a card |
 | \`move_lorebook_entry\` | \`{characterId, entryId, index}\` — move an entry to a 0-based position |
-| \`add_game_lib\` | \`{characterId}\` — vendor the game lib (\`lib/*.lua\`: loop, transcript, ledger, todo, registry, …; topic \`game_cards\`) into the card's \`backend_logic/\` VFS. Overwrites \`lib/\` keys only; the card's own modules and main.lua are preserved |
+| \`add_game_lib\` | \`{characterId}\` — vendor the game lib (\`lib/*.lua\`: loop, ledger, todo, registry, rolling, …; topic \`game_cards\`) into the card's \`backend_logic/\` VFS. Overwrites \`lib/\` keys only; the card's own modules and main.lua are preserved |
 
 ## Creating entities: write to .../new(.json)
 

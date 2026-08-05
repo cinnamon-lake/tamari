@@ -314,6 +314,49 @@
     font-style: italic;
   }
 
+  /* Game-card display rules: [/fight|/pack|/event … summary="…"] gist lines,
+     the [HUD|…] panel, and the [MAP|…] fog-of-war map (docs topic
+     `game_cards_example`). The cards emit these classes via scoped regex
+     rules; the client owns their look. */
+  .plot-log {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    font-style: italic;
+    border-left: 3px solid var(--color-border);
+    padding-left: var(--space-sm);
+    margin-top: var(--space-sm);
+  }
+
+  .hud {
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    margin-top: var(--space-sm);
+    max-width: fit-content;
+  }
+
+  .map {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm);
+    margin-top: var(--space-sm);
+    max-width: fit-content;
+    min-width: 12rem;
+  }
+
+  .map-room {
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    padding: var(--space-xs) var(--space-sm);
+  }
+
   ul,
   ol {
     padding-left: var(--space-md);

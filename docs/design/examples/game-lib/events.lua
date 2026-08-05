@@ -12,20 +12,26 @@
 --   * the cast: a character registry (lib/registry) plus the casting tools.
 --     The character FIELDS are the card's (declared in the def); the
 --     validate-file-query pipeline is the lib's.
---   * dossiers: per-character memory, state.dossiers[id] = { digest, takes }.
---     close_event files one take per participant — what THAT character
+--   * dossiers: per-character memory as rolling summary channels
+--     (lib/rolling). state.dossiers[id] is a plain array of entry ids;
+--     close_event pushes one take per participant — what THAT character
 --     carried away, so knowledge asymmetry is structural. get_character
---     serves the file with FOLD-ON-READ digestion: when the backlog outgrows
---     the recent window, one cheap sub-gen folds the oldest takes into the
---     running digest and drops them. Fail-soft: a delegate error never eats
---     memory — cap-and-count is served and the fold retries next read.
---   * the tags: [event kind], [chat featuring="..."], [/event kind
---     summary="..."]. Structural markup — visible to the model, rendered for
---     the player, emitted ONLY by the script (strip removes freelanced tags
---     from delegate text).
---   * the append-only span: span(prompt) is the event's messages verbatim,
---     deterministically cleaned, never capped — the scene-runner's
---     frozen-prefix view (turn N is a strict prefix of turn N+1).
+--     serves rolling.parts: the recent takes verbatim plus fold entries as
+--     the digest, folded ON READ when the backlog outgrows the window (a
+--     never-read character costs no token). Loud on error: a delegate
+--     failure fails the turn — ids move only after the fold entry is filed,
+--     so memory survives intact and a swipe retries the fold.
+--   * the tags: [event kind], [/event kind summary="..."]. PLAYER-facing
+--     renderings only (hide the open, plot-log the close's gist) — nothing
+--     parses them. The cast is NOT a tag: it rides the newest message via
+--     castLine() (from state.event.participants), and strip removes
+--     freelanced tags from delegate text.
+--   * the append-only span: the scene-runner's tail, tracked MECHANICALLY as
+--     a persistent linked list in the store (state.event.spanId) — user
+--     inputs, assistant text, and the tool_use/tool_result rounds, one node
+--     per turn. Turn N is a strict prefix of turn N+1 by CONSTRUCTION (no
+--     log parsing, no history-budget dependence), the model never re-issues
+--     a read it already made, and old branches keep their old head.
 --
 -- Two contract views, for toolset composition:
 --   ev.tools() / ev.exec(name, args)   -- the scene-runner's toolset
@@ -35,8 +41,6 @@
 --     roster = myRoster,   -- inject the card's own registry instance…
 --     fields = {...},      -- …or declare fields and the engine creates it
 --     key = "characters",  -- state key for the roster (default)
---     recent = 3,          -- dossier takes served verbatim (default 3)
---     backlog = 3,         -- fold when takes exceed recent + backlog (default 3)
 --   })
 --
 -- INJECT the roster when anything else needs the cast: the same instance
@@ -44,27 +48,46 @@
 -- records are plain tables in state[key], so roster.get(id) returns the
 -- LIVE record — an ad-hoc tool mutates it (rec.dead = true) and every
 -- consumer sees it: get_character copies all record fields into its result.
--- The instance is always available as ev.roster, whichever path built it.
 --
 -- Instance surface beyond the contract (PLAIN DOT CALLS):
---   ev.isOpen()  ev.kind()  ev.eventLine()  ev.participants()  ev.clear()
---   ev.strip(text)  ev.chatWrap(text)  ev.closeTag()  ev.span(prompt)
---   ev.finalize(prompt)  -- the /leave path: best-effort close, always closes
---   ev.roster            -- the character registry (shared, live)
---   ev.bindPrompt(prompt)  -- once per generate(), like ledger.bind: the
---     fold's digest sub-gen inherits the turn's token budget (a bare
---     { messages } prompt would break real adapters, which read
---     prompt.tokenUsage). Unbound = digestion stays dormant.
+--   ev.isOpen()  ev.kind()  ev.eventLine()  ev.clear()
+--   ev.strip(text)  ev.openTag()  ev.castLine()  ev.closeTag()
+--   ev.hasSpan()  ev.spanStart(entries)  ev.spanAppend(entries)  ev.span()
+--   ev.finalize(prompt)  -- the /leave path: one finalize gen, loud on error
+--   ev.bindPrompt(prompt)  -- once per generate(), like ledger.bind: arms
+--     lib/rolling's fold sub-gens (they inherit the turn's prompt, which
+--     real adapters require for prompt.tokenUsage). Unbound = folds dormant.
+-- exec tries the roster's tools FIRST, then the event tools — don't declare
+-- a character field or roster tool named list_characters / get_character /
+-- add_to_chat / close_event, and don't declare fields named digest /
+-- dossier / older_takes (get_character injects those keys into its result).
 
 local registry = require("lib/registry")
 local toolset = require("lib/toolset")
 local loop = require("lib/loop")
+local chrome = require("lib/chrome")
+local rolling = require("lib/rolling")
 
 local M = {}
 
+local RESERVED = { digest = true, dossier = true, older_takes = true }
+
 function M.new(def)
+  if def.recent or def.backlog then
+    error("events.new: recent/backlog are retired — dossier folds use lib/rolling's fixed window (3 recent + 3 backlog); drop both", 2)
+  end
+  if not def.roster and not def.fields then
+    error("events.new: provide roster (a registry instance) or fields (to create one)", 2)
+  end
+  if def.fields then
+    for _, f in ipairs(def.fields) do
+      if RESERVED[f.name] then
+        error("events.new: field name '" .. f.name .. "' is reserved (get_character injects it)", 2)
+      end
+    end
+  end
   -- The roster: injected (shared with the card's other subsystems) or
-  -- created from the declared fields. Either way, public as E.roster.
+  -- created from the declared fields.
   local roster = def.roster or registry.new({
     tool = "register_character",
     description = "File a NEW character (check list_characters first — re-filing an existing name returns the existing record).",
@@ -72,22 +95,22 @@ function M.new(def)
     id_from = "name",
     fields = def.fields,
   })
-  local RECENT = def.recent or 3
-  local BACKLOG = def.backlog or 3
-
-  local E = { roster = roster }
+  local E = {}
 
   -- ---------- state ----------
 
+  -- A dossier is a rolling summary channel: state.dossiers[id] is a plain
+  -- array of entry ids (lib/rolling owns the fold and the store blobs). The
+  -- retired { digest, takes } shape resets — old pinned lib copies keep their
+  -- own behavior; this lib starts dossiers fresh.
   local function dossier(id)
     if type(state) ~= "table" then state = {} end
     state.dossiers = state.dossiers or {}
     local d = state.dossiers[id]
-    if type(d) ~= "table" or type(d.takes) ~= "table" then
-      d = { digest = "", takes = {} }
+    if type(d) ~= "table" or d.digest ~= nil or d.takes ~= nil then
+      d = {}
       state.dossiers[id] = d
     end
-    if type(d.digest) ~= "string" then d.digest = "" end
     return d
   end
 
@@ -102,7 +125,7 @@ function M.new(def)
     return state.event.kind .. " — " .. state.event.context
   end
 
-  function E.participants()
+  local function participants()
     return (state.event and state.event.participants) or {}
   end
 
@@ -116,9 +139,20 @@ function M.new(def)
     return (tostring(text or ""):gsub("%[/?event [^%]]*%]", ""):gsub("%[/?chat[^%]]*%]", ""))
   end
 
-  --- Wrap one scene-runner response in this turn's chat block.
-  function E.chatWrap(text)
-    return '[chat featuring="' .. table.concat(E.participants(), ",") .. '"]\n' .. text .. "\n[/chat]"
+  --- The cast note: who is on stage, from state.event.participants — appended
+  --- to the newest user message each scene turn (volatile state rides the
+  --- newest message, never the frozen prefix). "" when nobody is on stage.
+  function E.castLine()
+    local cast = participants()
+    if #cast == 0 then return "" end
+    return "on stage: " .. table.concat(cast, ", ")
+  end
+
+  --- The open tag for the CURRENT event ("" when none is open). The script
+  --- emits every tag: DM boundary turns and script-opened events splice this.
+  function E.openTag()
+    if not state.event then return "" end
+    return "[event " .. state.event.kind .. "]"
   end
 
   --- The spliced close tag ("" when the event isn't closing).
@@ -127,87 +161,60 @@ function M.new(def)
     return "[/event " .. state.event.kind .. ' summary="' .. state.event.closed.gist .. '"]'
   end
 
-  -- ---------- the append-only span ----------
+  -- ---------- the append-only span (a persistent list in the store) ----------
 
-  -- The event's messages verbatim, deterministically cleaned, NEVER capped.
-  -- [sys], buttons, and HUD are stripped; the structural markup STAYS (the
-  -- scene-runner needs to see who is on stage). Deterministic cleaning plus
-  -- a stable span start is what makes turn N a strict prefix of turn N+1.
-  function E.span(prompt)
-    local startIdx
-    for i = #prompt.messages, 1, -1 do
-      local m = prompt.messages[i]
-      if type(m.content) == "string" and m.content:find("%[event ") then startIdx = i break end
-    end
-    local msgs = {}
-    if startIdx then
-      for i = startIdx, #prompt.messages do
-        local m = prompt.messages[i]
-        if type(m.content) == "string" then
-          local cleaned = m.content
-            :gsub("%s*%[sys%].-%[/sys%]%s*", "\n\n")
-            :gsub("%s*<button.-</button>", "")
-            :gsub("%[HUD[^%]]*%]", "")
-            :gsub("^%s*(.-)%s*$", "%1")
-          if cleaned ~= "" then msgs[#msgs + 1] = { role = m.role, content = cleaned } end
-        end
-      end
-    end
-    return msgs
+  -- The scene-runner's tail is tracked MECHANICALLY, never parsed out of
+  -- history: state.event.spanId is the head of a persistent linked list
+  -- (store.append / store.readArray), one node per turn, the turn's entries
+  -- array as the node item. Full fidelity — user inputs, assistant text, AND
+  -- the tool_use/tool_result rounds — so the model never re-issues a read it
+  -- already made, and turn N is a strict prefix of turn N+1 by construction
+  -- (the delegate's prefix cache covers the whole scene). Old branches keep
+  -- pointing at their old head, so swipes stay correct; history budgets
+  -- (promptHistoryLimit) are irrelevant — nothing about the span depends on
+  -- what the log currently shows.
+
+  --- True once the event has a span (openEvent or the card's spanStart).
+  function E.hasSpan()
+    return state.event ~= nil and state.event.spanId ~= nil
   end
 
-  -- ---------- dossiers (fold-on-read digestion) ----------
-
-  -- The turn's incoming prompt, bound once per generate() by the card: the
-  -- digest sub-gen copies it (like every other sub-prompt in the lib) so the
-  -- delegate gets a complete prompt table — real adapters read
-  -- prompt.tokenUsage, and a bare { messages } table throws in production.
-  local boundPrompt = nil
-
-  --- Bind the turn's prompt (once per generate, next to ledger.bind).
-  function E.bindPrompt(prompt) boundPrompt = prompt end
-
-  -- One cheap, tool-less sub-gen folds the oldest takes into the running
-  -- digest, then drops them — the digest is bounded, raw takes are not.
-  -- Fail-soft: any error leaves the dossier untouched and the caller serves
-  -- cap-and-count; memory is never lost to a delegate error.
-  local function fold(d)
-    if not boundPrompt then return end -- dormant until the card binds
-    local cut = #d.takes - RECENT
-    if cut <= 0 then return end
-    local folding = {}
-    for i = 1, cut do folding[#folding + 1] = d.takes[i].take end
-    local sub = {}
-    for k, v in pairs(boundPrompt) do sub[k] = v end
-    sub.tools = nil
-    sub.messages = {
-      { role = "system", content = "Compress a character's history with the player into ONE short paragraph, "
-        .. "third person. Keep the specifics that would matter later — names, debts, slights, promises, "
-        .. "impressions. No double quotes. If a prior digest is given, fold the new entries INTO it." },
-      { role = "user", content =
-        (d.digest ~= "" and ("PRIOR DIGEST:\n" .. d.digest .. "\n\n") or "")
-        .. "NEW ENTRIES (oldest first):\n- " .. table.concat(folding, "\n- ") },
-    }
-    local ok, res = pcall(function() return backends.generate(sub):await() end)
-    if not ok or type(res) ~= "table" or type(res.text) ~= "string" then return end
-    local digest = res.text:gsub("%s+", " "):gsub('"', "'"):gsub("^%s*(.-)%s*$", "%1"):sub(1, 400)
-    if digest == "" then return end
-    d.digest = digest
-    for _ = 1, cut do table.remove(d.takes, 1) end
+  --- Start the span with its seed entries (one node; entries may be {}).
+  --- Errors when no event is open — the card calls this right after the
+  --- event opens (the DM's open_event does it for you, with an empty span).
+  function E.spanStart(entries)
+    if not state.event then error("events: spanStart with no open event", 2) end
+    state.event.spanId = store.append(nil, entries or {}):await()
   end
 
-  --- A character's file: the registry record plus their dossier (digest +
-  --- recent takes). Triggers the fold when the backlog outgrows the window.
-  --- Returns nil when no such character.
-  function E.file(id)
+  --- Append one turn's entries (user input, the loop's tool rounds, the
+  --- final reply) — ONE node, one await.
+  function E.spanAppend(entries)
+    if not E.hasSpan() then error("events: spanAppend with no span", 2) end
+    state.event.spanId = store.append(state.event.spanId, entries):await()
+  end
+
+  --- The whole tail, flattened ({} when there's no span). Loud when a node
+  --- is missing or garbled — blobs are script-written, that's a bug.
+  function E.span()
+    if not E.hasSpan() then return {} end
+    return json.decode(store.readArray(state.event.spanId):await())
+  end
+
+  -- ---------- dossiers (rolling summary channels) ----------
+
+  --- Bind the turn's prompt (once per generate, next to ledger.bind): arms
+  --- lib/rolling's fold sub-gens. Unbound = folds stay dormant.
+  function E.bindPrompt(prompt) rolling.bind(prompt) end
+
+  --- A character's file: the registry record plus their dossier as
+  --- { digest, takes, older } — rolling.parts folds the oldest takes into
+  --- digest entries when the backlog outgrows the window (on read, so a
+  --- never-read character costs no token). Returns nil when no such character.
+  local function characterFile(id)
     local rec = roster.get(id)
     if not rec then return nil end
-    local d = dossier(rec.id)
-    if #d.takes > RECENT + BACKLOG then fold(d) end
-    local recent = {}
-    local start = math.max(1, #d.takes - RECENT + 1)
-    for i = start, #d.takes do recent[#recent + 1] = d.takes[i].take end
-    return rec, { digest = d.digest, takes = recent, older = #d.takes - #recent }
+    return rec, rolling.parts(dossier(rec.id))
   end
 
   -- ---------- opening and closing ----------
@@ -221,6 +228,7 @@ function M.new(def)
     end
     state.eventSeq = (state.eventSeq or 0) + 1 -- lib-owned: cards without a turn counter still get unique ids
     state.event = { id = "e" .. state.eventSeq, kind = kind, context = context, participants = {} }
+    E.spanStart({}) -- the span starts empty; the DM turn appends its transition
     return json.encode({ opened = state.event.id, kind = kind,
       note = "the scene-runner takes over now — cast no characters yourself" })
   end
@@ -232,7 +240,7 @@ function M.new(def)
   local function closeEvent(args)
     if not state.event then return "rejected: no event is open" end
     if state.event.closed then return "already closing: " .. state.event.id end
-    local gist = tostring(args.gist or ""):gsub('"', "'"):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1"):sub(1, 200)
+    local gist = chrome.oneline(args.gist or "", 200)
     if gist == "" then gist = "The " .. state.event.kind .. " breaks off." end
     local filed, dropped = {}, {}
     if type(args.takes) == "table" then
@@ -242,8 +250,7 @@ function M.new(def)
           if p == id then present = true break end
         end
         if present then
-          local d = dossier(id)
-          d.takes[#d.takes + 1] = { event = state.event.kind, take = tostring(take):sub(1, 200) }
+          rolling.push(dossier(id), { label = state.event.kind, gist = take })
           filed[#filed + 1] = id
         else
           dropped[#dropped + 1] = tostring(id)
@@ -269,27 +276,27 @@ function M.new(def)
       parameters = { type = "object", properties = { kind = { type = "string" }, context = { type = "string" } }, required = { "kind", "context" } } },
   }
 
-  --- The /leave path: the exit never depends on the delegate. One
-  --- best-effort finalize gen writes the gist and takes; on any failure the
-  --- event still closes with a script-composed fallback gist. Returns the
-  --- spliced close tag.
+  --- The /leave path. One finalize gen writes the gist and takes. Loud on
+  --- error: a delegate failure throws and fails the turn — state rolls back,
+  --- the event stays open, and a swipe retries the exit. If the model just
+  --- spends its rounds without calling close_event (a content outcome, not
+  --- an error), the event still closes with a script-composed fallback gist.
+  --- Returns the spliced close tag.
   function E.finalize(prompt)
     if not state.event then return "" end
-    pcall(function()
-      local ts = toolset.new()
-      ts:handle("close_event", function(args) return closeEvent(args) end, CLOSE_EVENT_SCHEMA)
-      local sub = {}
-      for k, v in pairs(prompt) do sub[k] = v end
-      sub.tools = ts:schemas()
-      sub.messages = {
-        { role = "system", content = "The player just walked out of this event. Close it properly: call close_event "
-          .. "with a neutral gist of what happened and one take per participant (what THAT character carries away). "
-          .. "EVENT: " .. E.eventLine() },
-      }
-      for _, m in ipairs(E.span(prompt)) do sub.messages[#sub.messages + 1] = m end
-      local res = backends.generate(sub):await()
-      loop.run(sub, res, ts:exec(), 4)
-    end)
+    local ts = toolset.new()
+    ts:handle("close_event", function(args) return closeEvent(args) end, CLOSE_EVENT_SCHEMA)
+    local sub = {}
+    for k, v in pairs(prompt) do sub[k] = v end
+    sub.tools = ts:schemas()
+    sub.messages = {
+      { role = "system", content = "The player just walked out of this event. Close it properly: call close_event "
+        .. "with a neutral gist of what happened and one take per participant (what THAT character carries away). "
+        .. "EVENT: " .. E.eventLine() },
+    }
+    for _, m in ipairs(E.span()) do sub.messages[#sub.messages + 1] = m end
+    local res = backends.generate(sub):await()
+    loop.run(sub, res, ts:exec(), 4)
     if not state.event.closed then
       state.event.closed = { gist = "The " .. state.event.kind .. " breaks off." }
     end
@@ -329,7 +336,7 @@ function M.new(def)
       return "registry:" .. b
     end
     if name == "get_character" then
-      local rec, file = E.file(args and args.id)
+      local rec, file = characterFile(args and args.id)
       if not rec then return "unknown character: " .. tostring(args and args.id) end
       local out = {}
       for k, v in pairs(rec) do out[k] = v end

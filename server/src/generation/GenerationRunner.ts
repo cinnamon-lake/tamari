@@ -35,6 +35,7 @@ import { createContextualBackendAdapter, getCharacterBackendScript } from '../ba
 import { LuaBackendAdapter } from '../backends/LuaBackendAdapter.js';
 import type { LuaRuntime } from '../scripting/LuaRuntime.js';
 import type { ICustomBackendRepository } from '../repos/CustomBackendRepository.js';
+import type { IScriptBlobRepository } from '../repos/ScriptBlobRepository.js';
 import type { ToolRegistry } from '../services/ToolRegistry.js';
 import type { GenerationBroadcastService } from '../services/GenerationBroadcastService.js';
 import { findLatestStateSnapshot } from '../services/toolState.js';
@@ -59,6 +60,7 @@ export interface GenerationRunnerDeps {
   promptLists: IPromptListRepository;
   backendFactory: BackendAdapterFactory;
   customBackends: ICustomBackendRepository;
+  scriptBlobs: IScriptBlobRepository;
   luaRuntime: LuaRuntime;
   generationBroadcast: GenerationBroadcastService;
   toolRegistry?: ToolRegistry;
@@ -199,6 +201,7 @@ export class GenerationRunner {
           backendConfigs: this.deps.backendConfigs,
           settings: this.deps.settings,
           luaRuntime: this.deps.luaRuntime,
+          scriptBlobs: this.deps.scriptBlobs,
           createResolvedAdapter: (s) => backendFactory.create(s),
         },
         {

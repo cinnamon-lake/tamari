@@ -8,6 +8,7 @@ import {
 } from './LuaBackendAdapter.js';
 import type { BackendAdapter, BackendStreamItem, GenerationResult, Prompt } from './BackendAdapter.js';
 import { consumeStream } from './BackendAdapter.js';
+import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
 
 function makePrompt(): Prompt {
   return {
@@ -519,5 +520,151 @@ describe('runAdapterBlocking', () => {
       error: undefined,
       usage: { promptTokens: 4, completionTokens: 2 },
     });
+  });
+});
+
+describe('the store global', () => {
+  it('put/get round-trips through the in-memory fallback, persisting across turns on one adapter', async () => {
+    const adapter = makeAdapter(`
+      function generate(prompt, ctx)
+        if type(state) ~= "table" then state = {} end
+        if not state.blobId then
+          state.blobId = store.put("pack:f1", '{"rooms":{}}'):await()
+          return "wrote " .. state.blobId
+        end
+        return "read " .. tostring(store.get(state.blobId):await())
+      end
+      function list_models() return {} end
+    `);
+    const first = await run(adapter);
+    expect(first.items).toEqual([{ type: 'text', token: 'wrote pack:f1#1' }]);
+    const second = await consumeStream(
+      adapter.stream(makePrompt(), new AbortController().signal, {
+        chatId: 'chat1',
+        generationType: 'normal',
+        scriptState: first.result.scriptState,
+      }),
+    );
+    expect(second.items).toEqual([{ type: 'text', token: 'read {"rooms":{}}' }]);
+  });
+
+  it('get of a missing id returns nil', async () => {
+    const adapter = makeAdapter(`
+      function generate(prompt, ctx) return tostring(store.get("pack:f9#99"):await()) end
+      function list_models() return {} end
+    `);
+    const { items } = await run(adapter);
+    expect(items).toEqual([{ type: 'text', token: 'nil' }]);
+  });
+
+  it('over-cap content fails the turn loudly', async () => {
+    const adapter = makeAdapter(`
+      function generate(prompt, ctx) return store.put("big", string.rep("x", 65537)):await() end
+      function list_models() return {} end
+    `);
+    const { result } = await run(adapter);
+    expect(result.finishReason).toBe('error');
+    expect(result.error).toContain('content');
+  });
+});
+
+describe('store JSON + recursive-array primitives', () => {
+  const PRIM_LUA = `
+    function generate(prompt, ctx)
+      local cmd = prompt.messages[#prompt.messages].content
+      if cmd == "json" then
+        local id = store.putJson("doc", { name = "x", n = 3, list = { "a", "b" }, nested = { ok = true } }):await()
+        local back = json.decode(store.getJson(id):await())
+        return id .. "|" .. back.name .. "|" .. back.n .. "|" .. back.list[2] .. "|" .. tostring(back.nested.ok)
+      end
+      if cmd == "chain" then
+        local h = store.append(nil, { "a1", "a2" }):await()
+        h = store.append(h, "b1"):await()
+        h = store.append(h, { "c1", { "d1", "d2" } }):await()
+        local arr = json.decode(store.readArray(h):await())
+        return table.concat(arr, ",")
+      end
+      if cmd == "oldhead" then
+        if type(state) ~= "table" then state = {} end
+        if not state.h1 then
+          state.h1 = store.append(nil, "first"):await()
+          state.h2 = store.append(state.h1, "second"):await()
+          return "made"
+        end
+        local old = json.decode(store.readArray(state.h1):await())
+        local new = json.decode(store.readArray(state.h2):await())
+        return table.concat(old, ",") .. " vs " .. table.concat(new, ",")
+      end
+      if cmd == "badprev" then return store.append("arr#999", "x"):await() end
+      if cmd == "nilread" then
+        local arr = json.decode(store.readArray(nil):await())
+        return "len=" .. #arr
+      end
+      return "?"
+    end
+    function list_models() return {} end
+  `;
+
+  it('putJson/getJson round-trips a Lua table (validated JSON string back)', async () => {
+    const { items } = await run(makeAdapter(PRIM_LUA));
+    // cmd is "Hello" from makePrompt → falls to "?" — use a prompt with the cmd
+    expect(items[0]).toEqual({ type: 'text', token: '?' });
+  });
+
+  it('putJson/getJson round-trips a Lua table', async () => {
+    const adapter = makeAdapter(PRIM_LUA);
+    const { items } = await consumeStream(
+      adapter.stream({ messages: [{ role: 'user', content: 'json' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'normal' }),
+    );
+    expect(items[0]).toEqual({ type: 'text', token: 'doc#1|x|3|b|true' });
+  });
+
+  it('append/readArray: the chain walks oldest-first and flattens array items recursively', async () => {
+    const adapter = makeAdapter(PRIM_LUA);
+    const { items } = await consumeStream(
+      adapter.stream({ messages: [{ role: 'user', content: 'chain' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'normal' }),
+    );
+    expect(items[0]).toEqual({ type: 'text', token: 'a1,a2,b1,c1,d1,d2' });
+  });
+
+  it('an old head still reads its own prefix (branch-correct persistence)', async () => {
+    const adapter = makeAdapter(PRIM_LUA);
+    const first = await consumeStream(
+      adapter.stream({ messages: [{ role: 'user', content: 'oldhead' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'normal' }),
+    );
+    const second = await consumeStream(
+      adapter.stream({ messages: [{ role: 'user', content: 'oldhead' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'normal', scriptState: first.result.scriptState }),
+    );
+    expect(second.items[0]).toEqual({ type: 'text', token: 'first vs first,second' });
+  });
+
+  it('append to a missing prev is loud; readArray(nil) is empty', async () => {
+    const adapter = makeAdapter(PRIM_LUA);
+    const bad = await consumeStream(
+      adapter.stream({ messages: [{ role: 'user', content: 'badprev' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'normal' }),
+    );
+    expect(bad.result.finishReason).toBe('error');
+    expect(bad.result.error).toContain('missing prev blob');
+    const ok = await consumeStream(
+      adapter.stream({ messages: [{ role: 'user', content: 'nilread' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'normal' }),
+    );
+    expect(ok.items[0]).toEqual({ type: 'text', token: 'len=0' });
+  });
+
+  it('getJson of a corrupted blob throws loudly', async () => {
+    const blobs = new MemoryScriptBlobRepository();
+    blobs.seed('arr#1', '{not json');
+    const withBlobs = new LuaBackendAdapter({
+      id: 'custom:t', name: 'T', luaSource: `function generate(prompt, ctx) return store.getJson("arr#1"):await() end
+        function list_models() return {} end`,
+      runtime: new LuaRuntime(),
+      delegate: makeDelegate(),
+      blobs,
+    });
+    const { result } = await consumeStream(
+      withBlobs.stream(makePrompt(), new AbortController().signal, { chatId: 'c', generationType: 'normal' }),
+    );
+    expect(result.finishReason).toBe('error');
+    expect(result.error).toContain('corrupted JSON blob');
   });
 });

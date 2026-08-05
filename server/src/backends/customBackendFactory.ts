@@ -24,6 +24,7 @@ import type { BackendConfig } from '@tamari/types';
 import type { BackendAdapter } from './BackendAdapter.js';
 import type { LuaRuntime } from '../scripting/LuaRuntime.js';
 import type { ICustomBackendRepository } from '../repos/CustomBackendRepository.js';
+import type { IScriptBlobRepository } from '../repos/ScriptBlobRepository.js';
 import type { IBackendConfigRepository } from '../repos/BackendConfigRepository.js';
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
 import { buildBackendSettings } from './buildBackendSettings.js';
@@ -42,6 +43,8 @@ export interface CustomBackendFactoryDeps {
   backendConfigs: IBackendConfigRepository;
   settings: ISettingsRepository;
   luaRuntime: LuaRuntime;
+  /** The append-only blob store behind the script-facing `store` global. */
+  scriptBlobs: IScriptBlobRepository;
   /** The resolved adapter factory (secret:<key> references already resolved). */
   createResolvedAdapter: (settings: Record<string, unknown>) => Promise<BackendAdapter | null>;
 }
@@ -81,6 +84,7 @@ export async function createCustomBackendAdapter(
     luaSource: customBackend.luaSource,
     runtime: deps.luaRuntime,
     delegate: makeDelegate(deps, delegateConfigId, depth),
+    blobs: deps.scriptBlobs,
   });
 }
 
@@ -213,6 +217,7 @@ export function createContextualBackendAdapter(
     luaSource: opts.luaSource,
     vfsFiles: opts.files,
     runtime: deps.luaRuntime,
+    blobs: deps.scriptBlobs,
     delegate: {
       generate: async (configId, prompt, signal, ctx) =>
         runAdapterBlocking(configId ? await resolveExplicit(configId) : opts.activeAdapter, prompt, signal, ctx),

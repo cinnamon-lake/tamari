@@ -30,6 +30,7 @@ import {
   ToolTemplateRepository,
   ExtensionDataRepository,
   CustomBackendRepository,
+  ScriptBlobRepository,
 } from '../repos/index.js';
 import { GenerationService } from '../services/GenerationService.js';
 import { GenerationRunner } from '../generation/GenerationRunner.js';
@@ -98,6 +99,7 @@ export class TestHarness {
     const toolTemplates = new ToolTemplateRepository(this.db);
     this.extensionData = new ExtensionDataRepository(this.db);
     const customBackends = new CustomBackendRepository(this.db);
+    const scriptBlobs = new ScriptBlobRepository(this.db);
     const luaRuntime = new LuaRuntime();
 
     const worldInfoInjector = new WorldInfoInjector();
@@ -145,6 +147,7 @@ export class TestHarness {
       promptLists,
       backendFactory: opts?.backendFactory ?? { create: async () => null },
       customBackends,
+      scriptBlobs,
       luaRuntime,
       generationBroadcast,
       toolRegistry: opts?.toolRegistry,

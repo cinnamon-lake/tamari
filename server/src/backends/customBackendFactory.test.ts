@@ -14,6 +14,7 @@ import { consumeStream } from './BackendAdapter.js';
 import type { ICustomBackendRepository } from '../repos/CustomBackendRepository.js';
 import type { IBackendConfigRepository } from '../repos/BackendConfigRepository.js';
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
+import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
 
 function makePrompt(): Prompt {
   return { messages: [{ role: 'user', content: 'hi' }], tokenUsage: { prompt: 1, completion: 1 } };
@@ -72,6 +73,7 @@ function makeDeps(
     } as unknown as IBackendConfigRepository,
     settings: { list: async () => ({}) } as unknown as ISettingsRepository,
     luaRuntime: new LuaRuntime(),
+    scriptBlobs: new MemoryScriptBlobRepository(),
     createResolvedAdapter:
       opts.createResolvedAdapter ??
       (async () => {

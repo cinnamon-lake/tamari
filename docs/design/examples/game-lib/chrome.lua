@@ -1,22 +1,18 @@
--- lib/chrome.lua — player-facing chrome helpers.
+-- lib/chrome.lua — player-facing chrome helpers and text hygiene.
 --
--- The chrome contract: [sys] is script-only output hidden from BOTH the
--- player AND the prompt (a universal prompt+display hiding rule, plus
--- transcript stripping for delegates). In-fiction results of player actions
--- are served as VISIBLE text instead — not every ack should be hidden, and
--- anything a delegate should analyze must stay in a channel it can see.
+-- Acks are plain VISIBLE text: the model sees what the player sees, and a
+-- capable model needs nothing hidden from it — so game cards have no [sys]
+-- tag. (unwrap and clean still tolerate legacy [sys]-wrapped text on the way
+-- in.) In-fiction results of player actions are the game's feedback loop;
+-- serve them as visible text.
 
 local M = {}
 
--- Bare command payloads — NEVER [sys]-wrapped: display regexes are
--- structure-blind and would mangle the attribute, killing the button.
+-- Bare command payloads — never wrapped in any tag a display rule hides:
+-- display regexes are structure-blind and would mangle the attribute,
+-- killing the button.
 function M.btn(cmd, label)
   return '<button data-post-response="/' .. cmd .. '">' .. label .. "</button>"
-end
-
--- Hidden ack: visible to neither the player nor the prompt.
-function M.ack(text)
-  return "[sys]" .. text .. "[/sys]"
 end
 
 -- "[sys]/go north[/sys]" (legacy) or "go north" / "/go north" → "go north"
@@ -24,6 +20,29 @@ function M.unwrap(text)
   local inner = text:match("^%s*%[sys%](.-)%[/sys%]%s*$") or text
   inner = inner:gsub("^%s*(.-)%s*$", "%1")
   return (inner:gsub("^/", ""))
+end
+
+-- The deterministic cleaning every delegate view shares: strip legacy
+-- [sys]…[/sys], <button>…</button>, and [HUD…]; trim. Transcript and the
+-- event span BOTH use this — the frozen-prefix property of the event span
+-- depends on the cleaning never diverging between views.
+function M.clean(text)
+  return (tostring(text or "")
+    :gsub("%s*%[sys%].-%[/sys%]%s*", "\n\n")
+    :gsub("%s*<button.-</button>", "")
+    :gsub("%[HUD[^%]]*%]", "")
+    :gsub("^%s*(.-)%s*$", "%1"))
+end
+
+-- One safe line, at most max chars: double quotes become single (so the
+-- result can ride a summary="…" attribute), whitespace collapses, ends trim.
+-- Every gist/digest the lib splices into a tag goes through this.
+function M.oneline(text, max)
+  return (tostring(text or "")
+    :gsub('"', "'")
+    :gsub("%s+", " ")
+    :gsub("^%s*(.-)%s*$", "%1")
+    :sub(1, max))
 end
 
 return M

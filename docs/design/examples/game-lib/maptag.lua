@@ -16,8 +16,8 @@
 --     seen = { r1 = true, r2 = true },   -- nil = reveal the whole graph
 --   })
 --
--- The companion display rule (Crypt map) renders any tag of this shape;
--- its source is in topic `game_cards_factory` and the `regexes` recipe.
+-- The companion display rule (floor map) renders any tag of this shape;
+-- its source is in topic `game_cards_example` and the `regexes` recipe.
 
 local M = {}
 
@@ -60,7 +60,7 @@ function M.tag(rooms, opts)
       table.sort(dirs)
       for _, d in ipairs(dirs) do
         local to = rooms[id].exits[d]
-        if to ~= "down" and rooms[to] and visible[to] then
+        if rooms[to] and visible[to] then
           local key = id < to and (id .. "|" .. to) or (to .. "|" .. id)
           if not edgeSeen[key] then
             edgeSeen[key] = true

@@ -30,6 +30,7 @@ import {
   ToolTemplateRepository,
   ExtensionDataRepository,
   CustomBackendRepository,
+  ScriptBlobRepository,
 } from './repos/index.js';
 import type { ISettingsRepository } from './repos/SettingsRepository.js';
 import { createDispatcher } from './dispatcher.js';
@@ -158,6 +159,7 @@ const chatMembers = withLogging(new ChatMemberRepository(db), 'chatMembers');
 const extensionData = withLogging(new ExtensionDataRepository(db), 'extensionData');
 const attachments = withLogging(new AttachmentRepository(db), 'attachments');
 const customBackends = withLogging(new CustomBackendRepository(db), 'customBackends');
+const scriptBlobs = withLogging(new ScriptBlobRepository(db), 'scriptBlobs');
 const secrets = withLogging(new SecretRepository(db), 'secrets');
 const secretService = new SecretService(secrets);
 
@@ -170,7 +172,7 @@ const createBackendAdapterResolved = async (backendSettings: Record<string, unkn
   const customSelection = customBackendSelectionFromSettings(backendSettings);
   if (customSelection) {
     return createCustomBackendAdapter(
-      { customBackends, backendConfigs, settings, luaRuntime, createResolvedAdapter: createBackendAdapterResolved },
+      { customBackends, backendConfigs, settings, luaRuntime, scriptBlobs, createResolvedAdapter: createBackendAdapterResolved },
       customSelection.customBackendId,
       customSelection.delegateConfigId,
       depth,
@@ -287,6 +289,7 @@ const generationRunner = new GenerationRunner({
   promptLists,
   backendFactory: { create: createBackendAdapterResolved },
   customBackends,
+  scriptBlobs,
   luaRuntime,
   generationBroadcast,
   toolRegistry,

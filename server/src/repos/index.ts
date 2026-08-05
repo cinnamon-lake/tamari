@@ -15,3 +15,4 @@ export * from './ToolsetRepository.js';
 export * from './ToolTemplateRepository.js';
 export * from './ExtensionDataRepository.js';
 export * from './CustomBackendRepository.js';
+export * from './ScriptBlobRepository.js';

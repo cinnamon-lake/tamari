@@ -38,6 +38,9 @@
 
 import type { LuaRuntime } from '../scripting/LuaRuntime.js';
 import { isLuaTimeoutError } from '../scripting/LuaRuntime.js';
+import type { IScriptBlobRepository } from '../repos/ScriptBlobRepository.js';
+import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
+import { storeAppend, storeGetJson, storePutJson, storeReadArray } from './scriptBlobArrays.js';
 import type {
   BackendAdapter,
   BackendCallContext,
@@ -92,6 +95,9 @@ export interface LuaBackendAdapterConfig {
   luaSource: string;
   runtime: LuaRuntime;
   delegate: CustomBackendDelegate;
+  /** The append-only blob store behind the script-facing `store` global.
+      Defaults to an ephemeral in-memory store (tests, dry-runs). */
+  blobs?: IScriptBlobRepository;
   /** Card VFS module map for the sandboxed `require` (generate() only;
       list_models() states don't get it, matching the absent backends global). */
   vfsFiles?: Record<string, string>;
@@ -100,6 +106,14 @@ export interface LuaBackendAdapterConfig {
 }
 
 const EMPTY_USAGE = { promptTokens: 0, completionTokens: 0 };
+
+/** Coerce a Lua value crossing into the store API to a plain string. */
+function luaString(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  return JSON.stringify(v); // Lua tables stringify fine; functions shouldn't reach here
+}
 
 function errorResult(error: string, usage = EMPTY_USAGE, traceError?: TraceError): GenerationResult {
   return { finishReason: 'error', usage, error, traceError };
@@ -209,6 +223,7 @@ export class LuaBackendAdapter implements BackendAdapter {
   private readonly luaSource: string;
   private readonly runtime: LuaRuntime;
   private readonly delegate: CustomBackendDelegate;
+  private readonly blobs: IScriptBlobRepository;
   private readonly vfsFiles: Record<string, string> | undefined;
   private readonly generateTimeoutMs: number;
   private modulesLoaded: string[] = [];
@@ -219,6 +234,7 @@ export class LuaBackendAdapter implements BackendAdapter {
     this.luaSource = config.luaSource;
     this.runtime = config.runtime;
     this.delegate = config.delegate;
+    this.blobs = config.blobs ?? new MemoryScriptBlobRepository();
     this.vfsFiles = config.vfsFiles;
     this.generateTimeoutMs = config.generateTimeoutMs ?? LUA_GENERATE_TIMEOUT_MS;
   }
@@ -308,6 +324,27 @@ export class LuaBackendAdapter implements BackendAdapter {
           },
         });
       }
+
+      // The `store` global: the append-only blob heap for kilobyte-scale
+      // script-authored data (content packs, big generated designs) that would
+      // bloat per-message state snapshots. put(name, text) -> id ("<name>#<seq>"
+      // — the name is only a debug-readable prefix); get(id) -> text|nil. No
+      // list, no edits: a "mutation" is a new put plus moving the pointer the
+      // script keeps in its (branch-aware) state, so swipes stay correct.
+      // JSON + persistent-list primitives (one :await() each, JS-side):
+      // putJson(name, table), getJson(id) -> validated JSON string (Lua
+      // json.decode's it — never fails), append(prevId, item) -> new head
+      // (item may be an array — the batching idiom), readArray(id) -> the
+      // flattened chain as a JSON string. Always present — DB-backed in
+      // production, in-memory otherwise.
+      lua.global.set('store', {
+        put: (name: unknown, text: unknown) => this.blobs.put(luaString(name), luaString(text)),
+        get: async (id: unknown) => (await this.blobs.get(luaString(id))) ?? undefined,
+        putJson: (name: unknown, value: unknown) => storePutJson(this.blobs, luaString(name), value),
+        getJson: (id: unknown) => storeGetJson(this.blobs, id),
+        append: (prevId: unknown, item: unknown) => storeAppend(this.blobs, prevId, item),
+        readArray: (id: unknown) => storeReadArray(this.blobs, id),
+      });
 
       await lua.doString(
         `__prompt = ${toLuaLiteral(prompt)}\n__ctx = ${toLuaLiteral({

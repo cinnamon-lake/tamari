@@ -1499,8 +1499,8 @@ describe('CharacterWorkbench', () => {
       });
       const res = await template.execute('backend_logic_add_game_lib', { characterId: 'char1' });
       const out = JSON.parse(res.content as string) as { added: string[]; total: number };
-      expect(out.added).toHaveLength(12);
-      expect(out.total).toBe(13); // the 12 lib modules + the card's own lib/custom.lua
+      expect(out.added).toHaveLength(11);
+      expect(out.total).toBe(12); // the 11 lib modules + the card's own lib/custom.lua
       const ext = charStore.get('char1')!.extensions['contextualBackend'] as {
         enabled: boolean;
         luaSource: string;
@@ -1515,10 +1515,10 @@ describe('CharacterWorkbench', () => {
     it('backend_logic_add_game_lib starts a fresh module map without enabling anything', async () => {
       const { template, charStore } = makeTemplate({ characters: [makeCharacter()] });
       const res = await template.execute('backend_logic_add_game_lib', { characterId: 'char1' });
-      expect(JSON.parse(res.content as string)).toMatchObject({ total: 12 });
+      expect(JSON.parse(res.content as string)).toMatchObject({ total: 11 });
       const ext = charStore.get('char1')!.extensions['contextualBackend'] as Record<string, unknown>;
       expect(ext['enabled']).toBeUndefined(); // vendoring never activates the card logic
-      expect(Object.keys(ext['files'] as Record<string, string>)).toHaveLength(12);
+      expect(Object.keys(ext['files'] as Record<string, string>)).toHaveLength(11);
       expect((await template.execute('backend_logic_add_game_lib', { characterId: 'nope' })).content).toContain('not found');
     });
 

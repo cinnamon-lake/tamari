@@ -8,9 +8,23 @@ local M = {}
 
 function M.data(t)
   if type(t) ~= "table" then return t end
+  -- A JSON array may hold null (a truthy js_null sentinel); nil-ing an integer
+  -- key would punch a sequence hole and break #/ipairs downstream. So arrays
+  -- are rebuilt without holes; maps are cleaned in place.
+  local isSeq = true
+  for k, _ in pairs(t) do if type(k) ~= "number" then isSeq = false break end end
+  if isSeq then
+    local out = {}
+    for _, v in ipairs(t) do
+      local tv = type(v)
+      if tv == "table" then out[#out + 1] = M.data(v)
+      elseif tv == "string" or tv == "number" or tv == "boolean" then out[#out + 1] = v end
+    end
+    return out
+  end
   for k, v in pairs(t) do
     local tv = type(v)
-    if tv == "table" then M.data(v)
+    if tv == "table" then t[k] = M.data(v)
     elseif tv ~= "string" and tv ~= "number" and tv ~= "boolean" then t[k] = nil end
   end
   return t
