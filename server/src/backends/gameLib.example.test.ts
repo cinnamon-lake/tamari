@@ -22,8 +22,8 @@ const LIB_FILES: Record<string, string> = Object.fromEntries(
 
 const USAGE = { promptTokens: 1, completionTokens: 1 };
 
-// A sparring ring: "start" opens a [fight] block, anything else is a
-// mechanical line, "end" closes the block with a delegate-written gist.
+// A sparring ring: "start" begins a tracked fight (state.log), anything else
+// is a mechanical line, "end" gists the log and serves it as a plain line.
 const CARD_LUA = `
 local summarize = require("lib/summarize")
 
@@ -32,11 +32,19 @@ function generate(prompt, ctx)
   local last = prompt.messages[#prompt.messages]
   local cmd = last.content
   if cmd == "start" then
-    return summarize.open("fight") .. "\\nThe goblin blocks the way."
+    state.log = { { role = "assistant", content = "The goblin blocks the way." } }
+    return "The goblin blocks the way."
   end
   if cmd == "end" then
-    local gist = summarize.gist("fight", prompt)
-    return "You wipe the blade. " .. (gist and summarize.close("fight", gist) or summarize.close("fight", "It is over."))
+    local gist = summarize.gist(prompt, { span = state.log })
+    state.log = nil
+    return "You wipe the blade. " .. (gist or "It is over.")
+  end
+  if state.log then
+    state.log[#state.log + 1] = { role = "user", content = cmd }
+    local blow = "You trade blows. (-3 hp, a potion shattered)"
+    state.log[#state.log + 1] = { role = "assistant", content = blow }
+    return blow
   end
   return "You trade blows. (-3 hp, a potion shattered)"
 end
@@ -128,7 +136,7 @@ async function runTurn(
 }
 
 describe('lib/summarize', () => {
-  it('closes the block with the delegate gist over the mechanical span — and only the span', async () => {
+  it('serves the delegate gist over the mechanical span as a plain line — and only the span', async () => {
     const summarizePrompts: Prompt[] = [];
     const delegate: CustomBackendDelegate = {
       generate: vi.fn(async (_configId: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
@@ -140,39 +148,32 @@ describe('lib/summarize', () => {
       }),
     };
     const adapter = makeAdapter(delegate);
-    const history: Array<{ role: string; content: string }> = [
-      { role: 'user', content: 'we head into the crypt' }, // BEFORE the open: not part of the span
-      { role: 'assistant', content: '[fight]\nThe goblin blocks the way.' },
-      { role: 'user', content: 'attack' },
-      { role: 'assistant', content: 'You trade blows. (-3 hp, a potion shattered)' },
-    ];
-    const text = await runTurn(adapter, 'end', history);
+    let t = await roll(adapter, undefined, 'start');
+    t = await roll(adapter, t.scriptState, 'attack');
+    const text = (await roll(adapter, t.scriptState, 'end')).text;
 
-    // The gist was requested over the span: the open-tag message (tag
-    // stripped — the intro is part of the fight) plus everything after it.
+    // The gist was requested over exactly the tracked log.
     expect(summarizePrompts).toHaveLength(1);
     const spanText = JSON.stringify(summarizePrompts[0]!.messages);
     expect(spanText).toContain('The goblin blocks the way.');
     expect(spanText).toContain('trade blows');
     expect(spanText).toContain('potion shattered');
-    expect(spanText).not.toContain('head into the crypt');
-    expect(spanText).not.toContain('[fight]');
 
-    // The close tag carries the gist — quotes flattened, whitespace tamed.
-    expect(text).toContain('You wipe the blade. [/fight summary="You \'barely\' made it, every potion spent."]');
+    // The memoir is a PLAIN line — no tag, nothing to regex away.
+    expect(text).toBe('You wipe the blade. You "barely" made it, every potion spent.');
   });
 
-  it('falls back when the open tag is not visible (no span to summarize)', async () => {
+  it('falls back when there is no tracked span (and never calls the delegate)', async () => {
     const delegate: CustomBackendDelegate = {
       generate: vi.fn(async (): Promise<DelegatedGenerateResult> => {
-        throw new Error('delegate not expected — no open tag, no sub-gen');
+        throw new Error('delegate not expected — no span, no sub-gen');
       }),
       resolveAdapter: vi.fn(async () => {
         throw new Error('passthrough not expected');
       }),
     };
     const text = await runTurn(makeAdapter(delegate), 'end', [{ role: 'assistant', content: 'Nothing pending.' }]);
-    expect(text).toContain('[/fight summary="It is over."]');
+    expect(text).toBe('You wipe the blade. It is over.');
   });
 });
 
@@ -214,17 +215,8 @@ describe('lib/summarize error handling', () => {
       }),
     };
     const adapter = makeAdapter(delegate);
-    const prompt: Prompt = {
-      messages: [
-        { role: 'system', content: 'Base system prompt.' },
-        { role: 'assistant', content: '[fight]\nThe goblin blocks the way.' },
-        { role: 'user', content: 'end' },
-      ],
-      tokenUsage: { prompt: 0, completion: 0 },
-    };
-    const { result } = await consumeStream(
-      adapter.stream(prompt, new AbortController().signal, { chatId: 'spar-chat', generationType: 'normal' }),
-    );
+    const started = await roll(adapter, undefined, 'start');
+    const { result } = await roll(adapter, started.scriptState, 'end');
     // The turn fails with the REAL error — no canned fallback gist, and no
     // state snapshot (scriptState absent), so a swipe retries from a clean world.
     expect(result.finishReason).toBe('error');

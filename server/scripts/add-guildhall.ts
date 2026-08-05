@@ -120,19 +120,6 @@ const REGEX_RULES: RegexRule[] = [
   // Fog-of-war floor map.
   { id: randomUUID(), name: 'Floor map', findRegex: '/\\[MAP\\|([^\\]]+)\\]/g', replaceString: '', replaceLua: MAP_REPLACE_LUA,
     disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
-  // Fight spans: hide the open, plot-log the close's gist (the blows are visible prose; only tags are chrome).
-  { id: randomUUID(), name: 'Hide fight open', findRegex: '/\\[fight [\\w ]+\\]/g', replaceString: '',
-    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
-  { id: randomUUID(), name: 'Fight plot log', findRegex: '/\\[\\/fight [\\w ]+ summary="([^"]*)"\\]/g', replaceString: '<div class="plot-log">⚔ $1</div>',
-    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
-  // Pack blobs → one plot-log line.
-  { id: randomUUID(), name: 'Pack plot log', findRegex: '/\\[pack (\\w[\\w ]*)\\][\\s\\S]*?\\[\\/pack \\1 summary="([^"]*)"\\]/g', replaceString: '<div class="plot-log">$2</div>',
-    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
-  // Event structural markup: hide the open, plot-log the close's gist.
-  { id: randomUUID(), name: 'Hide event open', findRegex: '/\\[event [\\w ]+\\]/g', replaceString: '',
-    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
-  { id: randomUUID(), name: 'Event plot log', findRegex: '/\\[\\/event (\\w[\\w ]*) summary="([^"]*)"\\]/g', replaceString: '<div class="plot-log">$2</div>',
-    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
 ];
 
 /** The vendored game lib, as the card's backend_logic/lib/*.lua VFS map. */

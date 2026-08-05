@@ -23,21 +23,19 @@
 -- hygiene), chrome (buttons/unwrap, the shared clean/oneline text hygiene),
 -- ledger (plot promises), todo (planning self-organization), toolset
 -- (composition), registry (TWO: characters with dossiers, enemies with canned
--- lines), summarize (fight gists AND the pack-tag format), maptag (the
--- fog-of-war map), events (the engine over the character registry), rolling
--- (recursive summaries: the STORY channel fight gists land in — the DM's
--- ONLY history view — and the dossiers underneath events; inspect_summary
--- zooms from a gist into the raw log).
+-- lines), summarize (the gist engine), maptag (the fog-of-war map), events
+-- (the engine over the character registry), rolling (recursive summaries:
+-- the STORY channel fight gists land in — the DM's ONLY history view — and
+-- the dossiers underneath events; inspect_summary zooms from a gist into
+-- the raw log).
 --
--- Companion display rules (acks are plain VISIBLE text — no hiding rule):
+-- Companion display rules — only FUNCTIONAL chrome (the memoir lines are
+-- plain prose; there are no structural tags to hide):
 --   optional: /^\s*\/\w+.*$/s with role userInput → "" (hide command messages;
 --   safe because posted commands are bare text with no HTML to mangle)
 --   /\[HUD\|([^\]]+)\]/g → panel HTML (HUD recipe, topic `regexes`) — hall
 --   shows gold; the dungeon adds where/hp/atk.
 --   /\[MAP\|([^\]]+)\]/g → floor-graph map (maptag recipe)
---   /[fight [\w ]+]/g → ""  and  /[\/fight [\w ]+ summary="([^"]*)"]/g → plot-log
---   /\[pack (\w[\w ]*)\][\s\S]*?\[\/pack \1 summary="([^"]*)"\]/g → plot-log
---   /\[event [\w ]+\]/g → ""  /\[\/event (\w[\w ]*) summary="([^"]*)"\]/g → plot-log
 
 local loop = require("lib/loop")
 local sanitize = require("lib/sanitize")
@@ -110,7 +108,7 @@ local function ensureState()
   state.dun.combat = state.dun.combat or nil     -- { name, hp, maxHp, atk, lines, reward }
   state.dun.seen = state.dun.seen or {}           -- fog-of-war: full room ids visited
   state.dun.escalations = state.dun.escalations or 0
-  state.dun.fightTag = state.dun.fightTag or nil
+  state.dun.fightName = state.dun.fightName or nil
   state.dun.delveOver = state.dun.delveOver or nil -- nil | "dead" | "won"
   state.onboarded = state.onboarded or false
   state.playerName = state.playerName or ""
@@ -175,10 +173,8 @@ end
 -- snapshots. The blob goes into the append-only `store` (store.put ->
 -- "pack:f1#3"); the branch-aware POINTER (state.dun.packIds[fid]) stays in
 -- state. A mutation is a NEW put plus moving the pointer — old branches still
--- point at their version, so swipes stay correct. The message carries only an
--- empty-span summary marker (a plot-log line for the player).
-local function packTag(id) return summarize.open("pack " .. id) end
-
+-- point at their version, so swipes stay correct. The player sees a plain
+-- memoir line (composeSummary); no tags, no display rules.
 local function composeSummary(pack, repairs)
   local n = 0
   for _ in pairs(pack.rooms) do n = n + 1 end
@@ -192,7 +188,7 @@ end
 local function packBlob(pack, summary)
   local pid = store.putJson("pack:" .. pack.id, pack):await()
   state.dun.packIds[pack.id] = pid
-  return packTag(pack.id) .. summarize.close("pack " .. pack.id, summary)
+  return summary
 end
 
 local function copyPack(pack)
@@ -307,8 +303,7 @@ end
 
 -- The fight log is MECHANICAL: every blow lands in state.dun.fightLog as it
 -- is served (message-shaped entries, branch-aware like everything in state).
--- No open-tag scan at fight end — the log IS the span (the [fight] tags in
--- history are pure plot-log renderings).
+-- No tags, no scans — at fight end the gist is written over THIS array.
 local function fightLog(entry)
   state.dun.fightLog = state.dun.fightLog or {}
   state.dun.fightLog[#state.dun.fightLog + 1] = entry
@@ -316,9 +311,9 @@ end
 
 -- Lua rolls the roster, not the model. The entrance is safe; a room goes
 -- quiet for ENCOUNTER_COOLDOWN turns after a fight there. A rolled encounter
--- also OPENS a summary-tagged span (state.dun.fightTag): the mechanical blows
--- land in the log as served text, and when the fight ends the delegate writes
--- the one line that survives.
+-- starts a tracked fight (state.dun.fightName + fightLog): the blows land in
+-- the log as served text AND in fightLog, and when the fight ends the
+-- delegate writes the one line that survives.
 local function maybeRollEncounter(pack)
   if state.dun.combat then return nil end
   local rid = subOf(state.dun.room)
@@ -329,29 +324,29 @@ local function maybeRollEncounter(pack)
   if math.random() >= ENCOUNTER_CHANCE then return nil end
   local e = pack.encounterTable[math.random(#pack.encounterTable)]
   state.dun.combat = { name = e.name, hp = e.hp, maxHp = e.maxHp, atk = e.atk, lines = e.lines, reward = e.reward }
-  state.dun.fightTag = "fight " .. e.name
+  state.dun.fightName = "fight " .. e.name
   state.dun.fightLog = nil
   fightLog({ role = "assistant", content = e.lines.intro })
-  return e.lines.intro .. "\n" .. summarize.open(state.dun.fightTag)
+  return e.lines.intro
 end
 
--- Close the fight's span with a delegate-written gist over the mechanical
--- blows (read from state.dun.fightLog, never parsed out of history) — filed
--- as a STORY entry (the blows ride along as its content, so inspect_summary
--- can zoom from the gist to the actual fight), then spliced into the close
--- tag. A delegate error fails the turn — the last good state snapshot is
--- untouched, so a swipe/regenerate replays the blow AND retries the gist.
--- Fights that started without a span (a spawn_enemy consequence) get NO
--- close tag.
+-- End the fight: a delegate-written gist over the mechanical blows (read
+-- from state.dun.fightLog, never parsed out of history), filed as a STORY
+-- entry (the blows ride along as its content, so inspect_summary can zoom),
+-- and served as a PLAIN memoir line — no tags, nothing to regex away. A
+-- delegate error fails the turn — the last good state snapshot is untouched,
+-- so a swipe/regenerate replays the blow AND retries the gist. Fights that
+-- started untracked (a spawn_enemy consequence) get no summary.
 local function endFight(prompt)
-  local tag = state.dun.fightTag
-  state.dun.fightTag = nil
+  local tag = state.dun.fightName
+  state.dun.fightName = nil
   if not tag then return "" end
   local log = state.dun.fightLog
   state.dun.fightLog = nil
-  local gist = log and summarize.gist(tag, prompt, { span = log }) or nil
-  rolling.push(state.story, { label = tag, gist = gist or "The crypt keeps the details.", content = log })
-  return "\n" .. summarize.close(tag, gist or "The crypt keeps the details.")
+  local gist = log and summarize.gist(prompt, { span = log }) or nil
+  gist = gist or "The crypt keeps the details."
+  rolling.push(state.story, { label = tag, gist = gist, content = log })
+  return "\n" .. gist
 end
 
 local function applyEffect(effect)
@@ -971,15 +966,14 @@ local function dungeonDmTurn(prompt, input, pack)
     text = text .. "\n\n" .. packBlob(dctx.packDraft, composeSummary(dctx.packDraft))
   end
   -- If the DM framed a scene (even mid-fight), run the scene-runner's first
-  -- scene reply THIS turn — the open tag, the DM's transition, and 
-  -- chat block land in one message. ev.isOpen() is now true.
+  -- reply THIS turn — the DM's transition and the first reply land in one
+  -- message. ev.isOpen() is now true.
   if ev.isOpen() then
     if not ev.hasSpan() then ev.spanStart({}) end -- open_event already started one
     if text ~= "" then ev.spanAppend({ { role = "assistant", content = text } }) end -- the DM's transition
-    state.event.tagged = true
     local chatBlock = chatTurn(prompt, input)
     if text == "" then text = "The dark shifts around you." end
-    text = ev.openTag() .. "\n\n" .. text .. "\n\n" .. chatBlock
+    text = text .. "\n\n" .. chatBlock
   end
   return text
 end
@@ -1014,13 +1008,12 @@ local function hallDmTurn(prompt, cmd)
   local text = trim(ev.strip(res.text or ""))
   if ev.isOpen() then
     -- Boundary turn: the DM framed a scene — run the scene-runner's first
-    -- scene reply now, all in one message.
+    -- reply now, all in one message.
     if not ev.hasSpan() then ev.spanStart({}) end
     if text ~= "" then ev.spanAppend({ { role = "assistant", content = text } }) end
-    state.event.tagged = true
     local chatBlock = chatTurn(prompt, cmd)
     if text == "" then text = "The hall shifts around you." end
-    return ev.openTag() .. "\n\n" .. text .. "\n\n" .. chatBlock .. tail(nil)
+    return text .. "\n\n" .. chatBlock .. tail(nil)
   end
   if text == "" then text = "Nothing comes of it." end
   return text .. tail(nil)
@@ -1032,7 +1025,7 @@ local function returnToHall()
   state.mode = "hall"
   state.dun.delveOver = nil
   state.dun.combat = nil
-  state.dun.fightTag = nil
+  state.dun.fightName = nil
   state.dun.hp = state.dun.maxHp
   state.dun.room = "f1" -- next delve restarts at the top (packs persist in the log)
 end
@@ -1093,7 +1086,7 @@ local function eventTurn(prompt, cmd)
   end
   if cmd == "leave" then
     local wasRegistration = state.event and state.event.kind == "registration"
-    local tag = ev.finalize(prompt)
+    local gistLine = ev.finalize(prompt) -- the close's memoir line (plain text)
     rolling.push(state.story, {
       label = state.event.kind,
       gist = (state.event.closed and state.event.closed.gist) or ("The " .. state.event.kind .. " breaks off."),
@@ -1101,7 +1094,7 @@ local function eventTurn(prompt, cmd)
     })
     ev.clear()
     if wasRegistration then state.onboarded = true end -- leaving onboarding still finishes it
-    return tag .. "\n\nYou step away; the moment ends." .. tail(currentPack())
+    return gistLine .. "\n\nYou step away; the moment ends." .. tail(currentPack())
   end
   -- A script-opened event (onboarding) has no DM boundary: seed the span with
   -- the receptionist's greeting as a prior assistant message.
@@ -1109,21 +1102,14 @@ local function eventTurn(prompt, cmd)
     ev.spanStart({ { role = "assistant", content = GREETING } })
   end
   local out = chatTurn(prompt, cmd)
-  if not state.event.tagged then
-    -- Script-opened events emit their [event] open on the first scene turn —
-    -- the DM paths do it on their boundary turn.
-    out = ev.openTag() .. "\n\n" .. out
-    state.event.tagged = true
-  end
-  local closeTag = ev.closeTag()
-  if closeTag ~= "" then
+  if state.event and state.event.closed then
     local wasRegistration = state.event and state.event.kind == "registration"
     rolling.push(state.story, {
       label = state.event.kind,
       gist = state.event.closed.gist,
       content = ev.span(),
     })
-    out = out .. "\n\n" .. closeTag
+    out = out .. "\n\n" .. state.event.closed.gist -- the memoir line
     ev.clear()
     if wasRegistration then state.onboarded = true end
     out = out .. "\n\nThe way on opens up again."

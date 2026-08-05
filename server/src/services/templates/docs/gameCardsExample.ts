@@ -8,13 +8,13 @@ A complete, TESTED game card: \`backend_logic/main.lua\` plus its vendored game 
 - **Two registries.** Characters (\`state.characters\`, with per-character dossiers via \`lib/events\`) and enemies (canned combat lines, filed into the floor pack in draft mode during planning). The character registry is injected into \`events.new\`; the enemy registry is per-planning-pass.
 - **Trust the model: no \`[sys]\` tag.** Acks are plain visible text — the model sees what the player sees. Don't reach for a hide channel; it just rewrangles the delegate's prompt for no gain.
 - **Death and the relic end the DELVE, not the game.** \`state.dun.delveOver = "dead" | "won"\`; the next turn returns you to the hall (hp reset, room to f1; packs and the relic flag persist). The card never terminally ends.
-- **Pack blobs in the store, pointers in \`state\`.** A floor pack is kilobytes of JSON — \`store.put\` files it (id like \`"pack:f1#3"\`), \`state.dun.packIds[fid]\` holds the branch-aware pointer, and the message carries only an empty-span \`[pack f1][/pack f1 summary="…"]\` marker (plot-log + collapse). A mutation is a new put plus moving the pointer, so swiped branches keep their versions. \`state.dun.*\` is the dungeon's namespaced home — every former unprefixed crypt key lives there, so it can't collide with the hall or the events engine.
-- **The scene-runner's prompt is append-only within an event — mechanically, and the test proves it.** Frozen system block (instructions + the DM's context, via \`ev.eventLine()\`); the tail is a persistent linked list in the store (\`state.event.spanId\`, one node per turn), FULL-FIDELITY — user inputs, chat blocks, AND the tool_use/tool_result rounds, so the model never re-issues a read. Turn N is a strict prefix of turn N+1 by construction (no log parsing, no history-budget dependence), so the delegate's prefix cache covers the whole scene.
+- **Pack blobs in the store, pointers in \`state\`.** A floor pack is kilobytes of JSON — \`store.putJson\` files it (id like \`"pack:f1#3"\`), \`state.dun.packIds[fid]\` holds the branch-aware pointer, and the player sees a plain memoir line ("Designed The Upper Halls: …") — no tags, nothing to regex. A mutation is a new put plus moving the pointer, so swiped branches keep their versions. \`state.dun.*\` is the dungeon's namespaced home — every former unprefixed crypt key lives there, so it can't collide with the hall or the events engine.
+- **The scene-runner's prompt is append-only within an event — mechanically, and the test proves it.** Frozen system block (instructions + the DM's context, via \`ev.eventLine()\`); the tail is a persistent linked list in the store (\`state.event.spanId\`, one node per turn), FULL-FIDELITY — user inputs, assistant replies, AND the tool_use/tool_result rounds, so the model never re-issues a read. Turn N is a strict prefix of turn N+1 by construction (no log parsing, no history-budget dependence), so the delegate's prefix cache covers the whole scene.
 - **Dossiers: memory keyed by WHO was there.** \`close_event\` files one take per participant in \`state.dossiers\`; \`get_character\` serves the file + dossier as a read-tool result. Dossiers are \`lib/rolling\` channels: recent takes verbatim, oldest folded into digest entries on read (a never-read character costs no token; a delegate error fails the turn — ids move only once the fold lands, so a swipe retries).
 - **The STORY is a rolling summary, and the DM can zoom into it.** Fight gists land in \`state.story\` (a \`lib/rolling\` channel) with the fight's mechanical span as their content; both DM briefings carry the \`STORY SO FAR\` lines, and both DM toolsets expose \`inspect_summary\` — the model tool-calls its way from a digest line down to the actual blows.
 - **\`continue\` never resolves** — an ambient line only, so nothing double-applies.
 
-Companion character-scoped regex rules (installed by the script): optional hide \`/^\\/\\w+.*$/s\` (userInput), a HUD panel for \`[HUD|where=..|gold=..(|hp=..|atk=..)]\` (hall vs dungeon fields), a \`[MAP|..]\` floor-graph renderer, hide \`[event ..]\`, plot-log \`[/event .. summary=..]\`, hide \`[/?chat..]\`, hide \`[fight ..]\` / plot-log \`[/fight .. summary=..]\`, plot-log \`[pack ..]\` blobs.
+Companion character-scoped regex rules (installed by the script): optional hide \`/^\\/\\w+.*$/s\` (userInput), a HUD panel for \`[HUD|where=..|gold=..(|hp=..|atk=..)]\` (hall vs dungeon fields), a \`[MAP|..]\` floor-graph renderer. That's all — memoir lines and event closes are plain prose; there are no structural tags to hide.
 
 The lib modules this card vendors (\`loop\`, \`sanitize\`, \`chrome\`, \`ledger\`, \`toolset\`, \`todo\`, \`registry\`, \`summarize\`, \`maptag\`, \`events\`, \`rolling\`) are documented in topic \`game_cards\` (The game lib); full sources below.
 
@@ -44,21 +44,19 @@ The lib modules this card vendors (\`loop\`, \`sanitize\`, \`chrome\`, \`ledger\
 -- hygiene), chrome (buttons/unwrap, the shared clean/oneline text hygiene),
 -- ledger (plot promises), todo (planning self-organization), toolset
 -- (composition), registry (TWO: characters with dossiers, enemies with canned
--- lines), summarize (fight gists AND the pack-tag format), maptag (the
--- fog-of-war map), events (the engine over the character registry), rolling
--- (recursive summaries: the STORY channel fight gists land in — the DM's
--- ONLY history view — and the dossiers underneath events; inspect_summary
--- zooms from a gist into the raw log).
+-- lines), summarize (the gist engine), maptag (the fog-of-war map), events
+-- (the engine over the character registry), rolling (recursive summaries:
+-- the STORY channel fight gists land in — the DM's ONLY history view — and
+-- the dossiers underneath events; inspect_summary zooms from a gist into
+-- the raw log).
 --
--- Companion display rules (acks are plain VISIBLE text — no hiding rule):
+-- Companion display rules — only FUNCTIONAL chrome (the memoir lines are
+-- plain prose; there are no structural tags to hide):
 --   optional: /^\\s*\\/\\w+.*$/s with role userInput → "" (hide command messages;
 --   safe because posted commands are bare text with no HTML to mangle)
 --   /\\[HUD\\|([^\\]]+)\\]/g → panel HTML (HUD recipe, topic \`regexes\`) — hall
 --   shows gold; the dungeon adds where/hp/atk.
 --   /\\[MAP\\|([^\\]]+)\\]/g → floor-graph map (maptag recipe)
---   /[fight [\\w ]+]/g → ""  and  /[\\/fight [\\w ]+ summary="([^"]*)"]/g → plot-log
---   /\\[pack (\\w[\\w ]*)\\][\\s\\S]*?\\[\\/pack \\1 summary="([^"]*)"\\]/g → plot-log
---   /\\[event [\\w ]+\\]/g → ""  /\\[\\/event (\\w[\\w ]*) summary="([^"]*)"\\]/g → plot-log
 
 local loop = require("lib/loop")
 local sanitize = require("lib/sanitize")
@@ -131,7 +129,7 @@ local function ensureState()
   state.dun.combat = state.dun.combat or nil     -- { name, hp, maxHp, atk, lines, reward }
   state.dun.seen = state.dun.seen or {}           -- fog-of-war: full room ids visited
   state.dun.escalations = state.dun.escalations or 0
-  state.dun.fightTag = state.dun.fightTag or nil
+  state.dun.fightName = state.dun.fightName or nil
   state.dun.delveOver = state.dun.delveOver or nil -- nil | "dead" | "won"
   state.onboarded = state.onboarded or false
   state.playerName = state.playerName or ""
@@ -196,10 +194,8 @@ end
 -- snapshots. The blob goes into the append-only \`store\` (store.put ->
 -- "pack:f1#3"); the branch-aware POINTER (state.dun.packIds[fid]) stays in
 -- state. A mutation is a NEW put plus moving the pointer — old branches still
--- point at their version, so swipes stay correct. The message carries only an
--- empty-span summary marker (a plot-log line for the player).
-local function packTag(id) return summarize.open("pack " .. id) end
-
+-- point at their version, so swipes stay correct. The player sees a plain
+-- memoir line (composeSummary); no tags, no display rules.
 local function composeSummary(pack, repairs)
   local n = 0
   for _ in pairs(pack.rooms) do n = n + 1 end
@@ -213,7 +209,7 @@ end
 local function packBlob(pack, summary)
   local pid = store.putJson("pack:" .. pack.id, pack):await()
   state.dun.packIds[pack.id] = pid
-  return packTag(pack.id) .. summarize.close("pack " .. pack.id, summary)
+  return summary
 end
 
 local function copyPack(pack)
@@ -328,8 +324,7 @@ end
 
 -- The fight log is MECHANICAL: every blow lands in state.dun.fightLog as it
 -- is served (message-shaped entries, branch-aware like everything in state).
--- No open-tag scan at fight end — the log IS the span (the [fight] tags in
--- history are pure plot-log renderings).
+-- No tags, no scans — at fight end the gist is written over THIS array.
 local function fightLog(entry)
   state.dun.fightLog = state.dun.fightLog or {}
   state.dun.fightLog[#state.dun.fightLog + 1] = entry
@@ -337,9 +332,9 @@ end
 
 -- Lua rolls the roster, not the model. The entrance is safe; a room goes
 -- quiet for ENCOUNTER_COOLDOWN turns after a fight there. A rolled encounter
--- also OPENS a summary-tagged span (state.dun.fightTag): the mechanical blows
--- land in the log as served text, and when the fight ends the delegate writes
--- the one line that survives.
+-- starts a tracked fight (state.dun.fightName + fightLog): the blows land in
+-- the log as served text AND in fightLog, and when the fight ends the
+-- delegate writes the one line that survives.
 local function maybeRollEncounter(pack)
   if state.dun.combat then return nil end
   local rid = subOf(state.dun.room)
@@ -350,29 +345,29 @@ local function maybeRollEncounter(pack)
   if math.random() >= ENCOUNTER_CHANCE then return nil end
   local e = pack.encounterTable[math.random(#pack.encounterTable)]
   state.dun.combat = { name = e.name, hp = e.hp, maxHp = e.maxHp, atk = e.atk, lines = e.lines, reward = e.reward }
-  state.dun.fightTag = "fight " .. e.name
+  state.dun.fightName = "fight " .. e.name
   state.dun.fightLog = nil
   fightLog({ role = "assistant", content = e.lines.intro })
-  return e.lines.intro .. "\\n" .. summarize.open(state.dun.fightTag)
+  return e.lines.intro
 end
 
--- Close the fight's span with a delegate-written gist over the mechanical
--- blows (read from state.dun.fightLog, never parsed out of history) — filed
--- as a STORY entry (the blows ride along as its content, so inspect_summary
--- can zoom from the gist to the actual fight), then spliced into the close
--- tag. A delegate error fails the turn — the last good state snapshot is
--- untouched, so a swipe/regenerate replays the blow AND retries the gist.
--- Fights that started without a span (a spawn_enemy consequence) get NO
--- close tag.
+-- End the fight: a delegate-written gist over the mechanical blows (read
+-- from state.dun.fightLog, never parsed out of history), filed as a STORY
+-- entry (the blows ride along as its content, so inspect_summary can zoom),
+-- and served as a PLAIN memoir line — no tags, nothing to regex away. A
+-- delegate error fails the turn — the last good state snapshot is untouched,
+-- so a swipe/regenerate replays the blow AND retries the gist. Fights that
+-- started untracked (a spawn_enemy consequence) get no summary.
 local function endFight(prompt)
-  local tag = state.dun.fightTag
-  state.dun.fightTag = nil
+  local tag = state.dun.fightName
+  state.dun.fightName = nil
   if not tag then return "" end
   local log = state.dun.fightLog
   state.dun.fightLog = nil
-  local gist = log and summarize.gist(tag, prompt, { span = log }) or nil
-  rolling.push(state.story, { label = tag, gist = gist or "The crypt keeps the details.", content = log })
-  return "\\n" .. summarize.close(tag, gist or "The crypt keeps the details.")
+  local gist = log and summarize.gist(prompt, { span = log }) or nil
+  gist = gist or "The crypt keeps the details."
+  rolling.push(state.story, { label = tag, gist = gist, content = log })
+  return "\\n" .. gist
 end
 
 local function applyEffect(effect)
@@ -992,15 +987,14 @@ local function dungeonDmTurn(prompt, input, pack)
     text = text .. "\\n\\n" .. packBlob(dctx.packDraft, composeSummary(dctx.packDraft))
   end
   -- If the DM framed a scene (even mid-fight), run the scene-runner's first
-  -- scene reply THIS turn — the open tag, the DM's transition, and 
-  -- chat block land in one message. ev.isOpen() is now true.
+  -- reply THIS turn — the DM's transition and the first reply land in one
+  -- message. ev.isOpen() is now true.
   if ev.isOpen() then
     if not ev.hasSpan() then ev.spanStart({}) end -- open_event already started one
     if text ~= "" then ev.spanAppend({ { role = "assistant", content = text } }) end -- the DM's transition
-    state.event.tagged = true
     local chatBlock = chatTurn(prompt, input)
     if text == "" then text = "The dark shifts around you." end
-    text = ev.openTag() .. "\\n\\n" .. text .. "\\n\\n" .. chatBlock
+    text = text .. "\\n\\n" .. chatBlock
   end
   return text
 end
@@ -1035,13 +1029,12 @@ local function hallDmTurn(prompt, cmd)
   local text = trim(ev.strip(res.text or ""))
   if ev.isOpen() then
     -- Boundary turn: the DM framed a scene — run the scene-runner's first
-    -- scene reply now, all in one message.
+    -- reply now, all in one message.
     if not ev.hasSpan() then ev.spanStart({}) end
     if text ~= "" then ev.spanAppend({ { role = "assistant", content = text } }) end
-    state.event.tagged = true
     local chatBlock = chatTurn(prompt, cmd)
     if text == "" then text = "The hall shifts around you." end
-    return ev.openTag() .. "\\n\\n" .. text .. "\\n\\n" .. chatBlock .. tail(nil)
+    return text .. "\\n\\n" .. chatBlock .. tail(nil)
   end
   if text == "" then text = "Nothing comes of it." end
   return text .. tail(nil)
@@ -1053,7 +1046,7 @@ local function returnToHall()
   state.mode = "hall"
   state.dun.delveOver = nil
   state.dun.combat = nil
-  state.dun.fightTag = nil
+  state.dun.fightName = nil
   state.dun.hp = state.dun.maxHp
   state.dun.room = "f1" -- next delve restarts at the top (packs persist in the log)
 end
@@ -1114,7 +1107,7 @@ local function eventTurn(prompt, cmd)
   end
   if cmd == "leave" then
     local wasRegistration = state.event and state.event.kind == "registration"
-    local tag = ev.finalize(prompt)
+    local gistLine = ev.finalize(prompt) -- the close's memoir line (plain text)
     rolling.push(state.story, {
       label = state.event.kind,
       gist = (state.event.closed and state.event.closed.gist) or ("The " .. state.event.kind .. " breaks off."),
@@ -1122,7 +1115,7 @@ local function eventTurn(prompt, cmd)
     })
     ev.clear()
     if wasRegistration then state.onboarded = true end -- leaving onboarding still finishes it
-    return tag .. "\\n\\nYou step away; the moment ends." .. tail(currentPack())
+    return gistLine .. "\\n\\nYou step away; the moment ends." .. tail(currentPack())
   end
   -- A script-opened event (onboarding) has no DM boundary: seed the span with
   -- the receptionist's greeting as a prior assistant message.
@@ -1130,21 +1123,14 @@ local function eventTurn(prompt, cmd)
     ev.spanStart({ { role = "assistant", content = GREETING } })
   end
   local out = chatTurn(prompt, cmd)
-  if not state.event.tagged then
-    -- Script-opened events emit their [event] open on the first scene turn —
-    -- the DM paths do it on their boundary turn.
-    out = ev.openTag() .. "\\n\\n" .. out
-    state.event.tagged = true
-  end
-  local closeTag = ev.closeTag()
-  if closeTag ~= "" then
+  if state.event and state.event.closed then
     local wasRegistration = state.event and state.event.kind == "registration"
     rolling.push(state.story, {
       label = state.event.kind,
       gist = state.event.closed.gist,
       content = ev.span(),
     })
-    out = out .. "\\n\\n" .. closeTag
+    out = out .. "\\n\\n" .. state.event.closed.gist -- the memoir line
     ev.clear()
     if wasRegistration then state.onboarded = true end
     out = out .. "\\n\\nThe way on opens up again."
@@ -1846,85 +1832,34 @@ end
 return M
 \`\`\`
 \`\`\`lua
--- lib/summarize.lua — the PRODUCTION half of compaction: authoring
--- summary-tagged blocks, and turning a mechanical span into a model-written
--- gist. (The tags are PLAYER-facing: a display rule hides the open and
--- plot-logs the close's gist. The model's memory of the span is the rolling
--- story channel — lib/rolling — not a folded view of history.)
+-- lib/summarize.lua — the gist engine: turn a mechanical span into the ONE
+-- model-written line that survives.
 --
--- The flow: the script opens a block when a span starts (a fight, a shopping
--- trip, an exploration), serves the mechanical turns plainly, and at the
--- boundary asks the delegate for the ONE line that survives — "the player
--- kinda struggled and had to use all of his potions against a zubat lol" —
--- then splices it into the close tag. Stored history keeps the full span;
--- the player sees the plot-log line and the story channel carries the gist
--- (lib/rolling), so the mechanical detail costs no context but the OUTCOME
--- is never paraphrased away.
+-- The flow: the script serves a span's mechanical turns plainly (a fight, a
+-- shopping trip, an exploration), and at the boundary asks the delegate for
+-- the one line — "the player kinda struggled and had to use all of his
+-- potions against a zubat lol". That line goes two places, both TAGLESS: a
+-- plain memoir line in the reply (the player reads it like any other prose),
+-- and a rolling story entry with the span as its zoomable content
+-- (lib/rolling). No tags, no display rules — the memoir is just text.
 --
--- The gist sub-gen reads the span from prompt.messages: the open-tag
--- message itself (tag stripped — the encounter intro is part of the story)
--- plus everything after it — OR takes it directly via opts.span, for cards
--- that track the span mechanically (a fight log in state) instead of the
--- open-tag scan. The open must be VISIBLE to be summarized — if it scrolled
--- out of the script's own prompt, gist() returns nil and the caller closes
--- with a fallback gist or strips the tag. A nil is ONLY "there was nothing
--- to summarize": a delegate ERROR propagates and fails the turn — failed
--- turns never overwrite the last good state snapshot, so the user sees the
--- real error and a swipe/regenerate retries the turn from a clean world.
--- One honest bound: the gist is only as good as what the span shows —
--- anything kept out of the delegate's view can't make it into the summary.
-
-local chrome = require("lib/chrome")
+-- The span is the caller's, passed via opts.span (message-shaped entries,
+-- usually tracked mechanically in state). gist() returns nil only when there
+-- is nothing to summarize (no span, empty span, empty delegate answer) — the
+-- caller picks the fallback. A delegate ERROR propagates and fails the turn —
+-- failed turns never overwrite the last good state snapshot, so the user sees
+-- the real error and a swipe/regenerate retries from a clean world. One
+-- honest bound: the gist is only as good as what the span shows — anything
+-- kept out of the delegate's view can't make it into the summary.
 
 local M = {}
 
-local function escapePat(s) return (s:gsub("(%W)", "%%%1")) end
-
---- "[dungeon exploration 5]"
-function M.open(name)
-  return "[" .. name .. "]"
-end
-
---- "[/dungeon exploration 5 summary=\\"...\\"]" — the script owns the format:
---- summaries never carry double quotes, newlines, or excess length.
-function M.close(name, summary)
-  return "[/" .. name .. " summary=\\"" .. chrome.oneline(summary, 200) .. "\\"]"
-end
-
---- The span since a block's open tag: the open-tag message itself (tag
---- stripped — the encounter intro IS part of the story) plus everything after
---- it. Returns nil when the open isn't visible. gist() consumes this; cards
---- also use it to file the span as a rolling summary's content (lib/rolling).
-function M.span(prompt, name)
-  local pat = "%[" .. escapePat(name) .. "%]"
-  local openIdx
-  for i = #prompt.messages, 1, -1 do
-    local m = prompt.messages[i]
-    if type(m.content) == "string" and m.content:find(pat) then openIdx = i break end
-  end
-  if not openIdx then return nil end
-  local span = {}
-  for i = openIdx, #prompt.messages do
-    local m = prompt.messages[i]
-    if type(m.content) == "string" then
-      local content = i == openIdx and (m.content:gsub(pat, ""):gsub("^%s*(.-)%s*$", "%1")) or m.content
-      if content:match("%S") then span[#span + 1] = { role = m.role, content = content } end
-    end
-  end
-  return span
-end
-
---- Run the gist sub-gen over the span: one line for close().
---- Returns nil when there is nothing to summarize (no span, empty
---- span, or an empty delegate answer) — the caller picks the fallback. A
---- delegate error THROWS (fails the turn; state rolls back, swipe retries).
---- opts.instructions: extra guidance appended to the summarizer's prompt.
---- opts.maxSpanChars: span budget (default 6000).
---- opts.span: an explicit span (message-shaped entries) — for spans the card
---- tracks mechanically instead of the open-tag scan (lib/rolling content).
-function M.gist(name, prompt, opts)
+--- Run the gist sub-gen over opts.span: one line. opts.instructions: extra
+--- guidance appended to the summarizer's prompt. opts.maxSpanChars: span
+--- budget (default 6000).
+function M.gist(prompt, opts)
   opts = opts or {}
-  local span = opts.span or M.span(prompt, name)
+  local span = opts.span
   if not span or #span == 0 then return nil end
 
   local lines = {}
@@ -1952,20 +1887,6 @@ function M.gist(name, prompt, opts)
   s = s:gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1")
   if s == "" then return nil end
   return s
-end
-
---- Repair a model-freelanced close tag in outgoing text: a bare "[/name]"
---- (no summary) becomes a proper close with the given summary — or is
---- stripped entirely when no summary is available. Never leak a bare close.
-function M.fixClose(text, name, summary)
-  local bare = "%[/" .. escapePat(name) .. "%s*%]"
-  if summary then
-    -- Function replacement, not a string: a gist containing '%' (e.g. "lost 50%
-    -- HP") would otherwise throw "invalid use of '%' in replacement string".
-    local close = M.close(name, summary)
-    return (text:gsub(bare, function() return close end))
-  end
-  return (text:gsub(bare, ""))
 end
 
 return M
@@ -2067,8 +1988,7 @@ return M
 -- the machinery every such card re-derives:
 --
 --   * event state (state.event = { id, kind, context, participants }) — the
---     MODE. The [event ...] tags in the log are renderings of it, never the
---     source of truth.
+--     MODE, and the only source of truth for it (the engine emits no markup).
 --   * the cast: a character registry (lib/registry) plus the casting tools.
 --     The character FIELDS are the card's (declared in the def); the
 --     validate-file-query pipeline is the lib's.
@@ -2081,11 +2001,10 @@ return M
 --     never-read character costs no token). Loud on error: a delegate
 --     failure fails the turn — ids move only after the fold entry is filed,
 --     so memory survives intact and a swipe retries the fold.
---   * the tags: [event kind], [/event kind summary="..."]. PLAYER-facing
---     renderings only (hide the open, plot-log the close's gist) — nothing
---     parses them. The cast is NOT a tag: it rides the newest message via
---     castLine() (from state.event.participants), and strip removes
---     freelanced tags from delegate text.
+--   * the cast note, NOT a tag: who is on stage rides the newest message via
+--     castLine() (from state.event.participants) — volatile state in the
+--     newest message, never the frozen prefix. strip removes freelanced
+--     tags from delegate text (the model never types a bracket).
 --   * the append-only span: the scene-runner's tail, tracked MECHANICALLY as
 --     a persistent linked list in the store (state.event.spanId) — user
 --     inputs, assistant text, and the tool_use/tool_result rounds, one node
@@ -2111,7 +2030,7 @@ return M
 --
 -- Instance surface beyond the contract (PLAIN DOT CALLS):
 --   ev.isOpen()  ev.kind()  ev.eventLine()  ev.clear()
---   ev.strip(text)  ev.openTag()  ev.castLine()  ev.closeTag()
+--   ev.strip(text)  ev.castLine()
 --   ev.hasSpan()  ev.spanStart(entries)  ev.spanAppend(entries)  ev.span()
 --   ev.finalize(prompt)  -- the /leave path: one finalize gen, loud on error
 --   ev.bindPrompt(prompt)  -- once per generate(), like ledger.bind: arms
@@ -2206,19 +2125,6 @@ function M.new(def)
     local cast = participants()
     if #cast == 0 then return "" end
     return "on stage: " .. table.concat(cast, ", ")
-  end
-
-  --- The open tag for the CURRENT event ("" when none is open). The script
-  --- emits every tag: DM boundary turns and script-opened events splice this.
-  function E.openTag()
-    if not state.event then return "" end
-    return "[event " .. state.event.kind .. "]"
-  end
-
-  --- The spliced close tag ("" when the event isn't closing).
-  function E.closeTag()
-    if not (state.event and state.event.closed) then return "" end
-    return "[/event " .. state.event.kind .. ' summary="' .. state.event.closed.gist .. '"]'
   end
 
   -- ---------- the append-only span (a persistent list in the store) ----------
@@ -2341,7 +2247,7 @@ function M.new(def)
   --- the event stays open, and a swipe retries the exit. If the model just
   --- spends its rounds without calling close_event (a content outcome, not
   --- an error), the event still closes with a script-composed fallback gist.
-  --- Returns the spliced close tag.
+  --- Returns the gist (a plain-text memoir line for the card to serve).
   function E.finalize(prompt)
     if not state.event then return "" end
     local ts = toolset.new()
@@ -2360,7 +2266,7 @@ function M.new(def)
     if not state.event.closed then
       state.event.closed = { gist = "The " .. state.event.kind .. " breaks off." }
     end
-    return E.closeTag()
+    return state.event.closed.gist -- the memoir line, plain text
   end
 
   -- ---------- the tool contract (the scene-runner's toolset) ----------

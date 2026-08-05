@@ -41,7 +41,7 @@ interface DunState {
   escalations: number;
   packIds?: Record<string, string>;
   fightLog?: Array<{ role: string; content: string }>;
-  fightTag?: string;
+  fightName?: string;
   delveOver?: 'dead' | 'won' | null;
 }
 interface MergeState {
@@ -351,7 +351,7 @@ describe('The Guildhall (merged card)', () => {
       const t = await runTurn(makeAdapter(planningDelegate()), '/delve', hallState());
       expect(t.state.mode).toBe('dungeon');
       expect(t.state.dun.room).toBe('f1:r1');
-      expect(t.text).toContain('[pack f1]');
+      expect(t.text).toContain('Designed The Upper Halls');
       expect(t.text).toContain('Collapsed Nave');
       expect(t.text).toContain('data-post-response="/go north"');
       expect(t.text).not.toContain('data-post-response="/delve"'); // hall menu gone
@@ -385,7 +385,7 @@ describe('The Guildhall (merged card)', () => {
       };
       const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f3', seen: {}, escalations: 0 } });
       const t = await runTurn(makeAdapter(delegate), 'look', start);
-      expect(t.text).toContain('[pack f3]');
+      expect(t.text).toContain('Designed The Relic Vaults');
       // The pack blob lives in the store, not the message — assert on it.
       const blob = await testBlobs.get(t.state.dun.packIds?.f3 ?? '');
       expect(blob).not.toContain('"down":"down"'); // the designed stairs were stripped
@@ -447,7 +447,7 @@ describe('The Guildhall (merged card)', () => {
       const t = await runTurn(makeAdapter(dungeonEconomyDelegate()), 'I blow the door open', start);
       expect(t.state.dun.escalations).toBe(1);
       expect(t.state.dun.inventory.bomb).toBeUndefined(); // consumed by the engine
-      expect(t.text).toContain('[pack f1]'); // the pack marker for the new version
+      expect(t.text).toContain('Designed The Upper Halls'); // the pack marker for the new version
       // The mutation is a NEW blob; the pointer moved to it.
       expect(t.state.dun.packIds?.f1).not.toBe('pack:f1#1');
       const blob = await testBlobs.get(t.state.dun.packIds?.f1 ?? '');
@@ -484,7 +484,6 @@ describe('The Guildhall (merged card)', () => {
     it('the hall DM frames the event; the scene-runner casts and writes', async () => {
       const prompts: Prompt[] = [];
       const t = await runTurn(makeAdapter(hallEventDelegate(prompts)), 'I go recruit the old knight', hallState());
-      expect(t.text).toContain('[event recruitment]');
       expect(t.text).toContain('"What\'s the offer?"'); // the scene reply is plain text now
       expect(t.text).toContain('data-post-response="/leave"');
       expect(t.text).not.toContain('data-post-response="/delve"'); // hall menu gated by the event
@@ -537,7 +536,7 @@ describe('The Guildhall (merged card)', () => {
 
     it('close_event: the gist rides the close tag; takes file the dossiers', async () => {
       const t = await runTurn(makeAdapter(closeDelegate()), 'Great. Let\'s go.', eventState());
-      expect(t.text).toContain('[/event recruitment summary="Recruited Ser Aldric at the quest board."]');
+      expect(t.text).toContain('Recruited Ser Aldric at the quest board.'); // the memoir line
       expect(t.state.dossiers?.['ser-aldric']).toHaveLength(1); // one rolling entry id
       expect(t.state.event).toBeUndefined();
       expect(t.text).toContain('data-post-response="/delve"'); // back to idle
@@ -545,7 +544,7 @@ describe('The Guildhall (merged card)', () => {
 
     it('/leave closes with a script-composed fallback gist when the model never calls close_event', async () => {
       const t = await runTurn(makeAdapter(textOnlyDelegate()), '/leave', eventState());
-      expect(t.text).toContain('[/event recruitment summary="The recruitment breaks off."]'); // script-composed fallback
+      expect(t.text).toContain('The recruitment breaks off.'); // script-composed fallback memoir
       expect(t.state.event).toBeUndefined();
     });
 
@@ -636,7 +635,7 @@ describe('The Guildhall (merged card)', () => {
       await runTurn(adapter, 'What is your rate?', t1.scriptState, []);
       const p2js = JSON.stringify(scenePrompts[scenePrompts.length - 1]!.messages);
       expect(p2js).toContain('You cross the hall.'); // the DM's transition
-      expect(p2js).toContain('The knight strokes his beard.'); // turn 1's chat block
+      expect(p2js).toContain('The knight strokes his beard.'); // turn 1's reply
       expect(p2js).toContain('I recruit the knight'); // the triggering input (kept now)
     });
 
@@ -680,7 +679,6 @@ describe('The Guildhall (merged card)', () => {
       const t = await runTurn(makeAdapter(dungeonDmOpensEventDelegate()), 'I try to intimidate the rat', start);
       // The combat gate did NOT swallow the free text — the dungeon DM was reached.
       expect(t.state.dun.escalations).toBe(1);
-      expect(t.text).toContain('[event parley]');
       expect(t.text).toContain('The rat does not blink.'); // the scene-runner's first reply
       expect(t.state.dun.combat?.name).toBe('Crypt Rat'); // combat PERSISTS across the opened event
       expect(t.state.event?.kind).toBe('parley');
@@ -722,7 +720,7 @@ describe('The Guildhall (merged card)', () => {
   describe('the story channel (lib/rolling)', () => {
     it('a fight gist lands in the story; the next DM sees STORY SO FAR and can inspect_summary into the raw span', async () => {
       const combat = { name: 'Crypt Rat', hp: 3, maxHp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat bites.', death: 'The rat twitches and is still.' } };
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, packIds: { ...F1_POINTER }, combat, fightTag: 'fight Crypt Rat',
+      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, packIds: { ...F1_POINTER }, combat, fightName: 'fight Crypt Rat',
         fightLog: [
           { role: 'assistant', content: 'It lunges.' },
           { role: 'user', content: 'attack' },
@@ -756,7 +754,7 @@ describe('The Guildhall (merged card)', () => {
       const adapter = makeAdapter(dm);
       // Turn 1: the killing blow ends the fight — gist sub-gen, then the story push.
       const t1 = await runTurn(adapter, 'attack', start, fightHistory);
-      expect(t1.text).toContain('[/fight Crypt Rat summary="You stabbed the rat dead, barely winded."]');
+      expect(t1.text).toContain('You stabbed the rat dead, barely winded.');
       expect(t1.state.story ?? []).toHaveLength(1);
       // Turn 2: a novel action escalates; the DM's briefing carries the story…
       await runTurn(adapter, 'i search the ossuary for trinkets', t1.scriptState, [
@@ -1015,19 +1013,19 @@ describe('The Guildhall (merged card)', () => {
       const t4 = await step('/delve');
       expect(t4.state.mode).toBe('dungeon');
       expect(t4.state.dun.room).toBe('f1:r1');
-      expect(t4.text).toContain('[pack f1]');
+      expect(t4.text).toContain('Designed The Upper Halls');
 
       // 5. go north → r2 → a rat rolls up (ENCOUNTER_CHANCE=1).
       const t5 = await step('go north');
       expect(t5.state.dun.room).toBe('f1:r2');
       expect(t5.state.dun.combat?.name).toBe('Crypt Rat');
-      expect(t5.text).toContain('[fight Crypt Rat]');
+      expect(t5.text).toContain('It lunges.');
 
       // 6. attack → kill → gold + a delegate-written fight gist.
       const t6 = await step('attack');
       expect(t6.state.dun.combat).toBeUndefined();
       expect(t6.state.gold).toBeGreaterThanOrEqual(5);
-      expect(t6.text).toMatch(/\/fight Crypt Rat summary="/);
+      expect(t6.state.story ?? []).toHaveLength(2); // the recruitment scene AND the fight gist
 
       // 7. go south → back to the entrance (no encounter there).
       const t7 = await step('go south');
@@ -1110,8 +1108,7 @@ describe('The Guildhall (merged card)', () => {
       };
       const adapter = makeAdapter(delegate);
       const t1 = await runTurn(adapter, 'hi', undefined);
-      // The fix: the first onboarding turn emits the [event registration] open.
-      expect(t1.text).toContain('[event registration]');
+      expect(t1.text).toContain('Your name, traveler?'); // the receptionist asked
       expect(t1.state.event?.kind).toBe('registration'); // still open — turn 1 only asked
       const t2 = await runTurn(adapter, 'Grok', t1.scriptState, [
         { role: 'user', content: 'hi' },

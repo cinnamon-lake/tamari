@@ -1,82 +1,31 @@
--- lib/summarize.lua — the PRODUCTION half of compaction: authoring
--- summary-tagged blocks, and turning a mechanical span into a model-written
--- gist. (The tags are PLAYER-facing: a display rule hides the open and
--- plot-logs the close's gist. The model's memory of the span is the rolling
--- story channel — lib/rolling — not a folded view of history.)
+-- lib/summarize.lua — the gist engine: turn a mechanical span into the ONE
+-- model-written line that survives.
 --
--- The flow: the script opens a block when a span starts (a fight, a shopping
--- trip, an exploration), serves the mechanical turns plainly, and at the
--- boundary asks the delegate for the ONE line that survives — "the player
--- kinda struggled and had to use all of his potions against a zubat lol" —
--- then splices it into the close tag. Stored history keeps the full span;
--- the player sees the plot-log line and the story channel carries the gist
--- (lib/rolling), so the mechanical detail costs no context but the OUTCOME
--- is never paraphrased away.
+-- The flow: the script serves a span's mechanical turns plainly (a fight, a
+-- shopping trip, an exploration), and at the boundary asks the delegate for
+-- the one line — "the player kinda struggled and had to use all of his
+-- potions against a zubat lol". That line goes two places, both TAGLESS: a
+-- plain memoir line in the reply (the player reads it like any other prose),
+-- and a rolling story entry with the span as its zoomable content
+-- (lib/rolling). No tags, no display rules — the memoir is just text.
 --
--- The gist sub-gen reads the span from prompt.messages: the open-tag
--- message itself (tag stripped — the encounter intro is part of the story)
--- plus everything after it — OR takes it directly via opts.span, for cards
--- that track the span mechanically (a fight log in state) instead of the
--- open-tag scan. The open must be VISIBLE to be summarized — if it scrolled
--- out of the script's own prompt, gist() returns nil and the caller closes
--- with a fallback gist or strips the tag. A nil is ONLY "there was nothing
--- to summarize": a delegate ERROR propagates and fails the turn — failed
--- turns never overwrite the last good state snapshot, so the user sees the
--- real error and a swipe/regenerate retries the turn from a clean world.
--- One honest bound: the gist is only as good as what the span shows —
--- anything kept out of the delegate's view can't make it into the summary.
-
-local chrome = require("lib/chrome")
+-- The span is the caller's, passed via opts.span (message-shaped entries,
+-- usually tracked mechanically in state). gist() returns nil only when there
+-- is nothing to summarize (no span, empty span, empty delegate answer) — the
+-- caller picks the fallback. A delegate ERROR propagates and fails the turn —
+-- failed turns never overwrite the last good state snapshot, so the user sees
+-- the real error and a swipe/regenerate retries from a clean world. One
+-- honest bound: the gist is only as good as what the span shows — anything
+-- kept out of the delegate's view can't make it into the summary.
 
 local M = {}
 
-local function escapePat(s) return (s:gsub("(%W)", "%%%1")) end
-
---- "[dungeon exploration 5]"
-function M.open(name)
-  return "[" .. name .. "]"
-end
-
---- "[/dungeon exploration 5 summary=\"...\"]" — the script owns the format:
---- summaries never carry double quotes, newlines, or excess length.
-function M.close(name, summary)
-  return "[/" .. name .. " summary=\"" .. chrome.oneline(summary, 200) .. "\"]"
-end
-
---- The span since a block's open tag: the open-tag message itself (tag
---- stripped — the encounter intro IS part of the story) plus everything after
---- it. Returns nil when the open isn't visible. gist() consumes this; cards
---- also use it to file the span as a rolling summary's content (lib/rolling).
-function M.span(prompt, name)
-  local pat = "%[" .. escapePat(name) .. "%]"
-  local openIdx
-  for i = #prompt.messages, 1, -1 do
-    local m = prompt.messages[i]
-    if type(m.content) == "string" and m.content:find(pat) then openIdx = i break end
-  end
-  if not openIdx then return nil end
-  local span = {}
-  for i = openIdx, #prompt.messages do
-    local m = prompt.messages[i]
-    if type(m.content) == "string" then
-      local content = i == openIdx and (m.content:gsub(pat, ""):gsub("^%s*(.-)%s*$", "%1")) or m.content
-      if content:match("%S") then span[#span + 1] = { role = m.role, content = content } end
-    end
-  end
-  return span
-end
-
---- Run the gist sub-gen over the span: one line for close().
---- Returns nil when there is nothing to summarize (no span, empty
---- span, or an empty delegate answer) — the caller picks the fallback. A
---- delegate error THROWS (fails the turn; state rolls back, swipe retries).
---- opts.instructions: extra guidance appended to the summarizer's prompt.
---- opts.maxSpanChars: span budget (default 6000).
---- opts.span: an explicit span (message-shaped entries) — for spans the card
---- tracks mechanically instead of the open-tag scan (lib/rolling content).
-function M.gist(name, prompt, opts)
+--- Run the gist sub-gen over opts.span: one line. opts.instructions: extra
+--- guidance appended to the summarizer's prompt. opts.maxSpanChars: span
+--- budget (default 6000).
+function M.gist(prompt, opts)
   opts = opts or {}
-  local span = opts.span or M.span(prompt, name)
+  local span = opts.span
   if not span or #span == 0 then return nil end
 
   local lines = {}
@@ -104,20 +53,6 @@ function M.gist(name, prompt, opts)
   s = s:gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1")
   if s == "" then return nil end
   return s
-end
-
---- Repair a model-freelanced close tag in outgoing text: a bare "[/name]"
---- (no summary) becomes a proper close with the given summary — or is
---- stripped entirely when no summary is available. Never leak a bare close.
-function M.fixClose(text, name, summary)
-  local bare = "%[/" .. escapePat(name) .. "%s*%]"
-  if summary then
-    -- Function replacement, not a string: a gist containing '%' (e.g. "lost 50%
-    -- HP") would otherwise throw "invalid use of '%' in replacement string".
-    local close = M.close(name, summary)
-    return (text:gsub(bare, function() return close end))
-  end
-  return (text:gsub(bare, ""))
 end
 
 return M

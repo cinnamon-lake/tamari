@@ -7,8 +7,7 @@
 -- the machinery every such card re-derives:
 --
 --   * event state (state.event = { id, kind, context, participants }) — the
---     MODE. The [event ...] tags in the log are renderings of it, never the
---     source of truth.
+--     MODE, and the only source of truth for it (the engine emits no markup).
 --   * the cast: a character registry (lib/registry) plus the casting tools.
 --     The character FIELDS are the card's (declared in the def); the
 --     validate-file-query pipeline is the lib's.
@@ -21,11 +20,10 @@
 --     never-read character costs no token). Loud on error: a delegate
 --     failure fails the turn — ids move only after the fold entry is filed,
 --     so memory survives intact and a swipe retries the fold.
---   * the tags: [event kind], [/event kind summary="..."]. PLAYER-facing
---     renderings only (hide the open, plot-log the close's gist) — nothing
---     parses them. The cast is NOT a tag: it rides the newest message via
---     castLine() (from state.event.participants), and strip removes
---     freelanced tags from delegate text.
+--   * the cast note, NOT a tag: who is on stage rides the newest message via
+--     castLine() (from state.event.participants) — volatile state in the
+--     newest message, never the frozen prefix. strip removes freelanced
+--     tags from delegate text (the model never types a bracket).
 --   * the append-only span: the scene-runner's tail, tracked MECHANICALLY as
 --     a persistent linked list in the store (state.event.spanId) — user
 --     inputs, assistant text, and the tool_use/tool_result rounds, one node
@@ -51,7 +49,7 @@
 --
 -- Instance surface beyond the contract (PLAIN DOT CALLS):
 --   ev.isOpen()  ev.kind()  ev.eventLine()  ev.clear()
---   ev.strip(text)  ev.openTag()  ev.castLine()  ev.closeTag()
+--   ev.strip(text)  ev.castLine()
 --   ev.hasSpan()  ev.spanStart(entries)  ev.spanAppend(entries)  ev.span()
 --   ev.finalize(prompt)  -- the /leave path: one finalize gen, loud on error
 --   ev.bindPrompt(prompt)  -- once per generate(), like ledger.bind: arms
@@ -146,19 +144,6 @@ function M.new(def)
     local cast = participants()
     if #cast == 0 then return "" end
     return "on stage: " .. table.concat(cast, ", ")
-  end
-
-  --- The open tag for the CURRENT event ("" when none is open). The script
-  --- emits every tag: DM boundary turns and script-opened events splice this.
-  function E.openTag()
-    if not state.event then return "" end
-    return "[event " .. state.event.kind .. "]"
-  end
-
-  --- The spliced close tag ("" when the event isn't closing).
-  function E.closeTag()
-    if not (state.event and state.event.closed) then return "" end
-    return "[/event " .. state.event.kind .. ' summary="' .. state.event.closed.gist .. '"]'
   end
 
   -- ---------- the append-only span (a persistent list in the store) ----------
@@ -281,7 +266,7 @@ function M.new(def)
   --- the event stays open, and a swipe retries the exit. If the model just
   --- spends its rounds without calling close_event (a content outcome, not
   --- an error), the event still closes with a script-composed fallback gist.
-  --- Returns the spliced close tag.
+  --- Returns the gist (a plain-text memoir line for the card to serve).
   function E.finalize(prompt)
     if not state.event then return "" end
     local ts = toolset.new()
@@ -300,7 +285,7 @@ function M.new(def)
     if not state.event.closed then
       state.event.closed = { gist = "The " .. state.event.kind .. " breaks off." }
     end
-    return E.closeTag()
+    return state.event.closed.gist -- the memoir line, plain text
   end
 
   -- ---------- the tool contract (the scene-runner's toolset) ----------
