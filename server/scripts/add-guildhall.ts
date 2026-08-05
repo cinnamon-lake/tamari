@@ -54,11 +54,11 @@ const CREATOR_NOTES = [
   'idle turns and dungeon serve turns are free; the hall DM frames events, a scene-runner writes every',
   'participant with an append-only (prefix-cache-friendly) prompt; the dungeon plans each floor in one',
   'sub-gen and serves it deterministically. An event can open mid-combat and resumes the fight on close.',
-  'Companion character-scoped regex rules are preinstalled (HUD panel, fog-of-war map, event/fight/pack',
-  'plot-logs, tag hiders).',
+  'Companion character-scoped regex rules are preinstalled (HUD panel, fog-of-war map, optional hiding',
+  'of bare command messages).',
 ].join(' ');
 
-/** Renders [HUD|where=..|gold=..(|hp=..|atk=..)] — hall shows gold, the dungeon adds the rest. */
+/** Renders the [HUD|k=v|…] tag as a panel — hall: name/where/gold; the dungeon adds hp/atk. Key-parsed, order-agnostic. */
 const HUD_REPLACE_LUA = `function replace(match, captures)
   local fields = {}
   for pair in captures[1]:gmatch("[^|]+") do

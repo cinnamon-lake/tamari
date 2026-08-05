@@ -20,7 +20,7 @@ import { consumeStream, type BackendStreamItem, type Prompt } from './BackendAda
 
 const luaSource = readFileSync(new URL('../../../docs/design/examples/guildhall/main.lua', import.meta.url), 'utf8');
 
-// The card VFS: main.lua requires all twelve vendored game-lib modules.
+// The card VFS: main.lua requires all eleven vendored game-lib modules.
 const LIB_FILES: Record<string, string> = Object.fromEntries(
   ['loop', 'sanitize', 'chrome', 'ledger', 'toolset', 'todo', 'registry', 'summarize', 'maptag', 'events', 'rolling'].map((m) => [
     `lib/${m}.lua`,

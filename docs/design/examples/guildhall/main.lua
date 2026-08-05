@@ -34,7 +34,7 @@
 --   optional: /^\s*\/\w+.*$/s with role userInput → "" (hide command messages;
 --   safe because posted commands are bare text with no HTML to mangle)
 --   /\[HUD\|([^\]]+)\]/g → panel HTML (HUD recipe, topic `regexes`) — hall
---   shows gold; the dungeon adds where/hp/atk.
+--   shows name/where/gold; the dungeon adds hp/atk (key-parsed, any order).
 --   /\[MAP\|([^\]]+)\]/g → floor-graph map (maptag recipe)
 
 local loop = require("lib/loop")
@@ -117,6 +117,11 @@ local function ensureState()
   -- their ANSWER to her, not a menu command. She gets a name + trade, the
   -- scene-runner calls register_player (which rolls stats) and close_event,
   -- and the hall menu appears. Closed → onboarded, never re-opens.
+  -- This is the ONLY script-opened event: a static context is safe here
+  -- because there is no history to contradict yet. Once the game has a past,
+  -- events are DM-framed (or their context is composed from state) — a canned
+  -- context or opener asserts the past blindly, and the scene-runner will
+  -- believe it ("welcome back, how was the dungeon?" on a first meeting).
   if not state.onboarded and state.event == nil
      and (state.characters == nil or #state.characters == 0) then
     state.characters = {}
@@ -756,13 +761,18 @@ end
 local HALL_DM_PROMPT = "You are the guildhall's dungeon master, adjudicating ONE player action in the idle hall. "
   .. "If the action opens a conversation or scene, call open_event with a kind and a CONTEXT: who the player "
   .. "is and what they are after, framed for the scene-runner who takes over — NO character list; casting is "
-  .. "the scene-runner's job. Use attempt() for anything risky — the ENGINE rolls and decides. set_flag for "
+  .. "the scene-runner's job. Ground the CONTEXT in the STORY SO FAR: what just happened, and whether the "
+  .. "player and the people involved have met before — the scene-runner inherits only your context and the "
+  .. "public record. Use attempt() for anything risky — the ENGINE rolls and decides. set_flag for "
   .. "lasting facts, inspect_summary to zoom into what actually happened. Then narrate the outcome in 1-2 terse sentences, "
   .. "second person."
 
 local DUNGEON_DM_PROMPT = "You are the dungeon master of a terse dungeon crawler, adjudicating ONE novel player action. "
   .. "If the action opens a conversation or scene (even mid-fight), call open_event with a kind and a CONTEXT: "
   .. "who the player is and what they are after — NO character list; casting is the scene-runner's job. "
+  .. "Ground the CONTEXT in what actually happened (the STORY SO FAR; inspect_summary zooms in) — including "
+  .. "whether the player and anyone involved have met before; the scene-runner inherits only your context "
+  .. "and the public record. "
   .. "Rules: use attempt() for anything risky — the ENGINE rolls and decides; honor its result. "
   .. "Use remove_item/add_exit/set_flag/spawn_enemy to make consequences REAL — costs are deducted by the engine, "
   .. "and the tool result is the canonical record. Never grant what the tools can't express. "
@@ -772,6 +782,9 @@ local CHAT_PROMPT = "You are the scene-runner for one event in a guild-hall RPG.
   .. "except the player — all of them, in one response. Cast the scene from the registry: list_characters "
   .. "before inventing anyone, get_character for a character's file and their history with the player, "
   .. "register_character to file someone NEW, add_to_chat to bring them on stage. Never speak for the player. "
+  .. "The STORY SO FAR below is the public record: honor it over assumption, and inspect_summary zooms into "
+  .. "any line of it. A character whose dossier is EMPTY has NO history with the player — they have never "
+  .. "met; write them that way, with no assumed familiarity the record doesn't show. "
   .. "When the scene is spent, close_event with a gist and one take PER PARTICIPANT. "
   .. "Terse, concrete, in character.\n\nEVENT: "
 
@@ -787,12 +800,15 @@ local GREETING = "The guildhall's reception desk is a slab of oak lost under for
   .. "a finger and slides a blank form your way. \"Welcome to the Guildhall. Name and trade, newcomer "
   .. "— let's get you registered.\""
 
--- The scene-runner: the events engine's full toolset. The model never types a
+-- The scene-runner: the events engine's full toolset PLUS rolling — the
+-- STORY SO FAR rides the frozen system block (chatTurn), and inspect_summary
+-- lets the model zoom into it instead of guessing. The model never types a
 -- bracket — ev.strip removes freelanced tags; the cast rides the newest
 -- message via ev.castLine(); the script splices the close tag.
 local function chatToolset()
   local ts = toolset.new()
   ts:use(ev)
+  ts:use(rolling)
   -- Onboarding: file the newcomer's name and roll their starting stats. The
   -- receptionist calls this during registration, reads the result back, and
   -- close_event hands them into the hall.
@@ -827,7 +843,11 @@ local function chatTurn(prompt, cmd)
   for k, v in pairs(prompt) do sub[k] = v end
   sub.tools = ts:schemas()
   sub.messages = {
-    { role = "system", content = CHAT_PROMPT .. ev.eventLine() },
+    -- The STORY SO FAR rides the FROZEN block: the story channel changes
+    -- only at an event close (which ends the event) or a fight gist (fights
+    -- can't end while an event is open), so this stays byte-identical for
+    -- the event's lifetime — the prefix-cache property is untouched.
+    { role = "system", content = CHAT_PROMPT .. ev.eventLine() .. rolling.briefing(state.story) },
   }
   for _, m in ipairs(ev.span()) do sub.messages[#sub.messages + 1] = m end
   -- The cast rides the newest message (volatile state, never the frozen

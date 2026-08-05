@@ -9,14 +9,14 @@ A complete, TESTED game card: \`backend_logic/main.lua\` plus its vendored game 
 - **Trust the model: no \`[sys]\` tag.** Acks are plain visible text — the model sees what the player sees. Don't reach for a hide channel; it just rewrangles the delegate's prompt for no gain.
 - **Death and the relic end the DELVE, not the game.** \`state.dun.delveOver = "dead" | "won"\`; the next turn returns you to the hall (hp reset, room to f1; packs and the relic flag persist). The card never terminally ends.
 - **Pack blobs in the store, pointers in \`state\`.** A floor pack is kilobytes of JSON — \`store.putJson\` files it (id like \`"pack:f1#3"\`), \`state.dun.packIds[fid]\` holds the branch-aware pointer, and the player sees a plain memoir line ("Designed The Upper Halls: …") — no tags, nothing to regex. A mutation is a new put plus moving the pointer, so swiped branches keep their versions. \`state.dun.*\` is the dungeon's namespaced home — every former unprefixed crypt key lives there, so it can't collide with the hall or the events engine.
-- **The scene-runner's prompt is append-only within an event — mechanically, and the test proves it.** Frozen system block (instructions + the DM's context, via \`ev.eventLine()\`); the tail is a persistent linked list in the store (\`state.event.spanId\`, one node per turn), FULL-FIDELITY — user inputs, assistant replies, AND the tool_use/tool_result rounds, so the model never re-issues a read. Turn N is a strict prefix of turn N+1 by construction (no log parsing, no history-budget dependence), so the delegate's prefix cache covers the whole scene.
-- **Dossiers: memory keyed by WHO was there.** \`close_event\` files one take per participant in \`state.dossiers\`; \`get_character\` serves the file + dossier as a read-tool result. Dossiers are \`lib/rolling\` channels: recent takes verbatim, oldest folded into digest entries on read (a never-read character costs no token; a delegate error fails the turn — ids move only once the fold lands, so a swipe retries).
-- **The STORY is a rolling summary, and the DM can zoom into it.** Fight gists land in \`state.story\` (a \`lib/rolling\` channel) with the fight's mechanical span as their content; both DM briefings carry the \`STORY SO FAR\` lines, and both DM toolsets expose \`inspect_summary\` — the model tool-calls its way from a digest line down to the actual blows.
-- **Onboarding is a script-opened event, and the greeting has NO buttons on purpose.** The first turn opens a registration event in \`ensureState\` (no delegate needed); the scene-runner runs the receptionist, \`register_player\` files the name and rolls stats, \`close_event\` hands the player into the hall. While it runs, \`buttonsHtml\` returns "" — the menu can't serve anything before registration, so the greeting offers nothing to click (the receptionist asked a question; type, don't click).
+- **The scene-runner's prompt is append-only within an event — mechanically, and the test proves it.** Frozen system block (instructions + the DM's context, via \`ev.eventLine()\`, plus \`rolling.briefing(state.story)\` — the story channel changes only at an event close or a fight gist, neither of which can happen mid-event, so the block stays byte-frozen); the tail is a persistent linked list in the store (\`state.event.spanId\`, one node per turn), FULL-FIDELITY — user inputs, assistant replies, AND the tool_use/tool_result rounds, so the model never re-issues a read. Turn N is a strict prefix of turn N+1 by construction (no log parsing, no history-budget dependence), so the delegate's prefix cache covers the whole scene. The scene-runner's toolset includes \`inspect_summary\`, so it can zoom into the public record instead of guessing.
+- **Dossiers: memory keyed by WHO was there.** \`close_event\` files one take per participant in \`state.dossiers\`; \`get_character\` serves the file + dossier as a read-tool result. Dossiers are \`lib/rolling\` channels: recent takes verbatim, oldest folded into digest entries on read (a never-read character costs no token; a delegate error fails the turn — ids move only once the fold lands, so a swipe retries). An EMPTY dossier means never-met — and the scene-runner prompt says so outright, because a gap in the record loses to a strong prior: models fill silence with assumption, and canon-heavy casts come with the loudest assumptions.
+- **The STORY is a rolling summary, and every delegate can zoom into it.** Fight gists land in \`state.story\` (a \`lib/rolling\` channel) with the fight's mechanical span as their content; both DM briefings AND the scene-runner's frozen block carry the \`STORY SO FAR\` lines, and every delegate toolset exposes \`inspect_summary\` — the model tool-calls its way from a digest line down to the actual blows.
+- **Onboarding is a script-opened event, and the greeting has NO buttons on purpose.** The first turn opens a registration event in \`ensureState\` (no delegate needed); the scene-runner runs the receptionist, \`register_player\` files the name and rolls stats, \`close_event\` hands the player into the hall. While it runs, \`buttonsHtml\` returns "" — the menu can't serve anything before registration, so the greeting offers nothing to click (the receptionist asked a question; type, don't click). It is the ONLY script-opened event: with no history to contradict, a static context is safe — every other scene is DM-framed so its context carries the live situation.
 - **The card fields are minimal on purpose.** \`description\`/\`creatorNotes\` for the library, \`firstMes\` as the greeting — and personality/scenario/mesExample EMPTY, no lorebook. The script composes every delegate prompt by hand, so engine prompt-assembly fields never reach a delegate; the registries are the lore.
 - **\`continue\` never resolves** — an ambient line only, so nothing double-applies.
 
-Companion character-scoped regex rules (installed by the script): optional hide \`/^\\/\\w+.*$/s\` (userInput), a HUD panel for \`[HUD|where=..|gold=..(|hp=..|atk=..)]\` (hall vs dungeon fields), a \`[MAP|..]\` floor-graph renderer. That's all — memoir lines and event closes are plain prose; there are no structural tags to hide.
+Companion character-scoped regex rules (installed by the script): optional hide \`/^\\s*\\/\\w+.*$/s\` (userInput), a HUD panel for \`[HUD|name=..|where=..|gold=..]\` (hall) / \`[HUD|name=..|where=..|hp=..|atk=..|gold=..]\` (dungeon — the renderer parses by key, order-agnostic), a \`[MAP|..]\` floor-graph renderer. That's all — memoir lines and event closes are plain prose; there are no structural tags to hide.
 
 The lib modules this card vendors (\`loop\`, \`sanitize\`, \`chrome\`, \`ledger\`, \`toolset\`, \`todo\`, \`registry\`, \`summarize\`, \`maptag\`, \`events\`, \`rolling\`) are documented in topic \`game_cards\` (The game lib); full sources below.
 
@@ -57,7 +57,7 @@ The lib modules this card vendors (\`loop\`, \`sanitize\`, \`chrome\`, \`ledger\
 --   optional: /^\\s*\\/\\w+.*$/s with role userInput → "" (hide command messages;
 --   safe because posted commands are bare text with no HTML to mangle)
 --   /\\[HUD\\|([^\\]]+)\\]/g → panel HTML (HUD recipe, topic \`regexes\`) — hall
---   shows gold; the dungeon adds where/hp/atk.
+--   shows name/where/gold; the dungeon adds hp/atk (key-parsed, any order).
 --   /\\[MAP\\|([^\\]]+)\\]/g → floor-graph map (maptag recipe)
 
 local loop = require("lib/loop")
@@ -140,6 +140,11 @@ local function ensureState()
   -- their ANSWER to her, not a menu command. She gets a name + trade, the
   -- scene-runner calls register_player (which rolls stats) and close_event,
   -- and the hall menu appears. Closed → onboarded, never re-opens.
+  -- This is the ONLY script-opened event: a static context is safe here
+  -- because there is no history to contradict yet. Once the game has a past,
+  -- events are DM-framed (or their context is composed from state) — a canned
+  -- context or opener asserts the past blindly, and the scene-runner will
+  -- believe it ("welcome back, how was the dungeon?" on a first meeting).
   if not state.onboarded and state.event == nil
      and (state.characters == nil or #state.characters == 0) then
     state.characters = {}
@@ -779,13 +784,18 @@ end
 local HALL_DM_PROMPT = "You are the guildhall's dungeon master, adjudicating ONE player action in the idle hall. "
   .. "If the action opens a conversation or scene, call open_event with a kind and a CONTEXT: who the player "
   .. "is and what they are after, framed for the scene-runner who takes over — NO character list; casting is "
-  .. "the scene-runner's job. Use attempt() for anything risky — the ENGINE rolls and decides. set_flag for "
+  .. "the scene-runner's job. Ground the CONTEXT in the STORY SO FAR: what just happened, and whether the "
+  .. "player and the people involved have met before — the scene-runner inherits only your context and the "
+  .. "public record. Use attempt() for anything risky — the ENGINE rolls and decides. set_flag for "
   .. "lasting facts, inspect_summary to zoom into what actually happened. Then narrate the outcome in 1-2 terse sentences, "
   .. "second person."
 
 local DUNGEON_DM_PROMPT = "You are the dungeon master of a terse dungeon crawler, adjudicating ONE novel player action. "
   .. "If the action opens a conversation or scene (even mid-fight), call open_event with a kind and a CONTEXT: "
   .. "who the player is and what they are after — NO character list; casting is the scene-runner's job. "
+  .. "Ground the CONTEXT in what actually happened (the STORY SO FAR; inspect_summary zooms in) — including "
+  .. "whether the player and anyone involved have met before; the scene-runner inherits only your context "
+  .. "and the public record. "
   .. "Rules: use attempt() for anything risky — the ENGINE rolls and decides; honor its result. "
   .. "Use remove_item/add_exit/set_flag/spawn_enemy to make consequences REAL — costs are deducted by the engine, "
   .. "and the tool result is the canonical record. Never grant what the tools can't express. "
@@ -795,6 +805,9 @@ local CHAT_PROMPT = "You are the scene-runner for one event in a guild-hall RPG.
   .. "except the player — all of them, in one response. Cast the scene from the registry: list_characters "
   .. "before inventing anyone, get_character for a character's file and their history with the player, "
   .. "register_character to file someone NEW, add_to_chat to bring them on stage. Never speak for the player. "
+  .. "The STORY SO FAR below is the public record: honor it over assumption, and inspect_summary zooms into "
+  .. "any line of it. A character whose dossier is EMPTY has NO history with the player — they have never "
+  .. "met; write them that way, with no assumed familiarity the record doesn't show. "
   .. "When the scene is spent, close_event with a gist and one take PER PARTICIPANT. "
   .. "Terse, concrete, in character.\\n\\nEVENT: "
 
@@ -810,12 +823,15 @@ local GREETING = "The guildhall's reception desk is a slab of oak lost under for
   .. "a finger and slides a blank form your way. \\"Welcome to the Guildhall. Name and trade, newcomer "
   .. "— let's get you registered.\\""
 
--- The scene-runner: the events engine's full toolset. The model never types a
+-- The scene-runner: the events engine's full toolset PLUS rolling — the
+-- STORY SO FAR rides the frozen system block (chatTurn), and inspect_summary
+-- lets the model zoom into it instead of guessing. The model never types a
 -- bracket — ev.strip removes freelanced tags; the cast rides the newest
 -- message via ev.castLine(); the script splices the close tag.
 local function chatToolset()
   local ts = toolset.new()
   ts:use(ev)
+  ts:use(rolling)
   -- Onboarding: file the newcomer's name and roll their starting stats. The
   -- receptionist calls this during registration, reads the result back, and
   -- close_event hands them into the hall.
@@ -850,7 +866,11 @@ local function chatTurn(prompt, cmd)
   for k, v in pairs(prompt) do sub[k] = v end
   sub.tools = ts:schemas()
   sub.messages = {
-    { role = "system", content = CHAT_PROMPT .. ev.eventLine() },
+    -- The STORY SO FAR rides the FROZEN block: the story channel changes
+    -- only at an event close (which ends the event) or a fight gist (fights
+    -- can't end while an event is open), so this stays byte-identical for
+    -- the event's lifetime — the prefix-cache property is untouched.
+    { role = "system", content = CHAT_PROMPT .. ev.eventLine() .. rolling.briefing(state.story) },
   }
   for _, m in ipairs(ev.span()) do sub.messages[#sub.messages + 1] = m end
   -- The cast rides the newest message (volatile state, never the frozen
