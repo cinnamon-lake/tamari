@@ -63,7 +63,7 @@ local enemies = registry.new({
   key = "enemies",
   id_from = "name",
   fields = {
-    { name = "name", type = "string", required = true, max = 40 },
+    { name = "name", type = "string", required = true },
     { name = "tags", type = "array", required = true, closed = { "flying", "undead" } },
   },
 })
@@ -79,6 +79,12 @@ function generate(prompt, ctx)
   end
   if cmd == "ok" then
     return enemies.exec("register_enemy", { name = "Imp", tags = { "flying", "bogus" } })
+  end
+  if cmd == "long" then
+    return enemies.exec("register_enemy", {
+      name = "The Glass Knight of the Ninth Floor, Reflective Terror of the Lower Halls",
+      tags = { "flying" },
+    })
   end
   if cmd == "dupe" then
     local ts = toolset.new()
@@ -193,6 +199,13 @@ describe('lib/registry required array fields', () => {
     expect(text).toContain('"registered":"imp"');
     expect(text).toContain('"dropped":["bogus"]');
     expect(text).toContain('"tags":["flying"]');
+  });
+
+  it('files long text verbatim — string fields are never truncated', async () => {
+    const name = 'The Glass Knight of the Ninth Floor, Reflective Terror of the Lower Halls';
+    const text = await runTurn(makeAdapter(noDelegate(), PROBE_LUA), 'long', []);
+    expect(text).toContain(`"name":"${name}"`);
+    expect(text).toContain('"registered":"the-glass-knight-of-the-ninth-floor-reflective-terror-of-the-lower-halls"');
   });
 });
 

@@ -1,14 +1,16 @@
 -- lib/registry.lua — ThingRegistry: declare "a registry of something" and get
 -- a full tool (plus an optional query tool) that OWNS the Fact-lane
--- rules: validate on entry, clamp to budgets, closed lists, id assignment,
--- canonical tool result, swipe-stability through `state`.
+-- rules: validate on entry, clamp numbers to budgets, closed lists, id
+-- assignment, canonical tool result, swipe-stability through `state`.
 --
 -- The model invents; Lua files. The tool result is the canonical record —
--- what was ACTUALLY filed, clamps and dropped entries included — so the
--- model's continuing narration matches fact. Re-registering an existing id
--- returns the EXISTING record instead of overwriting: on regenerate, state
--- has rolled back and re-filing converges to the same record — swipe-stable
--- by construction.
+-- what was ACTUALLY filed, numeric clamps and dropped entries included — so
+-- the model's continuing narration matches fact. Text is filed verbatim:
+-- truncating prose would fill the registry with cut-off natural language, so
+-- string fields take any length. Re-registering an existing id returns the
+-- EXISTING record instead of overwriting: on regenerate, state has rolled
+-- back and re-filing converges to the same record — swipe-stable by
+-- construction.
 --
 -- Storage is a plain array of records at state[key] (branch-aware), each
 -- record carrying its assigned `id`. Planning mode: pass store.get to file
@@ -22,7 +24,7 @@
 --     query_tool = "get_enemy",        -- optional; omit for no query tool
 --     cap = 8,                          -- optional max records
 --     fields = {                        -- ARRAY: order is preserved in the schema
---       { name = "name", type = "string", required = true, max = 40 },
+--       { name = "name", type = "string", required = true },
 --       { name = "hp",   type = "integer", min = 1, max = 20, default = 6 },
 --       -- min/max may be zero-arg functions (depth-scaled budgets):
 --       { name = "atk",  type = "integer", min = 1, max = function() return 1 + depth() end, default = 2 },
@@ -42,7 +44,7 @@
 local M = {}
 
 local function slugify(s)
-  local slug = tostring(s or ""):lower():gsub("[^%w]+", "-"):gsub("^-+", ""):gsub("-+$", ""):sub(1, 30)
+  local slug = tostring(s or ""):lower():gsub("[^%w]+", "-"):gsub("^-+", ""):gsub("-+$", "")
   if slug == "" then slug = "thing" end
   return slug
 end
@@ -91,7 +93,6 @@ local function coerce(fields, args)
       if type(v) == "table" then rec[f.name] = v end
     else -- string
       local s = v ~= nil and tostring(v) or (f.default ~= nil and tostring(f.default) or "")
-      if f.max then s = s:sub(1, f.max) end
       rec[f.name] = s
     end
     if f.required and (rec[f.name] == nil or rec[f.name] == "") then

@@ -54,7 +54,7 @@ function M.exec(name, args)
     while #list > 0 do table.remove(list) end
     if type(args.items) == "table" then
       for _, item in ipairs(args.items) do
-        local text = tostring(item):sub(1, 120)
+        local text = tostring(item)
         if text ~= "" then list[#list + 1] = { text = text, done = false } end
       end
     end

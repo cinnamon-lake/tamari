@@ -386,7 +386,7 @@ local function planningToolset(draft, fid)
   ts:use(todo)
 
   ts:handle("add_description", function(args)
-    draft.description = tostring(args.text or ""):sub(1, 400)
+    draft.description = tostring(args.text or "")
     return "ok"
   end, {
     type = "function",
@@ -399,19 +399,19 @@ local function planningToolset(draft, fid)
     local added = {}
     for _, r in ipairs(args.rooms) do
       if type(r) == "table" then
-        local id = tostring(r.id or ""):lower():sub(1, 12)
+        local id = tostring(r.id or ""):lower()
         if id == "" or draft.rooms[id] then
           return "rejected: empty or duplicate room id '" .. id .. "' (added so far: " .. table.concat(added, ", ") .. ")"
         end
         local exits = {}
         if type(r.exits) == "table" then
           for dir, to in pairs(r.exits) do
-            exits[tostring(dir):lower():sub(1, 12)] = tostring(to):lower():sub(1, 12)
+            exits[tostring(dir):lower()] = tostring(to):lower()
           end
         end
         draft.rooms[id] = {
-          name = tostring(r.name or id):sub(1, 30),
-          desc = tostring(r.desc or ""):sub(1, 140),
+          name = tostring(r.name or id),
+          desc = tostring(r.desc or ""),
           exits = exits,
         }
         draft.roomOrder[#draft.roomOrder + 1] = id
@@ -433,12 +433,12 @@ local function planningToolset(draft, fid)
   })
 
   ts:handle("add_interactable", function(args)
-    local room = tostring(args.room or ""):lower():sub(1, 12)
-    local iname = tostring(args.name or ""):lower():sub(1, 30)
+    local room = tostring(args.room or ""):lower()
+    local iname = tostring(args.name or ""):lower()
     if room == "" or iname == "" then return "rejected: room and name required" end
     local responses = {}
     if type(args.responses) == "table" then
-      for _, r in ipairs(args.responses) do responses[#responses + 1] = tostring(r):sub(1, 200) end
+      for _, r in ipairs(args.responses) do responses[#responses + 1] = tostring(r) end
     end
     if #responses == 0 then responses = { "Nothing happens." } end
     local effect
@@ -446,7 +446,7 @@ local function planningToolset(draft, fid)
       effect = {}
       if tonumber(args.effect.gold) then effect.gold = math.max(0, math.min(math.floor(tonumber(args.effect.gold)), 5 * depth)) end
       if tonumber(args.effect.hp) then effect.hp = math.max(-10, math.min(10, math.floor(tonumber(args.effect.hp)))) end
-      if type(args.effect.item) == "string" then effect.item = args.effect.item:lower():sub(1, 30) end
+      if type(args.effect.item) == "string" then effect.item = args.effect.item:lower() end
     end
     draft.interactables[room .. ":" .. iname] = { responses = responses, effect = effect }
     return "ok: " .. room .. ":" .. iname
@@ -463,7 +463,7 @@ local function planningToolset(draft, fid)
 
   ts:handle("add_ambient", function(args)
     if type(args.lines) == "table" then
-      for _, l in ipairs(args.lines) do draft.ambient[#draft.ambient + 1] = tostring(l):sub(1, 200) end
+      for _, l in ipairs(args.lines) do draft.ambient[#draft.ambient + 1] = tostring(l) end
     end
     return "ok"
   end, {
@@ -483,7 +483,7 @@ local function planningToolset(draft, fid)
     cap = MAX_ROSTER,
     store = { get = function() return draft.encounterTable end },
     fields = {
-      { name = "name", type = "string", required = true, max = 40 },
+      { name = "name", type = "string", required = true },
       { name = "hp", type = "integer", min = 1, max = function() return 6 + depth * 4 end, default = 6 },
       { name = "atk", type = "integer", min = 1, max = function() return 1 + depth end, default = 2 },
       { name = "reward", type = "integer", min = 0, max = function() return 5 * depth end, default = 5 },
@@ -493,9 +493,9 @@ local function planningToolset(draft, fid)
       rec.maxHp = rec.hp
       local lines = type(rec.lines) == "table" and rec.lines or {}
       rec.lines = {
-        intro = tostring(lines.intro or "It lunges from the dark."):sub(1, 200),
-        hit = tostring(lines.hit or "It shrieks."):sub(1, 200),
-        death = tostring(lines.death or "It collapses."):sub(1, 200),
+        intro = tostring(lines.intro or "It lunges from the dark."),
+        hit = tostring(lines.hit or "It shrieks."),
+        death = tostring(lines.death or "It collapses."),
       }
     end,
   })
@@ -813,7 +813,7 @@ local function chatToolset()
   -- receptionist calls this during registration, reads the result back, and
   -- close_event hands them into the hall.
   ts:handle("register_player", function(args)
-    local name = tostring(args.name or ""):gsub("[^%w%s%-%'_]", " "):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1"):sub(1, 40)
+    local name = tostring(args.name or ""):gsub("[^%w%s%-%'_]", " "):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1")
     if name == "" then return "rejected: name required (ask the newcomer their name)" end
     state.playerName = name
     if not state.onboarded then
@@ -888,7 +888,7 @@ end
 
 local function addSetFlagTool(ts, description)
   ts:handle("set_flag", function(args)
-    local key = tostring(args.key or ""):sub(1, 30)
+    local key = tostring(args.key or "")
     if key == "" then return "rejected: key required" end
     state.flags[key] = args.value == nil and true or args.value
     return "ok: " .. key
@@ -924,7 +924,7 @@ local function dungeonDmToolset(dctx)
   })
 
   ts:handle("add_exit", function(args)
-    local dir = tostring(args.direction or ""):lower():sub(1, 12)
+    local dir = tostring(args.direction or ""):lower()
     local to = tostring(args.to or ""):lower()
     local room = dctx.packDraft.rooms[subOf(state.dun.room)]
     if dir == "" or not room or not dctx.packDraft.rooms[to] then
@@ -949,7 +949,7 @@ local function dungeonDmToolset(dctx)
     local depth = depthOfFloor(floorOf(state.dun.room))
     local hp = math.max(1, math.min(tonumber(args.hp) or 6, 6 + depth * 4))
     local atk = math.max(1, math.min(tonumber(args.atk) or 2, 1 + depth))
-    state.dun.combat = { name = tostring(args.name or "crypt thing"):sub(1, 40), hp = hp, maxHp = hp, atk = atk,
+    state.dun.combat = { name = tostring(args.name or "crypt thing"), hp = hp, maxHp = hp, atk = atk,
       lines = { intro = "It arrives.", hit = "It strikes.", death = "It falls." }, reward = 0 }
     return json.encode({ spawned = state.dun.combat.name, clamped = { hp = hp, atk = atk } })
   end, {

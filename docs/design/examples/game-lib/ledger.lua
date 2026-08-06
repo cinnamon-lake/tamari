@@ -53,8 +53,8 @@ end
 function M.exec(name, args)
   local now = getNow()
   if name == "promise" then
-    local id = tostring(args.id or ""):sub(1, 30)
-    local what = tostring(args.what or ""):sub(1, 120)
+    local id = tostring(args.id or "")
+    local what = tostring(args.what or "")
     local due = tonumber(args.due)
     -- The critical validation: a concrete due anchor. No "later".
     if id == "" or what == "" or due == nil then
@@ -69,7 +69,7 @@ function M.exec(name, args)
     return json.encode({ promised = id, due = due })
   end
   if name == "resolve_promise" then
-    local id = tostring(args.id or ""):sub(1, 30)
+    local id = tostring(args.id or "")
     for _, p in ipairs(promises()) do
       if p.id == id and not p.status then
         p.status = args.outcome == "failed" and "failed" or "kept"

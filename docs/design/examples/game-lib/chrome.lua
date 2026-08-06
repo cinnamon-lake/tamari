@@ -34,15 +34,17 @@ function M.clean(text)
     :gsub("^%s*(.-)%s*$", "%1"))
 end
 
--- One safe line, at most max chars: double quotes become single (so the
--- result can ride a summary="…" attribute), whitespace collapses, ends trim.
--- Every gist/digest the lib splices into a tag goes through this.
+-- One safe line: double quotes become single (so the result can ride a
+-- summary="…" attribute), whitespace collapses, ends trim. The text itself is
+-- never cut — max is opt-in and used for previews/excerpts only (the zoom
+-- chain's inspect rendering); filing channels call this WITHOUT a max.
 function M.oneline(text, max)
-  return (tostring(text or "")
+  local s = tostring(text or "")
     :gsub('"', "'")
     :gsub("%s+", " ")
     :gsub("^%s*(.-)%s*$", "%1")
-    :sub(1, max))
+  if max then s = s:sub(1, max) end
+  return s
 end
 
 return M

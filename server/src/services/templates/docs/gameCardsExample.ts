@@ -409,7 +409,7 @@ local function planningToolset(draft, fid)
   ts:use(todo)
 
   ts:handle("add_description", function(args)
-    draft.description = tostring(args.text or ""):sub(1, 400)
+    draft.description = tostring(args.text or "")
     return "ok"
   end, {
     type = "function",
@@ -422,19 +422,19 @@ local function planningToolset(draft, fid)
     local added = {}
     for _, r in ipairs(args.rooms) do
       if type(r) == "table" then
-        local id = tostring(r.id or ""):lower():sub(1, 12)
+        local id = tostring(r.id or ""):lower()
         if id == "" or draft.rooms[id] then
           return "rejected: empty or duplicate room id '" .. id .. "' (added so far: " .. table.concat(added, ", ") .. ")"
         end
         local exits = {}
         if type(r.exits) == "table" then
           for dir, to in pairs(r.exits) do
-            exits[tostring(dir):lower():sub(1, 12)] = tostring(to):lower():sub(1, 12)
+            exits[tostring(dir):lower()] = tostring(to):lower()
           end
         end
         draft.rooms[id] = {
-          name = tostring(r.name or id):sub(1, 30),
-          desc = tostring(r.desc or ""):sub(1, 140),
+          name = tostring(r.name or id),
+          desc = tostring(r.desc or ""),
           exits = exits,
         }
         draft.roomOrder[#draft.roomOrder + 1] = id
@@ -456,12 +456,12 @@ local function planningToolset(draft, fid)
   })
 
   ts:handle("add_interactable", function(args)
-    local room = tostring(args.room or ""):lower():sub(1, 12)
-    local iname = tostring(args.name or ""):lower():sub(1, 30)
+    local room = tostring(args.room or ""):lower()
+    local iname = tostring(args.name or ""):lower()
     if room == "" or iname == "" then return "rejected: room and name required" end
     local responses = {}
     if type(args.responses) == "table" then
-      for _, r in ipairs(args.responses) do responses[#responses + 1] = tostring(r):sub(1, 200) end
+      for _, r in ipairs(args.responses) do responses[#responses + 1] = tostring(r) end
     end
     if #responses == 0 then responses = { "Nothing happens." } end
     local effect
@@ -469,7 +469,7 @@ local function planningToolset(draft, fid)
       effect = {}
       if tonumber(args.effect.gold) then effect.gold = math.max(0, math.min(math.floor(tonumber(args.effect.gold)), 5 * depth)) end
       if tonumber(args.effect.hp) then effect.hp = math.max(-10, math.min(10, math.floor(tonumber(args.effect.hp)))) end
-      if type(args.effect.item) == "string" then effect.item = args.effect.item:lower():sub(1, 30) end
+      if type(args.effect.item) == "string" then effect.item = args.effect.item:lower() end
     end
     draft.interactables[room .. ":" .. iname] = { responses = responses, effect = effect }
     return "ok: " .. room .. ":" .. iname
@@ -486,7 +486,7 @@ local function planningToolset(draft, fid)
 
   ts:handle("add_ambient", function(args)
     if type(args.lines) == "table" then
-      for _, l in ipairs(args.lines) do draft.ambient[#draft.ambient + 1] = tostring(l):sub(1, 200) end
+      for _, l in ipairs(args.lines) do draft.ambient[#draft.ambient + 1] = tostring(l) end
     end
     return "ok"
   end, {
@@ -506,7 +506,7 @@ local function planningToolset(draft, fid)
     cap = MAX_ROSTER,
     store = { get = function() return draft.encounterTable end },
     fields = {
-      { name = "name", type = "string", required = true, max = 40 },
+      { name = "name", type = "string", required = true },
       { name = "hp", type = "integer", min = 1, max = function() return 6 + depth * 4 end, default = 6 },
       { name = "atk", type = "integer", min = 1, max = function() return 1 + depth end, default = 2 },
       { name = "reward", type = "integer", min = 0, max = function() return 5 * depth end, default = 5 },
@@ -516,9 +516,9 @@ local function planningToolset(draft, fid)
       rec.maxHp = rec.hp
       local lines = type(rec.lines) == "table" and rec.lines or {}
       rec.lines = {
-        intro = tostring(lines.intro or "It lunges from the dark."):sub(1, 200),
-        hit = tostring(lines.hit or "It shrieks."):sub(1, 200),
-        death = tostring(lines.death or "It collapses."):sub(1, 200),
+        intro = tostring(lines.intro or "It lunges from the dark."),
+        hit = tostring(lines.hit or "It shrieks."),
+        death = tostring(lines.death or "It collapses."),
       }
     end,
   })
@@ -836,7 +836,7 @@ local function chatToolset()
   -- receptionist calls this during registration, reads the result back, and
   -- close_event hands them into the hall.
   ts:handle("register_player", function(args)
-    local name = tostring(args.name or ""):gsub("[^%w%s%-%'_]", " "):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1"):sub(1, 40)
+    local name = tostring(args.name or ""):gsub("[^%w%s%-%'_]", " "):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1")
     if name == "" then return "rejected: name required (ask the newcomer their name)" end
     state.playerName = name
     if not state.onboarded then
@@ -911,7 +911,7 @@ end
 
 local function addSetFlagTool(ts, description)
   ts:handle("set_flag", function(args)
-    local key = tostring(args.key or ""):sub(1, 30)
+    local key = tostring(args.key or "")
     if key == "" then return "rejected: key required" end
     state.flags[key] = args.value == nil and true or args.value
     return "ok: " .. key
@@ -947,7 +947,7 @@ local function dungeonDmToolset(dctx)
   })
 
   ts:handle("add_exit", function(args)
-    local dir = tostring(args.direction or ""):lower():sub(1, 12)
+    local dir = tostring(args.direction or ""):lower()
     local to = tostring(args.to or ""):lower()
     local room = dctx.packDraft.rooms[subOf(state.dun.room)]
     if dir == "" or not room or not dctx.packDraft.rooms[to] then
@@ -972,7 +972,7 @@ local function dungeonDmToolset(dctx)
     local depth = depthOfFloor(floorOf(state.dun.room))
     local hp = math.max(1, math.min(tonumber(args.hp) or 6, 6 + depth * 4))
     local atk = math.max(1, math.min(tonumber(args.atk) or 2, 1 + depth))
-    state.dun.combat = { name = tostring(args.name or "crypt thing"):sub(1, 40), hp = hp, maxHp = hp, atk = atk,
+    state.dun.combat = { name = tostring(args.name or "crypt thing"), hp = hp, maxHp = hp, atk = atk,
       lines = { intro = "It arrives.", hit = "It strikes.", death = "It falls." }, reward = 0 }
     return json.encode({ spawned = state.dun.combat.name, clamped = { hp = hp, atk = atk } })
   end, {
@@ -1361,15 +1361,17 @@ function M.clean(text)
     :gsub("^%s*(.-)%s*$", "%1"))
 end
 
--- One safe line, at most max chars: double quotes become single (so the
--- result can ride a summary="…" attribute), whitespace collapses, ends trim.
--- Every gist/digest the lib splices into a tag goes through this.
+-- One safe line: double quotes become single (so the result can ride a
+-- summary="…" attribute), whitespace collapses, ends trim. The text itself is
+-- never cut — max is opt-in and used for previews/excerpts only (the zoom
+-- chain's inspect rendering); filing channels call this WITHOUT a max.
 function M.oneline(text, max)
-  return (tostring(text or "")
+  local s = tostring(text or "")
     :gsub('"', "'")
     :gsub("%s+", " ")
     :gsub("^%s*(.-)%s*$", "%1")
-    :sub(1, max))
+  if max then s = s:sub(1, max) end
+  return s
 end
 
 return M
@@ -1430,8 +1432,8 @@ end
 function M.exec(name, args)
   local now = getNow()
   if name == "promise" then
-    local id = tostring(args.id or ""):sub(1, 30)
-    local what = tostring(args.what or ""):sub(1, 120)
+    local id = tostring(args.id or "")
+    local what = tostring(args.what or "")
     local due = tonumber(args.due)
     -- The critical validation: a concrete due anchor. No "later".
     if id == "" or what == "" or due == nil then
@@ -1446,7 +1448,7 @@ function M.exec(name, args)
     return json.encode({ promised = id, due = due })
   end
   if name == "resolve_promise" then
-    local id = tostring(args.id or ""):sub(1, 30)
+    local id = tostring(args.id or "")
     for _, p in ipairs(promises()) do
       if p.id == id and not p.status then
         p.status = args.outcome == "failed" and "failed" or "kept"
@@ -1613,7 +1615,7 @@ function M.exec(name, args)
     while #list > 0 do table.remove(list) end
     if type(args.items) == "table" then
       for _, item in ipairs(args.items) do
-        local text = tostring(item):sub(1, 120)
+        local text = tostring(item)
         if text ~= "" then list[#list + 1] = { text = text, done = false } end
       end
     end
@@ -1644,15 +1646,17 @@ return M
 \`\`\`lua
 -- lib/registry.lua — ThingRegistry: declare "a registry of something" and get
 -- a full tool (plus an optional query tool) that OWNS the Fact-lane
--- rules: validate on entry, clamp to budgets, closed lists, id assignment,
--- canonical tool result, swipe-stability through \`state\`.
+-- rules: validate on entry, clamp numbers to budgets, closed lists, id
+-- assignment, canonical tool result, swipe-stability through \`state\`.
 --
 -- The model invents; Lua files. The tool result is the canonical record —
--- what was ACTUALLY filed, clamps and dropped entries included — so the
--- model's continuing narration matches fact. Re-registering an existing id
--- returns the EXISTING record instead of overwriting: on regenerate, state
--- has rolled back and re-filing converges to the same record — swipe-stable
--- by construction.
+-- what was ACTUALLY filed, numeric clamps and dropped entries included — so
+-- the model's continuing narration matches fact. Text is filed verbatim:
+-- truncating prose would fill the registry with cut-off natural language, so
+-- string fields take any length. Re-registering an existing id returns the
+-- EXISTING record instead of overwriting: on regenerate, state has rolled
+-- back and re-filing converges to the same record — swipe-stable by
+-- construction.
 --
 -- Storage is a plain array of records at state[key] (branch-aware), each
 -- record carrying its assigned \`id\`. Planning mode: pass store.get to file
@@ -1666,7 +1670,7 @@ return M
 --     query_tool = "get_enemy",        -- optional; omit for no query tool
 --     cap = 8,                          -- optional max records
 --     fields = {                        -- ARRAY: order is preserved in the schema
---       { name = "name", type = "string", required = true, max = 40 },
+--       { name = "name", type = "string", required = true },
 --       { name = "hp",   type = "integer", min = 1, max = 20, default = 6 },
 --       -- min/max may be zero-arg functions (depth-scaled budgets):
 --       { name = "atk",  type = "integer", min = 1, max = function() return 1 + depth() end, default = 2 },
@@ -1686,7 +1690,7 @@ return M
 local M = {}
 
 local function slugify(s)
-  local slug = tostring(s or ""):lower():gsub("[^%w]+", "-"):gsub("^-+", ""):gsub("-+$", ""):sub(1, 30)
+  local slug = tostring(s or ""):lower():gsub("[^%w]+", "-"):gsub("^-+", ""):gsub("-+$", "")
   if slug == "" then slug = "thing" end
   return slug
 end
@@ -1735,7 +1739,6 @@ local function coerce(fields, args)
       if type(v) == "table" then rec[f.name] = v end
     else -- string
       local s = v ~= nil and tostring(v) or (f.default ~= nil and tostring(f.default) or "")
-      if f.max then s = s:sub(1, f.max) end
       rec[f.name] = s
     end
     if f.required and (rec[f.name] == nil or rec[f.name] == "") then
@@ -1938,7 +1941,7 @@ return M
 local M = {}
 
 local function clean(s)
-  return (tostring(s):gsub("[|;>%[%]=<'\\"&]", " "):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1"):sub(1, 18))
+  return (tostring(s):gsub("[|;>%[%]=<'\\"&]", " "):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1"))
 end
 
 --- rooms: { id = { name = string, exits = { dir -> to } } }
@@ -2209,8 +2212,8 @@ function M.new(def)
 
   local function openEvent(args)
     if state.event then return "rejected: an event is already open" end
-    local kind = tostring(args.kind or ""):lower():sub(1, 30)
-    local context = tostring(args.context or ""):sub(1, 400)
+    local kind = tostring(args.kind or ""):lower()
+    local context = tostring(args.context or "")
     if kind == "" or context == "" then
       return "rejected: kind and context required — the scene-runner needs framing (who the player is, what they want)"
     end
@@ -2228,7 +2231,7 @@ function M.new(def)
   local function closeEvent(args)
     if not state.event then return "rejected: no event is open" end
     if state.event.closed then return "already closing: " .. state.event.id end
-    local gist = chrome.oneline(args.gist or "", 200)
+    local gist = chrome.oneline(args.gist or "")
     if gist == "" then gist = "The " .. state.event.kind .. " breaks off." end
     local filed, dropped = {}, {}
     if type(args.takes) == "table" then
@@ -2435,9 +2438,9 @@ end
 function M.push(ids, entry)
   assert(type(ids) == "table", "rolling.push: ids array required")
   assert(type(entry) == "table", "rolling.push: entry table required")
-  local gist = chrome.oneline(entry.gist, 400)
+  local gist = chrome.oneline(entry.gist)
   if gist == "" then error("rolling.push: gist required", 2) end
-  local blob = { label = chrome.oneline(entry.label, 60), gist = gist }
+  local blob = { label = chrome.oneline(entry.label), gist = gist }
   if entry.content ~= nil then blob.content = entry.content end
   local id = store.putJson("roll", blob):await()
   ids[#ids + 1] = id
@@ -2467,7 +2470,7 @@ local function fold(ids)
     { role = "user", content = table.concat(lines, "\\n") },
   }
   local res = backends.generate(sub):await() -- loud: an error fails the turn
-  local digest = type(res) == "table" and type(res.text) == "string" and chrome.oneline(res.text, 400) or ""
+  local digest = type(res) == "table" and type(res.text) == "string" and chrome.oneline(res.text) or ""
   if digest == "" then return end -- empty answer is a content outcome: retry next read
   local foldId = store.putJson("roll", {
     label = cut .. " episodes", gist = digest, content = descriptors,

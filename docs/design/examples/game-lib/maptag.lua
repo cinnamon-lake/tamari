@@ -22,7 +22,7 @@
 local M = {}
 
 local function clean(s)
-  return (tostring(s):gsub("[|;>%[%]=<'\"&]", " "):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1"):sub(1, 18))
+  return (tostring(s):gsub("[|;>%[%]=<'\"&]", " "):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1"))
 end
 
 --- rooms: { id = { name = string, exits = { dir -> to } } }

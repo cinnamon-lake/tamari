@@ -206,8 +206,8 @@ function M.new(def)
 
   local function openEvent(args)
     if state.event then return "rejected: an event is already open" end
-    local kind = tostring(args.kind or ""):lower():sub(1, 30)
-    local context = tostring(args.context or ""):sub(1, 400)
+    local kind = tostring(args.kind or ""):lower()
+    local context = tostring(args.context or "")
     if kind == "" or context == "" then
       return "rejected: kind and context required — the scene-runner needs framing (who the player is, what they want)"
     end
@@ -225,7 +225,7 @@ function M.new(def)
   local function closeEvent(args)
     if not state.event then return "rejected: no event is open" end
     if state.event.closed then return "already closing: " .. state.event.id end
-    local gist = chrome.oneline(args.gist or "", 200)
+    local gist = chrome.oneline(args.gist or "")
     if gist == "" then gist = "The " .. state.event.kind .. " breaks off." end
     local filed, dropped = {}, {}
     if type(args.takes) == "table" then

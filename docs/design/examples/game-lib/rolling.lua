@@ -67,9 +67,9 @@ end
 function M.push(ids, entry)
   assert(type(ids) == "table", "rolling.push: ids array required")
   assert(type(entry) == "table", "rolling.push: entry table required")
-  local gist = chrome.oneline(entry.gist, 400)
+  local gist = chrome.oneline(entry.gist)
   if gist == "" then error("rolling.push: gist required", 2) end
-  local blob = { label = chrome.oneline(entry.label, 60), gist = gist }
+  local blob = { label = chrome.oneline(entry.label), gist = gist }
   if entry.content ~= nil then blob.content = entry.content end
   local id = store.putJson("roll", blob):await()
   ids[#ids + 1] = id
@@ -99,7 +99,7 @@ local function fold(ids)
     { role = "user", content = table.concat(lines, "\n") },
   }
   local res = backends.generate(sub):await() -- loud: an error fails the turn
-  local digest = type(res) == "table" and type(res.text) == "string" and chrome.oneline(res.text, 400) or ""
+  local digest = type(res) == "table" and type(res.text) == "string" and chrome.oneline(res.text) or ""
   if digest == "" then return end -- empty answer is a content outcome: retry next read
   local foldId = store.putJson("roll", {
     label = cut .. " episodes", gist = digest, content = descriptors,
