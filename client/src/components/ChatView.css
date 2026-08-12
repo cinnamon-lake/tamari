@@ -759,6 +759,35 @@
   margin-top: var(--space-md);
 }
 
+/* Backend debug block (custom-backend print capture) */
+.backend-debug-block {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+.backend-debug-block summary {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+
+.backend-debug-content {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-bg-tertiary);
+}
+
 /* Tool call / result blocks */
 .tool-call-block,
 .tool-result-block {

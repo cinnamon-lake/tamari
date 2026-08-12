@@ -60,6 +60,8 @@ export interface DryRunOutcome {
   stateOut?: string;
   /** Every delegated backends.generate() call, in order. */
   delegations: DryRunDelegation[];
+  /** Captured print() output from the script (backendDebug stream items, joined). */
+  debug?: string;
   error?: string;
   /** Debug trace: per-delegation layer (+ failure) and the VFS modules the
       script actually required during the run. */
@@ -139,6 +141,11 @@ export async function dryRunBackendScript(runtime: LuaRuntime, opts: DryRunOptio
     .map((i) => i.token)
     .join('');
 
+  const debug = items
+    .filter((i): i is Extract<BackendStreamItem, { type: 'backendDebug' }> => i.type === 'backendDebug')
+    .map((i) => i.token)
+    .join('');
+
   const outcome: DryRunOutcome = {
     ok: result.finishReason !== 'error',
     usage: result.usage,
@@ -149,6 +156,7 @@ export async function dryRunBackendScript(runtime: LuaRuntime, opts: DryRunOptio
     },
   };
   if (text.length > 0) outcome.text = text;
+  if (debug.length > 0) outcome.debug = debug;
   if (result.reasoningText) outcome.reasoning = result.reasoningText;
   if (result.toolCalls && result.toolCalls.length > 0) outcome.toolCalls = result.toolCalls;
   if (result.scriptState !== undefined) outcome.stateOut = result.scriptState;

@@ -60,6 +60,18 @@ export class GenerationBroadcastService {
     );
   }
 
+  broadcastGenerationDebugToken(
+    _chatId: string,
+    generationId: string,
+    token: string,
+    excludeClientId?: string,
+  ): void {
+    this.deps.bus.broadcast(
+      { type: 'generation.debugToken', generationId, token },
+      excludeClientId,
+    );
+  }
+
   broadcastPromptAnnounced(
     _chatId: string,
     generationId: string,

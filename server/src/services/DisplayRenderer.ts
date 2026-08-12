@@ -191,6 +191,14 @@ export async function renderMessageHtml(ctx: DisplayRenderContext): Promise<stri
           }
           break;
         }
+        case 'backend_debug': {
+          if (part.text.trim()) {
+            blocks.push(
+              `<details class="backend-debug-block"><summary class="backend-debug-summary">Backend debug</summary><pre class="backend-debug-content">${escapeHtml(part.text)}</pre></details>`,
+            );
+          }
+          break;
+        }
         case 'image': {
           blocks.push(`<img class="message-inline-img" src="${escapeHtml(part.source)}" alt="" loading="lazy" />`);
           break;

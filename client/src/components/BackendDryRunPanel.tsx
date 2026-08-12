@@ -132,6 +132,10 @@ export function BackendDryRunPanel(props: BackendDryRunPanelProps) {
               <span class="text-xs text-muted">{t('customBackends.testReasoning')}</span>
               <pre class="font-mono text-sm" style={PRE_STYLE}>{o().reasoning}</pre>
             </Show>
+            <Show when={o().debug}>
+              <span class="text-xs text-muted">{t('customBackends.testDebug')}</span>
+              <pre class="font-mono text-sm" style={PRE_STYLE}>{o().debug}</pre>
+            </Show>
             <p class="text-xs text-muted">
               {t('customBackends.testUsage', {
                 prompt: o().usage.promptTokens,

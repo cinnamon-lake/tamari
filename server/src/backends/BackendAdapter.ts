@@ -22,6 +22,7 @@ export type {
   ToolUsePart,
   ToolResultPart,
   ReasoningPart,
+  BackendDebugPart,
   InlineContentPart,
   ContentPart,
   PipelineMessage,
@@ -100,11 +101,19 @@ export interface ToolCallStreamItem {
   arguments: Record<string, unknown>;
 }
 
+/** Captured `print(...)` output from a custom (Lua) backend, one chunk per
+    drained line. Accumulates into a `backend_debug` part — never dialogue. */
+export interface BackendDebugStreamItem {
+  type: 'backendDebug';
+  token: string;
+}
+
 export type BackendStreamItem =
   | TextStreamItem
   | ReasoningStreamItem
   | ReasoningSignatureStreamItem
-  | ToolCallStreamItem;
+  | ToolCallStreamItem
+  | BackendDebugStreamItem;
 
 /** Consume an async generator stream, collecting all yielded items and the final return value. */
 export async function consumeStream<T, R>(gen: AsyncGenerator<T, R>): Promise<{ items: T[]; result: R }> {

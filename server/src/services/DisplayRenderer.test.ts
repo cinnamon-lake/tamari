@@ -165,4 +165,29 @@ describe('renderMessageHtml tool_result parts', () => {
     expect(strict).not.toContain('<form');
     expect(strict).not.toContain('<input');
   });
+
+  it('renders a backend_debug part as a collapsed details block, HTML-escaped', async () => {
+    const html = await renderMessageHtml(
+      makeCtx([
+        { type: 'text', text: 'The reply.' },
+        { type: 'backend_debug', text: 'checkpoint 1\n<b>not html</b>' },
+      ]),
+    );
+    expect(html).toContain('<details class="backend-debug-block">');
+    expect(html).toContain('Backend debug');
+    expect(html).toContain('checkpoint 1\n&lt;b&gt;not html&lt;/b&gt;');
+    expect(html).not.toContain('<b>not html</b>');
+    // Ordering: the reply text renders before the debug block.
+    expect(html.indexOf('The reply.')).toBeLessThan(html.indexOf('backend-debug-block'));
+  });
+
+  it('skips a blank backend_debug part', async () => {
+    const html = await renderMessageHtml(
+      makeCtx([
+        { type: 'text', text: 'The reply.' },
+        { type: 'backend_debug', text: '   ' },
+      ]),
+    );
+    expect(html).not.toContain('backend-debug-block');
+  });
 });

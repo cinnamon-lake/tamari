@@ -278,6 +278,7 @@ function resetState() {
       targetMessageId: null,
       streamingText: '',
       streamingReasoning: '',
+      streamingDebug: '',
       impersonationDraft: '',
       status: 'idle',
     },
@@ -778,6 +779,22 @@ describe('serverStore', () => {
         token: 'thinking',
       });
       expect(state.generation.streamingReasoning).toBe('thinking');
+    });
+
+    it('generation.debugToken accumulates backend debug output', () => {
+      setState('generation', { ...state.generation, chatId: 'chat-1', status: 'streaming' });
+      mockWs.simulateMessage({ type: 'generation.debugToken', generationId: 'gen-1', token: 'line 1\n' });
+      mockWs.simulateMessage({ type: 'generation.debugToken', generationId: 'gen-1', token: 'line 2\n' });
+      expect(state.generation.streamingDebug).toBe('line 1\nline 2\n');
+    });
+
+    it('generation.started and generation.done reset streamingDebug', () => {
+      setState('generation', { ...state.generation, chatId: 'chat-1', status: 'streaming', streamingDebug: 'leftover' });
+      mockWs.simulateMessage({ type: 'generation.started', generationId: 'gen-2', chatId: 'chat-1', messageId: 2 });
+      expect(state.generation.streamingDebug).toBe('');
+      setState('generation', 'streamingDebug', 'some debug');
+      mockWs.simulateMessage({ type: 'generation.done', generationId: 'gen-2', finishReason: 'stop' });
+      expect(state.generation.streamingDebug).toBe('');
     });
 
     it('generation.done resets state', () => {

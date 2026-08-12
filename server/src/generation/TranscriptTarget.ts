@@ -271,6 +271,8 @@ export class TranscriptTarget implements GenerationTarget {
       }
     } else if (item.type === 'reasoningSignature') {
       // Accumulated by the legacy quiet path but never persisted — dropped.
+    } else if (item.type === 'backendDebug') {
+      // Custom-backend print output — not meaningful for a transcript.
     } else {
       // toolCall
       if (!this.parts.some((p) => p.type === 'tool_use' && p.id === item.id)) {

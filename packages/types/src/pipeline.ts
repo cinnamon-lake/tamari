@@ -54,9 +54,25 @@ export interface ReasoningPart {
   signature?: string;
 }
 
+/** Captured `print(...)` output from a custom (Lua) backend. Never part of the
+    dialogue — getMessageText only surfaces text parts — but optionally shown
+    on display as a collapsed debug block. */
+export interface BackendDebugPart {
+  type: 'backend_debug';
+  text: string;
+}
+
 export type InlineContentPart = TextPart | ImagePart | AudioPart | VideoPart;
 
-export type ContentPart = TextPart | ImagePart | AudioPart | VideoPart | ToolUsePart | ToolResultPart | ReasoningPart;
+export type ContentPart =
+  | TextPart
+  | ImagePart
+  | AudioPart
+  | VideoPart
+  | ToolUsePart
+  | ToolResultPart
+  | ReasoningPart
+  | BackendDebugPart;
 
 export interface PipelineMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';

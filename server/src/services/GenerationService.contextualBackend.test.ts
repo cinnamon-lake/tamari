@@ -466,6 +466,59 @@ describe('custom backend tool calls (e2e)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// print() capture: a contextual backend that prints debug output. The output
+// persists as a backend_debug part on the assistant message, and the dialogue
+// view (getMessageText — the single funnel for history → prompt text) excludes
+// it.
+// ---------------------------------------------------------------------------
+const PRINT_CARD_LUA = `
+function generate(prompt, ctx)
+  print("turn start", 42)
+  print("checkpoint", { phase = "test" })
+  return "The reply."
+end
+`;
+
+describe('custom backend print capture (e2e)', () => {
+  it('persists print output as a backend_debug part, excluded from the dialogue text', async () => {
+    const { writer } = makeCountingWriter();
+    const h = new TestHarness({ backendFactory: { create: async () => writer } });
+    await h.initSchema();
+    try {
+      const character = await h.deps.characters.create('char-print', {
+        name: 'Noisy',
+        extensions: { contextualBackend: { enabled: true, luaSource: PRINT_CARD_LUA } },
+      });
+      const chatId = crypto.randomUUID();
+      await h.deps.chats.createChat(chatId, {
+        characterId: character.id,
+        personaId: null,
+        name: 'print',
+        headMessageId: null,
+        metadata: {},
+      });
+
+      await h.deps.generationService.handleSend(chatId, 'hello');
+      await h.deps.generationService.handleGenerate(chatId);
+
+      const chain = await h.deps.chats.getMessageChain(chatId);
+      const assistant = [...chain].reverse().find((m) => m.role === 'assistant');
+      const parts = assistant?.extra.parts ?? [];
+
+      const debugPart = parts.find((p) => p.type === 'backend_debug');
+      expect(debugPart).toBeDefined();
+      expect((debugPart as { text: string }).text).toContain('turn start\t42\n');
+      expect((debugPart as { text: string }).text).toMatch(/checkpoint\ttable: 0x[0-9a-f]+\n/);
+
+      // The dialogue filter: only the text reply is visible to prompts/history.
+      expect(getMessageText(parts)).toBe('The reply.');
+    } finally {
+      await h.teardown();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Group chats: the active backend runs per speaker (scriptable-layers.md §2,
 // "Group chats") — a contextual backend wraps only ITS character's turns.
 // Default NATURAL strategy: every member responds, in insertion order.

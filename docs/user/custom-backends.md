@@ -270,7 +270,7 @@ Both editors embed a **Test (dry run)** panel that runs your current (even unsav
 - **State (JSON, optional)** — a canned state snapshot, restored as the `state` global exactly like a real turn.
 - **Delegate Response (optional)** — canned text returned by every `backends.generate()` call.
 
-The result shows the script's **Output**, **Reasoning**, token usage, every **Delegation** your script made (target id and the exact prompt it would have sent), and **State Out** — the snapshot a real turn would persist. The **Use as state for next run** button feeds it back into the state field, so you can walk a multi-turn game loop turn by turn.
+The result shows the script's **Output**, **Reasoning**, **Debug** (captured `print()` output), token usage, every **Delegation** your script made (target id and the exact prompt it would have sent), and **State Out** — the snapshot a real turn would persist. The **Use as state for next run** button feeds it back into the state field, so you can walk a multi-turn game loop turn by turn.
 
 > **Note:** `__passthrough` is refused in a dry run — there is no real backend to stream from. Test passthrough middleware by dry-running the blocking path, then trying it live.
 
@@ -293,8 +293,16 @@ A `delegateConfigId`, and any explicit id passed to `backends.generate("<id>", �
 
 - **`generate()` execution timeout: 10 minutes** — simulator backends legitimately run long across sub-generations. Cancelling a generation relies on this timeout inside the VM.
 - **`list_models()` timeout: 10 seconds.**
+- **`print()` capture: 64 KB per turn** — beyond that, output is dropped with a truncation marker.
 - **Delegation depth cap: 4.** Custom → custom chains (a script delegating to a config that is itself Custom (Lua)) are allowed, but deeper than 4 levels errors out instead of hanging the turn — check for delegation cycles if you hit it.
 - Everything else about failure is fail-loud: Lua errors, timeouts, and empty returns all surface as backend errors.
+
+## Debugging with `print()`
+
+`print(...)` in a backend script is captured, not lost. Each call is stringified with real Lua semantics (arguments `tostring`ed, tab-joined) and streamed live during the turn:
+
+- **In chat**, it lands on the assistant message as a collapsed **Backend debug** block. It is stored as a `backend_debug` part, which is *never* part of the dialogue the model sees — history and prompts include text parts only — so debug freely without polluting the context.
+- **In dry runs**, it comes back as the `debug` field (the test panel shows it as **Debug**), including anything printed before the script errored — often the only clue a failing script leaves behind.
 
 ## Tips & Gotchas
 

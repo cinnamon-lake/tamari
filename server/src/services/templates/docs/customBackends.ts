@@ -333,6 +333,10 @@ The porting insight: a trigger's "events" are all the same moment in v2 — the 
 
 Before \`generate()\`, the newest \`message.extra._toolState[backend.id]\` snapshot from the current branch is restored into the Lua \`state\` global (via your \`deserialize(raw)\` if defined, else \`json.decode\`). After a successful turn, \`state\` is captured (via your \`serialize()\` or \`json.encode(state)\`) and persisted. Failed turns never overwrite the last good snapshot. Swipes/branches restore state as of that point — store game/sim state here, not in globals that outlive the turn.
 
+## Debugging — \`print()\` is captured
+
+\`print(...)\` in a backend script does NOT vanish: every call is captured (real Lua semantics — args are \`tostring\`ed and tab-joined) and streamed as a \`backend_debug\` part on the assistant message. It is never part of the dialogue the model sees; it shows in chat as a collapsed "Backend debug" block, and in dry-run outcomes (\`test_backend_logic\` / \`test_custom_backend\` / the editor's test panel) as the \`debug\` field — including lines printed before the script errored. Use it liberally while developing; it costs nothing in the prompt. Cap: 64 KB per turn, truncated with a marker beyond that.
+
 ## Timeouts
 
 \`generate()\` 10 minutes (simulator backends run long); \`list_models()\` 10 seconds. Abort relies on the timeout inside the VM. Memory: each script state is capped at 64 MB of Lua heap — a memory bomb fails the turn with a "not enough memory" error.

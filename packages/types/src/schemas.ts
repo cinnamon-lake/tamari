@@ -730,6 +730,7 @@ export const CustomBackendTestOutcomeSchema = z.object({
   delegations: z.array(
     z.object({ configId: z.string().nullable(), promptPreview: z.string(), response: z.string() }),
   ),
+  debug: z.string().optional(),
   error: z.string().optional(),
 });
 export type CustomBackendTestOutcome = z.infer<typeof CustomBackendTestOutcomeSchema>;
@@ -1122,6 +1123,7 @@ const ContentPartSchema = z.union([
     extra: z.record(z.string(), z.unknown()).optional(),
   }),
   z.object({ type: z.literal('reasoning'), text: z.string(), signature: z.string().optional() }),
+  z.object({ type: z.literal('backend_debug'), text: z.string() }),
 ]);
 
 const PipelineMessageSchema = z.object({
@@ -1246,6 +1248,12 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('generation.reasoningToken'),
+    generationId: z.string(),
+    token: z.string(),
+    clientId: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('generation.debugToken'),
     generationId: z.string(),
     token: z.string(),
     clientId: z.string().optional(),

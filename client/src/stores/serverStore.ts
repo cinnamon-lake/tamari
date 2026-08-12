@@ -49,6 +49,8 @@ interface GenerationState {
   targetMessageId: number | null;
   streamingText: string;
   streamingReasoning: string;
+  /** Captured print() output from a custom backend (generation.debugToken). */
+  streamingDebug: string;
   impersonationDraft: string;
   status: 'idle' | 'streaming' | 'error';
 }
@@ -111,6 +113,7 @@ const [state, setState] = createStore<ServerState>({
     targetMessageId: null,
     streamingText: '',
     streamingReasoning: '',
+    streamingDebug: '',
     impersonationDraft: '',
     status: 'idle',
   },
@@ -183,6 +186,7 @@ bus.on('snapshot', (msg) => {
           targetMessageId: msg.state.generation.messageId,
           streamingText: msg.state.generation.text,
           streamingReasoning: msg.state.generation.reasoning ?? '',
+          streamingDebug: '',
           impersonationDraft: '',
           status: 'streaming',
         };
@@ -376,6 +380,7 @@ bus.on('generation.started', (msg) => {
     targetMessageId: msg.messageId ?? null,
     streamingText: '',
     streamingReasoning: '',
+    streamingDebug: '',
     impersonationDraft: '',
     status: 'streaming',
   });
@@ -393,6 +398,13 @@ bus.on('generation.reasoningToken', (msg) => {
   queueToken('reasoning', msg.token);
 });
 
+bus.on('generation.debugToken', (msg) => {
+  const chatId = state.generation.chatId;
+  if (chatId !== activeChatId() || chatId === null) return;
+  // No smooth-stream queue: debug output doesn't need pacing.
+  setState('generation', 'streamingDebug', (t) => t + msg.token);
+});
+
 bus.on('generation.done', () => {
   flushTokenQueue();
   if (state.settings['messageSoundEnabled']) {
@@ -408,6 +420,7 @@ bus.on('generation.done', () => {
     targetMessageId: null,
     streamingText: '',
     streamingReasoning: '',
+    streamingDebug: '',
     impersonationDraft: '',
     status: 'idle',
   });
@@ -421,6 +434,7 @@ bus.on('generation.aborted', () => {
     targetMessageId: null,
     streamingText: '',
     streamingReasoning: '',
+    streamingDebug: '',
     impersonationDraft: '',
     status: 'idle',
   });
@@ -435,6 +449,7 @@ bus.on('generation.error', (msg) => {
     targetMessageId: null,
     streamingText: '',
     streamingReasoning: '',
+    streamingDebug: '',
     impersonationDraft: '',
     status: 'idle',
   });

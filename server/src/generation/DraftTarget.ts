@@ -97,7 +97,7 @@ export class DraftTarget implements GenerationTarget {
       }
       this.deps.generationBroadcast.broadcastGenerationReasoningToken(this.chatId, this.generationId, item.token);
     }
-    // reasoningSignature/toolCall: not meaningful for a draft (matches the
+    // reasoningSignature/toolCall/backendDebug: not meaningful for a draft (matches the
     // legacy quiet path, which ignored tool calls by omission).
   }
 

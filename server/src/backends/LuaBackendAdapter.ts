@@ -62,6 +62,13 @@ const log = getLogger('lua-backend');
 const LUA_GENERATE_TIMEOUT_MS = 10 * 60 * 1000;
 const LUA_LIST_MODELS_TIMEOUT_MS = 10 * 1000;
 
+/** Cap on captured print() output per generate() call — the JS-side buffer is
+    outside Lua's setMemoryMax, so a script printing in a tight loop must not
+    grow it unbounded. */
+const PRINT_CAP_BYTES = 64 * 1024;
+/** Poll interval for draining captured print lines while generate() runs. */
+const PRINT_DRAIN_INTERVAL_MS = 50;
+
 export interface DelegatedGenerateResult {
   text: string;
   reasoning?: string;
@@ -250,7 +257,43 @@ export class LuaBackendAdapter implements BackendAdapter {
     ctx?: BackendCallContext,
   ): AsyncGenerator<BackendStreamItem, GenerationResult> {
     const { lua, cleanup } = await this.runtime.createState({ allowNet: true, vfsFiles: this.vfsFiles }, this.generateTimeoutMs);
+    // Captured print() output — drained as backendDebug stream items. Declared
+    // outside the try so the catch path can drain whatever a failing script
+    // printed before it errored.
+    const printLines: string[] = [];
+    const drainPrints = (): BackendStreamItem[] => {
+      if (printLines.length === 0) return [];
+      const items: BackendStreamItem[] = printLines.map((line) => ({ type: 'backendDebug', token: line + '\n' }));
+      printLines.length = 0;
+      return items;
+    };
     try {
+      // print() capture: a JS sink plus a Lua-side shim with real print
+      // semantics (tostring each arg, tab-joined) — Lua tables cross wasmoon
+      // as JS objects, so stringifying JS-side would yield "[object Object]".
+      let printBytes = 0;
+      let printTruncated = false;
+      lua.global.set('__printCapture', (line: unknown) => {
+        const s = typeof line === 'string' ? line : String(line);
+        if (printTruncated) return;
+        if (printBytes + s.length > PRINT_CAP_BYTES) {
+          printTruncated = true;
+          printLines.push('…[print output truncated]');
+          return;
+        }
+        printLines.push(s);
+        printBytes += s.length;
+        log.debug({ backend: this.name, line: s }, 'custom backend print');
+      });
+      await lua.doString(`
+        print = function(...)
+          local n = select('#', ...)
+          local parts = {}
+          for i = 1, n do parts[i] = tostring(select(i, ...)) end
+          __printCapture(table.concat(parts, '\\t'))
+        end
+      `);
+
       // Track delegated usage so scripts that don't report usage still account tokens.
       let delegatedUsage = { promptTokens: 0, completionTokens: 0 };
       const backendsGlobal = {
@@ -380,7 +423,40 @@ export class LuaBackendAdapter implements BackendAdapter {
         `);
       }
 
-      const raw: unknown = await lua.doString('return generate(__prompt, __ctx)');
+      // Run generate() while draining captured print lines as they arrive:
+      // wasmoon runs Lua on the JS thread except at JS-callback/await points,
+      // so lines surface at delegation/:await() boundaries — exactly when a
+      // script is mid-turn waiting on a backend. Poll-drain so chat clients
+      // see debug output live instead of only at turn end.
+      let raw: unknown;
+      {
+        // Object-held flags: control-flow analysis would narrow plain `let`s
+        // mutated only inside the promise callbacks below.
+        const gen = { settled: false, failed: false, value: undefined as unknown, error: undefined as unknown };
+        const genPromise: Promise<unknown> = lua.doString('return generate(__prompt, __ctx)');
+        void genPromise.then(
+          (v) => {
+            gen.value = v;
+          },
+          (e: unknown) => {
+            gen.failed = true;
+            gen.error = e;
+          },
+        ).finally(() => {
+          gen.settled = true;
+        });
+        while (!gen.settled) {
+          for (const item of drainPrints()) yield item;
+          // At most one extra interval after generate() resolves — negligible
+          // against the turn's own latency, and keeps control-flow simple.
+          await new Promise((r) => setTimeout(r, PRINT_DRAIN_INTERVAL_MS));
+        }
+        if (gen.failed) throw gen.error;
+        raw = gen.value;
+      }
+      // Final drain: everything the script printed is now captured; emit it
+      // before any text/reasoning/passthrough output (chronological order).
+      for (const item of drainPrints()) yield item;
 
       // Capture state for persistence (only on success paths; a failed turn
       // must not corrupt the last good snapshot). Scripts that never touch
@@ -482,6 +558,9 @@ export class LuaBackendAdapter implements BackendAdapter {
         scriptState: await captureScriptState(),
       };
     } catch (err) {
+      // Emit whatever the script printed before failing — often the only clue
+      // the author left behind.
+      for (const item of drainPrints()) yield item;
       const timeout = isLuaTimeoutError(err);
       const message = timeout
         ? `script timed out (${Math.round(this.generateTimeoutMs / 1000)}s execution limit)`

@@ -990,6 +990,12 @@ function MessageBubble(props: {
               );
             })()}
           </Show>
+          <Show when={!props.readOnly && isStreamingTarget() && state.generation.streamingDebug}>
+            <details class="backend-debug-block">
+              <summary class="backend-debug-summary">Backend debug</summary>
+              <pre class="backend-debug-content">{state.generation.streamingDebug}</pre>
+            </details>
+          </Show>
           <Show when={attachments().length > 0}>
             <div class={`message-attachments ${state.settings['mediaDisplayMode'] === 'grid' ? 'grid' : ''}`}>
               <For each={attachments()}>

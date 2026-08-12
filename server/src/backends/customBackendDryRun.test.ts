@@ -31,4 +31,30 @@ describe('customBackendDryRun history', () => {
     expect(outcome.error).toBeUndefined();
     expect(outcome.text).toBe('absent');
   });
+
+  it('captures print() output into outcome.debug, including before an error', async () => {
+    const ok = await dryRunBackendScript(new LuaRuntime(), {
+      luaSource: `
+        function generate(prompt, ctx)
+          print("turn start", 1)
+          return "done"
+        end
+      `,
+      input: 'hi',
+    });
+    expect(ok.error).toBeUndefined();
+    expect(ok.debug).toBe('turn start\t1\n');
+
+    const failing = await dryRunBackendScript(new LuaRuntime(), {
+      luaSource: `
+        function generate(prompt, ctx)
+          print("checkpoint")
+          error("boom")
+        end
+      `,
+      input: 'hi',
+    });
+    expect(failing.ok).toBe(false);
+    expect(failing.debug).toBe('checkpoint\n');
+  });
 });

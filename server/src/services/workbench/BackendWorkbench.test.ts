@@ -393,5 +393,17 @@ describe('BackendWorkbench', () => {
       expect(failing.ok).toBe(false);
       expect(failing.error).toContain('delegate died');
     });
+
+    it('custom_backend_test surfaces captured print() output as debug', async () => {
+      const { template } = makeTemplate([], stubAdapter());
+      const res = JSON.parse(
+        (await template.execute('custom_backend_test', {
+          luaSource: 'function generate(p, c) print("checking prompt", #p.messages) return "ok" end',
+          input: 'hi',
+        })).content as string,
+      ) as { ok: boolean; debug?: string };
+      expect(res.ok).toBe(true);
+      expect(res.debug).toBe('checking prompt\t1\n');
+    });
   });
 });

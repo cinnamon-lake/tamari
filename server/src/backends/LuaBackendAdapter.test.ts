@@ -667,4 +667,89 @@ describe('store JSON + recursive-array primitives', () => {
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('corrupted JSON blob');
   });
+
+  describe('print capture', () => {
+    const debugTokens = (items: BackendStreamItem[]) =>
+      items.filter((i): i is Extract<BackendStreamItem, { type: 'backendDebug' }> => i.type === 'backendDebug');
+
+    it('captures print() with real Lua semantics and emits it before the reply', async () => {
+      const adapter = makeAdapter(`
+        function generate(prompt, ctx)
+          print("hi", 42, true)
+          print({ a = 1 })
+          return "answer"
+        end
+      `);
+      const { items, result } = await run(adapter);
+      const debug = debugTokens(items);
+      expect(debug.map((d) => d.token)).toEqual(['hi\t42\ttrue\n', expect.stringMatching(/^table: 0x[0-9a-f]+\n$/)]);
+      // Debug output precedes the text reply (chronological order).
+      expect(items.findIndex((i) => i.type === 'backendDebug')).toBeLessThan(items.findIndex((i) => i.type === 'text'));
+      expect(result.finishReason).toBe('stop');
+    });
+
+    it('captures print() from top-level script code, not just generate()', async () => {
+      const adapter = makeAdapter(`
+        print("loading")
+        function generate(prompt, ctx) return "ok" end
+      `);
+      const { items } = await run(adapter);
+      expect(debugTokens(items).map((d) => d.token)).toEqual(['loading\n']);
+    });
+
+    it('emits prints even when the script errors', async () => {
+      const adapter = makeAdapter(`
+        function generate(prompt, ctx)
+          print("checkpoint 1")
+          error("boom")
+        end
+      `);
+      const { items, result } = await run(adapter);
+      expect(debugTokens(items).map((d) => d.token)).toEqual(['checkpoint 1\n']);
+      expect(result.finishReason).toBe('error');
+      expect(result.error).toContain('boom');
+    });
+
+    it('emits prints on the passthrough path before delegate chunks', async () => {
+      const delegateAdapter: BackendAdapter = {
+        id: 'mock',
+        supportsStreaming: true,
+        supportsTools: false,
+        async *stream(): AsyncGenerator<BackendStreamItem, GenerationResult> {
+          yield { type: 'text', token: 'streamed' };
+          return { finishReason: 'stop', usage: { promptTokens: 0, completionTokens: 0 } };
+        },
+        listModels: async () => [],
+      };
+      const delegate = makeDelegate({ resolveAdapter: vi.fn(async () => delegateAdapter) });
+      const adapter = makeAdapter(`
+        function generate(prompt, ctx)
+          print("routing to delegate")
+          return { __passthrough = true, prompt = prompt }
+        end
+      `, delegate);
+      const { items } = await run(adapter);
+      expect(items).toEqual([
+        { type: 'backendDebug', token: 'routing to delegate\n' },
+        { type: 'text', token: 'streamed' },
+      ]);
+    });
+
+    it('caps runaway print output and marks the truncation', async () => {
+      const line = 'x'.repeat(100);
+      const adapter = makeAdapter(`
+        function generate(prompt, ctx)
+          for i = 1, 10000 do print("${line}") end
+          return "done"
+        end
+      `);
+      const { items, result } = await run(adapter);
+      const joined = debugTokens(items)
+        .map((d) => d.token)
+        .join('');
+      expect(joined).toContain('…[print output truncated]');
+      expect(joined.length).toBeLessThan(128 * 1024);
+      expect(result.finishReason).toBe('stop');
+    });
+  });
 });

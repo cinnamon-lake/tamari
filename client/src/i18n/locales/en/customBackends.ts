@@ -29,6 +29,7 @@ export const customBackends = {
   testFailed: 'Dry run failed.',
   testOutput: 'Output',
   testReasoning: 'Reasoning',
+  testDebug: 'Debug (print output)',
   testUsage: 'Tokens: {{prompt}} prompt / {{completion}} completion',
   testStateOut: 'State Out',
   testFeedState: 'Use as state for next run',

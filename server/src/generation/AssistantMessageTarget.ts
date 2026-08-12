@@ -351,6 +351,20 @@ export class AssistantMessageTarget implements GenerationTarget {
         this.scheduleFlush();
         break;
       }
+      case 'backendDebug': {
+        // Captured print() output from a custom backend — persisted as a
+        // backend_debug part (never dialogue: getMessageText skips it) and
+        // shown as a collapsed debug block on display.
+        const last = this.streamingParts[this.streamingParts.length - 1];
+        if (last && last.type === 'backend_debug') {
+          last.text += item.token;
+        } else {
+          this.streamingParts.push({ type: 'backend_debug', text: item.token });
+        }
+        this.deps.generationBroadcast.broadcastGenerationDebugToken(this.chatId, this.generationId, item.token);
+        this.scheduleFlush();
+        break;
+      }
       case 'reasoningSignature':
         this.streamingReasoningSignature += item.signature;
         break;
