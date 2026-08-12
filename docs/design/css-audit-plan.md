@@ -38,7 +38,7 @@
 Make sure you're in the repo root and `ripgrep` (`rg`) is available.
 
 ```bash
-cd /home/johnf/SillyTavern
+cd <repo-root>
 ```
 
 All commands below search `client/src/**/*.css` and `client/src/**/*.tsx`.
