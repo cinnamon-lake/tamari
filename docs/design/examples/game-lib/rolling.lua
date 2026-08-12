@@ -1,22 +1,36 @@
--- lib/rolling.lua — recursive rolling summaries.
+-- lib/rolling.lua — one channel, both memory kinds.
 --
--- One summary channel (the story so far, one character's memory, a quest
--- log) is a plain ARRAY OF IDS the card owns in state — state.story,
--- state.dossiers[charId], anything. An entry is a blob in the append-only
--- store ({ label, gist, content? }); the entry's id IS the blob id, so the
--- store doubles as the archive: inspect(id) resolves any id forever, live or
--- folded away long ago.
+-- A channel is a single object the card owns in state — rolling.channel()
+-- returns { kv = {}, ids = {} } — and the same shape serves the story
+-- (state.story), a dossier (state.dossiers[charId]), or any scoped memory
+-- the card invents:
 --
---   rolling.bind(prompt)                        -- once per generate: arms folds
---   rolling.push(ids, { label, gist, content? }) -- file an entry, return its id
---   rolling.briefing(ids) -> string              -- the main summaries (below)
---   rolling.inspect(id) -> string | nil          -- what one summary covers
---   rolling.parts(ids) -> { digest, takes, older } -- the dossier serve shape
---   rolling.tools() / rolling.exec(name, args)   -- inspect_summary, for toolset
+--   * the NON-COMPACTING half: ch.kv — verbatim facts by key. set overwrites,
+--     latest value is canon, values file at any length. The kv block NEVER
+--     folds: it is exactly the information judged worth keeping verbatim
+--     (a character's appearance, world facts), and overwriting — not
+--     appending — is what makes "hair: black" → "hair: white" impossible to
+--     contradict.
+--   * the COMPACTING half: ch.ids — an array of entry ids. An entry is a blob
+--     in the append-only store ({ label, gist, content? }); the entry's id IS
+--     the blob id, so the store doubles as the archive: inspect(id) resolves
+--     any id forever, live or folded away long ago. When the log outgrows the
+--     window the oldest entries FOLD into a digest entry (see below).
+--
+--   local story = rolling.channel()  -- in ensureState: state.story = state.story or rolling.channel()
+--   rolling.bind(prompt)                          -- once per generate: arms folds
+--   rolling.set(ch, key, value) / rolling.get(ch, key)   -- the verbatim half
+--   rolling.push(ch, { label, gist, content? })   -- file a log entry, return its id
+--   rolling.briefing(ch) -> string                -- kv facts, then id-bearing gist lines
+--   rolling.parts(ch) -> { digest, takes, older } -- the dossier serve shape
+--   rolling.inspect(id) -> string | nil           -- what one summary covers
+--   rolling.tools() / rolling.exec(name, args)    -- inspect_summary, for toolset
+--   rolling.tools(ch)                             -- per-channel contract object with
+--     -- the freestyle kv tools: list_facts / get_fact / set_fact (ts:use(rolling.tools(ch)))
 --
 -- content is the ACTUAL material the gist covers — a message list, a
 -- generated battle log, a nav trace: any JSON-able array. Gist-scale data
--- rides in state; the kilobyte-scale content sits in the heap.
+-- rides in state; the kilobyte-scale content sits in the store.
 --
 -- FOLD: when the live list outgrows recent + backlog, briefing (or parts)
 -- compresses the oldest entries into ONE fold entry: its gist is a
@@ -43,8 +57,19 @@ local BACKLOG = 3  -- fold when the live list exceeds RECENT + BACKLOG
 local boundPrompt = nil
 
 --- Bind the turn's prompt (once per generate, next to ledger.bind): fold
---- sub-gens copy it so real adapters get a complete prompt table.
+--- sub-gens copy it so real adapters get a complete prompt table. Bind on
+--- EVERY generate: an unbound turn defers a due fold to the next bound one,
+--- but a card that never binds has a silent unbounded-growth bug.
 function M.bind(prompt) boundPrompt = prompt end
+
+--- A memory channel: { kv = {}, ids = {} }. The card owns it in state.
+function M.channel() return { kv = {}, ids = {} } end
+
+local function assertChannel(ch, fnName)
+  if type(ch) ~= "table" or type(ch.kv) ~= "table" or type(ch.ids) ~= "table" then
+    error("rolling." .. fnName .. ": pass a channel from rolling.channel() ({ kv, ids }), not a bare array", 3)
+  end
+end
 
 -- Fetch an entry the CARD vouched for (an id in a state array): missing is a
 -- bug, not bad luck — blobs are script-written — so, loud. (getJson throws
@@ -63,16 +88,44 @@ local function isFoldEntry(entry)
   return type(entry.content) == "table" and #entry.content > 0 and isDescriptor(entry.content[1])
 end
 
---- File one summary. ids is the card's live array (mutated). Returns the id.
-function M.push(ids, entry)
-  assert(type(ids) == "table", "rolling.push: ids array required")
+-- ---------- the non-compacting half (kv: verbatim, overwritten, never folded) ----------
+
+--- Overwrite a verbatim fact by key — latest value is canon, any length.
+function M.set(ch, key, value)
+  assertChannel(ch, "set")
+  ch.kv[tostring(key)] = value
+end
+
+--- Read a verbatim fact (nil when nothing is filed under key).
+function M.get(ch, key)
+  assertChannel(ch, "get")
+  return ch.kv[tostring(key)]
+end
+
+local function factValue(v)
+  if type(v) == "table" then return json.encode(v) end
+  return tostring(v)
+end
+
+local function sortedKeys(t)
+  local keys = {}
+  for k in pairs(t) do keys[#keys + 1] = k end
+  table.sort(keys)
+  return keys
+end
+
+-- ---------- the compacting half (the log: push, fold, zoom) ----------
+
+--- File one summary into the channel's log. Returns the id.
+function M.push(ch, entry)
+  assertChannel(ch, "push")
   assert(type(entry) == "table", "rolling.push: entry table required")
   local gist = chrome.oneline(entry.gist)
   if gist == "" then error("rolling.push: gist required", 2) end
   local blob = { label = chrome.oneline(entry.label), gist = gist }
   if entry.content ~= nil then blob.content = entry.content end
   local id = store.putJson("roll", blob):await()
-  ids[#ids + 1] = id
+  ch.ids[#ch.ids + 1] = id
   return id
 end
 
@@ -108,22 +161,39 @@ local function fold(ids)
   table.insert(ids, 1, foldId)
 end
 
---- The main summaries, one id-bearing line per live entry ("" when empty).
---- Folds first when the list outgrows the window.
-function M.briefing(ids)
-  if #ids > RECENT + BACKLOG then fold(ids) end
-  if #ids == 0 then return "" end
-  local lines = {}
-  for _, id in ipairs(ids) do
-    local e = fetch(id)
-    lines[#lines + 1] = "- [" .. id .. ": " .. e.label .. "] " .. e.gist
+--- The channel's briefing: kv facts verbatim first, then one id-bearing line
+--- per live log entry ("" when both are empty). Folds first when the log
+--- outgrows the window; the kv block never folds.
+function M.briefing(ch)
+  assertChannel(ch, "briefing")
+  local out = {}
+  local keys = sortedKeys(ch.kv)
+  if #keys > 0 then
+    local lines = {}
+    for _, k in ipairs(keys) do
+      lines[#lines + 1] = "- " .. k .. ": " .. factValue(ch.kv[k])
+    end
+    out[#out + 1] = "\nFACTS:\n" .. table.concat(lines, "\n")
   end
-  return "\nSTORY SO FAR:\n" .. table.concat(lines, "\n")
+  local ids = ch.ids
+  if #ids > RECENT + BACKLOG then fold(ids) end
+  if #ids > 0 then
+    local lines = {}
+    for _, id in ipairs(ids) do
+      local e = fetch(id)
+      lines[#lines + 1] = "- [" .. id .. ": " .. e.label .. "] " .. e.gist
+    end
+    out[#out + 1] = "\nSTORY SO FAR:\n" .. table.concat(lines, "\n")
+  end
+  return table.concat(out, "\n")
 end
 
 --- The dossier serve shape: fold-entry gists concatenated as the digest,
---- plain-entry gists as the recent takes, older = the fold count.
-function M.parts(ids)
+--- plain-entry gists as the recent takes, older = the fold count. (The log
+--- half only — a character's kv facts live in their registry record.)
+function M.parts(ch)
+  assertChannel(ch, "parts")
+  local ids = ch.ids
   if #ids > RECENT + BACKLOG then fold(ids) end
   local digestParts, takes, older = {}, {}, 0
   for _, id in ipairs(ids) do
@@ -177,14 +247,69 @@ function M.inspect(id)
   return table.concat(lines, "\n")
 end
 
-function M.tools()
-  return { {
-    type = "function",
-    ["function"] = {
-      name = "inspect_summary",
-      description = "Open one summary by id (ids appear in the STORY SO FAR briefing). A folded summary lists the summaries inside it, each with its own id — inspect those to keep zooming toward the raw log.",
-      parameters = { type = "object", properties = { id = { type = "string" } }, required = { "id" } } },
-    },
+-- ---------- the tool contract ----------
+
+--- With NO argument: the module-level inspect_summary schemas (ts:use(rolling)).
+--- With a channel: a contract object ({ tools, exec }) exposing the freestyle
+--- kv tools over that one channel — list_facts / get_fact / set_fact. No
+--- schema, no closed key list: the model invents keys as the fiction demands
+--- ("grudge_against_guild", "current_disguise"), and list_facts keeps it from
+--- forking a near-duplicate key. One channel's kv tools per toolset — the
+--- tool names are fixed, so two channels in one toolset collide.
+function M.tools(ch)
+  if ch == nil then
+    return { {
+      type = "function",
+      ["function"] = {
+        name = "inspect_summary",
+        description = "Open one summary by id (ids appear in the STORY SO FAR briefing). A folded summary lists the summaries inside it, each with its own id — inspect those to keep zooming toward the raw log.",
+        parameters = { type = "object", properties = { id = { type = "string" } }, required = { "id" } } },
+      },
+    }
+  end
+  assertChannel(ch, "tools")
+  return {
+    tools = function()
+      return { {
+        type = "function",
+        ["function"] = {
+          name = "list_facts",
+          description = "List the keys of every verbatim fact currently filed. Check BEFORE writing — re-key an existing fact instead of forking a near-duplicate.",
+          parameters = { type = "object", properties = {} } },
+      }, {
+        type = "function",
+        ["function"] = {
+          name = "get_fact",
+          description = "Read one verbatim fact by key. The answer is canon.",
+          parameters = { type = "object", properties = { key = { type = "string" } }, required = { "key" } } },
+      }, {
+        type = "function",
+        ["function"] = {
+          name = "set_fact",
+          description = "File or OVERWRITE a verbatim fact by key — the latest value is canon. For facts that must survive paraphrase: appearances, world truths, standing rules.",
+          parameters = { type = "object", properties = { key = { type = "string" }, value = { type = "string" } }, required = { "key", "value" } } },
+      } }
+    end,
+    exec = function(name, args)
+      if name == "list_facts" then
+        local keys = sortedKeys(ch.kv)
+        if #keys == 0 then return "no facts filed" end
+        return table.concat(keys, ", ")
+      end
+      if name == "get_fact" then
+        local k = tostring(args and args.key or "")
+        local v = ch.kv[k]
+        if v == nil then return "no fact filed under: " .. k end
+        return factValue(v)
+      end
+      if name == "set_fact" then
+        local k = tostring(args and args.key or "")
+        if k == "" then return "rejected: key required" end
+        ch.kv[k] = args and args.value
+        return json.encode({ fact_set = k })
+      end
+      return nil
+    end,
   }
 end
 

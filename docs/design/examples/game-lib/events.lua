@@ -11,29 +11,41 @@
 --   * the cast: a character registry (lib/registry) plus the casting tools.
 --     The character FIELDS are the card's (declared in the def); the
 --     validate-file-query pipeline is the lib's.
---   * dossiers: per-character memory as rolling summary channels
---     (lib/rolling). state.dossiers[id] is a plain array of entry ids;
---     close_event pushes one take per participant — what THAT character
---     carried away, so knowledge asymmetry is structural. get_character
---     serves rolling.parts: the recent takes verbatim plus fold entries as
---     the digest, folded ON READ when the backlog outgrows the window (a
---     never-read character costs no token). Loud on error: a delegate
---     failure fails the turn — ids move only after the fold entry is filed,
---     so memory survives intact and a swipe retries the fold.
+--   * dossiers: per-character memory as lib/rolling channels.
+--     state.dossiers[id] is a rolling channel ({ kv, ids }); close_event
+--     pushes one gist-only take per participant to the log half — what THAT
+--     character carried away, so knowledge asymmetry is structural. (The
+--     character's kv facts live in their roster record, not here.)
+--     get_character serves rolling.parts: the recent takes verbatim plus
+--     fold entries as the digest, folded ON READ when the backlog outgrows
+--     the window (a never-read character costs no token). Loud on error: a
+--     delegate failure fails the turn — ids move only after the fold entry
+--     is filed, so memory survives intact and a swipe retries the fold.
 --   * the cast note, NOT a tag: who is on stage rides the newest message via
 --     castLine() (from state.event.participants) — volatile state in the
---     newest message, never the frozen prefix. strip removes freelanced
---     tags from delegate text (the model never types a bracket).
---   * the append-only span: the scene-runner's tail, tracked MECHANICALLY as
---     a persistent linked list in the store (state.event.spanId) — user
---     inputs, assistant text, and the tool_use/tool_result rounds, one node
---     per turn. Turn N is a strict prefix of turn N+1 by CONSTRUCTION (no
---     log parsing, no history-budget dependence), the model never re-issues
---     a read it already made, and old branches keep their old head.
+--     newest message, never deep in the span. strip removes freelanced tags
+--     from delegate text (the model never types a bracket).
+--   * the span — the event's prompt IS the record: a persistent array in the
+--     store (store.append / store.readArray), state.event.spanId pointing at
+--     its head. Node zero is the system briefing (instructions + event
+--     context + STORY SO FAR at open time); then one node per turn — user
+--     inputs, assistant text, AND the tool_use/tool_result rounds, full
+--     fidelity, so the model never re-issues a read it already made. Each
+--     generate rebuilds the scene-runner's prompt by reading the span and
+--     appending — there is no separately-maintained frozen block to fall out
+--     of sync. Append-only is the NORM (turn N is a strict prefix of turn
+--     N+1, so the delegate's prefix cache hits), but a briefing that must
+--     change mid-scene simply rides the next node: the cache degrades to a
+--     partial hit — slower, never wrong. Old branches keep pointing at their
+--     old head, so swipes stay correct; history budgets are irrelevant — the
+--     span never touches the log.
 --
--- Two contract views, for toolset composition:
---   ev.tools() / ev.exec(name, args)   -- the scene-runner's toolset
---   ev.dm()                            -- the DM's slice: open_event only
+-- ONE TOOLSET, TWO ROLES. The DM (escalation) and the scene-runner compose
+-- different PROMPTS but get the same full toolset (ts:use(ev) both times).
+-- Mode enforcement is a runtime concern, not a schema-shaping one: tools
+-- that make no sense in the current mode — a second open_event mid-scene, a
+-- close_event with nothing open — fail as ordinary error results, and the
+-- tool loop carries the error back like any other.
 --
 --   local ev = events.new({
 --     roster = myRoster,   -- inject the card's own registry instance…
@@ -54,7 +66,10 @@
 --   ev.finalize(prompt)  -- the /leave path: one finalize gen, loud on error
 --   ev.bindPrompt(prompt)  -- once per generate(), like ledger.bind: arms
 --     lib/rolling's fold sub-gens (they inherit the turn's prompt, which
---     real adapters require for prompt.tokenUsage). Unbound = folds dormant.
+--     real adapters require for prompt.tokenUsage). An unbound turn defers a
+--     due fold to the next bound one — but bind on EVERY generate: a card
+--     that never binds has a silent unbounded-growth bug, and dormant folds
+--     will hide it.
 -- exec tries the roster's tools FIRST, then the event tools — don't declare
 -- a character field or roster tool named list_characters / get_character /
 -- add_to_chat / close_event, and don't declare fields named digest /
@@ -97,16 +112,16 @@ function M.new(def)
 
   -- ---------- state ----------
 
-  -- A dossier is a rolling summary channel: state.dossiers[id] is a plain
-  -- array of entry ids (lib/rolling owns the fold and the store blobs). The
-  -- retired { digest, takes } shape resets — old pinned lib copies keep their
-  -- own behavior; this lib starts dossiers fresh.
+  -- A dossier is a rolling channel: state.dossiers[id] is { kv, ids } (the
+  -- log half carries the takes; lib/rolling owns the fold and the store
+  -- blobs). Anything not channel-shaped resets — old pinned lib copies keep
+  -- their own behavior; this lib starts dossiers fresh.
   local function dossier(id)
     if type(state) ~= "table" then state = {} end
     state.dossiers = state.dossiers or {}
     local d = state.dossiers[id]
-    if type(d) ~= "table" or d.digest ~= nil or d.takes ~= nil then
-      d = {}
+    if type(d) ~= "table" or type(d.kv) ~= "table" or type(d.ids) ~= "table" then
+      d = rolling.channel()
       state.dossiers[id] = d
     end
     return d
@@ -116,8 +131,8 @@ function M.new(def)
 
   function E.kind() return (state.event and state.event.kind) or nil end
 
-  --- "kind — context": the card appends this to its frozen scene-runner
-  --- system block. Frozen for the event's lifetime by construction.
+  --- "kind — context": what open_event filed. The card typically composes it
+  --- into the span's node-zero briefing at open time.
   function E.eventLine()
     if not state.event then return "" end
     return state.event.kind .. " — " .. state.event.context
@@ -132,64 +147,67 @@ function M.new(def)
   -- ---------- tags (script-owned) ----------
 
   -- The model never types a bracket: freelanced structural tags in delegate
-  -- text are stripped; the script emits every tag.
+  -- text are stripped before serving; the script emits every tag.
   function E.strip(text)
     return (tostring(text or ""):gsub("%[/?event [^%]]*%]", ""):gsub("%[/?chat[^%]]*%]", ""))
   end
 
   --- The cast note: who is on stage, from state.event.participants — appended
   --- to the newest user message each scene turn (volatile state rides the
-  --- newest message, never the frozen prefix). "" when nobody is on stage.
+  --- newest message, never deep in the span). "" when nobody is on stage.
   function E.castLine()
     local cast = participants()
     if #cast == 0 then return "" end
-    return "on stage: " .. table.concat(cast, ", ")
+    return "(In the scene with you: " .. table.concat(cast, ", ") .. ")"
   end
 
-  -- ---------- the append-only span (a persistent list in the store) ----------
+  -- ---------- the span (the event's prompt IS the record) ----------
 
-  -- The scene-runner's tail is tracked MECHANICALLY, never parsed out of
-  -- history: state.event.spanId is the head of a persistent linked list
-  -- (store.append / store.readArray), one node per turn, the turn's entries
-  -- array as the node item. Full fidelity — user inputs, assistant text, AND
-  -- the tool_use/tool_result rounds — so the model never re-issues a read it
-  -- already made, and turn N is a strict prefix of turn N+1 by construction
-  -- (the delegate's prefix cache covers the whole scene). Old branches keep
-  -- pointing at their old head, so swipes stay correct; history budgets
-  -- (promptHistoryLimit) are irrelevant — nothing about the span depends on
-  -- what the log currently shows.
+  -- A persistent array in the store (store.append / store.readArray),
+  -- state.event.spanId pointing at its head. Node zero is the system
+  -- briefing; then one node per turn — user inputs, the loop's tool rounds,
+  -- the final reply — full fidelity, tracked MECHANICALLY, never parsed out
+  -- of history. Turn N is a strict prefix of turn N+1 by CONSTRUCTION (no
+  -- log parsing, no history-budget dependence), the model never re-issues a
+  -- read it already made, and old branches keep their old head.
 
-  --- True once the event has a span (openEvent or the card's spanStart).
+  --- True once the event has a span (the card's spanStart).
   function E.hasSpan()
     return state.event ~= nil and state.event.spanId ~= nil
   end
 
   --- Start the span with its seed entries (one node; entries may be {}).
+  --- Node zero should carry the scene-runner's system briefing — the card
+  --- composes it at open time (instructions + event context + STORY SO FAR).
   --- Errors when no event is open — the card calls this right after the
-  --- event opens (the DM's open_event does it for you, with an empty span).
+  --- event opens, when it seeds node zero.
   function E.spanStart(entries)
     if not state.event then error("events: spanStart with no open event", 2) end
     state.event.spanId = store.append(nil, entries or {}):await()
   end
 
   --- Append one turn's entries (user input, the loop's tool rounds, the
-  --- final reply) — ONE node, one await.
+  --- final reply) — ONE node, one await. A mid-scene briefing change rides
+  --- its own node here: the prefix cache degrades to partial, never wrong.
   function E.spanAppend(entries)
     if not E.hasSpan() then error("events: spanAppend with no span", 2) end
     state.event.spanId = store.append(state.event.spanId, entries):await()
   end
 
-  --- The whole tail, flattened ({} when there's no span). Loud when a node
-  --- is missing or garbled — blobs are script-written, that's a bug.
+  --- The whole record, flattened — node zero (the briefing) first ({} when
+  --- there's no span). Loud when a node is missing or garbled — blobs are
+  --- script-written, that's a bug.
   function E.span()
     if not E.hasSpan() then return {} end
     return json.decode(store.readArray(state.event.spanId):await())
   end
 
-  -- ---------- dossiers (rolling summary channels) ----------
+  -- ---------- dossiers (rolling channels) ----------
 
   --- Bind the turn's prompt (once per generate, next to ledger.bind): arms
-  --- lib/rolling's fold sub-gens. Unbound = folds stay dormant.
+  --- lib/rolling's fold sub-gens. Bind on EVERY generate — an unbound turn
+  --- defers a due fold to the next bound one, but a card that never binds
+  --- has a silent unbounded-growth bug.
   function E.bindPrompt(prompt) rolling.bind(prompt) end
 
   --- A character's file: the registry record plus their dossier as
@@ -213,15 +231,18 @@ function M.new(def)
     end
     state.eventSeq = (state.eventSeq or 0) + 1 -- lib-owned: cards without a turn counter still get unique ids
     state.event = { id = "e" .. state.eventSeq, kind = kind, context = context, participants = {} }
-    E.spanStart({}) -- the span starts empty; the DM turn appends its transition
+    -- No span yet: the card's dispatch loop starts it (spanStart) when it
+    -- seeds node zero. (Starting one with zero entries would NOT round-trip:
+    -- an empty entries array serializes as {} and reads back as a phantom
+    -- empty entry.)
     return json.encode({ opened = state.event.id, kind = kind,
       note = "the scene-runner takes over now — cast no characters yourself" })
   end
 
-  -- The gist is NEUTRAL (it rides the close tag, for compaction and the
-  -- plot log); the takes are TARGETED (what each participant carries away).
-  -- Keys are validated against the participant list — strangers are dropped
-  -- and reported, per the canonical-record rule.
+  -- The gist is NEUTRAL (one line for the record — the story entry and the
+  -- memoir line consume it); the takes are TARGETED (what each participant
+  -- carries away). Keys are validated against the participant list —
+  -- strangers are dropped and reported, per the canonical-record rule.
   local function closeEvent(args)
     if not state.event then return "rejected: no event is open" end
     if state.event.closed then return "already closing: " .. state.event.id end
@@ -255,18 +276,12 @@ function M.new(def)
         required = { "gist" } } },
   }
 
-  local OPEN_EVENT_SCHEMA = {
-    type = "function",
-    ["function"] = { name = "open_event", description = "Open an event (a conversation or scene) and hand it to the scene-runner. context: who the player is and what they are after. NO character list — casting is the scene-runner's job.",
-      parameters = { type = "object", properties = { kind = { type = "string" }, context = { type = "string" } }, required = { "kind", "context" } } },
-  }
-
   --- The /leave path. One finalize gen writes the gist and takes. Loud on
-  --- error: a delegate failure throws and fails the turn — state rolls back,
-  --- the event stays open, and a swipe retries the exit. If the model just
-  --- spends its rounds without calling close_event (a content outcome, not
-  --- an error), the event still closes with a script-composed fallback gist.
-  --- Returns the gist (a plain-text memoir line for the card to serve).
+  --- error: a delegate failure throws and fails the turn (the card's Failure
+  --- UX marks the branch bricked; recovery is a swipe or rewind). If the
+  --- model just spends its rounds without calling close_event (a content
+  --- outcome, not an error), the event still closes with a script-composed
+  --- fallback gist. Returns the gist (a plain-text memoir line to serve).
   function E.finalize(prompt)
     if not state.event then return "" end
     local ts = toolset.new()
@@ -279,7 +294,12 @@ function M.new(def)
         .. "with a neutral gist of what happened and one take per participant (what THAT character carries away). "
         .. "EVENT: " .. E.eventLine() },
     }
-    for _, m in ipairs(E.span()) do sub.messages[#sub.messages + 1] = m end
+    for _, m in ipairs(E.span()) do
+      -- The span's node zero is the scene-runner's system briefing — the
+      -- finalizer carries its own system message; a second one mid-array
+      -- breaks adapters.
+      if m.role ~= "system" then sub.messages[#sub.messages + 1] = m end
+    end
     local res = backends.generate(sub):await()
     loop.run(sub, res, ts:exec(), 4)
     if not state.event.closed then
@@ -288,7 +308,7 @@ function M.new(def)
     return state.event.closed.gist -- the memoir line, plain text
   end
 
-  -- ---------- the tool contract (the scene-runner's toolset) ----------
+  -- ---------- the tool contract (ONE toolset for both roles) ----------
 
   function E.tools()
     local out = roster.tools()
@@ -306,6 +326,11 @@ function M.new(def)
       type = "function",
       ["function"] = { name = "add_to_chat", description = "Bring a filed character on stage (they become a participant of this event).",
         parameters = { type = "object", properties = { id = { type = "string" } }, required = { "id" } } },
+    }
+    out[#out + 1] = {
+      type = "function",
+      ["function"] = { name = "open_event", description = "Open an event (a conversation or scene) and hand it to the scene-runner. context: who the player is and what they are after. NO character list — casting is the scene-runner's job.",
+        parameters = { type = "object", properties = { kind = { type = "string" }, context = { type = "string" } }, required = { "kind", "context" } } },
     }
     out[#out + 1] = CLOSE_EVENT_SCHEMA
     return out
@@ -340,20 +365,9 @@ function M.new(def)
       state.event.participants[#state.event.participants + 1] = rec.id
       return json.encode({ joined = rec.id })
     end
+    if name == "open_event" then return openEvent(args or {}) end
     if name == "close_event" then return closeEvent(args or {}) end
     return nil
-  end
-
-  --- The DM's slice of the contract: open_event, nothing else. Casting is
-  --- the scene-runner's job; the DM's toolset shouldn't even have it.
-  function E.dm()
-    return {
-      tools = function() return { OPEN_EVENT_SCHEMA } end,
-      exec = function(name, args)
-        if name == "open_event" then return openEvent(args or {}) end
-        return nil
-      end,
-    }
   end
 
   return E

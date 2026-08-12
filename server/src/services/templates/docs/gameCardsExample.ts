@@ -1,20 +1,20 @@
 /** Reference doc for the `game_cards_example` topic, served by the Docs tool. */
-export const GAME_CARDS_EXAMPLE_DOC = `# The Guildhall (worked example: factory ratio + event engine)
+export const GAME_CARDS_EXAMPLE_DOC = `# The Guildhall (worked example: content factory + event engine)
 
-A complete, TESTED game card: \`backend_logic/main.lua\` plus its vendored game lib (\`backend_logic/lib/*.lua\`) — a social hub run by the event engine over a procedurally-designed dungeon run by the factory ratio. Idle in the hall (delve / store / blacksmith, or free text); \`/delve\` drops you into a dungeon whose floors the model designs as room-graphs and Lua serves for free (movement, combat, loot, a fog-of-war map) until you do something unscripted. Theory lives in topic \`game_cards\` (The content factory; The event engine; The game lib); this topic is the steal-able file. (Repo copy \`docs/design/examples/guildhall/main.lua\` + \`docs/design/examples/game-lib/*.lua\`, validated end-to-end through the real adapter by \`server/src/backends/guildhall.example.test.ts\`; install as a playable card with \`server/scripts/add-guildhall.ts\`.) Decisions worth noticing:
+A complete, TESTED game card: \`backend_logic/main.lua\` plus its vendored game lib (\`backend_logic/lib/*.lua\`) — a social hub run by the event engine over a procedurally-designed dungeon run by the content factory. Idle in the hall (delve / store / blacksmith, or free text); \`/delve\` drops you into a dungeon whose floors the model designs as room-graphs and Lua serves for free (movement, combat, loot, a fog-of-war map) until you do something unscripted. Theory lives in topic \`game_cards\` (The content factory; The event engine; The game lib); this topic is the steal-able file. (Repo copy \`docs/design/examples/guildhall/main.lua\` + \`docs/design/examples/game-lib/*.lua\`, validated end-to-end through the real adapter by \`server/src/backends/guildhall.example.test.ts\`; install as a playable card with \`server/scripts/add-guildhall.ts\`.) Decisions worth noticing:
 
-- **One card, two ratios, ONE events engine.** \`state.mode = hall | dungeon\`. The events engine sits ABOVE both: \`ev.isOpen()\` is checked before the mode turn, so an event opened mid-combat or mid-explore PAUSES that mode and RESUMES it on close — combat state (\`state.dun.combat\`) persists across a scene. The hall is narrator-ratio (every turn a delegate); the dungeon is factory-ratio (one planning sub-gen per floor, then free serve turns).
-- **The DM is reachable from ANY mode.** Free text always escalates — in the hall to the hall DM, in the dungeon to the dungeon DM. The combat gate is RELAXED: while a monster lives, deterministic movement/look/interact verbs are refused ("the monster is between you and everything else"), but unrecognized input falls through to the dungeon DM (\`serve\` returns nil), which may \`open_event\` even mid-fight. Both DMs are casting-blind (no \`register_character\`); only the scene-runner casts.
-- **Two registries.** Characters (\`state.characters\`, with per-character dossiers via \`lib/events\`) and enemies (canned combat lines, filed into the floor pack in draft mode during planning). The character registry is injected into \`events.new\`; the enemy registry is per-planning-pass.
+- **One card, two boundary positions, ONE events engine.** \`state.mode = hall | dungeon\`. The events engine sits ABOVE both: \`ev.isOpen()\` is checked before the mode turn, so an event opened mid-combat or mid-explore PAUSES that mode and RESUMES it on close — combat state (\`state.dun.combat\`) persists across a scene. The hall delegates every turn it can't serve (conversation can't be commissioned ahead of the input it answers); the dungeon commissions at floor granularity (one planning sub-gen per floor, then free serve turns).
+- **The DM is reachable from ANY mode.** Free text always escalates — in the hall to the hall DM, in the dungeon to the dungeon DM. The combat gate is RELAXED: while a monster lives, deterministic movement/look/interact verbs are refused ("the monster is between you and everything else"), but unrecognized input falls through to the dungeon DM (\`serve\` returns nil), which may \`open_event\` even mid-fight. Both roles run the FULL toolset (one toolset, two views — a second \`open_event\` mid-scene or a DM-side \`close_event\` fails as an ordinary error result); casting remains the scene-runner's job by convention, not by schema.
+- **Five registries, two storage shapes.** Characters (\`state.characters\`, unpartitioned, \`mutable = { "personality" }\`, injected into \`events.new\`; per-character dossiers via \`lib/events\`). Dungeon content is PARTITIONED by floor — floors, rooms, enemies, interactables share one pack blob per floor. Enemies file through the registry's own mutation tool during planning; rooms/floors/interactables file card-side after \`validateGraph\` (graph repair needs prune/rewrite, which set/update can't express).
 - **Trust the model: no \`[sys]\` tag.** Acks are plain visible text — the model sees what the player sees. Don't reach for a hide channel; it just rewrangles the delegate's prompt for no gain.
 - **Death and the relic end the DELVE, not the game.** \`state.dun.delveOver = "dead" | "won"\`; the next turn returns you to the hall (hp reset, room to f1; packs and the relic flag persist). The card never terminally ends.
-- **Pack blobs in the store, pointers in \`state\`.** A floor pack is kilobytes of JSON — \`store.putJson\` files it (id like \`"pack:f1#3"\`), \`state.dun.packIds[fid]\` holds the branch-aware pointer, and the player sees a plain memoir line ("Designed The Upper Halls: …") — no tags, nothing to regex. A mutation is a new put plus moving the pointer, so swiped branches keep their versions. \`state.dun.*\` is the dungeon's namespaced home — every former unprefixed crypt key lives there, so it can't collide with the hall or the events engine.
-- **The scene-runner's prompt is append-only within an event — mechanically, and the test proves it.** Frozen system block (instructions + the DM's context, via \`ev.eventLine()\`, plus \`rolling.briefing(state.story)\` — the story channel changes only at an event close or a fight gist, neither of which can happen mid-event, so the block stays byte-frozen); the tail is a persistent linked list in the store (\`state.event.spanId\`, one node per turn), FULL-FIDELITY — user inputs, assistant replies, AND the tool_use/tool_result rounds, so the model never re-issues a read. Turn N is a strict prefix of turn N+1 by construction (no log parsing, no history-budget dependence), so the delegate's prefix cache covers the whole scene. The scene-runner's toolset includes \`inspect_summary\`, so it can zoom into the public record instead of guessing.
+- **Pack blobs in the store, pointers in \`state.packIds\` — and the card never touches a blob.** Writes queue mutation records in \`state\`; \`registry.flush()\` at the end of \`generate()\` applies them (one new put per touched floor) and moves the pointers — a swiped branch keeps its version. The boundary gen is INVISIBLE to the player: no "Designed The Upper Halls" memoir — the /delve reply is just the entrance narration. \`state.dun.*\` is the dungeon's namespaced home — every former unprefixed crypt key lives there, so it can't collide with the hall or the events engine.
+- **The event's span IS the scene-runner's prompt — and the test proves the prefix property.** Node zero of the span is the system briefing (instructions + the DM's context via \`ev.eventLine()\`, plus \`rolling.briefing(state.story)\` at open time); then one node per turn in a persistent array in the store (\`state.event.spanId\`), FULL-FIDELITY — user inputs, assistant replies, AND the tool_use/tool_result rounds, so the model never re-issues a read. Each scene turn rebuilds the prompt by reading the span and appending: turn N is a strict prefix of turn N+1 by construction (no log parsing, no history-budget dependence), so the delegate's prefix cache covers the whole scene — and a briefing that must change mid-scene just rides the next node (slower, never wrong). The scene-runner's toolset includes \`inspect_summary\`, so it can zoom into the public record instead of guessing.
 - **Dossiers: memory keyed by WHO was there.** \`close_event\` files one take per participant in \`state.dossiers\`; \`get_character\` serves the file + dossier as a read-tool result. Dossiers are \`lib/rolling\` channels: recent takes verbatim, oldest folded into digest entries on read (a never-read character costs no token; a delegate error fails the turn — ids move only once the fold lands, so a swipe retries). An EMPTY dossier means never-met — and the scene-runner prompt says so outright, because a gap in the record loses to a strong prior: models fill silence with assumption, and canon-heavy casts come with the loudest assumptions.
-- **The STORY is a rolling summary, and every delegate can zoom into it.** Fight gists land in \`state.story\` (a \`lib/rolling\` channel) with the fight's mechanical span as their content; both DM briefings AND the scene-runner's frozen block carry the \`STORY SO FAR\` lines, and every delegate toolset exposes \`inspect_summary\` — the model tool-calls its way from a digest line down to the actual blows.
+- **The STORY is a rolling channel, and every delegate can zoom into it.** Fight gists land in \`state.story\` (a \`lib/rolling\` channel — world facts like the registered player ride its kv half via \`rolling.set\`) with the fight's mechanical span as their content; both DM briefings AND the span's node-zero briefing carry the \`STORY SO FAR\` lines, and every delegate toolset exposes \`inspect_summary\` — the model tool-calls its way from a digest line down to the actual blows.
 - **Onboarding is a script-opened event, and the greeting has NO buttons on purpose.** The first turn opens a registration event in \`ensureState\` (no delegate needed); the scene-runner runs the receptionist, \`register_player\` files the name and rolls stats, \`close_event\` hands the player into the hall. While it runs, \`buttonsHtml\` returns "" — the menu can't serve anything before registration, so the greeting offers nothing to click (the receptionist asked a question; type, don't click). It is the ONLY script-opened event: with no history to contradict, a static context is safe — every other scene is DM-framed so its context carries the live situation.
 - **The card fields are minimal on purpose.** \`description\`/\`creatorNotes\` for the library, \`firstMes\` as the greeting — and personality/scenario/mesExample EMPTY, no lorebook. The script composes every delegate prompt by hand, so engine prompt-assembly fields never reach a delegate; the registries are the lore.
-- **\`continue\` never resolves** — an ambient line only, so nothing double-applies.
+- **\`continue\`/\`impersonate\` throw early; a hard failure BRICKS the branch.** The generation-type guard fires before \`ensureState\` — only \`normal\` and \`regenerate\` run, and regenerate IS the normal path. Delegate errors are caught (\`pcall\` around the turn body): the card marks \`state.bricked\` and returns the error as the reply — a raw throw would roll the flag back with the rest of state. Further turns on the branch refuse; recovery is a swipe or rewind.
 
 Companion character-scoped regex rules (installed by the script): optional hide \`/^\\s*\\/\\w+.*$/s\` (userInput), a HUD panel for \`[HUD|name=..|where=..|gold=..]\` (hall) / \`[HUD|name=..|where=..|hp=..|atk=..|gold=..]\` (dungeon — the renderer parses by key, order-agnostic), a \`[MAP|..]\` floor-graph renderer. That's all — memoir lines and event closes are plain prose; there are no structural tags to hide.
 
@@ -22,7 +22,7 @@ The lib modules this card vendors (\`loop\`, \`sanitize\`, \`chrome\`, \`ledger\
 
 \`\`\`lua
 -- The Guildhall — a COMPLETE game card: a social hub (event engine) over a
--- procedurally-designed dungeon (factory ratio). Idle in the hall with a menu
+-- procedurally-designed dungeon (content factory). Idle in the hall with a menu
 -- (delve / store / blacksmith) or free text; the hall DM adjudicates and
 -- FRAMES events, the scene-runner casts and writes scenes, and the
 -- people you meet keep DOSSIERS — what THEY carried away — and bring it up
@@ -38,19 +38,33 @@ The lib modules this card vendors (\`loop\`, \`sanitize\`, \`chrome\`, \`ledger\
 -- event sits ABOVE both — ev.isOpen() is checked first — so an event opened
 -- mid-combat or mid-explore PAUSES that mode and RESUMES it on close (combat
 -- state persists across a scene). Free text always escalates to a DM,
--- reachable from any mode; a DM may open_event whenever the action opens a
--- scene. Trust the model: acks are plain visible text, no [sys] channel.
+-- reachable from any mode; when the DM's open_event fires, the SAME turn
+-- continues into the scene phase — the handoff is a dispatch loop, and the
+-- DM's prose is the fallback, not the reply.
+--
+-- Dungeon content lives in PARTITIONED registries (lib/registry): floors,
+-- rooms, enemies, interactables are filed per floor and packed ONE store blob
+-- per partition; state carries only the pointer table (state.packIds) and the
+-- mutation queue (state._regq). Planning files through the same registry
+-- mutation path as escalation writes (add_exit, spawn_enemy); registry.flush()
+-- at the end of generate() commits each touched floor's pack as ONE new blob
+-- plus a pointer move, so old branches keep their old blob.
+--
+-- Failure UX: generate wraps the real body in pcall — a hard failure marks
+-- state.bricked and RETURNS the failure text (a mechanically successful turn,
+-- so the flag persists); a bricked branch refuses further input. Recovery is
+-- a swipe or rewind. Generation types: only normal/regenerate — continue and
+-- impersonate throw BEFORE the brick machinery.
 --
 -- Built on the game lib (docs/design/examples/game-lib/, vendored as
 -- backend_logic/lib/*.lua): loop (tool loop), sanitize (decoded-JSON
 -- hygiene), chrome (buttons/unwrap, the shared clean/oneline text hygiene),
 -- ledger (plot promises), todo (planning self-organization), toolset
--- (composition), registry (TWO: characters with dossiers, enemies with canned
--- lines), summarize (the gist engine), maptag (the fog-of-war map), events
--- (the engine over the character registry), rolling (recursive summaries:
--- the STORY channel fight gists land in — the DM's ONLY history view — and
--- the dossiers underneath events; inspect_summary zooms from a gist into
--- the raw log).
+-- (composition), registry (the character roster with mutable fields; the
+-- partitioned dungeon content), summarize (the gist engine), maptag (the
+-- fog-of-war map), events (the engine over the character registry), rolling
+-- (the story channel — { kv, ids }: the player's FACTS plus the STORY SO FAR
+-- the DM reads — and the dossier channels underneath events).
 --
 -- Companion display rules — only FUNCTIONAL chrome (the memoir lines are
 -- plain prose; there are no structural tags to hide):
@@ -92,15 +106,19 @@ local FLOORS = {
 
 -- ---------- the cast + the event engine over it ----------
 
--- Characters are the card's registry (state.characters); the events engine
--- owns event state, the cast tools, dossiers, the script-owned tags, the
--- append-only span, and the /leave finalize. Records are plain tables, so
--- roster.get(id) returns the LIVE record for ad-hoc mutations.
+-- Characters are the card's registry (state.characters), UNPARTITIONED — the
+-- cast is needed on every floor. mutable = { "personality" } emits
+-- update_character: a character's personality may EVOLVE (set semantics —
+-- the latest value is canon, the id stable). The events engine owns event
+-- state, the cast tools, dossiers, the script-owned tags, the append-only
+-- span, and the /leave finalize. Records are plain tables, so roster.get(id)
+-- returns the LIVE record for ad-hoc mutations.
 local roster = registry.new({
   tool = "register_character",
   description = "File a NEW character (check list_characters first — re-filing an existing name returns the existing record).",
   key = "characters",
   id_from = "name",
+  mutable = { "personality" },
   fields = {
     { name = "name", type = "string", required = true, max = 40 },
     { name = "role", type = "string", max = 60 },
@@ -109,6 +127,93 @@ local roster = registry.new({
 })
 
 local ev = events.new({ roster = roster })
+
+-- ---------- the dungeon's partitioned content registries ----------
+
+-- One pack blob per floor in the store ({ floors = [...], rooms = [...],
+-- enemies = [...], interactables = [...] }), the pointer table in
+-- state.packIds, the mutation queue in state._regq. Writes update the
+-- resolved view immediately and ride the queue; registry.flush() (once at
+-- the end of generate) commits each touched floor as ONE new blob plus a
+-- pointer move — old branches keep their old blob, so swipes stay correct.
+-- The partition is a property OF THE RECORD (rec.floor), derived by the card
+-- — the model never hears the word.
+
+-- The depth budget for enemy clamps is whatever floor is being planned (or
+-- escalated on) RIGHT NOW — planFloor / spawn_enemy set it before filing.
+local activeEnemyDepth = 1
+
+local floorsReg = registry.new({
+  tool = "file_floor", -- card-side only: the planning boundary files the validated floor
+  description = "File a floor's meta record (name, description, entrance, stairs, ambient lines).",
+  key = "floors",
+  id_from = "floor",
+  partition_by = function(rec) return rec.floor end,
+  fields = {
+    { name = "floor", type = "string", required = true },
+    { name = "name", type = "string", required = true },
+    { name = "description", type = "string" },
+    { name = "entrance", type = "string" },
+    { name = "stairsDown", type = "string" }, -- "" on the terminal floor
+    { name = "ambient", type = "array" },
+  },
+})
+
+local roomsReg = registry.new({
+  tool = "add_room", -- planning files rooms card-side (validateGraph repairs first)
+  description = "File a room of the floor graph.",
+  key = "rooms",
+  id_from = "id",
+  partition_by = function(rec) return rec.floor end,
+  mutable = { "exits" }, -- the dungeon DM's add_exit rewrites a room's exits mid-delve
+  fields = {
+    { name = "id", type = "string", required = true },
+    { name = "floor", type = "string", required = true },
+    { name = "name", type = "string" },
+    { name = "desc", type = "string" },
+    { name = "exits", type = "table" },
+  },
+})
+
+local enemiesReg = registry.new({
+  tool = "add_encounter",
+  description = "Add a monster to the floor's roster (max " .. MAX_ROSTER .. ") with canned combat lines. Lua rolls roster monsters as RANDOM encounters while the player explores. hp/atk/reward clamp to the depth budget.",
+  key = "enemies",
+  id_from = "name",
+  partition_by = function(rec) return rec.floor end,
+  cap = MAX_ROSTER, -- per partition: each floor's own roster
+  fields = {
+    { name = "name", type = "string", required = true },
+    { name = "floor", type = "string", required = true },
+    { name = "hp", type = "integer", min = 1, max = function() return 6 + activeEnemyDepth * 4 end, default = 6 },
+    { name = "atk", type = "integer", min = 1, max = function() return 1 + activeEnemyDepth end, default = 2 },
+    { name = "reward", type = "integer", min = 0, max = function() return 5 * activeEnemyDepth end, default = 5 },
+    { name = "lines", type = "table" },
+  },
+  on_register = function(rec)
+    rec.maxHp = rec.hp
+    local lines = type(rec.lines) == "table" and rec.lines or {}
+    rec.lines = {
+      intro = tostring(lines.intro or "It lunges from the dark."),
+      hit = tostring(lines.hit or "It shrieks."),
+      death = tostring(lines.death or "It collapses."),
+    }
+  end,
+})
+
+local interactablesReg = registry.new({
+  tool = "file_interactable", -- card-side: filed at the boundary, after graph validation
+  description = "File an interactable object placed in a room.",
+  key = "interactables",
+  id_from = "key",
+  partition_by = function(rec) return rec.floor end,
+  fields = {
+    { name = "key", type = "string", required = true }, -- "r2:crate"
+    { name = "floor", type = "string", required = true },
+    { name = "responses", type = "table" },
+    { name = "effect", type = "table" },
+  },
+})
 
 -- ---------- state (hot only — pack POINTERS here, pack blobs in the store) ----------
 
@@ -119,14 +224,20 @@ local function ensureState()
   state.gold = state.gold or 30
   state.flags = state.flags or {}
   state.turn = state.turn or 0
-  state.story = state.story or {}              -- rolling summary ids (lib/rolling)
+  -- The story channel (lib/rolling): kv facts verbatim (the player FACTS
+  -- block) plus the compacting log of gist entries (STORY SO FAR). Anything
+  -- not channel-shaped resets fresh.
+  if type(state.story) ~= "table" or type(state.story.kv) ~= "table" or type(state.story.ids) ~= "table" then
+    state.story = rolling.channel()
+  end
+  state.packIds = state.packIds or {}           -- partition ("f1") -> pack blob id
+  state.bricked = state.bricked or nil          -- set after a hard failure: the branch refuses input
   -- dungeon (namespaced — every former unprefixed crypt key lives here)
   if type(state.dun) ~= "table" then state.dun = {} end
   state.dun.maxHp = state.dun.maxHp or 20
   state.dun.hp = state.dun.hp or state.dun.maxHp
   state.dun.atk = state.dun.atk or 4
   state.dun.inventory = state.dun.inventory or {} -- name -> count
-  state.dun.packIds = state.dun.packIds or {}     -- floor id -> store blob id ("pack:f1#3")
   state.dun.room = state.dun.room or "f1"        -- floor only until a pack designates an entrance
   state.dun.combat = state.dun.combat or nil     -- { name, hp, maxHp, atk, lines, reward }
   state.dun.seen = state.dun.seen or {}           -- fog-of-war: full room ids visited
@@ -195,53 +306,41 @@ local function invList()
   return #out > 0 and table.concat(out, ", ") or "nothing"
 end
 
--- ---------- content packs (blobs in the store; pointers in state) ----------
+-- ---------- floor packs (resolved views over the partitioned registries) ----------
 
--- A floor pack is kilobytes of JSON — far too big for per-message state
--- snapshots. The blob goes into the append-only \`store\` (store.put ->
--- "pack:f1#3"); the branch-aware POINTER (state.dun.packIds[fid]) stays in
--- state. A mutation is a NEW put plus moving the pointer — old branches still
--- point at their version, so swipes stay correct. The player sees a plain
--- memoir line (composeSummary); no tags, no display rules.
-local function composeSummary(pack, repairs)
-  local n = 0
-  for _ in pairs(pack.rooms) do n = n + 1 end
-  local stairs = pack.rooms[pack.stairsDown]
-  local s = "Designed " .. pack.name .. ": " .. n .. " rooms, " .. #pack.encounterTable
-    .. " monsters, stairs in " .. (stairs and stairs.name or "?") .. "."
-  if repairs and #repairs > 0 then s = s .. " (" .. #repairs .. " repairs)" end
-  return s
-end
-
-local function packBlob(pack, summary)
-  local pid = store.putJson("pack:" .. pack.id, pack):await()
-  state.dun.packIds[pack.id] = pid
-  return summary
-end
-
-local function copyPack(pack)
-  return json.decode(json.encode(pack))
-end
-
--- The pack for a floor: the pointer is in state, the blob in the store.
--- No pointer → nil (the floor was never designed ON THIS BRANCH — the caller
--- plans it). A pointer whose blob is missing is a bug, not bad luck — blobs
--- are script-written — so it throws (getJson throws just as loudly on one
--- that won't decode).
-local function findPack(id)
-  local pid = state.dun.packIds[id]
-  if not pid then return nil end
-  local body = store.getJson(pid):await()
-  if not body then
-    error("pack blob missing for " .. id .. " (" .. pid .. ") — blobs are script-written, this is a bug", 2)
+-- The live view of a floor's pack, in the shape the serve path consumes.
+-- lib/registry resolves base blob + unflushed queue on every read, so this is
+-- current the moment a write lands. nil when the floor was never designed ON
+-- THIS BRANCH (no pointer, nothing queued — the caller plans it). A pointer
+-- whose blob is missing is a bug, not bad luck — the registry throws.
+local function floorPack(fid)
+  local meta = floorsReg.get(fid, fid)
+  if not meta then return nil end
+  local rooms = {}
+  for _, r in ipairs(roomsReg.list(fid)) do
+    rooms[r.id] = { name = r.name, desc = r.desc, exits = r.exits or {} }
   end
-  return sanitize.data(json.decode(body))
+  local interactables = {}
+  for _, it in ipairs(interactablesReg.list(fid)) do
+    interactables[it.key] = { responses = it.responses or {}, effect = it.effect }
+  end
+  return {
+    id = fid,
+    name = meta.name,
+    description = meta.description,
+    entrance = meta.entrance ~= "" and meta.entrance or nil,
+    stairsDown = meta.stairsDown ~= "" and meta.stairsDown or nil,
+    ambient = meta.ambient or {},
+    rooms = rooms,
+    encounterTable = enemiesReg.list(fid),
+    interactables = interactables,
+  }
 end
 
 -- The pack for the dungeon floor the player is on (nil in the hall).
 local function currentPack()
   if state.mode ~= "dungeon" then return nil end
-  return findPack(floorOf(state.dun.room))
+  return floorPack(floorOf(state.dun.room))
 end
 
 -- ---------- display ----------
@@ -362,9 +461,8 @@ end
 -- from state.dun.fightLog, never parsed out of history), filed as a STORY
 -- entry (the blows ride along as its content, so inspect_summary can zoom),
 -- and served as a PLAIN memoir line — no tags, nothing to regex away. A
--- delegate error fails the turn — the last good state snapshot is untouched,
--- so a swipe/regenerate replays the blow AND retries the gist. Fights that
--- started untracked (a spawn_enemy consequence) get no summary.
+-- delegate error bricks the branch (see generate); a swipe retries the gist.
+-- Fights that started untracked get no summary.
 local function endFight(prompt)
   local tag = state.dun.fightName
   state.dun.fightName = nil
@@ -395,15 +493,11 @@ local function maybeAmbient(pack)
   return pack.ambient[(math.floor(state.turn / 4) - 1) % #pack.ambient + 1]
 end
 
-local function ambientLine(pack)
-  if not pack or #pack.ambient == 0 then return "Drip. Drip." end
-  return pack.ambient[(state.turn % #pack.ambient) + 1]
-end
-
 -- ---------- planning: ONE sub-gen per floor, the floor as a GRAPH ----------
 
 local function planningToolset(draft, fid)
   local depth = depthOfFloor(fid)
+  activeEnemyDepth = depth -- the enemies registry's budget clamps read this
   local ts = toolset.new()
   ts:use(ledger)
   ts:use(todo)
@@ -495,34 +589,17 @@ local function planningToolset(draft, fid)
       parameters = { type = "object", properties = { lines = { type = "array", items = { type = "string" } } }, required = { "lines" } } },
   })
 
-  -- The roster, declared as a registry: budgets and the cap are data, the
-  -- validate-clamp-file pipeline is the lib's. Draft mode: records land in
-  -- draft.encounterTable, not \`state\` — the pack is written at the boundary.
-  local enemies = registry.new({
-    tool = "add_encounter",
-    description = "Add a monster to the floor's roster (max " .. MAX_ROSTER .. ") with canned combat lines. Lua rolls roster monsters as RANDOM encounters while the player explores. hp/atk/reward clamp to the depth budget.",
-    key = "encounterTable",
-    id_from = "name",
-    cap = MAX_ROSTER,
-    store = { get = function() return draft.encounterTable end },
-    fields = {
-      { name = "name", type = "string", required = true },
-      { name = "hp", type = "integer", min = 1, max = function() return 6 + depth * 4 end, default = 6 },
-      { name = "atk", type = "integer", min = 1, max = function() return 1 + depth end, default = 2 },
-      { name = "reward", type = "integer", min = 0, max = function() return 5 * depth end, default = 5 },
-      { name = "lines", type = "table" },
-    },
-    on_register = function(rec)
-      rec.maxHp = rec.hp
-      local lines = type(rec.lines) == "table" and rec.lines or {}
-      rec.lines = {
-        intro = tostring(lines.intro or "It lunges from the dark."),
-        hit = tostring(lines.hit or "It shrieks."),
-        death = tostring(lines.death or "It collapses."),
-      }
-    end,
-  })
-  ts:use(enemies)
+  -- The roster, declared as a partitioned registry: budgets and the cap are
+  -- data, the validate-clamp-file pipeline is the lib's, and the write rides
+  -- the registry mutation queue into the floor's pack. The card injects the
+  -- floor — the partition is a property of the record, never the model's to
+  -- speak — so the tool schema is the registry's own minus the floor field.
+  local addEncounterSchema = json.decode(json.encode(enemiesReg.tools()[1]))
+  addEncounterSchema["function"].parameters.properties.floor = nil
+  ts:handle("add_encounter", function(args)
+    args.floor = fid
+    return enemiesReg.exec("add_encounter", args)
+  end, addEncounterSchema)
 
   return ts
 end
@@ -530,7 +607,7 @@ end
 -- Judgment as data, graph edition. The model's layout is a PROPOSAL; Lua
 -- makes it true: dangling exits dropped, unreachable rooms pruned (BFS from
 -- the entrance), exactly one stairs-down guaranteed, interactables on pruned
--- rooms dropped. The repair count rides in the pack's summary line.
+-- rooms dropped. Runs on the planning scratch draft BEFORE anything is filed.
 local function validateGraph(draft)
   local repairs = {}
   draft.entrance = draft.roomOrder[1]
@@ -604,12 +681,14 @@ local function validateGraph(draft)
 end
 
 -- ONE planning sub-gen per floor: the model lays out the whole map through
--- tool calls (increments, not a one-shot blob), then writes the intro.
+-- tool calls (increments, not a one-shot blob), then writes the intro. The
+-- boundary is INVISIBLE — the reply is just the entrance narration; the pack
+-- commit (registry.flush at the end of generate) leaves no memoir line.
 local function planFloor(prompt, fid)
   local floor = FLOORS[fid]
   if not floor then return "Nowhere to go." end
-  local draft = { id = fid, name = floor.name, description = "", rooms = {}, roomOrder = {},
-    stairsDown = nil, encounterTable = {}, interactables = {}, ambient = {} }
+  local draft = { id = fid, description = "", rooms = {}, roomOrder = {},
+    stairsDown = nil, interactables = {}, ambient = {} }
   local ts = planningToolset(draft, fid)
   local sub = {}
   for k, v in pairs(prompt) do sub[k] = v end
@@ -637,7 +716,7 @@ local function planFloor(prompt, fid)
   }
   local res = backends.generate(sub):await()
   res = loop.run(sub, res, ts:exec(), 16)
-  local repairs = validateGraph(draft)
+  validateGraph(draft)
   if not draft.entrance then
     -- The model filed nothing usable: a skeleton floor keeps the game moving.
     draft.rooms = { r1 = { name = floor.name, desc = floor.theme .. ".", exits = { down = "down" } } }
@@ -645,14 +724,26 @@ local function planFloor(prompt, fid)
     draft.entrance = "r1"
     draft.stairsDown = "r1"
   end
-  draft.roomOrder = nil -- ordering is planning scratch, not pack data
-  state.dun.room = fid .. ":" .. draft.entrance
   if draft.description == "" then draft.description = floor.name .. ": " .. floor.theme .. "." end
+  -- File the validated floor into the partitioned registries — the same
+  -- mutation path escalation writes use. registry.flush() (end of generate)
+  -- commits ONE new pack blob for the floor and moves state.packIds[fid].
+  floorsReg.create({ floor = fid, name = floor.name, description = draft.description,
+    entrance = draft.entrance, stairsDown = draft.stairsDown, ambient = draft.ambient })
+  for _, rid in ipairs(draft.roomOrder) do
+    local room = draft.rooms[rid]
+    if room then
+      roomsReg.create({ id = rid, floor = fid, name = room.name, desc = room.desc, exits = room.exits })
+    end
+  end
+  for key, it in pairs(draft.interactables) do
+    interactablesReg.create({ key = key, floor = fid, responses = it.responses, effect = it.effect })
+  end
+  state.dun.room = fid .. ":" .. draft.entrance
   local intro = type(res.text) == "string" and res.text:match("^%s*(.-)%s*$") or ""
   if intro == "" then intro = draft.description end
   markSeen()
-  return intro .. "\\n\\n" .. packBlob(draft, composeSummary(draft, repairs))
-    .. "\\n\\n" .. statusTags(draft) .. "\\n" .. buttonsHtml(draft)
+  return intro .. tail(floorPack(fid))
 end
 
 -- ---------- serving (deterministic, zero model) ----------
@@ -823,11 +914,26 @@ local GREETING = "The guildhall's reception desk is a slab of oak lost under for
   .. "a finger and slides a blank form your way. \\"Welcome to the Guildhall. Name and trade, newcomer "
   .. "— let's get you registered.\\""
 
+-- Span-is-prompt: the event's prompt IS its record, and node zero is the
+-- system briefing (instructions + event context + the STORY SO FAR at open
+-- time). The card starts the span when it seeds node zero — right after the
+-- event opens. The script-opened registration event also gets the
+-- receptionist's greeting as a prior assistant message.
+local function ensureSpanSeeded()
+  if #ev.span() > 0 then return end
+  local nodeZero = { role = "system", content = CHAT_PROMPT .. ev.eventLine() .. rolling.briefing(state.story) }
+  if state.event.kind == "registration" then
+    ev.spanStart({ nodeZero, { role = "assistant", content = GREETING } })
+  else
+    ev.spanStart({ nodeZero })
+  end
+end
+
 -- The scene-runner: the events engine's full toolset PLUS rolling — the
--- STORY SO FAR rides the frozen system block (chatTurn), and inspect_summary
--- lets the model zoom into it instead of guessing. The model never types a
--- bracket — ev.strip removes freelanced tags; the cast rides the newest
--- message via ev.castLine(); the script splices the close tag.
+-- STORY SO FAR rides node zero of the span, and inspect_summary lets the
+-- model zoom into it instead of guessing. The model never types a bracket —
+-- ev.strip removes freelanced tags; the cast rides the newest message via
+-- ev.castLine(); the script splices the close tag.
 local function chatToolset()
   local ts = toolset.new()
   ts:use(ev)
@@ -845,6 +951,9 @@ local function chatToolset()
       state.dun.atk = math.random(3, 5)
       state.gold = math.random(20, 40)
     end
+    -- The kv demo: the player's name becomes a verbatim FACT in the story
+    -- channel — it rides every briefing the channel serves, never folds.
+    rolling.set(state.story, "player", name)
     return json.encode({ registered = name, hp = state.dun.maxHp, atk = state.dun.atk, gold = state.gold,
       note = "registered — welcome them by name, then close_event" })
   end, {
@@ -855,29 +964,26 @@ local function chatToolset()
   return ts
 end
 
--- One scene-runner call: frozen system + the event's span (the mechanical
--- tail — prior turns' user inputs, tool rounds, and assistant replies), then the
--- tool loop, and everything this turn added goes back onto the span. The
--- tail is full-fidelity, so the model never re-issues a read it already made
--- and the delegate's prefix cache covers the whole scene.
+-- One scene-runner call: the prompt is the event's span (node zero, the
+-- briefing, then the full-fidelity tail — prior turns' user inputs, tool
+-- rounds, and assistant replies) plus the newest user message; then the tool
+-- loop, and everything this turn added goes back onto the span. The tail is
+-- full-fidelity, so the model never re-issues a read it already made and the
+-- delegate's prefix cache covers the whole scene.
 local function chatTurn(prompt, cmd)
+  ensureSpanSeeded()
   local ts = chatToolset()
   local sub = {}
   for k, v in pairs(prompt) do sub[k] = v end
   sub.tools = ts:schemas()
-  sub.messages = {
-    -- The STORY SO FAR rides the FROZEN block: the story channel changes
-    -- only at an event close (which ends the event) or a fight gist (fights
-    -- can't end while an event is open), so this stays byte-identical for
-    -- the event's lifetime — the prefix-cache property is untouched.
-    { role = "system", content = CHAT_PROMPT .. ev.eventLine() .. rolling.briefing(state.story) },
-  }
+  sub.messages = {}
   for _, m in ipairs(ev.span()) do sub.messages[#sub.messages + 1] = m end
-  -- The cast rides the newest message (volatile state, never the frozen
-  -- prefix) — from state.event.participants, not a tag.
+  -- The cast rides the newest message (volatile state, never deep in the
+  -- span) — from state.event.participants, not a tag. castLine() returns the
+  -- full parenthetical.
   local castNote = ev.castLine()
   local input = chrome.clean(cmd)
-  if castNote ~= "" then input = input .. "\\n\\n(" .. castNote .. ")" end
+  if castNote ~= "" then input = input .. "\\n\\n" .. castNote end
   local newEntries = { { role = "user", content = input } }
   sub.messages[#sub.messages + 1] = newEntries[1]
   local baseLen = #sub.messages
@@ -922,13 +1028,45 @@ local function addSetFlagTool(ts, description)
   })
 end
 
--- The dungeon escalation DM: the mutation economy AND open_event (the one
--- addition over the old crypt DM), so a novel action can hand off to a
--- scene-runner mid-explore or mid-fight. Combat is NOT cleared by escalation.
-local function dungeonDmToolset(dctx)
+-- The same-turn handoff is a DISPATCH LOOP, not a goto: the DM phase
+-- adjudicates with the FULL events toolset (one toolset, two roles — a
+-- nonsense call like close_event with nothing open fails as an ordinary
+-- error result, and the tool loop carries it back), and when open_event
+-- fires the SAME turn continues into the scene phase. DM prose is the
+-- fallback — the scene's opening line wins.
+local function dmDispatch(prompt, dmUserLine, rawCmd, system, ts)
+  local phase = "dm"
+  local reply = ""
+  while phase do
+    if phase == "dm" then
+      local sub = {}
+      for k, v in pairs(prompt) do sub[k] = v end
+      sub.tools = ts:schemas()
+      sub.messages = {
+        { role = "system", content = system },
+        { role = "user", content = dmUserLine },
+      }
+      local res = loop.run(sub, backends.generate(sub):await(), ts:exec())
+      reply = trim(ev.strip(res.text or "")) -- DM framing, kept as fallback
+      phase = ev.isOpen() and "scene" or nil -- open_event fired: continue as scene
+    else -- "scene"
+      local chatBlock = chatTurn(prompt, rawCmd)
+      if chatBlock ~= "" then reply = chatBlock end -- the scene's opening line wins
+      phase = nil
+    end
+  end
+  if reply == "" then reply = "Nothing comes of it." end
+  return reply
+end
+
+-- The dungeon escalation DM: the mutation economy AND the full events
+-- toolset, so a novel action can hand off to the scene-runner mid-explore or
+-- mid-fight. Combat is NOT cleared by escalation. Its pack writes (add_exit,
+-- spawn_enemy) ride the registry mutation queue — flush commits them.
+local function dungeonDmToolset()
   local ts = toolset.new()
   ts:use(ledger)
-  ts:use(ev.dm()) -- open_event only — casting is the scene-runner's
+  ts:use(ev)      -- the full toolset: open_event frames, the rest is the scene-runner's
   ts:use(rolling) -- inspect_summary: zoom from a story gist into the raw log
 
   addAttemptTool(ts, true)
@@ -949,15 +1087,19 @@ local function dungeonDmToolset(dctx)
   ts:handle("add_exit", function(args)
     local dir = tostring(args.direction or ""):lower()
     local to = tostring(args.to or ""):lower()
-    local room = dctx.packDraft.rooms[subOf(state.dun.room)]
-    if dir == "" or not room or not dctx.packDraft.rooms[to] then
+    local fid = floorOf(state.dun.room)
+    local cur = subOf(state.dun.room)
+    local room = roomsReg.get(fid, cur)
+    if dir == "" or not room or not roomsReg.get(fid, to) then
       local ids = {}
-      for k in pairs(dctx.packDraft.rooms) do ids[#ids + 1] = k end
+      for _, r in ipairs(roomsReg.list(fid)) do ids[#ids + 1] = r.id end
       table.sort(ids)
       return "rejected: destination must be a room on this floor (" .. table.concat(ids, ", ") .. ")"
     end
-    room.exits[dir] = to
-    dctx.dirty = true
+    local exits = {}
+    for d, t in pairs(room.exits) do exits[d] = t end
+    exits[dir] = to
+    roomsReg.update(fid, cur, { exits = exits }) -- queued; flush commits the pack
     return json.encode({ added = dir .. " -> " .. to, via = tostring(args.via or "") })
   end, {
     type = "function",
@@ -969,12 +1111,19 @@ local function dungeonDmToolset(dctx)
   addSetFlagTool(ts, "Set a story flag.")
 
   ts:handle("spawn_enemy", function(args)
-    local depth = depthOfFloor(floorOf(state.dun.room))
+    local fid = floorOf(state.dun.room)
+    activeEnemyDepth = depthOfFloor(fid)
+    local depth = activeEnemyDepth
     local hp = math.max(1, math.min(tonumber(args.hp) or 6, 6 + depth * 4))
     local atk = math.max(1, math.min(tonumber(args.atk) or 2, 1 + depth))
-    state.dun.combat = { name = tostring(args.name or "crypt thing"), hp = hp, maxHp = hp, atk = atk,
-      lines = { intro = "It arrives.", hit = "It strikes.", death = "It falls." }, reward = 0 }
-    return json.encode({ spawned = state.dun.combat.name, clamped = { hp = hp, atk = atk } })
+    local name = tostring(args.name or "crypt thing")
+    local lines = { intro = "It arrives.", hit = "It strikes.", death = "It falls." }
+    state.dun.combat = { name = name, hp = hp, maxHp = hp, atk = atk, lines = lines, reward = 0 }
+    -- The spawn also joins the floor's roster — a pack write like any other,
+    -- riding the registry mutation queue (best-effort: a full roster rejects
+    -- the filing, the combat still happens).
+    enemiesReg.create({ name = name, floor = fid, hp = hp, atk = atk, reward = 0, lines = lines })
+    return json.encode({ spawned = name, clamped = { hp = hp, atk = atk } })
   end, {
     type = "function",
     ["function"] = { name = "spawn_enemy", description = "Spawn an enemy into the current room (depth-budget clamped). For consequences.",
@@ -985,48 +1134,24 @@ local function dungeonDmToolset(dctx)
   return ts
 end
 
-local function dungeonDmTurn(prompt, input, pack)
+local function dungeonDmTurn(prompt, cmd, pack)
   state.dun.escalations = state.dun.escalations + 1
-  local dctx = { packDraft = copyPack(pack), dirty = false }
-  local ts = dungeonDmToolset(dctx)
-  local sub = {}
-  for k, v in pairs(prompt) do sub[k] = v end
-  sub.tools = ts:schemas()
-  sub.messages = {
-    { role = "system", content = DUNGEON_DM_PROMPT .. "\\n\\nFLOOR PACK (current design):\\n" .. json.encode(pack)
-      .. "\\n\\nPLAYER: hp " .. state.dun.hp .. "/" .. state.dun.maxHp .. ", atk " .. state.dun.atk
-      .. ", gold " .. state.gold .. ", at " .. state.dun.room .. ", inventory: " .. invList()
-      .. (state.dun.combat and ("\\nIN COMBAT with " .. state.dun.combat.name) or "")
-      .. ledger.briefing()
-      .. rolling.briefing(state.story) },
-    { role = "user", content = 'The player attempts: "' .. input .. '"' },
-  }
-  local res = loop.run(sub, backends.generate(sub):await(), ts:exec())
-  local text = trim(ev.strip(res.text or ""))
-  if text == "" then text = "Nothing comes of it." end
-  -- Pack mutations are append-only: the new version goes in THIS message.
-  if dctx.dirty then
-    text = text .. "\\n\\n" .. packBlob(dctx.packDraft, composeSummary(dctx.packDraft))
-  end
-  -- If the DM framed a scene (even mid-fight), run the scene-runner's first
-  -- reply THIS turn — the DM's transition and the first reply land in one
-  -- message. ev.isOpen() is now true.
-  if ev.isOpen() then
-    if not ev.hasSpan() then ev.spanStart({}) end -- open_event already started one
-    if text ~= "" then ev.spanAppend({ { role = "assistant", content = text } }) end -- the DM's transition
-    local chatBlock = chatTurn(prompt, input)
-    if text == "" then text = "The dark shifts around you." end
-    text = text .. "\\n\\n" .. chatBlock
-  end
-  return text
+  local system = DUNGEON_DM_PROMPT .. "\\n\\nFLOOR PACK (current design):\\n" .. json.encode(pack)
+    .. "\\n\\nPLAYER: hp " .. state.dun.hp .. "/" .. state.dun.maxHp .. ", atk " .. state.dun.atk
+    .. ", gold " .. state.gold .. ", at " .. state.dun.room .. ", inventory: " .. invList()
+    .. (state.dun.combat and ("\\nIN COMBAT with " .. state.dun.combat.name) or "")
+    .. ledger.briefing()
+    .. rolling.briefing(state.story)
+  return dmDispatch(prompt, 'The player attempts: "' .. cmd .. '"', cmd, system, dungeonDmToolset())
 end
 
 -- The hall DM: adjudicates idle-hall actions and FRAMES events. No mutation
--- economy (the hall has no inventory, map, or enemies); open_event only.
+-- economy (the hall has no inventory, map, or enemies); the full events
+-- toolset, same as the scene-runner's.
 local function hallDmToolset()
   local ts = toolset.new()
   ts:use(ledger)
-  ts:use(ev.dm()) -- open_event, nothing else — casting is the scene-runner's
+  ts:use(ev)      -- the full toolset, one toolset two roles
   ts:use(rolling) -- inspect_summary, same as the dungeon DM
 
   addAttemptTool(ts, false)
@@ -1036,30 +1161,11 @@ local function hallDmToolset()
 end
 
 local function hallDmTurn(prompt, cmd)
-  local ts = hallDmToolset()
-  local sub = {}
-  for k, v in pairs(prompt) do sub[k] = v end
-  sub.tools = ts:schemas()
-  sub.messages = {
-    { role = "system", content = HALL_DM_PROMPT .. "\\n\\nPLAYER: gold " .. state.gold
-      .. (state.flags.relic and " (carries the relic)" or "")
-      .. ledger.briefing()
-      .. rolling.briefing(state.story) },
-    { role = "user", content = 'The player: "' .. cmd .. '"' },
-  }
-  local res = loop.run(sub, backends.generate(sub):await(), ts:exec())
-  local text = trim(ev.strip(res.text or ""))
-  if ev.isOpen() then
-    -- Boundary turn: the DM framed a scene — run the scene-runner's first
-    -- reply now, all in one message.
-    if not ev.hasSpan() then ev.spanStart({}) end
-    if text ~= "" then ev.spanAppend({ { role = "assistant", content = text } }) end
-    local chatBlock = chatTurn(prompt, cmd)
-    if text == "" then text = "The hall shifts around you." end
-    return text .. "\\n\\n" .. chatBlock .. tail(nil)
-  end
-  if text == "" then text = "Nothing comes of it." end
-  return text .. tail(nil)
+  local system = HALL_DM_PROMPT .. "\\n\\nPLAYER: gold " .. state.gold
+    .. (state.flags.relic and " (carries the relic)" or "")
+    .. ledger.briefing()
+    .. rolling.briefing(state.story)
+  return dmDispatch(prompt, 'The player: "' .. cmd .. '"', cmd, system, hallDmToolset())
 end
 
 -- ---------- mode helpers ----------
@@ -1077,16 +1183,11 @@ end
 -- player at the entrance of the floor they're on.
 local function enterDungeon(prompt)
   local fid = floorOf(state.dun.room)
-  local pack = findPack(fid)
+  local pack = floorPack(fid)
   if not pack then return planFloor(prompt, fid) end
   state.dun.room = fid .. ":" .. pack.entrance
   markSeen()
   return pack.description .. tail(pack)
-end
-
-local function continueLine()
-  if state.mode == "hall" then return "The hall murmurs on." end
-  return ambientLine(findPack(floorOf(state.dun.room)))
 end
 
 -- Hall menu verbs + dungeon verbs are ALL refused while an event is open.
@@ -1114,15 +1215,15 @@ local function hallTurn(prompt, cmd)
   if cmd == "" then
     return "Say something." .. tail(nil)
   end
-  return hallDmTurn(prompt, cmd)
+  return hallDmTurn(prompt, cmd) .. tail(nil)
 end
 
 -- Events sit above both modes. Menu/dungeon verbs are gated; /leave is a
--- one-gen exit (a delegate error fails the turn — swipe retries); otherwise
--- the scene-runner writes a reply. Closing the event resumes whatever
--- mode was active — including combat, which persisted in state.dun.combat.
--- Either way a scene closes, it joins the STORY: the gist as the line, the
--- full span as the zoomable content.
+-- one-gen exit (a delegate error bricks the branch — a swipe retries);
+-- otherwise the scene-runner writes a reply. Closing the event resumes
+-- whatever mode was active — including combat, which persisted in
+-- state.dun.combat. Either way a scene closes, it joins the STORY: the gist
+-- as the line, the full span as the zoomable content.
 local function eventTurn(prompt, cmd)
   if isModeVerb(cmd) then
     return "Finish your business here first." .. tail(currentPack())
@@ -1138,11 +1239,6 @@ local function eventTurn(prompt, cmd)
     ev.clear()
     if wasRegistration then state.onboarded = true end -- leaving onboarding still finishes it
     return gistLine .. "\\n\\nYou step away; the moment ends." .. tail(currentPack())
-  end
-  -- A script-opened event (onboarding) has no DM boundary: seed the span with
-  -- the receptionist's greeting as a prior assistant message.
-  if not ev.hasSpan() then
-    ev.spanStart({ { role = "assistant", content = GREETING } })
   end
   local out = chatTurn(prompt, cmd)
   if state.event and state.event.closed then
@@ -1173,7 +1269,7 @@ local function dungeonTurn(prompt, cmd)
 
   -- Boundary: first contact with a floor triggers the planning sub-gen.
   local fid = floorOf(state.dun.room)
-  local pack = findPack(fid)
+  local pack = floorPack(fid)
   if not pack then return planFloor(prompt, fid) end
   if not pack.rooms[subOf(state.dun.room)] then state.dun.room = fid .. ":" .. pack.entrance end
 
@@ -1185,7 +1281,7 @@ local function dungeonTurn(prompt, cmd)
       if nfid ~= fid then
         -- A stair: another floor's pack (it exists — the player came from
         -- there), or the boundary fires and a new floor is designed.
-        pack = findPack(nfid)
+        pack = floorPack(nfid)
         if not pack then return planFloor(prompt, nfid) end
         state.dun.room = nfid .. ":" .. pack.entrance
         text = pack.description
@@ -1205,7 +1301,7 @@ local function dungeonTurn(prompt, cmd)
     end
   else
     text = dungeonDmTurn(prompt, cmd, pack)
-    pack = findPack(fid) or pack -- a new pack version may exist now
+    pack = floorPack(fid) or pack -- queued pack mutations resolve on read
   end
 
   -- A fight that just ended (kill, flee, or death) closes its summary span.
@@ -1219,25 +1315,54 @@ end
 
 -- ---------- the turn ----------
 
-function generate(prompt, ctx)
-  ensureState()
-  ledger.bind(function() return state.turn end)
-  ev.bindPrompt(prompt) -- the fold's digest sub-gen inherits the turn's token budget
-
-  -- continue never resolves rules or effects — an ambient line only.
-  if ctx and ctx.generationType == "continue" then
-    return continueLine() .. tail(currentPack())
-  end
-
+local function realGenerate(prompt)
   local input = lastUserText(prompt)
   local cmd = chrome.unwrap(input)
   state.turn = state.turn + 1
 
   -- An open event is the HIGHEST gate: it pauses hall AND dungeon (combat
   -- persists) and resumes the prior mode when it closes.
-  if ev.isOpen() then return eventTurn(prompt, cmd) end
-  if state.mode == "hall" then return hallTurn(prompt, cmd) end
-  return dungeonTurn(prompt, cmd)
+  local out
+  if ev.isOpen() then
+    out = eventTurn(prompt, cmd)
+  elseif state.mode == "hall" then
+    out = hallTurn(prompt, cmd)
+  else
+    out = dungeonTurn(prompt, cmd)
+  end
+  -- Commit this turn's queued registry writes: ONE new pack blob per touched
+  -- floor, one pointer move per flushed partition. Reads resolve base +
+  -- queue, so this timing is about state size, never correctness.
+  registry.flush()
+  return out
+end
+
+function generate(prompt, ctx)
+  -- Generation types: only two stances. Regenerates and swipes run the
+  -- normal path (state rolls back; re-running is correct by construction).
+  -- Continue/impersonate are a HARD error — thrown before the brick
+  -- machinery, before even ensureState.
+  if ctx and ctx.generationType ~= "normal" and ctx.generationType ~= "regenerate" then
+    error("This card does not support " .. tostring(ctx.generationType) .. ".")
+  end
+  ensureState()
+  -- Failure UX: fail loudly, then brick the branch. A bricked branch refuses
+  -- further input; recovery is a swipe or a rewind past the failed turn.
+  if state.bricked then
+    return "This branch hit an unrecoverable error and can't continue: " .. state.bricked
+      .. "\\n\\nSwipe or rewind to a point before the failure to keep playing."
+  end
+  ledger.bind(function() return state.turn end)
+  ev.bindPrompt(prompt) -- the fold's digest sub-gen inherits the turn's token budget
+
+  -- The pcall IS the brick: a thrown turn would roll state back, brick flag
+  -- included, so on error the card sets state.bricked and RETURNS the failure
+  -- text — a mechanically successful turn, so the snapshot persists.
+  local ok, result = pcall(realGenerate, prompt)
+  if ok then return result end
+  state.bricked = tostring(result)
+  return "Something broke this turn: " .. state.bricked
+    .. "\\n\\nThis branch is bricked — swipe or rewind to retry from before the failure."
 end
 
 function list_models()
@@ -1351,8 +1476,8 @@ end
 
 -- The deterministic cleaning every delegate view shares: strip legacy
 -- [sys]…[/sys], <button>…</button>, and [HUD…]; trim. Transcript and the
--- event span BOTH use this — the frozen-prefix property of the event span
--- depends on the cleaning never diverging between views.
+-- event span BOTH use this — the append-only-prefix property of the event
+-- span depends on the cleaning never diverging between views.
 function M.clean(text)
   return (tostring(text or "")
     :gsub("%s*%[sys%].-%[/sys%]%s*", "\\n\\n")
@@ -1389,10 +1514,15 @@ return M
 -- due-ness from \`now\` and escalates to DUE NOW. Lifecycle includes failure:
 -- pending → kept / failed, and failure is canon too.
 --
--- \`now\` is the card's current turn counter; bind it once per turn with
--- ledger.bind(fn). A filed due date is clamped to now+1 … now+50 — a promise
--- can never be filed for the same turn, nor further than 50 turns out. The
--- lib never touches \`state\` beyond its own key.
+-- \`now\` is whatever the card's clock says — turns, floors, weeks — bound once
+-- per turn with ledger.bind(fn). A filed due date is clamped to now+1 …
+-- now+50 of those units: never this turn, never past the horizon. The lib
+-- never touches \`state\` beyond its own key.
+--
+-- SET semantics (the ledger is non-compacting information): records are keyed
+-- by id — promise({ id, … }) with an existing pending id OVERWRITES what/due
+-- (latest is canon, never a duplicate), and resolve_promise overwrites the
+-- status even on a resolved entry.
 
 local M = {}
 
@@ -1440,8 +1570,14 @@ function M.exec(name, args)
       return "rejected: id, what, and a concrete due are required"
     end
     due = math.max(now + 1, math.min(math.floor(due), now + 50))
+    -- Set semantics: re-filing an existing pending id OVERWRITES — latest is
+    -- canon, never a duplicate.
     for _, p in ipairs(promises()) do
-      if p.id == id and not p.status then return "already pending: " .. id end
+      if p.id == id and not p.status then
+        p.what = what
+        p.due = due
+        return json.encode({ promised = id, due = due, replaced = true })
+      end
     end
     local list = promises()
     list[#list + 1] = { id = id, what = what, due = due }
@@ -1450,12 +1586,12 @@ function M.exec(name, args)
   if name == "resolve_promise" then
     local id = tostring(args.id or "")
     for _, p in ipairs(promises()) do
-      if p.id == id and not p.status then
+      if p.id == id then
         p.status = args.outcome == "failed" and "failed" or "kept"
         return json.encode({ resolved = id, outcome = p.status })
       end
     end
-    return "no pending promise: " .. id
+    return "unknown promise: " .. id
   end
   return nil
 end
@@ -1645,9 +1781,9 @@ return M
 \`\`\`
 \`\`\`lua
 -- lib/registry.lua — ThingRegistry: declare "a registry of something" and get
--- a full tool (plus an optional query tool) that OWNS the Fact-lane
--- rules: validate on entry, clamp numbers to budgets, closed lists, id
--- assignment, canonical tool result, swipe-stability through \`state\`.
+-- a full tool (plus optional query/update/custom tools) that OWNS the
+-- Fact-lane rules: validate on entry, clamp numbers to budgets, closed lists,
+-- id assignment, the canonical tool result, swipe-stability through \`state\`.
 --
 -- The model invents; Lua files. The tool result is the canonical record —
 -- what was ACTUALLY filed, numeric clamps and dropped entries included — so
@@ -1658,18 +1794,53 @@ return M
 -- back and re-filing converges to the same record — swipe-stable by
 -- construction.
 --
--- Storage is a plain array of records at state[key] (branch-aware), each
--- record carrying its assigned \`id\`. Planning mode: pass store.get to file
--- into a draft table instead of \`state\`.
+-- STORAGE, two shapes:
+--   * Unpartitioned (default): a plain array of records at state[key]
+--     (branch-aware), each record carrying its assigned \`id\`. Planning mode:
+--     pass store.get to file into a draft table instead of \`state\`.
+--   * Partitioned (partition_by declared): records live in PACKS — one store
+--     blob per partition, shared by every partitioned registry using the same
+--     packs_key (default state.packIds). state carries only the pointer
+--     table: state[packs_key] maps each partition name to that partition's
+--     pack blob id ({ f1 = "pack#7", craft = "pack#3", … }). The partition is
+--     a property OF THE RECORD, derived by the card: partition_by(rec) is
+--     read at file time (a monster's partition is the floor it spawns on).
+--     The model never hears the word — tool schemas carry no partition
+--     field; \`floor\` is just a field the record happens to have.
+--
+-- WRITES (partitioned): a write updates nothing on disk immediately — it
+-- queues a mutation record in state._regq (branch-aware) and every READ
+-- resolves base blob + queue, so the in-memory view is live at once. The
+-- card calls registry.flush() ONCE at the end of generate(): flush groups
+-- the queue by partition, applies each group to its pack, does ONE new
+-- store.putJson per touched pack, and updates state.packIds[pk] for the
+-- flushed partitions only. A forgotten flush is a state-size issue, never a
+-- correctness one — the queue rides state, so the next flush (even next
+-- turn) compacts it. Swipe correctness falls out: a flush is a NEW put plus
+-- a pointer move, so old branches keep their old blob.
+--
+-- MUTABLE FIELDS (set semantics): registry records are non-compacting
+-- information — some fields legitimately EVOLVE (appearance, status).
+-- Declare mutable = { "appearance", … } and the registry emits an update
+-- tool that OVERWRITES the listed fields on the existing record (same
+-- validation and clamps, id stable, latest value canon).
+--
+-- CUSTOM QUERIES: queries = { { name, args = {...}, run = fn } } adds a read
+-- tool (schema built from args) AND a card-side method of the same name.
+-- run(records, args) receives the full cross-partition record list.
 --
 --   local enemies = registry.new({
 --     tool = "register_enemy",
 --     description = "Register an enemy design. Lua clamps stats to the power budget.",
 --     key = "enemies",
 --     id_from = "name",
---     query_tool = "get_enemy",        -- optional; omit for no query tool
---     cap = 8,                          -- optional max records
---     fields = {                        -- ARRAY: order is preserved in the schema
+--     partition_by = function(rec) return rec.floor end,  -- optional: packs
+--     packs_key = "packIds",                -- optional; shared pointer table
+--     mutable = { "hp" },                   -- optional: emits update_enemy
+--     update_tool = "update_enemy",         -- optional; derived by default
+--     query_tool = "get_enemy",             -- optional; omit for no query tool
+--     cap = 8,                              -- optional max records (per partition when partitioned)
+--     fields = {                            -- ARRAY: order is preserved in the schema
 --       { name = "name", type = "string", required = true },
 --       { name = "hp",   type = "integer", min = 1, max = 20, default = 6 },
 --       -- min/max may be zero-arg functions (depth-scaled budgets):
@@ -1677,15 +1848,28 @@ return M
 --       { name = "tags", type = "array", closed = { "flying", "reflect_magic" } },
 --       { name = "lines", type = "table" },   -- passthrough; shape it in on_register
 --     },
+--     queries = {                           -- optional custom read tools
+--       { name = "recipes_with_item",
+--         args = { { name = "item", type = "string", required = true } },
+--         run = function(records, args) … return matching end },
+--     },
 --     on_register = function(rec) ... end,  -- optional: reshape/side effects
 --   })
 --
 -- Instance surface (conforms to the lib module contract — plain dot calls):
---   enemies.tools() -> array            enemies.exec(name, args) -> string|nil
---   enemies.get(id) -> record|nil       enemies.all() -> array (LIVE — mutate
---     records in place and every consumer sees it; don't reorder or remove)
---   enemies.briefing() -> string        -- one line per record, for delegate
+--   R.tools() -> array              R.exec(name, args) -> string|nil
+--   Unpartitioned:   R.list()  R.get(id)      R.create(fields)  R.update(id, fields)
+--   Partitioned:     R.list(pk)  R.get(pk, id) R.create(fields) R.update(pk, id, fields)
+--     (create derives the partition from the record via partition_by)
+--   R.all() -> array  (cross-partition when partitioned) — LIVE records when
+--     unpartitioned (mutate in place, every consumer sees it); RESOLVED
+--     copies when partitioned — mutate those via R.update, not in place.
+--   R.briefing(pk?) -> string       -- one line per record, for delegate
 --     briefings ("" when empty); lib/events builds list_characters on it
+--
+-- Module level: registry.flush() — see WRITES above.
+
+local sanitize = require("lib/sanitize")
 
 local M = {}
 
@@ -1700,52 +1884,80 @@ local function bound(v)
   return v
 end
 
---- Coerce args per the field specs. Returns rec, dropped, missing.
+--- Coerce ONE field value per its spec. Returns value, dropped (array of
+--- closed-list rejections; nil otherwise).
+local function coerceOne(f, v)
+  if f.type == "integer" then
+    local n = tonumber(v)
+    if n == nil then n = f.default end
+    if n ~= nil then
+      n = math.floor(n)
+      local lo, hi = bound(f.min), bound(f.max)
+      if lo ~= nil and n < lo then n = lo end
+      if hi ~= nil and n > hi then n = hi end
+      return n
+    end
+    return nil
+  elseif f.type == "array" then
+    if type(v) == "table" then
+      local arr, dropped = {}, nil
+      for _, item in ipairs(v) do
+        local s = tostring(item)
+        if f.closed then
+          local ok = false
+          for _, allowed in ipairs(f.closed) do
+            if s == allowed then ok = true break end
+          end
+          if ok then arr[#arr + 1] = s else
+            dropped = dropped or {}
+            dropped[#dropped + 1] = s
+          end
+        else
+          arr[#arr + 1] = s
+        end
+      end
+      return arr, dropped
+    end
+    return nil -- a non-table array arg stays nil → missing (full coerce) or skipped (partial)
+  elseif f.type == "table" then
+    if type(v) == "table" then return v end
+    return nil
+  else -- string
+    if v ~= nil then return tostring(v) end
+    if f.default ~= nil then return tostring(f.default) end
+    return ""
+  end
+end
+
+--- Coerce args per the field specs (a full file). Returns rec, dropped, missing.
 local function coerce(fields, args)
   local rec, dropped, missing = {}, {}, {}
   for _, f in ipairs(fields) do
-    local v = args[f.name]
-    if f.type == "integer" then
-      local n = tonumber(v)
-      if n == nil then n = f.default end
-      if n ~= nil then
-        n = math.floor(n)
-        local lo, hi = bound(f.min), bound(f.max)
-        if lo ~= nil and n < lo then n = lo end
-        if hi ~= nil and n > hi then n = hi end
-        rec[f.name] = n
-      end
-    elseif f.type == "array" then
-      if type(v) == "table" then
-        local arr = {}
-        for _, item in ipairs(v) do
-          local s = tostring(item)
-          if f.closed then
-            local ok = false
-            for _, allowed in ipairs(f.closed) do
-              if s == allowed then ok = true break end
-            end
-            if ok then arr[#arr + 1] = s else dropped[#dropped + 1] = s end
-          else
-            arr[#arr + 1] = s
-          end
-        end
-        rec[f.name] = arr
-      elseif not f.required then
-        rec[f.name] = {}
-      end
-      -- a required array passed as a non-table stays nil → reported missing
-    elseif f.type == "table" then
-      if type(v) == "table" then rec[f.name] = v end
-    else -- string
-      local s = v ~= nil and tostring(v) or (f.default ~= nil and tostring(f.default) or "")
-      rec[f.name] = s
+    local v, d = coerceOne(f, args[f.name])
+    if f.type == "array" and v == nil and not f.required then
+      v = {}
     end
+    rec[f.name] = v
+    if d then for _, s in ipairs(d) do dropped[#dropped + 1] = s end end
     if f.required and (rec[f.name] == nil or rec[f.name] == "") then
       missing[#missing + 1] = f.name
     end
   end
   return rec, dropped, missing
+end
+
+--- Coerce only the listed mutable fields PRESENT in args (an update).
+--- Returns partial, dropped.
+local function coercePartial(fields, args, mutableSet)
+  local partial, dropped = {}, {}
+  for _, f in ipairs(fields) do
+    if mutableSet[f.name] and args[f.name] ~= nil then
+      local v, d = coerceOne(f, args[f.name])
+      if v ~= nil then partial[f.name] = v end
+      if d then for _, s in ipairs(d) do dropped[#dropped + 1] = s end end
+    end
+  end
+  return partial, dropped
 end
 
 local function fieldSchema(f)
@@ -1755,9 +1967,46 @@ local function fieldSchema(f)
   return { type = "string" }
 end
 
+local RESERVED_METHODS = {
+  tools = true, exec = true, get = true, all = true, list = true,
+  create = true, update = true, briefing = true,
+}
+
 function M.new(def)
+  local partitioned = def.partition_by ~= nil
+  local packsKey = def.packs_key or "packIds"
+  if partitioned and def.store then
+    error("registry.new: store (draft mode) and partition_by don't combine — "
+      .. "partitioned writes ARE the commit path; drop one", 2)
+  end
+  local mutableSet = {}
+  if def.mutable then
+    local known = {}
+    for _, f in ipairs(def.fields or {}) do known[f.name] = true end
+    for _, name in ipairs(def.mutable) do
+      if not known[name] then
+        error("registry.new: mutable field '" .. tostring(name) .. "' is not a declared field", 2)
+      end
+      mutableSet[name] = true
+    end
+  end
+  local updateTool = def.update_tool
+  if not updateTool and def.mutable then
+    updateTool = (def.tool or ""):gsub("^register_", "update_")
+    if updateTool == def.tool or updateTool == "" then updateTool = "update_" .. tostring(def.key) end
+  end
+  local queries = def.queries or {}
+  for _, q in ipairs(queries) do
+    if RESERVED_METHODS[q.name] or q.name == def.tool or q.name == def.query_tool or q.name == updateTool then
+      error("registry.new: query name '" .. tostring(q.name) .. "' collides with a built-in", 2)
+    end
+  end
+
   local R = {}
 
+  -- ---------- storage ----------
+
+  -- Unpartitioned records (or the draft table in planning mode).
   local function records()
     if def.store and def.store.get then return def.store.get() end
     if type(state) ~= "table" then state = {} end
@@ -1765,58 +2014,225 @@ function M.new(def)
     return state[def.key]
   end
 
+  local function mutationQueue()
+    if type(state) ~= "table" then state = {} end
+    state._regq = state._regq or {}
+    return state._regq
+  end
+
+  local function loadPackBlob(pks, pk)
+    local pid = type(state) == "table" and state[pks] and state[pks][pk] or nil
+    if not pid then return {} end
+    local body = store.getJson(pid):await()
+    if not body then
+      error("registry: pack blob missing for partition " .. tostring(pk) .. " (" .. tostring(pid)
+        .. ") — blobs are script-written, this is a bug", 3)
+    end
+    return sanitize.data(json.decode(body))
+  end
+
+  --- The live view of one partition for THIS registry: base blob records
+  --- plus this registry's queued mutations, in order. Returns array, byId.
+  local function resolvePartition(pk)
+    local base = loadPackBlob(packsKey, pk)
+    local recs, byId = {}, {}
+    for _, rec in ipairs(base[def.key] or {}) do
+      recs[#recs + 1] = rec
+      byId[rec.id] = rec
+    end
+    for _, m in ipairs(mutationQueue()) do
+      if m.pks == packsKey and m.pk == pk and m.reg == def.key then
+        if m.op == "set" then
+          if byId[m.id] then
+            local old = byId[m.id]
+            for k in pairs(old) do old[k] = nil end
+            for k, v in pairs(m.rec) do old[k] = v end
+          else
+            recs[#recs + 1] = m.rec
+            byId[m.id] = m.rec
+          end
+        else -- update
+          local old = byId[m.id]
+          if old then for k, v in pairs(m.fields) do old[k] = v end end
+        end
+      end
+    end
+    return recs, byId
+  end
+
+  --- Every partition key this registry has records in (pointer table +
+  --- queue), sorted for determinism.
+  local function partitionKeys()
+    local seen, out = {}, {}
+    if type(state) == "table" and type(state[packsKey]) == "table" then
+      for pk in pairs(state[packsKey]) do
+        if not seen[pk] then seen[pk] = true out[#out + 1] = pk end
+      end
+    end
+    for _, m in ipairs(mutationQueue()) do
+      if m.pks == packsKey and m.reg == def.key and not seen[m.pk] then
+        seen[m.pk] = true
+        out[#out + 1] = m.pk
+      end
+    end
+    table.sort(out)
+    return out
+  end
+
+  local function allRecords()
+    if not partitioned then return records() end
+    local out = {}
+    for _, pk in ipairs(partitionKeys()) do
+      for _, rec in ipairs(resolvePartition(pk)) do out[#out + 1] = rec end
+    end
+    return out
+  end
+
+  --- Find by id or id_from value. Partitioned: scans all partitions and also
+  --- returns the partition the record lives in (nil when not found).
   local function findRecord(idOrName)
     local needle = tostring(idOrName or ""):lower()
-    for _, rec in ipairs(records()) do
-      if rec.id == needle then return rec end
-      if def.id_from and tostring(rec[def.id_from] or ""):lower() == needle then return rec end
+    if not partitioned then
+      for _, rec in ipairs(records()) do
+        if rec.id == needle then return rec end
+        if def.id_from and tostring(rec[def.id_from] or ""):lower() == needle then return rec end
+      end
+      return nil
+    end
+    for _, pk in ipairs(partitionKeys()) do
+      local recs = resolvePartition(pk)
+      for _, rec in ipairs(recs) do
+        if rec.id == needle then return rec, pk end
+        if def.id_from and tostring(rec[def.id_from] or ""):lower() == needle then return rec, pk end
+      end
     end
     return nil
   end
 
-  local function register(args)
+  -- ---------- filing ----------
+
+  --- The shared write path. Returns id, status, record, dropped where status
+  --- is "filed" | "already"; or nil, reason on rejection.
+  local function file(args)
     local rec, dropped, missing = coerce(def.fields, args)
     if #missing > 0 then
-      return "rejected: " .. table.concat(missing, ", ") .. " required"
+      return nil, "rejected: " .. table.concat(missing, ", ") .. " required"
     end
     local id = slugify(def.id_from and rec[def.id_from] or nil)
-    -- Idempotent: an existing id returns the filed record, never an overwrite.
-    local existing = findRecord(id)
-    if existing then
-      return json.encode({ already_registered = id, record = existing })
+    if partitioned then
+      local pk = def.partition_by(rec)
+      if pk == nil then
+        error("registry: partition_by returned nil for '" .. id .. "' — the record lacks its routing field", 3)
+      end
+      pk = tostring(pk)
+      local recs = resolvePartition(pk)
+      for _, existing in ipairs(recs) do
+        if existing.id == id
+          or (def.id_from and tostring(existing[def.id_from] or ""):lower() == id) then
+          return id, "already", existing
+        end
+      end
+      if def.cap and #recs >= def.cap then
+        return nil, "rejected: registry full (" .. def.cap .. " " .. tostring(def.key or "records")
+          .. " max in " .. pk .. ")"
+      end
+      rec.id = id
+      if def.on_register then def.on_register(rec) end
+      local q = mutationQueue()
+      q[#q + 1] = { pks = packsKey, pk = pk, reg = def.key, op = "set", id = id, rec = rec }
+      return id, "filed", rec, dropped
     end
+    -- Unpartitioned: idempotent dup-check, cap, append to the live array.
+    local existing = findRecord(id)
+    if existing then return id, "already", existing end
     local list = records()
     if def.cap and #list >= def.cap then
-      return "rejected: registry full (" .. def.cap .. " " .. tostring(def.key or "records") .. " max)"
+      return nil, "rejected: registry full (" .. def.cap .. " " .. tostring(def.key or "records") .. " max)"
     end
     rec.id = id
     if def.on_register then def.on_register(rec) end
     list[#list + 1] = rec
+    return id, "filed", rec, dropped
+  end
+
+  local function register(args)
+    local id, status, rec, dropped = file(args)
+    if not id then return status end -- status carries the rejection reason
+    if status == "already" then
+      return json.encode({ already_registered = id, record = rec })
+    end
     local result = { registered = id, record = rec }
-    if #dropped > 0 then result.dropped = dropped end
+    if dropped and #dropped > 0 then result.dropped = dropped end
     return json.encode(result)
   end
 
   local function query(args)
-    local rec = findRecord(args.id)
-    if not rec then return "unknown " .. tostring(def.key or "record") .. ": " .. tostring(args.id) end
+    local rec = findRecord(args and args.id)
+    if not rec then return "unknown " .. tostring(def.key or "record") .. ": " .. tostring(args and args.id) end
     return json.encode(rec)
   end
 
+  --- The shared update path. Partitioned takes pk explicitly (nil pk = scan).
+  --- Returns true, dropped | nil, reason.
+  local function applyUpdate(pk, id, fields)
+    local partial, dropped = coercePartial(def.fields, fields, mutableSet)
+    if not next(partial) then
+      return nil, "rejected: nothing to update (mutable: " .. table.concat(def.mutable, ", ") .. ")"
+    end
+    if partitioned then
+      local rec, foundPk
+      if pk ~= nil then
+        foundPk = tostring(pk)
+        local recs, byId = resolvePartition(foundPk)
+        rec = byId[tostring(id)]
+        if not rec then
+          local needle = tostring(id):lower()
+          for _, r in ipairs(recs) do
+            if def.id_from and tostring(r[def.id_from] or ""):lower() == needle then rec = r break end
+          end
+        end
+      else
+        rec, foundPk = findRecord(id)
+      end
+      if not rec then return nil, "unknown " .. tostring(def.key or "record") .. ": " .. tostring(id) end
+      local q = mutationQueue()
+      q[#q + 1] = { pks = packsKey, pk = foundPk, reg = def.key, op = "update", id = rec.id, fields = partial }
+      return true, dropped
+    end
+    local rec = findRecord(id)
+    if not rec then return nil, "unknown " .. tostring(def.key or "record") .. ": " .. tostring(id) end
+    for k, v in pairs(partial) do rec[k] = v end
+    return true, dropped
+  end
+
+  local function updateExec(args)
+    local id = tostring(args and args.id or "")
+    if id == "" then return "rejected: id required" end
+    local ok, droppedOrErr = applyUpdate(nil, id, args)
+    if not ok then return droppedOrErr end
+    local rec = findRecord(id)
+    local result = { updated = rec.id, record = rec }
+    if droppedOrErr and #droppedOrErr > 0 then result.dropped = droppedOrErr end
+    return json.encode(result)
+  end
+
+  -- ---------- the tool contract ----------
+
   function R.tools()
+    local out = {}
     local properties, required = {}, {}
     for _, f in ipairs(def.fields) do
       properties[f.name] = fieldSchema(f)
       if f.required then required[#required + 1] = f.name end
     end
-    local out = { {
+    out[#out + 1] = {
       type = "function",
       ["function"] = {
         name = def.tool,
         description = def.description or ("Register a " .. tostring(def.key or "record") .. "."),
         parameters = { type = "object", properties = properties, required = required },
       },
-    } }
+    }
     if def.query_tool then
       out[#out + 1] = {
         type = "function",
@@ -1827,23 +2243,107 @@ function M.new(def)
         },
       }
     end
+    if updateTool then
+      local uprops = { id = { type = "string" } }
+      for _, f in ipairs(def.fields) do
+        if mutableSet[f.name] then uprops[f.name] = fieldSchema(f) end
+      end
+      out[#out + 1] = {
+        type = "function",
+        ["function"] = {
+          name = updateTool,
+          description = "Update an existing " .. tostring(def.key or "record")
+            .. ": OVERWRITES the given fields (latest value is canon). Only these fields may change: "
+            .. table.concat(def.mutable, ", ") .. ".",
+          parameters = { type = "object", properties = uprops, required = { "id" } },
+        },
+      }
+    end
+    for _, q in ipairs(queries) do
+      local qprops, qreq = {}, {}
+      for _, a in ipairs(q.args or {}) do
+        qprops[a.name] = fieldSchema(a)
+        if a.required then qreq[#qreq + 1] = a.name end
+      end
+      out[#out + 1] = {
+        type = "function",
+        ["function"] = {
+          name = q.name,
+          description = q.description or ("Query " .. tostring(def.key or "records") .. "."),
+          parameters = { type = "object", properties = qprops, required = qreq },
+        },
+      }
+    end
     return out
   end
 
   function R.exec(name, args)
     if name == def.tool then return register(args or {}) end
     if def.query_tool and name == def.query_tool then return query(args or {}) end
+    if updateTool and name == updateTool then return updateExec(args or {}) end
+    for _, q in ipairs(queries) do
+      if name == q.name then
+        local res = q.run(allRecords(), args or {})
+        if type(res) == "string" then return res end
+        return json.encode(res)
+      end
+    end
     return nil
   end
 
-  function R.get(id) return findRecord(id) end
+  -- ---------- the card-side surface ----------
 
-  function R.all() return records() end
+  --- Look up one record. Partitioned: R.get(pk, id). Unpartitioned: R.get(id).
+  function R.get(a, b)
+    if not partitioned then return findRecord(a) end
+    local _, byId = resolvePartition(tostring(a))
+    local rec = byId[tostring(b)]
+    if rec then return rec end
+    local needle = tostring(b or ""):lower()
+    for _, r in ipairs(resolvePartition(tostring(a))) do
+      if def.id_from and tostring(r[def.id_from] or ""):lower() == needle then return r end
+    end
+    return nil
+  end
+
+  --- The records of one partition (or the whole registry, unpartitioned).
+  function R.list(pk)
+    if not partitioned then return records() end
+    return (resolvePartition(tostring(pk)))
+  end
+
+  --- All records — cross-partition when partitioned.
+  function R.all() return allRecords() end
+
+  --- File a record from the card. Returns id on success (id, "already_registered"
+  --- when the id converges to an existing record), or nil, reason.
+  function R.create(fields)
+    local id, status = file(fields or {})
+    if not id then return nil, status end
+    if status == "already" then return id, "already_registered" end
+    return id
+  end
+
+  --- Overwrite mutable fields on an existing record.
+  --- Partitioned: R.update(pk, id, fields). Unpartitioned: R.update(id, fields).
+  function R.update(a, b, c)
+    if not partitioned then return applyUpdate(nil, a, b or {}) end
+    return applyUpdate(a, b, c or {})
+  end
 
   --- One line per record, for delegate briefings ("" when empty).
-  function R.briefing()
+  --- Partitioned: pass a pk to brief one partition, omit for all.
+  function R.briefing(pk)
+    local recs
+    if not partitioned then
+      recs = records()
+    elseif pk ~= nil then
+      recs = resolvePartition(tostring(pk))
+    else
+      recs = allRecords()
+    end
     local lines = {}
-    for _, rec in ipairs(records()) do
+    for _, rec in ipairs(recs) do
       local label = def.id_from and tostring(rec[def.id_from] or "") or ""
       lines[#lines + 1] = "- " .. tostring(rec.id) .. (label ~= "" and (": " .. label) or "")
     end
@@ -1851,7 +2351,74 @@ function M.new(def)
     return "\\n" .. tostring(def.key or "REGISTRY") .. ":\\n" .. table.concat(lines, "\\n")
   end
 
+  -- Custom queries double as card-side methods (raw return, not encoded).
+  for _, q in ipairs(queries) do
+    R[q.name] = function(args) return q.run(allRecords(), args or {}) end
+  end
+
   return R
+end
+
+--- Flush every queued registry mutation into the packs: one new store.put
+--- per touched partition, then the pointer table updates. Call ONCE at the
+--- end of generate() — reads resolve base + queue, so timing never affects
+--- correctness, only state size. No-op when nothing is queued.
+function M.flush()
+  if type(state) ~= "table" then return end
+  local q = state._regq
+  if type(q) ~= "table" or #q == 0 then return end
+  local groups, order = {}, {}
+  for _, m in ipairs(q) do
+    local gk = tostring(m.pks) .. "\\31" .. tostring(m.pk)
+    if not groups[gk] then
+      groups[gk] = { pks = m.pks, pk = m.pk, mutations = {} }
+      order[#order + 1] = gk
+    end
+    table.insert(groups[gk].mutations, m)
+  end
+  for _, gk in ipairs(order) do
+    local g = groups[gk]
+    state[g.pks] = state[g.pks] or {}
+    local pid = state[g.pks][g.pk]
+    local blob = {}
+    if pid then
+      local body = store.getJson(pid):await()
+      if not body then
+        error("registry.flush: pack blob missing for partition " .. tostring(g.pk)
+          .. " (" .. tostring(pid) .. ") — blobs are script-written, this is a bug", 2)
+      end
+      blob = sanitize.data(json.decode(body))
+    end
+    for _, m in ipairs(g.mutations) do
+      local section = blob[m.reg]
+      if type(section) ~= "table" then
+        section = {}
+        blob[m.reg] = section
+      end
+      if m.op == "set" then
+        local found = false
+        for i, rec in ipairs(section) do
+          if rec.id == m.id then section[i] = m.rec found = true break end
+        end
+        if not found then section[#section + 1] = m.rec end
+      else -- update
+        local found = false
+        for _, rec in ipairs(section) do
+          if rec.id == m.id then
+            for k, v in pairs(m.fields) do rec[k] = v end
+            found = true
+            break
+          end
+        end
+        if not found then
+          error("registry.flush: update for unknown id '" .. tostring(m.id)
+            .. "' in partition " .. tostring(g.pk), 2)
+        end
+      end
+    end
+    state[g.pks][g.pk] = store.putJson("pack", blob):await()
+  end
+  state._regq = {}
 end
 
 return M
@@ -2017,29 +2584,41 @@ return M
 --   * the cast: a character registry (lib/registry) plus the casting tools.
 --     The character FIELDS are the card's (declared in the def); the
 --     validate-file-query pipeline is the lib's.
---   * dossiers: per-character memory as rolling summary channels
---     (lib/rolling). state.dossiers[id] is a plain array of entry ids;
---     close_event pushes one take per participant — what THAT character
---     carried away, so knowledge asymmetry is structural. get_character
---     serves rolling.parts: the recent takes verbatim plus fold entries as
---     the digest, folded ON READ when the backlog outgrows the window (a
---     never-read character costs no token). Loud on error: a delegate
---     failure fails the turn — ids move only after the fold entry is filed,
---     so memory survives intact and a swipe retries the fold.
+--   * dossiers: per-character memory as lib/rolling channels.
+--     state.dossiers[id] is a rolling channel ({ kv, ids }); close_event
+--     pushes one gist-only take per participant to the log half — what THAT
+--     character carried away, so knowledge asymmetry is structural. (The
+--     character's kv facts live in their roster record, not here.)
+--     get_character serves rolling.parts: the recent takes verbatim plus
+--     fold entries as the digest, folded ON READ when the backlog outgrows
+--     the window (a never-read character costs no token). Loud on error: a
+--     delegate failure fails the turn — ids move only after the fold entry
+--     is filed, so memory survives intact and a swipe retries the fold.
 --   * the cast note, NOT a tag: who is on stage rides the newest message via
 --     castLine() (from state.event.participants) — volatile state in the
---     newest message, never the frozen prefix. strip removes freelanced
---     tags from delegate text (the model never types a bracket).
---   * the append-only span: the scene-runner's tail, tracked MECHANICALLY as
---     a persistent linked list in the store (state.event.spanId) — user
---     inputs, assistant text, and the tool_use/tool_result rounds, one node
---     per turn. Turn N is a strict prefix of turn N+1 by CONSTRUCTION (no
---     log parsing, no history-budget dependence), the model never re-issues
---     a read it already made, and old branches keep their old head.
+--     newest message, never deep in the span. strip removes freelanced tags
+--     from delegate text (the model never types a bracket).
+--   * the span — the event's prompt IS the record: a persistent array in the
+--     store (store.append / store.readArray), state.event.spanId pointing at
+--     its head. Node zero is the system briefing (instructions + event
+--     context + STORY SO FAR at open time); then one node per turn — user
+--     inputs, assistant text, AND the tool_use/tool_result rounds, full
+--     fidelity, so the model never re-issues a read it already made. Each
+--     generate rebuilds the scene-runner's prompt by reading the span and
+--     appending — there is no separately-maintained frozen block to fall out
+--     of sync. Append-only is the NORM (turn N is a strict prefix of turn
+--     N+1, so the delegate's prefix cache hits), but a briefing that must
+--     change mid-scene simply rides the next node: the cache degrades to a
+--     partial hit — slower, never wrong. Old branches keep pointing at their
+--     old head, so swipes stay correct; history budgets are irrelevant — the
+--     span never touches the log.
 --
--- Two contract views, for toolset composition:
---   ev.tools() / ev.exec(name, args)   -- the scene-runner's toolset
---   ev.dm()                            -- the DM's slice: open_event only
+-- ONE TOOLSET, TWO ROLES. The DM (escalation) and the scene-runner compose
+-- different PROMPTS but get the same full toolset (ts:use(ev) both times).
+-- Mode enforcement is a runtime concern, not a schema-shaping one: tools
+-- that make no sense in the current mode — a second open_event mid-scene, a
+-- close_event with nothing open — fail as ordinary error results, and the
+-- tool loop carries the error back like any other.
 --
 --   local ev = events.new({
 --     roster = myRoster,   -- inject the card's own registry instance…
@@ -2060,7 +2639,10 @@ return M
 --   ev.finalize(prompt)  -- the /leave path: one finalize gen, loud on error
 --   ev.bindPrompt(prompt)  -- once per generate(), like ledger.bind: arms
 --     lib/rolling's fold sub-gens (they inherit the turn's prompt, which
---     real adapters require for prompt.tokenUsage). Unbound = folds dormant.
+--     real adapters require for prompt.tokenUsage). An unbound turn defers a
+--     due fold to the next bound one — but bind on EVERY generate: a card
+--     that never binds has a silent unbounded-growth bug, and dormant folds
+--     will hide it.
 -- exec tries the roster's tools FIRST, then the event tools — don't declare
 -- a character field or roster tool named list_characters / get_character /
 -- add_to_chat / close_event, and don't declare fields named digest /
@@ -2103,16 +2685,16 @@ function M.new(def)
 
   -- ---------- state ----------
 
-  -- A dossier is a rolling summary channel: state.dossiers[id] is a plain
-  -- array of entry ids (lib/rolling owns the fold and the store blobs). The
-  -- retired { digest, takes } shape resets — old pinned lib copies keep their
-  -- own behavior; this lib starts dossiers fresh.
+  -- A dossier is a rolling channel: state.dossiers[id] is { kv, ids } (the
+  -- log half carries the takes; lib/rolling owns the fold and the store
+  -- blobs). Anything not channel-shaped resets — old pinned lib copies keep
+  -- their own behavior; this lib starts dossiers fresh.
   local function dossier(id)
     if type(state) ~= "table" then state = {} end
     state.dossiers = state.dossiers or {}
     local d = state.dossiers[id]
-    if type(d) ~= "table" or d.digest ~= nil or d.takes ~= nil then
-      d = {}
+    if type(d) ~= "table" or type(d.kv) ~= "table" or type(d.ids) ~= "table" then
+      d = rolling.channel()
       state.dossiers[id] = d
     end
     return d
@@ -2122,8 +2704,8 @@ function M.new(def)
 
   function E.kind() return (state.event and state.event.kind) or nil end
 
-  --- "kind — context": the card appends this to its frozen scene-runner
-  --- system block. Frozen for the event's lifetime by construction.
+  --- "kind — context": what open_event filed. The card typically composes it
+  --- into the span's node-zero briefing at open time.
   function E.eventLine()
     if not state.event then return "" end
     return state.event.kind .. " — " .. state.event.context
@@ -2138,64 +2720,67 @@ function M.new(def)
   -- ---------- tags (script-owned) ----------
 
   -- The model never types a bracket: freelanced structural tags in delegate
-  -- text are stripped; the script emits every tag.
+  -- text are stripped before serving; the script emits every tag.
   function E.strip(text)
     return (tostring(text or ""):gsub("%[/?event [^%]]*%]", ""):gsub("%[/?chat[^%]]*%]", ""))
   end
 
   --- The cast note: who is on stage, from state.event.participants — appended
   --- to the newest user message each scene turn (volatile state rides the
-  --- newest message, never the frozen prefix). "" when nobody is on stage.
+  --- newest message, never deep in the span). "" when nobody is on stage.
   function E.castLine()
     local cast = participants()
     if #cast == 0 then return "" end
-    return "on stage: " .. table.concat(cast, ", ")
+    return "(In the scene with you: " .. table.concat(cast, ", ") .. ")"
   end
 
-  -- ---------- the append-only span (a persistent list in the store) ----------
+  -- ---------- the span (the event's prompt IS the record) ----------
 
-  -- The scene-runner's tail is tracked MECHANICALLY, never parsed out of
-  -- history: state.event.spanId is the head of a persistent linked list
-  -- (store.append / store.readArray), one node per turn, the turn's entries
-  -- array as the node item. Full fidelity — user inputs, assistant text, AND
-  -- the tool_use/tool_result rounds — so the model never re-issues a read it
-  -- already made, and turn N is a strict prefix of turn N+1 by construction
-  -- (the delegate's prefix cache covers the whole scene). Old branches keep
-  -- pointing at their old head, so swipes stay correct; history budgets
-  -- (promptHistoryLimit) are irrelevant — nothing about the span depends on
-  -- what the log currently shows.
+  -- A persistent array in the store (store.append / store.readArray),
+  -- state.event.spanId pointing at its head. Node zero is the system
+  -- briefing; then one node per turn — user inputs, the loop's tool rounds,
+  -- the final reply — full fidelity, tracked MECHANICALLY, never parsed out
+  -- of history. Turn N is a strict prefix of turn N+1 by CONSTRUCTION (no
+  -- log parsing, no history-budget dependence), the model never re-issues a
+  -- read it already made, and old branches keep their old head.
 
-  --- True once the event has a span (openEvent or the card's spanStart).
+  --- True once the event has a span (the card's spanStart).
   function E.hasSpan()
     return state.event ~= nil and state.event.spanId ~= nil
   end
 
   --- Start the span with its seed entries (one node; entries may be {}).
+  --- Node zero should carry the scene-runner's system briefing — the card
+  --- composes it at open time (instructions + event context + STORY SO FAR).
   --- Errors when no event is open — the card calls this right after the
-  --- event opens (the DM's open_event does it for you, with an empty span).
+  --- event opens, when it seeds node zero.
   function E.spanStart(entries)
     if not state.event then error("events: spanStart with no open event", 2) end
     state.event.spanId = store.append(nil, entries or {}):await()
   end
 
   --- Append one turn's entries (user input, the loop's tool rounds, the
-  --- final reply) — ONE node, one await.
+  --- final reply) — ONE node, one await. A mid-scene briefing change rides
+  --- its own node here: the prefix cache degrades to partial, never wrong.
   function E.spanAppend(entries)
     if not E.hasSpan() then error("events: spanAppend with no span", 2) end
     state.event.spanId = store.append(state.event.spanId, entries):await()
   end
 
-  --- The whole tail, flattened ({} when there's no span). Loud when a node
-  --- is missing or garbled — blobs are script-written, that's a bug.
+  --- The whole record, flattened — node zero (the briefing) first ({} when
+  --- there's no span). Loud when a node is missing or garbled — blobs are
+  --- script-written, that's a bug.
   function E.span()
     if not E.hasSpan() then return {} end
     return json.decode(store.readArray(state.event.spanId):await())
   end
 
-  -- ---------- dossiers (rolling summary channels) ----------
+  -- ---------- dossiers (rolling channels) ----------
 
   --- Bind the turn's prompt (once per generate, next to ledger.bind): arms
-  --- lib/rolling's fold sub-gens. Unbound = folds stay dormant.
+  --- lib/rolling's fold sub-gens. Bind on EVERY generate — an unbound turn
+  --- defers a due fold to the next bound one, but a card that never binds
+  --- has a silent unbounded-growth bug.
   function E.bindPrompt(prompt) rolling.bind(prompt) end
 
   --- A character's file: the registry record plus their dossier as
@@ -2219,15 +2804,18 @@ function M.new(def)
     end
     state.eventSeq = (state.eventSeq or 0) + 1 -- lib-owned: cards without a turn counter still get unique ids
     state.event = { id = "e" .. state.eventSeq, kind = kind, context = context, participants = {} }
-    E.spanStart({}) -- the span starts empty; the DM turn appends its transition
+    -- No span yet: the card's dispatch loop starts it (spanStart) when it
+    -- seeds node zero. (Starting one with zero entries would NOT round-trip:
+    -- an empty entries array serializes as {} and reads back as a phantom
+    -- empty entry.)
     return json.encode({ opened = state.event.id, kind = kind,
       note = "the scene-runner takes over now — cast no characters yourself" })
   end
 
-  -- The gist is NEUTRAL (it rides the close tag, for compaction and the
-  -- plot log); the takes are TARGETED (what each participant carries away).
-  -- Keys are validated against the participant list — strangers are dropped
-  -- and reported, per the canonical-record rule.
+  -- The gist is NEUTRAL (one line for the record — the story entry and the
+  -- memoir line consume it); the takes are TARGETED (what each participant
+  -- carries away). Keys are validated against the participant list —
+  -- strangers are dropped and reported, per the canonical-record rule.
   local function closeEvent(args)
     if not state.event then return "rejected: no event is open" end
     if state.event.closed then return "already closing: " .. state.event.id end
@@ -2261,18 +2849,12 @@ function M.new(def)
         required = { "gist" } } },
   }
 
-  local OPEN_EVENT_SCHEMA = {
-    type = "function",
-    ["function"] = { name = "open_event", description = "Open an event (a conversation or scene) and hand it to the scene-runner. context: who the player is and what they are after. NO character list — casting is the scene-runner's job.",
-      parameters = { type = "object", properties = { kind = { type = "string" }, context = { type = "string" } }, required = { "kind", "context" } } },
-  }
-
   --- The /leave path. One finalize gen writes the gist and takes. Loud on
-  --- error: a delegate failure throws and fails the turn — state rolls back,
-  --- the event stays open, and a swipe retries the exit. If the model just
-  --- spends its rounds without calling close_event (a content outcome, not
-  --- an error), the event still closes with a script-composed fallback gist.
-  --- Returns the gist (a plain-text memoir line for the card to serve).
+  --- error: a delegate failure throws and fails the turn (the card's Failure
+  --- UX marks the branch bricked; recovery is a swipe or rewind). If the
+  --- model just spends its rounds without calling close_event (a content
+  --- outcome, not an error), the event still closes with a script-composed
+  --- fallback gist. Returns the gist (a plain-text memoir line to serve).
   function E.finalize(prompt)
     if not state.event then return "" end
     local ts = toolset.new()
@@ -2285,7 +2867,12 @@ function M.new(def)
         .. "with a neutral gist of what happened and one take per participant (what THAT character carries away). "
         .. "EVENT: " .. E.eventLine() },
     }
-    for _, m in ipairs(E.span()) do sub.messages[#sub.messages + 1] = m end
+    for _, m in ipairs(E.span()) do
+      -- The span's node zero is the scene-runner's system briefing — the
+      -- finalizer carries its own system message; a second one mid-array
+      -- breaks adapters.
+      if m.role ~= "system" then sub.messages[#sub.messages + 1] = m end
+    end
     local res = backends.generate(sub):await()
     loop.run(sub, res, ts:exec(), 4)
     if not state.event.closed then
@@ -2294,7 +2881,7 @@ function M.new(def)
     return state.event.closed.gist -- the memoir line, plain text
   end
 
-  -- ---------- the tool contract (the scene-runner's toolset) ----------
+  -- ---------- the tool contract (ONE toolset for both roles) ----------
 
   function E.tools()
     local out = roster.tools()
@@ -2312,6 +2899,11 @@ function M.new(def)
       type = "function",
       ["function"] = { name = "add_to_chat", description = "Bring a filed character on stage (they become a participant of this event).",
         parameters = { type = "object", properties = { id = { type = "string" } }, required = { "id" } } },
+    }
+    out[#out + 1] = {
+      type = "function",
+      ["function"] = { name = "open_event", description = "Open an event (a conversation or scene) and hand it to the scene-runner. context: who the player is and what they are after. NO character list — casting is the scene-runner's job.",
+        parameters = { type = "object", properties = { kind = { type = "string" }, context = { type = "string" } }, required = { "kind", "context" } } },
     }
     out[#out + 1] = CLOSE_EVENT_SCHEMA
     return out
@@ -2346,20 +2938,9 @@ function M.new(def)
       state.event.participants[#state.event.participants + 1] = rec.id
       return json.encode({ joined = rec.id })
     end
+    if name == "open_event" then return openEvent(args or {}) end
     if name == "close_event" then return closeEvent(args or {}) end
     return nil
-  end
-
-  --- The DM's slice of the contract: open_event, nothing else. Casting is
-  --- the scene-runner's job; the DM's toolset shouldn't even have it.
-  function E.dm()
-    return {
-      tools = function() return { OPEN_EVENT_SCHEMA } end,
-      exec = function(name, args)
-        if name == "open_event" then return openEvent(args or {}) end
-        return nil
-      end,
-    }
   end
 
   return E
@@ -2369,25 +2950,39 @@ return M
 \`\`\`
 
 \`\`\`lua
--- lib/rolling.lua — recursive rolling summaries.
+-- lib/rolling.lua — one channel, both memory kinds.
 --
--- One summary channel (the story so far, one character's memory, a quest
--- log) is a plain ARRAY OF IDS the card owns in state — state.story,
--- state.dossiers[charId], anything. An entry is a blob in the append-only
--- store ({ label, gist, content? }); the entry's id IS the blob id, so the
--- store doubles as the archive: inspect(id) resolves any id forever, live or
--- folded away long ago.
+-- A channel is a single object the card owns in state — rolling.channel()
+-- returns { kv = {}, ids = {} } — and the same shape serves the story
+-- (state.story), a dossier (state.dossiers[charId]), or any scoped memory
+-- the card invents:
 --
---   rolling.bind(prompt)                        -- once per generate: arms folds
---   rolling.push(ids, { label, gist, content? }) -- file an entry, return its id
---   rolling.briefing(ids) -> string              -- the main summaries (below)
---   rolling.inspect(id) -> string | nil          -- what one summary covers
---   rolling.parts(ids) -> { digest, takes, older } -- the dossier serve shape
---   rolling.tools() / rolling.exec(name, args)   -- inspect_summary, for toolset
+--   * the NON-COMPACTING half: ch.kv — verbatim facts by key. set overwrites,
+--     latest value is canon, values file at any length. The kv block NEVER
+--     folds: it is exactly the information judged worth keeping verbatim
+--     (a character's appearance, world facts), and overwriting — not
+--     appending — is what makes "hair: black" → "hair: white" impossible to
+--     contradict.
+--   * the COMPACTING half: ch.ids — an array of entry ids. An entry is a blob
+--     in the append-only store ({ label, gist, content? }); the entry's id IS
+--     the blob id, so the store doubles as the archive: inspect(id) resolves
+--     any id forever, live or folded away long ago. When the log outgrows the
+--     window the oldest entries FOLD into a digest entry (see below).
+--
+--   local story = rolling.channel()  -- in ensureState: state.story = state.story or rolling.channel()
+--   rolling.bind(prompt)                          -- once per generate: arms folds
+--   rolling.set(ch, key, value) / rolling.get(ch, key)   -- the verbatim half
+--   rolling.push(ch, { label, gist, content? })   -- file a log entry, return its id
+--   rolling.briefing(ch) -> string                -- kv facts, then id-bearing gist lines
+--   rolling.parts(ch) -> { digest, takes, older } -- the dossier serve shape
+--   rolling.inspect(id) -> string | nil           -- what one summary covers
+--   rolling.tools() / rolling.exec(name, args)    -- inspect_summary, for toolset
+--   rolling.tools(ch)                             -- per-channel contract object with
+--     -- the freestyle kv tools: list_facts / get_fact / set_fact (ts:use(rolling.tools(ch)))
 --
 -- content is the ACTUAL material the gist covers — a message list, a
 -- generated battle log, a nav trace: any JSON-able array. Gist-scale data
--- rides in state; the kilobyte-scale content sits in the heap.
+-- rides in state; the kilobyte-scale content sits in the store.
 --
 -- FOLD: when the live list outgrows recent + backlog, briefing (or parts)
 -- compresses the oldest entries into ONE fold entry: its gist is a
@@ -2414,8 +3009,19 @@ local BACKLOG = 3  -- fold when the live list exceeds RECENT + BACKLOG
 local boundPrompt = nil
 
 --- Bind the turn's prompt (once per generate, next to ledger.bind): fold
---- sub-gens copy it so real adapters get a complete prompt table.
+--- sub-gens copy it so real adapters get a complete prompt table. Bind on
+--- EVERY generate: an unbound turn defers a due fold to the next bound one,
+--- but a card that never binds has a silent unbounded-growth bug.
 function M.bind(prompt) boundPrompt = prompt end
+
+--- A memory channel: { kv = {}, ids = {} }. The card owns it in state.
+function M.channel() return { kv = {}, ids = {} } end
+
+local function assertChannel(ch, fnName)
+  if type(ch) ~= "table" or type(ch.kv) ~= "table" or type(ch.ids) ~= "table" then
+    error("rolling." .. fnName .. ": pass a channel from rolling.channel() ({ kv, ids }), not a bare array", 3)
+  end
+end
 
 -- Fetch an entry the CARD vouched for (an id in a state array): missing is a
 -- bug, not bad luck — blobs are script-written — so, loud. (getJson throws
@@ -2434,16 +3040,44 @@ local function isFoldEntry(entry)
   return type(entry.content) == "table" and #entry.content > 0 and isDescriptor(entry.content[1])
 end
 
---- File one summary. ids is the card's live array (mutated). Returns the id.
-function M.push(ids, entry)
-  assert(type(ids) == "table", "rolling.push: ids array required")
+-- ---------- the non-compacting half (kv: verbatim, overwritten, never folded) ----------
+
+--- Overwrite a verbatim fact by key — latest value is canon, any length.
+function M.set(ch, key, value)
+  assertChannel(ch, "set")
+  ch.kv[tostring(key)] = value
+end
+
+--- Read a verbatim fact (nil when nothing is filed under key).
+function M.get(ch, key)
+  assertChannel(ch, "get")
+  return ch.kv[tostring(key)]
+end
+
+local function factValue(v)
+  if type(v) == "table" then return json.encode(v) end
+  return tostring(v)
+end
+
+local function sortedKeys(t)
+  local keys = {}
+  for k in pairs(t) do keys[#keys + 1] = k end
+  table.sort(keys)
+  return keys
+end
+
+-- ---------- the compacting half (the log: push, fold, zoom) ----------
+
+--- File one summary into the channel's log. Returns the id.
+function M.push(ch, entry)
+  assertChannel(ch, "push")
   assert(type(entry) == "table", "rolling.push: entry table required")
   local gist = chrome.oneline(entry.gist)
   if gist == "" then error("rolling.push: gist required", 2) end
   local blob = { label = chrome.oneline(entry.label), gist = gist }
   if entry.content ~= nil then blob.content = entry.content end
   local id = store.putJson("roll", blob):await()
-  ids[#ids + 1] = id
+  ch.ids[#ch.ids + 1] = id
   return id
 end
 
@@ -2479,22 +3113,39 @@ local function fold(ids)
   table.insert(ids, 1, foldId)
 end
 
---- The main summaries, one id-bearing line per live entry ("" when empty).
---- Folds first when the list outgrows the window.
-function M.briefing(ids)
-  if #ids > RECENT + BACKLOG then fold(ids) end
-  if #ids == 0 then return "" end
-  local lines = {}
-  for _, id in ipairs(ids) do
-    local e = fetch(id)
-    lines[#lines + 1] = "- [" .. id .. ": " .. e.label .. "] " .. e.gist
+--- The channel's briefing: kv facts verbatim first, then one id-bearing line
+--- per live log entry ("" when both are empty). Folds first when the log
+--- outgrows the window; the kv block never folds.
+function M.briefing(ch)
+  assertChannel(ch, "briefing")
+  local out = {}
+  local keys = sortedKeys(ch.kv)
+  if #keys > 0 then
+    local lines = {}
+    for _, k in ipairs(keys) do
+      lines[#lines + 1] = "- " .. k .. ": " .. factValue(ch.kv[k])
+    end
+    out[#out + 1] = "\\nFACTS:\\n" .. table.concat(lines, "\\n")
   end
-  return "\\nSTORY SO FAR:\\n" .. table.concat(lines, "\\n")
+  local ids = ch.ids
+  if #ids > RECENT + BACKLOG then fold(ids) end
+  if #ids > 0 then
+    local lines = {}
+    for _, id in ipairs(ids) do
+      local e = fetch(id)
+      lines[#lines + 1] = "- [" .. id .. ": " .. e.label .. "] " .. e.gist
+    end
+    out[#out + 1] = "\\nSTORY SO FAR:\\n" .. table.concat(lines, "\\n")
+  end
+  return table.concat(out, "\\n")
 end
 
 --- The dossier serve shape: fold-entry gists concatenated as the digest,
---- plain-entry gists as the recent takes, older = the fold count.
-function M.parts(ids)
+--- plain-entry gists as the recent takes, older = the fold count. (The log
+--- half only — a character's kv facts live in their registry record.)
+function M.parts(ch)
+  assertChannel(ch, "parts")
+  local ids = ch.ids
   if #ids > RECENT + BACKLOG then fold(ids) end
   local digestParts, takes, older = {}, {}, 0
   for _, id in ipairs(ids) do
@@ -2548,14 +3199,69 @@ function M.inspect(id)
   return table.concat(lines, "\\n")
 end
 
-function M.tools()
-  return { {
-    type = "function",
-    ["function"] = {
-      name = "inspect_summary",
-      description = "Open one summary by id (ids appear in the STORY SO FAR briefing). A folded summary lists the summaries inside it, each with its own id — inspect those to keep zooming toward the raw log.",
-      parameters = { type = "object", properties = { id = { type = "string" } }, required = { "id" } } },
-    },
+-- ---------- the tool contract ----------
+
+--- With NO argument: the module-level inspect_summary schemas (ts:use(rolling)).
+--- With a channel: a contract object ({ tools, exec }) exposing the freestyle
+--- kv tools over that one channel — list_facts / get_fact / set_fact. No
+--- schema, no closed key list: the model invents keys as the fiction demands
+--- ("grudge_against_guild", "current_disguise"), and list_facts keeps it from
+--- forking a near-duplicate key. One channel's kv tools per toolset — the
+--- tool names are fixed, so two channels in one toolset collide.
+function M.tools(ch)
+  if ch == nil then
+    return { {
+      type = "function",
+      ["function"] = {
+        name = "inspect_summary",
+        description = "Open one summary by id (ids appear in the STORY SO FAR briefing). A folded summary lists the summaries inside it, each with its own id — inspect those to keep zooming toward the raw log.",
+        parameters = { type = "object", properties = { id = { type = "string" } }, required = { "id" } } },
+      },
+    }
+  end
+  assertChannel(ch, "tools")
+  return {
+    tools = function()
+      return { {
+        type = "function",
+        ["function"] = {
+          name = "list_facts",
+          description = "List the keys of every verbatim fact currently filed. Check BEFORE writing — re-key an existing fact instead of forking a near-duplicate.",
+          parameters = { type = "object", properties = {} } },
+      }, {
+        type = "function",
+        ["function"] = {
+          name = "get_fact",
+          description = "Read one verbatim fact by key. The answer is canon.",
+          parameters = { type = "object", properties = { key = { type = "string" } }, required = { "key" } } },
+      }, {
+        type = "function",
+        ["function"] = {
+          name = "set_fact",
+          description = "File or OVERWRITE a verbatim fact by key — the latest value is canon. For facts that must survive paraphrase: appearances, world truths, standing rules.",
+          parameters = { type = "object", properties = { key = { type = "string" }, value = { type = "string" } }, required = { "key", "value" } } },
+      } }
+    end,
+    exec = function(name, args)
+      if name == "list_facts" then
+        local keys = sortedKeys(ch.kv)
+        if #keys == 0 then return "no facts filed" end
+        return table.concat(keys, ", ")
+      end
+      if name == "get_fact" then
+        local k = tostring(args and args.key or "")
+        local v = ch.kv[k]
+        if v == nil then return "no fact filed under: " .. k end
+        return factValue(v)
+      end
+      if name == "set_fact" then
+        local k = tostring(args and args.key or "")
+        if k == "" then return "rejected: key required" end
+        ch.kv[k] = args and args.value
+        return json.encode({ fact_set = k })
+      end
+      return nil
+    end,
   }
 end
 

@@ -39,10 +39,13 @@ interface DunState {
   combat?: { name: string; hp: number; maxHp: number; atk: number; lines: { intro: string; hit: string; death: string }; reward: number };
   seen: Record<string, true>;
   escalations: number;
-  packIds?: Record<string, string>;
   fightLog?: Array<{ role: string; content: string }>;
   fightName?: string;
   delveOver?: 'dead' | 'won' | null;
+}
+interface RollingChannel {
+  kv: Record<string, string>;
+  ids: string[];
 }
 interface MergeState {
   mode: 'hall' | 'dungeon';
@@ -52,11 +55,14 @@ interface MergeState {
   dun: DunState;
   onboarded?: boolean;
   playerName?: string;
+  packIds?: Record<string, string>; // partition ("f1") -> pack blob id (shared by the partitioned registries)
+  _regq?: unknown; // the registry mutation queue — empty after the end-of-turn registry.flush()
+  bricked?: string; // set after a hard failure: the branch refuses further input
   promises?: Array<{ id: string; what: string; due: number; status?: string }>;
-  event?: { id: string; kind: string; context: string; participants: string[]; closed?: { gist: string } };
+  event?: { id: string; kind: string; context: string; participants: string[]; spanId?: string; closed?: { gist: string } };
   characters?: Array<{ id: string; name: string; role?: string; personality?: string }>;
-  dossiers?: Record<string, string[]>;
-  story?: string[];
+  dossiers?: Record<string, RollingChannel>;
+  story?: RollingChannel;
 }
 
 function makeAdapter(delegate: CustomBackendDelegate, source = luaSource): LuaBackendAdapter {
@@ -99,7 +105,7 @@ async function runTurnRaw(
   userText: string,
   scriptState: string | undefined,
   history?: Array<{ role: string; content: string }>,
-  generationType: 'normal' | 'continue' = 'normal',
+  generationType: string = 'normal',
   extraMessages?: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
 ) {
   const prompt: Prompt = {
@@ -128,7 +134,7 @@ async function runTurn(
   userText: string,
   scriptState: string | undefined,
   history?: Array<{ role: string; content: string }>,
-  generationType: 'normal' | 'continue' = 'normal',
+  generationType: string = 'normal',
   extraMessages?: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
 ): Promise<{ text: string; state: MergeState; scriptState: string }> {
   const { items, result } = await runTurnRaw(adapter, userText, scriptState, history, generationType, extraMessages);
@@ -144,12 +150,37 @@ async function runTurn(
 const sysOf = (p: Prompt): string => (typeof p.messages[0]?.content === 'string' ? (p.messages[0].content as string) : '');
 const clone = (p: Prompt): Prompt => JSON.parse(JSON.stringify(p)) as Prompt;
 
-/** A floor pack blob: 3 rooms, one Crypt Rat, a crate with 5 gold in r1. */
-/** The floor-1 pack as a bare store blob (what findPack reads via the pointer). */
-const F1_PACK = `{"id":"f1","name":"The Upper Halls","description":"Dust and old bones, galleries collapsing inward.","entrance":"r1","stairsDown":"r3","rooms":{"r1":{"name":"Collapsed Nave","desc":"Dust and old bones.","exits":{"north":"r2"}},"r2":{"name":"Ossuary","desc":"Stacked femurs like cordwood.","exits":{"south":"r1","east":"r3"}},"r3":{"name":"Silent Choir","desc":"Stone seats in rows.","exits":{"west":"r2","down":"down"}}},"encounterTable":[{"name":"Crypt Rat","hp":3,"maxHp":3,"atk":1,"reward":5,"lines":{"intro":"It lunges.","hit":"The rat sinks its teeth in.","death":"The rat twitches and is still."}}],"interactables":{"r1:crate":{"responses":["Inside: a few coins and a rat nest.","Just the rat nest now."],"effect":{"gold":5}}},"ambient":["Water drips below."]}`;
+/** A floor pack blob in the registry shape: one section per partitioned registry. */
+interface PackBlob {
+  floors?: Array<{ id: string; floor: string; name: string; description: string; entrance: string; stairsDown?: string; ambient: string[] }>;
+  rooms?: Array<{ id: string; floor: string; name: string; desc: string; exits: Record<string, string> }>;
+  enemies?: Array<{ id: string; floor: string; name: string; hp: number; maxHp: number; atk: number; reward: number; lines: { intro: string; hit: string; death: string } }>;
+  interactables?: Array<{ id: string; key: string; floor: string; responses: string[]; effect?: Record<string, unknown> }>;
+}
+
+/** The floor-1 pack as a bare store blob (what the registries resolve via the pointer). */
+const F1_PACK = JSON.stringify({
+  floors: [{ id: 'f1', floor: 'f1', name: 'The Upper Halls', description: 'Dust and old bones, galleries collapsing inward.', entrance: 'r1', stairsDown: 'r3', ambient: ['Water drips below.'] }],
+  rooms: [
+    { id: 'r1', floor: 'f1', name: 'Collapsed Nave', desc: 'Dust and old bones.', exits: { north: 'r2' } },
+    { id: 'r2', floor: 'f1', name: 'Ossuary', desc: 'Stacked femurs like cordwood.', exits: { south: 'r1', east: 'r3' } },
+    { id: 'r3', floor: 'f1', name: 'Silent Choir', desc: 'Stone seats in rows.', exits: { west: 'r2', down: 'down' } },
+  ],
+  enemies: [{ id: 'crypt-rat', floor: 'f1', name: 'Crypt Rat', hp: 3, maxHp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat sinks its teeth in.', death: 'The rat twitches and is still.' } }],
+  interactables: [{ id: 'r1-crate', key: 'r1:crate', floor: 'f1', responses: ['Inside: a few coins and a rat nest.', 'Just the rat nest now.'], effect: { gold: 5 } }],
+} satisfies PackBlob);
 
 /** Floor pack whose r1 interactable grants the relic (the WIN item). */
-const RELIC_PACK = `{"id":"f1","name":"The Upper Halls","description":"Dust and old bones.","entrance":"r1","stairsDown":"r3","rooms":{"r1":{"name":"Collapsed Nave","desc":"Dust and old bones.","exits":{"north":"r2"}},"r2":{"name":"Ossuary","desc":"Femurs.","exits":{"south":"r1"}},"r3":{"name":"Silent Choir","desc":"Seats.","exits":{"west":"r2"}}},"encounterTable":[],"interactables":{"r1:relic":{"responses":["You take the relic. It hums in your grip."],"effect":{"item":"relic"}}},"ambient":[]}`;
+const RELIC_PACK = JSON.stringify({
+  floors: [{ id: 'f1', floor: 'f1', name: 'The Upper Halls', description: 'Dust and old bones.', entrance: 'r1', stairsDown: 'r3', ambient: [] }],
+  rooms: [
+    { id: 'r1', floor: 'f1', name: 'Collapsed Nave', desc: 'Dust and old bones.', exits: { north: 'r2' } },
+    { id: 'r2', floor: 'f1', name: 'Ossuary', desc: 'Femurs.', exits: { south: 'r1' } },
+    { id: 'r3', floor: 'f1', name: 'Silent Choir', desc: 'Seats.', exits: { west: 'r2' } },
+  ],
+  enemies: [],
+  interactables: [{ id: 'r1-relic', key: 'r1:relic', floor: 'f1', responses: ['You take the relic. It hums in your grip.'], effect: { item: 'relic' } }],
+} satisfies PackBlob);
 
 /** The pointer every floor-1 test state carries (matches the beforeEach seed). */
 const F1_POINTER = { f1: 'pack:f1#1' };
@@ -159,7 +190,7 @@ let testBlobs: MemoryScriptBlobRepository;
 
 const ALDRIC = { id: 'ser-aldric', name: 'Ser Aldric', role: 'old knight', personality: 'grizzled, debt-hungry, quietly honorable' };
 
-/** Dungeon mode, standing in r1 of floor 1, full hp. */
+/** Dungeon mode, standing in r1 of floor 1, full hp. Pack pointers live at the TOP level (state.packIds). */
 function dungeonState(extra: Record<string, unknown> = {}): string {
   return JSON.stringify({
     mode: 'dungeon',
@@ -168,7 +199,8 @@ function dungeonState(extra: Record<string, unknown> = {}): string {
     turn: 4,
     onboarded: true,
     playerName: 'Tester',
-    dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0, packIds: { ...F1_POINTER } },
+    packIds: { ...F1_POINTER },
+    dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0 },
     ...extra,
   });
 }
@@ -234,7 +266,7 @@ function planningDelegate(): CustomBackendDelegate {
 /**
  * Hall route: the hall DM opens a recruitment event (no casting); the
  * scene-runner then casts Ser Aldric and writes the first reply.
- * Captures every prompt for the frozen-prefix assertion.
+ * Captures every prompt for the strict-prefix assertion.
  */
 function hallEventDelegate(prompts: Prompt[] = []): CustomBackendDelegate {
   return {
@@ -317,7 +349,7 @@ function dungeonEconomyDelegate(): CustomBackendDelegate {
         return { text: '', finishReason: 'stop', usage: USAGE,
           toolCalls: [
             { id: 'r1', name: 'remove_item', arguments: { name: 'bomb' } },
-            { id: 'x1', name: 'add_exit', arguments: { direction: 'east', to: 'r3', via: 'blown wall' } },
+            { id: 'x1', name: 'add_exit', arguments: { direction: 'west', to: 'r3', via: 'blown wall' } },
           ] };
       }
       return { text: 'The way opens.', finishReason: 'stop', usage: USAGE };
@@ -342,19 +374,44 @@ describe('The Guildhall (merged card)', () => {
       expect(t2.text).toContain('blacksmith');
     });
 
-    it('hall continue is ambient, no delegate', async () => {
-      const t = await runTurn(makeAdapter(neverDelegate()), '', hallState(), undefined, 'continue');
-      expect(t.text).toContain('The hall murmurs on.');
+    it('generation types: continue is a hard error, not an ambient line', async () => {
+      // Thrown BEFORE ensureState and before the brick machinery — the turn
+      // fails outright, nothing persists.
+      const { result } = await runTurnRaw(makeAdapter(neverDelegate()), '', hallState(), undefined, 'continue');
+      expect(result.finishReason).toBe('error');
+      expect(result.error).toContain('does not support continue');
+      expect(result.scriptState).toBeUndefined();
     });
 
-    it('/delve enters the dungeon: mode flips, planning designs f1, pack in the log', async () => {
+    it('generation types: impersonate is a hard error too', async () => {
+      const { result } = await runTurnRaw(makeAdapter(neverDelegate()), 'speak for me', hallState(), undefined, 'impersonate');
+      expect(result.finishReason).toBe('error');
+      expect(result.error).toContain('does not support impersonate');
+      expect(result.scriptState).toBeUndefined();
+    });
+
+    it('/delve enters the dungeon: mode flips, planning designs f1, ONE pack blob in the store', async () => {
       const t = await runTurn(makeAdapter(planningDelegate()), '/delve', hallState());
       expect(t.state.mode).toBe('dungeon');
       expect(t.state.dun.room).toBe('f1:r1');
-      expect(t.text).toContain('Designed The Upper Halls');
+      // The boundary gen is invisible: the reply is just the entrance
+      // narration — no "Designed …" memoir about the pack.
+      expect(t.text).not.toContain('Designed');
       expect(t.text).toContain('Collapsed Nave');
       expect(t.text).toContain('data-post-response="/go north"');
       expect(t.text).not.toContain('data-post-response="/delve"'); // hall menu gone
+      // Planning writes rode the registry mutation queue and flushed into ONE
+      // pack blob for the floor: one pointer move, one blob with a section per
+      // registry, and an empty queue afterwards.
+      const pid = t.state.packIds?.f1 ?? '';
+      expect(pid).not.toBe('');
+      expect(Object.keys(t.state.packIds ?? {})).toEqual(['f1']);
+      expect(Object.keys((t.state._regq as object) ?? {}).length).toBe(0); // flushed
+      const pack = JSON.parse((await testBlobs.get(pid))!) as PackBlob;
+      expect(pack.floors?.[0]?.name).toBe('The Upper Halls');
+      expect(pack.rooms?.map((r) => r.id)).toEqual(['r1', 'r2', 'r3']);
+      expect(pack.enemies?.map((e) => e.name)).toEqual(['Crypt Rat']);
+      expect(pack.interactables?.map((i) => i.key)).toEqual(['r1:crate']);
     });
   });
 
@@ -385,11 +442,11 @@ describe('The Guildhall (merged card)', () => {
       };
       const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f3', seen: {}, escalations: 0 } });
       const t = await runTurn(makeAdapter(delegate), 'look', start);
-      expect(t.text).toContain('Designed The Relic Vaults');
+      expect(t.text).not.toContain('Designed'); // the boundary gen is invisible
       // The pack blob lives in the store, not the message — assert on it.
-      const blob = await testBlobs.get(t.state.dun.packIds?.f3 ?? '');
-      expect(blob).not.toContain('"down":"down"'); // the designed stairs were stripped
-      expect(blob).not.toContain('"stairsDown"'); // and none was injected on the terminal floor
+      const pack = JSON.parse((await testBlobs.get(t.state.packIds?.f3 ?? ''))!) as PackBlob;
+      expect(JSON.stringify(pack.rooms)).not.toContain('"down":"down"'); // the designed stairs were stripped
+      expect(pack.floors?.[0]?.stairsDown ?? '').toBe(''); // and none was injected on the terminal floor
       expect(t.text).not.toContain('data-post-response="/go down"'); // no Descend button offered
     });
 
@@ -406,7 +463,7 @@ describe('The Guildhall (merged card)', () => {
     });
 
     it('combat: a kill is served from canned lines with zero delegate calls', async () => {
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, packIds: { ...F1_POINTER },
+      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0,
         combat: { name: 'Crypt Rat', hp: 3, maxHp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat sinks its teeth in.', death: 'The rat twitches and is still.' } } } });
       const delegate = neverDelegate();
       const t = await runTurn(makeAdapter(delegate), 'attack', start);
@@ -418,7 +475,7 @@ describe('The Guildhall (merged card)', () => {
     });
 
     it('combat is a mode: movement is gated, only attack/flee buttons', async () => {
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, packIds: { ...F1_POINTER },
+      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0,
         combat: { name: 'Crypt Rat', hp: 30, maxHp: 30, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat bites.', death: 'It dies.' } } } });
       const t = await runTurn(makeAdapter(neverDelegate()), 'go south', start);
       expect(t.text).toContain('between you and everything else');
@@ -429,7 +486,7 @@ describe('The Guildhall (merged card)', () => {
 
     it('flee: failure costs a hit, success returns to the entrance', async () => {
       const combat = { name: 'Crypt Rat', hp: 30, maxHp: 30, atk: 2, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat bites.', death: 'It dies.' } };
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, packIds: { ...F1_POINTER }, combat } });
+      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, combat } });
       const noEscape = luaSource.replace('local FLEE_DC = 8', 'local FLEE_DC = 100');
       const t1 = await runTurn(makeAdapter(neverDelegate(), noEscape), 'flee', start);
       expect(t1.text).toContain('no escape');
@@ -443,19 +500,56 @@ describe('The Guildhall (merged card)', () => {
     });
 
     it('escalation: the dungeon DM resolves novelty; costs are deducted by Lua', async () => {
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: { bomb: 1 }, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, packIds: { ...F1_POINTER } } });
+      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: { bomb: 1 }, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0 } });
       const t = await runTurn(makeAdapter(dungeonEconomyDelegate()), 'I blow the door open', start);
       expect(t.state.dun.escalations).toBe(1);
       expect(t.state.dun.inventory.bomb).toBeUndefined(); // consumed by the engine
-      expect(t.text).toContain('Designed The Upper Halls'); // the pack marker for the new version
-      // The mutation is a NEW blob; the pointer moved to it.
-      expect(t.state.dun.packIds?.f1).not.toBe('pack:f1#1');
-      const blob = await testBlobs.get(t.state.dun.packIds?.f1 ?? '');
-      expect(blob).toContain('"east":"r3"'); // the new exit
+      expect(t.text).not.toContain('Designed'); // pack writes are invisible now
+      // The mutation rode the registry queue and flushed into a NEW blob; the
+      // pointer moved to it, and the queue is empty afterwards.
+      expect(t.state.packIds?.f1).not.toBe('pack:f1#1');
+      expect(Object.keys((t.state._regq as object) ?? {}).length).toBe(0);
+      const pack = JSON.parse((await testBlobs.get(t.state.packIds?.f1 ?? ''))!) as PackBlob;
+      expect(pack.rooms?.find((r) => r.id === 'r2')?.exits.west).toBe('r3'); // the new exit
+      // Branch correctness: the OLD pointer still resolves to the OLD blob —
+      // a swipe back keeps its own version of the floor.
+      const old = JSON.parse((await testBlobs.get('pack:f1#1'))!) as PackBlob;
+      expect(old.rooms?.find((r) => r.id === 'r2')?.exits.west).toBeUndefined();
+    });
+
+    it('spawn_enemy files into the same floor pack as planning content (one pack per floor)', async () => {
+      // add_exit mutates a planning-era room; spawn_enemy adds a roster
+      // record — both ride the same queue and land in the SAME flushed blob.
+      let round = 0;
+      const delegate: CustomBackendDelegate = {
+        generate: vi.fn(async (_cfg: string | null, _prompt: Prompt): Promise<DelegatedGenerateResult> => {
+          round++;
+          if (round === 1) {
+            return { text: '', finishReason: 'stop', usage: USAGE,
+              toolCalls: [
+                { id: 'x1', name: 'add_exit', arguments: { direction: 'west', to: 'r3', via: 'blown wall' } },
+                { id: 's1', name: 'spawn_enemy', arguments: { name: 'Crypt Thing', hp: 4, atk: 1 } },
+              ] };
+          }
+          return { text: 'The wall comes down; something steps through.', finishReason: 'stop', usage: USAGE };
+        }),
+        resolveAdapter: noPassthrough(),
+      };
+      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0 } });
+      const t = await runTurn(makeAdapter(delegate), 'I blast the wall', start);
+      expect(t.state.dun.combat?.name).toBe('Crypt Thing'); // the spawn is live at once
+      expect(Object.keys(t.state.packIds ?? {})).toEqual(['f1']); // still ONE pack for the floor
+      expect(t.state.packIds?.f1).not.toBe('pack:f1#1');
+      const pack = JSON.parse((await testBlobs.get(t.state.packIds?.f1 ?? ''))!) as PackBlob;
+      expect(pack.rooms?.find((r) => r.id === 'r2')?.exits.west).toBe('r3'); // the planning-era record, mutated
+      expect(pack.enemies?.map((e) => e.name).sort()).toEqual(['Crypt Rat', 'Crypt Thing']); // planning + escalation in one pack
+      // …and the old pointer still resolves to the pre-escalation blob.
+      const old = JSON.parse((await testBlobs.get('pack:f1#1'))!) as PackBlob;
+      expect(old.enemies?.map((e) => e.name)).toEqual(['Crypt Rat']);
     });
 
     it('death ends the delve and returns you to the hall — not the game', async () => {
-      const start = dungeonState({ dun: { maxHp: 20, hp: 1, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, packIds: { ...F1_POINTER },
+      const start = dungeonState({ dun: { maxHp: 20, hp: 1, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0,
         combat: { name: 'Crypt Rat', hp: 30, maxHp: 30, atk: 5, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat savages you.', death: 'It dies.' } } } });
       const t1 = await runTurn(makeAdapter(neverDelegate()), 'attack', start);
       expect(t1.state.dun.delveOver).toBe('dead');
@@ -470,7 +564,7 @@ describe('The Guildhall (merged card)', () => {
 
     it('the relic wins the delve and returns you to the hall with the flag set', async () => {
       testBlobs.seed('pack:f1#1', RELIC_PACK); // the floor where r1 holds the relic
-      const start = dungeonState({ flags: {}, dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0, packIds: { ...F1_POINTER } } });
+      const start = dungeonState({ flags: {}, dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0 } });
       const t1 = await runTurn(makeAdapter(neverDelegate()), 'take the relic', start);
       expect(t1.state.dun.delveOver).toBe('won');
       expect(t1.state.flags.relic).toBe(true);
@@ -495,9 +589,14 @@ describe('The Guildhall (merged card)', () => {
       expect(JSON.stringify(prompts[0]!.messages)).not.toContain('reception desk');
     });
 
-    it('frozen prefix: within an event, turn N is a strict prefix of turn N+1', async () => {
+    it('span-is-prompt: within an event, turn N is a strict prefix of turn N+1', async () => {
       // One scene-runner call per turn (no casting tool loop) so each captured
       // prompt is a distinct turn and the append-only span grows by a block.
+      // The prompt IS the span: node zero is the system briefing (composed at
+      // open time), then one node per turn — there is no separate frozen
+      // block to drift. A mid-scene briefing change would be allowed to break
+      // byte-identity (the cache degrades to partial, never wrong), but with
+      // an unchanged briefing node zero stays byte-identical.
       const chats: Prompt[] = [];
       const delegate: CustomBackendDelegate = {
         generate: vi.fn(async (_cfg: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
@@ -529,7 +628,9 @@ describe('The Guildhall (merged card)', () => {
       expect(chats.length).toBeGreaterThanOrEqual(2);
       const p2 = chats[chats.length - 2]!;
       const p3 = chats[chats.length - 1]!;
-      expect(sysOf(p3)).toBe(sysOf(p2)); // system block byte-identical per event
+      expect(p2.messages[0]?.role).toBe('system'); // node zero IS the briefing
+      expect(sysOf(p2)).toContain('scene-runner');
+      expect(sysOf(p3)).toBe(sysOf(p2)); // node zero byte-identical while the briefing is unchanged
       expect(p3.messages.length).toBeGreaterThan(p2.messages.length);
       expect(p3.messages.slice(0, p2.messages.length)).toEqual(p2.messages); // strict prefix
     });
@@ -537,7 +638,7 @@ describe('The Guildhall (merged card)', () => {
     it('close_event: the gist rides the close tag; takes file the dossiers', async () => {
       const t = await runTurn(makeAdapter(closeDelegate()), 'Great. Let\'s go.', eventState());
       expect(t.text).toContain('Recruited Ser Aldric at the quest board.'); // the memoir line
-      expect(t.state.dossiers?.['ser-aldric']).toHaveLength(1); // one rolling entry id
+      expect(t.state.dossiers?.['ser-aldric']?.ids).toHaveLength(1); // one rolling entry id
       expect(t.state.event).toBeUndefined();
       expect(t.text).toContain('data-post-response="/delve"'); // back to idle
     });
@@ -548,11 +649,25 @@ describe('The Guildhall (merged card)', () => {
       expect(t.state.event).toBeUndefined();
     });
 
-    it('/leave with a dead delegate fails loudly — no snapshot, the event stays open for the retry', async () => {
-      const { result } = await runTurnRaw(makeAdapter(neverDelegate()), '/leave', eventState());
-      expect(result.finishReason).toBe('error');
-      expect(result.error).toContain('delegate not expected');
-      expect(result.scriptState).toBeUndefined(); // nothing persisted: a swipe retries from the open event
+    it('/leave with a dead delegate bricks the branch — the event stays open, a swipe retries cleanly', async () => {
+      // Failure UX: the delegate error is caught by the card's pcall; the
+      // failure text is RETURNED (a mechanically successful turn, so the brick
+      // flag persists), and the event stays open.
+      const dead = neverDelegate();
+      const t1 = await runTurn(makeAdapter(dead), '/leave', eventState());
+      expect(t1.text).toContain('bricked');
+      expect(t1.state.bricked).toContain('delegate not expected');
+      expect(t1.state.event?.kind).toBe('recruitment'); // still open
+      // The NEXT turn on the bricked branch refuses — without any delegate call.
+      const callsAfterBrick = vi.mocked(dead.generate).mock.calls.length;
+      const t2 = await runTurn(makeAdapter(dead), 'hello?', t1.scriptState);
+      expect(t2.text).toContain('Swipe or rewind');
+      expect(t2.state.bricked).toContain('delegate not expected');
+      expect(vi.mocked(dead.generate).mock.calls.length).toBe(callsAfterBrick);
+      // A swipe (the pre-failure scriptState) retries cleanly and closes.
+      const t3 = await runTurn(makeAdapter(textOnlyDelegate()), '/leave', eventState());
+      expect(t3.state.event).toBeUndefined();
+      expect(t3.text).toContain('The recruitment breaks off.');
     });
 
     it('events are modes: hall verbs gated while an event is open', async () => {
@@ -560,6 +675,33 @@ describe('The Guildhall (merged card)', () => {
       expect(t.text).toContain('Finish your business here first');
       expect(t.state.gold).toBe(30);
       expect(t.state.event?.kind).toBe('recruitment');
+    });
+
+    it('one toolset, two roles: the DM gets the FULL events toolset (update_character included)', async () => {
+      let dmTools: string[] = [];
+      let sceneTools: string[] = [];
+      const delegate: CustomBackendDelegate = {
+        generate: vi.fn(async (_cfg: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
+          const sys = sysOf(prompt);
+          const names = (((prompt as unknown as { tools?: Array<{ function: { name: string } }> }).tools) ?? []).map((t) => t.function.name);
+          if (sys.includes('idle hall')) {
+            dmTools = names;
+            if (!JSON.stringify(prompt.messages).includes('"open_event"')) {
+              return { text: 'You cross the hall.', finishReason: 'stop', usage: USAGE,
+                toolCalls: [{ id: 'o1', name: 'open_event', arguments: { kind: 'recruitment', context: 'A barbarian recruiting an old knight' } }] };
+            }
+            return { text: 'You cross the hall.', finishReason: 'stop', usage: USAGE };
+          }
+          sceneTools = names;
+          return { text: '"State your business."', finishReason: 'stop', usage: USAGE };
+        }),
+        resolveAdapter: noPassthrough(),
+      };
+      await runTurn(makeAdapter(delegate), 'I go recruit the old knight', hallState());
+      for (const name of ['open_event', 'close_event', 'register_character', 'update_character', 'list_characters', 'get_character', 'add_to_chat']) {
+        expect(dmTools).toContain(name); // the DM phase…
+        expect(sceneTools).toContain(name); // …and the scene phase share ONE toolset
+      }
     });
   });
 
@@ -606,7 +748,7 @@ describe('The Guildhall (merged card)', () => {
       expect(p2js).toContain('"type":"tool_result"');
       expect(p2js).toContain('ser-aldric');
       // …the cast rides the newest message (from state, not a tag)…
-      expect(p2js).toContain('(on stage: ser-aldric)');
+      expect(p2js).toContain('(In the scene with you: ser-aldric)');
       // …so turn 2's scene-runner answer needed no tool call.
       expect(toolResults[toolResults.length - 1]).toBeUndefined();
     });
@@ -633,10 +775,14 @@ describe('The Guildhall (merged card)', () => {
       // NO history at all — the budgeted window is empty. The old log-anchored
       // span would have been blank here; the mechanical span is complete.
       await runTurn(adapter, 'What is your rate?', t1.scriptState, []);
-      const p2js = JSON.stringify(scenePrompts[scenePrompts.length - 1]!.messages);
-      expect(p2js).toContain('You cross the hall.'); // the DM's transition
+      const p2 = scenePrompts[scenePrompts.length - 1]!;
+      const p2js = JSON.stringify(p2.messages);
+      expect(p2.messages[0]?.role).toBe('system'); // node zero: the briefing
+      expect(sysOf(p2)).toContain('EVENT: recruitment — A barbarian recruiting an old knight');
       expect(p2js).toContain('The knight strokes his beard.'); // turn 1's reply
       expect(p2js).toContain('I recruit the knight'); // the triggering input (kept now)
+      // The DM's framing prose is the fallback, not part of the scene record.
+      expect(p2js).not.toContain('You cross the hall.');
     });
 
     it('onboarding seeds the span with the receptionist greeting', async () => {
@@ -656,7 +802,7 @@ describe('The Guildhall (merged card)', () => {
       // Seed a span for the fixture event (openEvent would normally spanStart it).
       testBlobs.seed('arr#1', JSON.stringify({
         item: [
-          { role: 'user', content: 'I need a knight.\n\n(on stage: ser-aldric)' },
+          { role: 'user', content: 'I need a knight.\n\n(In the scene with you: ser-aldric)' },
           { role: 'assistant', content: '"State your business."' },
         ],
         prev: null,
@@ -664,7 +810,7 @@ describe('The Guildhall (merged card)', () => {
       const start = eventState({ event: { id: 'e1', kind: 'recruitment', context: 'A barbarian recruiting an old knight', participants: ['ser-aldric'], spanId: 'arr#1' } });
       const t = await runTurn(makeAdapter(textOnlyDelegate()), '/leave', start);
       expect(t.state.event).toBeUndefined();
-      const ids = t.state.story ?? [];
+      const ids = t.state.story?.ids ?? [];
       expect(ids).toHaveLength(1);
       const entry = JSON.parse((await testBlobs.get(ids[0]!))!) as { gist: string; content: unknown[] };
       expect(entry.gist).toBe('The recruitment breaks off.'); // the script-composed fallback gist
@@ -674,7 +820,7 @@ describe('The Guildhall (merged card)', () => {
 
   describe('merge: events + dungeon coexist', () => {
     it('mid-combat free text escalates to the dungeon DM, which opens an event; combat persists', async () => {
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, packIds: { ...F1_POINTER },
+      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0,
         combat: { name: 'Crypt Rat', hp: 10, maxHp: 10, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'It bites.', death: 'It dies.' } } } });
       const t = await runTurn(makeAdapter(dungeonDmOpensEventDelegate()), 'I try to intimidate the rat', start);
       // The combat gate did NOT swallow the free text — the dungeon DM was reached.
@@ -700,7 +846,7 @@ describe('The Guildhall (merged card)', () => {
         resolveAdapter: noPassthrough(),
       };
       const combat = { name: 'Crypt Rat', hp: 10, maxHp: 10, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'It bites.', death: 'It dies.' } };
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, packIds: { ...F1_POINTER }, combat } });
+      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, combat } });
       const t1 = await runTurn(makeAdapter(openDelegate), 'I parley with the rat', start);
       expect(t1.state.event?.kind).toBe('parley');
       expect(t1.state.dun.combat?.name).toBe('Crypt Rat');
@@ -720,7 +866,7 @@ describe('The Guildhall (merged card)', () => {
   describe('the story channel (lib/rolling)', () => {
     it('a fight gist lands in the story; the next DM sees STORY SO FAR and can inspect_summary into the raw span', async () => {
       const combat = { name: 'Crypt Rat', hp: 3, maxHp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat bites.', death: 'The rat twitches and is still.' } };
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, packIds: { ...F1_POINTER }, combat, fightName: 'fight Crypt Rat',
+      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, combat, fightName: 'fight Crypt Rat',
         fightLog: [
           { role: 'assistant', content: 'It lunges.' },
           { role: 'user', content: 'attack' },
@@ -755,7 +901,7 @@ describe('The Guildhall (merged card)', () => {
       // Turn 1: the killing blow ends the fight — gist sub-gen, then the story push.
       const t1 = await runTurn(adapter, 'attack', start, fightHistory);
       expect(t1.text).toContain('You stabbed the rat dead, barely winded.');
-      expect(t1.state.story ?? []).toHaveLength(1);
+      expect(t1.state.story?.ids ?? []).toHaveLength(1);
       // Turn 2: a novel action escalates; the DM's briefing carries the story…
       await runTurn(adapter, 'i search the ossuary for trinkets', t1.scriptState, [
         ...fightHistory,
@@ -771,20 +917,24 @@ describe('The Guildhall (merged card)', () => {
   });
 
   describe('lib invariants (restored from the former suites)', () => {
-    it('a corrupted pack blob fails loudly instead of silently replanning the floor', async () => {
+    it('a corrupted pack blob bricks the branch loudly instead of silently replanning the floor', async () => {
       testBlobs.seed('pack:f1#1', '{not json}');
-      const { result } = await runTurnRaw(makeAdapter(neverDelegate()), 'look', dungeonState());
-      expect(result.finishReason).toBe('error');
-      expect(result.error).toContain('corrupted JSON blob');
-      expect(result.scriptState).toBeUndefined();
+      // Failure UX: the error is caught by the card's pcall, the failure text
+      // is RETURNED (a mechanically successful turn), and the branch bricks.
+      const t = await runTurn(makeAdapter(neverDelegate()), 'look', dungeonState());
+      expect(t.text).toContain('bricked');
+      expect(t.state.bricked).toContain('corrupted JSON blob');
+      // The next input on the bricked branch is refused without any delegate call.
+      const t2 = await runTurn(makeAdapter(neverDelegate()), 'look again', t.scriptState);
+      expect(t2.text).toContain('Swipe or rewind');
+      expect(t2.state.bricked).toContain('corrupted JSON blob');
     });
 
-    it('a pack pointer whose blob is missing fails loudly', async () => {
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0, packIds: { f1: 'pack:f1#99' } } });
-      const { result } = await runTurnRaw(makeAdapter(neverDelegate()), 'look', start);
-      expect(result.finishReason).toBe('error');
-      expect(result.error).toContain('pack blob missing');
-      expect(result.scriptState).toBeUndefined();
+    it('a pack pointer whose blob is missing bricks the branch loudly', async () => {
+      const start = dungeonState({ packIds: { f1: 'pack:f1#99' } });
+      const t = await runTurn(makeAdapter(neverDelegate()), 'look', start);
+      expect(t.text).toContain('bricked');
+      expect(t.state.bricked).toContain('pack blob missing');
     });
 
     it('ledger: a vague due date is rejected at registration', async () => {
@@ -843,15 +993,15 @@ describe('The Guildhall (merged card)', () => {
 
     const WORDS = ['one', 'two', 'three', 'four', 'five', 'six', 'seven'];
 
-    /** Seed a dossier in the rolling shape: one gist-only entry per take, ids in the array. */
-    function seedTakes(charId: string, gists: string[]): Record<string, string[]> {
+    /** Seed a dossier as a rolling channel: one gist-only entry per take, ids in the log half. */
+    function seedTakes(charId: string, gists: string[]): Record<string, RollingChannel> {
       const ids: string[] = [];
       gists.forEach((gist, i) => {
         const id = `roll#${i + 2}`; // #1 is the beforeEach pack seed
         testBlobs.seed(id, JSON.stringify({ label: 'recruitment', gist }));
         ids.push(id);
       });
-      return { [charId]: ids };
+      return { [charId]: { kv: {}, ids } };
     }
     const SEVEN_TAKES = WORDS.map((w) => `take number ${w}`);
 
@@ -892,23 +1042,25 @@ describe('The Guildhall (merged card)', () => {
       expect(servedJs).toContain('take number seven'); // a recent take arrived
       // The live array is now [fold id, 3 recent ids]; the fold entry's blob
       // carries the delegate digest and the descriptor list of what it folded.
-      const ids = t.state.dossiers?.['ser-aldric'] ?? [];
+      const ids = t.state.dossiers?.['ser-aldric']?.ids ?? [];
       expect(ids).toHaveLength(4);
       const foldBlob = JSON.parse((await testBlobs.get(ids[0]!))!) as { gist: string; content: Array<{ id: string }> };
       expect(foldBlob.gist).toContain('grizzled');
       expect(foldBlob.content).toHaveLength(4); // the 4 folded takes, as descriptors
     });
 
-    it('dossier: a failing fold fails the turn loudly — nothing persisted, the retry folds fine', async () => {
+    it('dossier: a failing fold bricks the branch — memory intact, a swipe retries the fold fine', async () => {
       const start = eventState({ dossiers: seedTakes('ser-aldric', SEVEN_TAKES) });
-      const { result } = await runTurnRaw(makeAdapter(foldDelegate(true)), 'I find Ser Aldric', start);
-      expect(result.finishReason).toBe('error');
-      expect(result.error).toContain('backend down');
-      // No state snapshot: the dossier id array survives untouched on the
-      // rolled-back state, so a swipe retries the fold.
-      expect(result.scriptState).toBeUndefined();
+      // The fold's delegate error is caught by the card's pcall: the failure
+      // text is the reply and the branch bricks. Ids move only after the fold
+      // entry is filed, so the dossier survives untouched on the bricked state.
+      const t1 = await runTurn(makeAdapter(foldDelegate(true)), 'I find Ser Aldric', start);
+      expect(t1.state.bricked).toContain('backend down');
+      expect(t1.state.dossiers?.['ser-aldric']?.ids).toHaveLength(7); // the id array intact
+      expect(t1.state.event?.kind).toBe('recruitment'); // the event stays open
+      // A swipe (the pre-failure scriptState) retries the fold cleanly.
       const t = await runTurn(makeAdapter(foldDelegate(false)), 'I find Ser Aldric', start);
-      const ids = t.state.dossiers?.['ser-aldric'] ?? [];
+      const ids = t.state.dossiers?.['ser-aldric']?.ids ?? [];
       expect(ids).toHaveLength(4);
       const foldBlob = JSON.parse((await testBlobs.get(ids[0]!))!) as { gist: string };
       expect(foldBlob.gist).toContain('grizzled');
@@ -1005,15 +1157,18 @@ describe('The Guildhall (merged card)', () => {
       // 3. /leave closes the event (finalize files Aldric's take) → back to idle.
       const t3 = await step('/leave');
       expect(t3.state.event).toBeUndefined();
-      const aldricIds = t3.state.dossiers?.['ser-aldric'] ?? [];
+      const aldricIds = t3.state.dossiers?.['ser-aldric']?.ids ?? [];
       expect(aldricIds).toHaveLength(1);
       expect(await testBlobs.get(aldricIds[0]!)).toContain('meant business');
 
-      // 4. /delve → planning designs floor 1 → enter the dungeon.
+      // 4. /delve → planning designs floor 1 → enter the dungeon. The boundary
+      // gen is invisible: the reply is the entrance narration, and the pack is
+      // ONE flushed blob under state.packIds.f1.
       const t4 = await step('/delve');
       expect(t4.state.mode).toBe('dungeon');
       expect(t4.state.dun.room).toBe('f1:r1');
-      expect(t4.text).toContain('Designed The Upper Halls');
+      expect(t4.text).not.toContain('Designed');
+      expect(t4.state.packIds?.f1).toBeDefined();
 
       // 5. go north → r2 → a rat rolls up (ENCOUNTER_CHANCE=1).
       const t5 = await step('go north');
@@ -1025,7 +1180,7 @@ describe('The Guildhall (merged card)', () => {
       const t6 = await step('attack');
       expect(t6.state.dun.combat).toBeUndefined();
       expect(t6.state.gold).toBeGreaterThanOrEqual(5);
-      expect(t6.state.story ?? []).toHaveLength(2); // the recruitment scene AND the fight gist
+      expect(t6.state.story?.ids ?? []).toHaveLength(2); // the recruitment scene AND the fight gist
 
       // 7. go south → back to the entrance (no encounter there).
       const t7 = await step('go south');
@@ -1076,9 +1231,12 @@ describe('The Guildhall (merged card)', () => {
       // the scene-runner saw the receptionist already on stage (no cold-start
       // list_characters dance), and the cast note rides the newest message.
       expect(JSON.stringify(scenePrompts[0]!.messages)).toContain('Thornwall');
-      expect(JSON.stringify(scenePrompts[0]!.messages)).toContain('(on stage: receptionist)');
+      expect(JSON.stringify(scenePrompts[0]!.messages)).toContain('(In the scene with you: receptionist)');
       expect(t.state.onboarded).toBe(true);
       expect(t.state.playerName).toBe('Grok');
+      // The kv demo: register_player filed the player's name as a verbatim fact
+      // in the story channel — the FACTS block of every briefing it serves.
+      expect(t.state.story?.kv?.player).toBe('Grok');
       expect(t.state.event).toBeUndefined(); // registration closed
       expect(t.state.characters?.map((c) => c.id)).toContain('receptionist');
       expect(t.text).toContain('"Welcome to the Guildhall, Grok.'); // the receptionist spoke

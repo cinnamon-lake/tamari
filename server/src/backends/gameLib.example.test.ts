@@ -292,7 +292,7 @@ local rolling = require("lib/rolling")
 
 function generate(prompt, ctx)
   if type(state) ~= "table" then state = {} end
-  state.story = state.story or {}
+  state.story = state.story or rolling.channel()
   rolling.bind(prompt)
   local cmd = prompt.messages[#prompt.messages].content
   local label, gist = cmd:match("^push:([^|]+)|(.+)$")
@@ -304,7 +304,7 @@ function generate(prompt, ctx)
     return rolling.push(state.story, { label = "quiet walk", gist = "Nothing happened." })
   end
   if cmd == "plant-missing" then
-    state.story[#state.story + 1] = "roll#99" -- an id with no blob (a bug)
+    state.story.ids[#state.story.ids + 1] = "roll#99" -- an id with no blob (a bug)
     return "planted"
   end
   if cmd == "push-blocks" then
@@ -448,5 +448,310 @@ describe('lib/rolling', () => {
     const failed = await roll(adapter, t.scriptState, 'briefing');
     expect(failed.result.finishReason).toBe('error');
     expect(failed.result.error).toContain('summary blob missing');
+  });
+});
+
+// A kv-channel probe: the non-compacting half of lib/rolling.
+const KV_LUA = `
+local rolling = require("lib/rolling")
+local toolset = require("lib/toolset")
+
+function generate(prompt, ctx)
+  if type(state) ~= "table" then state = {} end
+  state.story = state.story or rolling.channel()
+  rolling.bind(prompt)
+  local cmd = prompt.messages[#prompt.messages].content
+  if cmd == "set" then rolling.set(state.story, "guild_name", "The Sunken Guildhall") return "set" end
+  if cmd == "overwrite" then rolling.set(state.story, "guild_name", "The REBUILT Guildhall") return "ok" end
+  if cmd == "get" then return rolling.get(state.story, "guild_name") or "nil" end
+  if cmd == "tools" then
+    local ts = toolset.new()
+    ts:use(rolling.tools(state.story))
+    local ex = ts:exec()
+    return ex("list_facts", {}) .. " | " .. ex("set_fact", { key = "grudge", value = "the guild" })
+      .. " | " .. ex("get_fact", { key = "grudge" }) .. " | " .. ex("list_facts", {})
+  end
+  if cmd == "briefing" then return rolling.briefing(state.story) end
+  local label = cmd:match("^push:(.+)$")
+  if label then return rolling.push(state.story, { label = label, gist = "gist " .. label }) end
+  return "?"
+end
+
+function list_models() return { { id = "spar", name = "Spar" } } end
+`;
+
+describe('lib/rolling kv (the non-compacting half)', () => {
+  it('set/get round-trip; overwrite is canon', async () => {
+    const adapter = makeAdapter(noDelegate(), KV_LUA);
+    let t = await roll(adapter, undefined, 'set');
+    t = await roll(adapter, t.scriptState, 'get');
+    expect(t.text).toBe('The Sunken Guildhall');
+    t = await roll(adapter, t.scriptState, 'overwrite');
+    t = await roll(adapter, t.scriptState, 'get');
+    expect(t.text).toBe('The REBUILT Guildhall');
+  });
+
+  it('briefing renders FACTS verbatim before STORY SO FAR', async () => {
+    const adapter = makeAdapter(noDelegate(), KV_LUA);
+    let t = await roll(adapter, undefined, 'set');
+    t = await roll(adapter, t.scriptState, 'push:first delve');
+    t = await roll(adapter, t.scriptState, 'briefing');
+    expect(t.text).toContain('FACTS:\n- guild_name: The Sunken Guildhall');
+    expect(t.text).toContain('STORY SO FAR');
+    expect(t.text.indexOf('FACTS:')).toBeLessThan(t.text.indexOf('STORY SO FAR'));
+  });
+
+  it('the kv block never folds', async () => {
+    const adapter = makeAdapter(digestDelegate(), KV_LUA);
+    let t = await roll(adapter, undefined, 'set');
+    for (const w of ['one', 'two', 'three', 'four', 'five', 'six', 'seven']) {
+      t = await roll(adapter, t.scriptState, `push:${w}`);
+    }
+    t = await roll(adapter, t.scriptState, 'briefing');
+    expect(t.text).toContain('A folded digest of the early episodes.'); // the log folded
+    expect(t.text).toContain('- guild_name: The Sunken Guildhall'); // the fact survived verbatim
+  });
+
+  it('rolling.tools(ch) exposes list_facts / get_fact / set_fact over the channel', async () => {
+    const adapter = makeAdapter(noDelegate(), KV_LUA);
+    let t = await roll(adapter, undefined, 'set');
+    t = await roll(adapter, t.scriptState, 'tools');
+    expect(t.text).toBe('guild_name | {"fact_set":"grudge"} | the guild | grudge, guild_name');
+  });
+});
+
+// A partitioned-registry probe: rooms routed by floor into packs.
+const PACK_LUA = `
+local registry = require("lib/registry")
+
+local rooms = registry.new({
+  tool = "add_room",
+  key = "rooms",
+  id_from = "name",
+  partition_by = function(rec) return rec.floor end,
+  cap = 4,
+  fields = {
+    { name = "name", type = "string", required = true },
+    { name = "floor", type = "string", required = true },
+    { name = "hp", type = "integer", min = 1, max = 20, default = 6 },
+    { name = "tags", type = "array", closed = { "dark", "flooded" } },
+  },
+  mutable = { "hp" },
+  queries = {
+    { name = "rooms_with_tag",
+      args = { { name = "tag", type = "string", required = true } },
+      run = function(records, args)
+        local out = {}
+        for _, r in ipairs(records) do
+          for _, t in ipairs(r.tags or {}) do
+            if t == args.tag then out[#out + 1] = r.id break end
+          end
+        end
+        return out
+      end },
+  },
+})
+
+function generate(prompt, ctx)
+  if type(state) ~= "table" then state = {} end
+  local cmd = prompt.messages[#prompt.messages].content
+  local f, name = cmd:match("^create:([^:]+):(.+)$")
+  if f then
+    local id, status = rooms.create({ name = name, floor = f, hp = 30, tags = { "dark" } }) -- hp 30 clamps to 20
+    return tostring(id) .. (status and (" (" .. status .. ")") or "")
+  end
+  local lf = cmd:match("^list:(.+)$")
+  if lf then
+    local names = {}
+    for _, r in ipairs(rooms.list(lf)) do names[#names + 1] = r.id .. "=" .. tostring(r.hp) end
+    return table.concat(names, ", ")
+  end
+  local gf, gid = cmd:match("^get:([^:]+):(.+)$")
+  if gf then
+    local r = rooms.get(gf, gid)
+    return r and json.encode(r) or "nil"
+  end
+  if cmd == "flush" then registry.flush() return "flushed" end
+  if cmd == "pointers" then return json.encode(state.packIds or {}) end
+  if cmd == "qlen" then return tostring(type(state._regq) == "table" and #state._regq or 0) end
+  local rb = cmd:match("^readblob:(.+)$")
+  if rb then return store.getJson(rb):await() or "missing" end
+  if cmd == "plant-bad-pointer" then
+    state.packIds = state.packIds or {}
+    state.packIds.f9 = "pack#99"
+    return "planted"
+  end
+  if cmd == "update-hp" then return rooms.exec("update_rooms", { id = "cell", hp = 25 }) end
+  if cmd == "update-nope" then return rooms.exec("update_rooms", { id = "ghost", hp = 5 }) end
+  if cmd == "update-nothing" then return rooms.exec("update_rooms", { id = "cell", floor = "f2" }) end
+  if cmd == "card-update" then
+    local ok, err = rooms.update("f1", "cell", { hp = 3 })
+    if ok then return "true" end
+    return "false " .. tostring(err)
+  end
+  if cmd == "tag-query" then return rooms.exec("rooms_with_tag", { tag = "dark" }) end
+  if cmd == "tag-method" then return json.encode(rooms.rooms_with_tag({ tag = "dark" })) end
+  return "?"
+end
+
+function list_models() return { { id = "spar", name = "Spar" } } end
+`;
+
+describe('lib/registry partitioned (packs)', () => {
+  it('writes queue and reads resolve base+queue; flush moves one pointer per partition', async () => {
+    const adapter = makeAdapter(noDelegate(), PACK_LUA);
+    let t = await roll(adapter, undefined, 'create:f1:Cell');
+    expect(t.text).toBe('cell');
+    t = await roll(adapter, t.scriptState, 'create:f1:Hall');
+    t = await roll(adapter, t.scriptState, 'create:f2:Crypt');
+    t = await roll(adapter, t.scriptState, 'qlen');
+    expect(t.text).toBe('3');
+    // Unflushed: reads resolve through the queue.
+    t = await roll(adapter, t.scriptState, 'list:f1');
+    expect(t.text).toBe('cell=20, hall=20');
+    t = await roll(adapter, t.scriptState, 'flush');
+    expect(t.text).toBe('flushed');
+    t = await roll(adapter, t.scriptState, 'qlen');
+    expect(t.text).toBe('0');
+    const pointers = JSON.parse((await roll(adapter, t.scriptState, 'pointers')).text) as Record<string, string>;
+    expect(pointers['f1']).toBeDefined();
+    expect(pointers['f2']).toBeDefined();
+    // Next turn: reads load from the flushed blob.
+    t = await roll(adapter, t.scriptState, 'list:f1');
+    expect(t.text).toBe('cell=20, hall=20');
+    t = await roll(adapter, t.scriptState, 'get:f2:crypt');
+    expect(t.text).toContain('"name":"Crypt"');
+  });
+
+  it('a flush is a NEW put plus a pointer move — old branches keep their version', async () => {
+    const adapter = makeAdapter(noDelegate(), PACK_LUA);
+    let t = await roll(adapter, undefined, 'create:f1:Cell');
+    t = await roll(adapter, t.scriptState, 'flush');
+    const s1 = t.scriptState;
+    const pid1 = JSON.parse((await roll(adapter, s1, 'pointers')).text)['f1'] as string;
+    // Mutate and flush: the pointer moves to a new blob.
+    t = await roll(adapter, s1, 'create:f1:Hall');
+    t = await roll(adapter, t.scriptState, 'flush');
+    const s2 = t.scriptState;
+    const pid2 = JSON.parse((await roll(adapter, s2, 'pointers')).text)['f1'] as string;
+    expect(pid2).not.toBe(pid1);
+    // The old branch's blob is untouched.
+    const oldBlob = (await roll(adapter, s2, `readblob:${pid1}`)).text;
+    expect(oldBlob).toContain('cell');
+    expect(oldBlob).not.toContain('hall');
+    // Re-filing from the post-mutation branch converges (swipe-stable).
+    t = await roll(adapter, s2, 'create:f1:Hall');
+    expect(t.text).toBe('hall (already_registered)');
+  });
+
+  it('a pointer whose blob is missing fails loudly', async () => {
+    const adapter = makeAdapter(noDelegate(), PACK_LUA);
+    const t = await roll(adapter, undefined, 'plant-bad-pointer');
+    const failed = await roll(adapter, t.scriptState, 'list:f9');
+    expect(failed.result.finishReason).toBe('error');
+    expect(failed.result.error).toContain('pack blob missing');
+  });
+
+  it('cap applies per partition', async () => {
+    const adapter = makeAdapter(noDelegate(), PACK_LUA);
+    let t = await roll(adapter, undefined, 'x');
+    for (const n of ['a', 'b', 'c', 'd']) {
+      t = await roll(adapter, t.scriptState, `create:f1:Room ${n}`);
+    }
+    t = await roll(adapter, t.scriptState, 'create:f1:Room e');
+    expect(t.text).toContain('registry full');
+    expect(t.text).toContain('in f1');
+    t = await roll(adapter, t.scriptState, 'create:f2:Room e'); // another partition is unaffected
+    expect(t.text).toBe('room-e');
+  });
+});
+
+describe('lib/registry mutable fields and queries', () => {
+  it('the update tool overwrites mutable fields with the same clamps', async () => {
+    const adapter = makeAdapter(noDelegate(), PACK_LUA);
+    let t = await roll(adapter, undefined, 'create:f1:Cell');
+    t = await roll(adapter, t.scriptState, 'update-hp'); // hp 25 → clamped to 20
+    expect(t.text).toContain('"updated":"cell"');
+    expect(t.text).toContain('"hp":20');
+    t = await roll(adapter, t.scriptState, 'get:f1:cell');
+    expect(t.text).toContain('"hp":20');
+  });
+
+  it('update rejects unknown ids and updates with no mutable field', async () => {
+    const adapter = makeAdapter(noDelegate(), PACK_LUA);
+    let t = await roll(adapter, undefined, 'create:f1:Cell');
+    t = await roll(adapter, t.scriptState, 'update-nope');
+    expect(t.text).toBe('unknown rooms: ghost');
+    t = await roll(adapter, t.scriptState, 'update-nothing'); // floor is not mutable
+    expect(t.text).toContain('rejected: nothing to update');
+  });
+
+  it('card-side update(pk, id, fields) queues against the partition', async () => {
+    const adapter = makeAdapter(noDelegate(), PACK_LUA);
+    let t = await roll(adapter, undefined, 'create:f1:Cell');
+    t = await roll(adapter, t.scriptState, 'card-update');
+    expect(t.text).toBe('true');
+    t = await roll(adapter, t.scriptState, 'get:f1:cell');
+    expect(t.text).toContain('"hp":3');
+  });
+
+  it('custom queries work as tool and as card-side method, cross-partition', async () => {
+    const adapter = makeAdapter(noDelegate(), PACK_LUA);
+    let t = await roll(adapter, undefined, 'create:f1:Cell');
+    t = await roll(adapter, t.scriptState, 'create:f2:Crypt');
+    t = await roll(adapter, t.scriptState, 'tag-query');
+    expect(t.text).toBe('["cell","crypt"]');
+    t = await roll(adapter, t.scriptState, 'tag-method');
+    expect(t.text).toBe('["cell","crypt"]');
+  });
+});
+
+// A ledger probe: set semantics for promises.
+const LEDGER_LUA = `
+local ledger = require("lib/ledger")
+
+function generate(prompt, ctx)
+  if type(state) ~= "table" then state = {} end
+  state.turn = state.turn or 0
+  ledger.bind(function() return state.turn end)
+  local cmd = prompt.messages[#prompt.messages].content
+  if cmd == "file" then return ledger.exec("promise", { id = "bro", what = "design the brother", due = state.turn + 5 }) end
+  if cmd == "refile" then return ledger.exec("promise", { id = "bro", what = "REDESIGN the brother", due = state.turn + 8 }) end
+  if cmd == "resolve" then return ledger.exec("resolve_promise", { id = "bro", outcome = "kept" }) end
+  if cmd == "fail" then return ledger.exec("resolve_promise", { id = "bro", outcome = "failed" }) end
+  if cmd == "unknown" then return ledger.exec("resolve_promise", { id = "nope" }) end
+  if cmd == "briefing" then return ledger.briefing() end
+  return "?"
+end
+
+function list_models() return { { id = "spar", name = "Spar" } } end
+`;
+
+describe('lib/ledger set semantics', () => {
+  it('re-filing a pending id overwrites what/due (replaced = true)', async () => {
+    const adapter = makeAdapter(noDelegate(), LEDGER_LUA);
+    let t = await roll(adapter, undefined, 'file');
+    expect(t.text).toContain('"promised":"bro"');
+    expect(t.text).toContain('"due":5');
+    t = await roll(adapter, t.scriptState, 'refile');
+    expect(t.text).toContain('"replaced":true');
+    expect(t.text).toContain('"due":8');
+    t = await roll(adapter, t.scriptState, 'briefing');
+    expect(t.text).toContain('REDESIGN the brother');
+    expect(t.text).toContain('due 8');
+    expect(t.text).not.toContain('design the brother (due 5)');
+  });
+
+  it('resolve overwrites status even on a resolved entry; unknown ids error', async () => {
+    const adapter = makeAdapter(noDelegate(), LEDGER_LUA);
+    let t = await roll(adapter, undefined, 'file');
+    t = await roll(adapter, t.scriptState, 'resolve');
+    expect(t.text).toContain('"outcome":"kept"');
+    t = await roll(adapter, t.scriptState, 'fail');
+    expect(t.text).toContain('"outcome":"failed"');
+    t = await roll(adapter, t.scriptState, 'briefing');
+    expect(t.text).toContain('FAILED — canon');
+    t = await roll(adapter, t.scriptState, 'unknown');
+    expect(t.text).toBe('unknown promise: nope');
   });
 });

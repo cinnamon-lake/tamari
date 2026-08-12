@@ -10,10 +10,15 @@
 -- due-ness from `now` and escalates to DUE NOW. Lifecycle includes failure:
 -- pending → kept / failed, and failure is canon too.
 --
--- `now` is the card's current turn counter; bind it once per turn with
--- ledger.bind(fn). A filed due date is clamped to now+1 … now+50 — a promise
--- can never be filed for the same turn, nor further than 50 turns out. The
--- lib never touches `state` beyond its own key.
+-- `now` is whatever the card's clock says — turns, floors, weeks — bound once
+-- per turn with ledger.bind(fn). A filed due date is clamped to now+1 …
+-- now+50 of those units: never this turn, never past the horizon. The lib
+-- never touches `state` beyond its own key.
+--
+-- SET semantics (the ledger is non-compacting information): records are keyed
+-- by id — promise({ id, … }) with an existing pending id OVERWRITES what/due
+-- (latest is canon, never a duplicate), and resolve_promise overwrites the
+-- status even on a resolved entry.
 
 local M = {}
 
@@ -61,8 +66,14 @@ function M.exec(name, args)
       return "rejected: id, what, and a concrete due are required"
     end
     due = math.max(now + 1, math.min(math.floor(due), now + 50))
+    -- Set semantics: re-filing an existing pending id OVERWRITES — latest is
+    -- canon, never a duplicate.
     for _, p in ipairs(promises()) do
-      if p.id == id and not p.status then return "already pending: " .. id end
+      if p.id == id and not p.status then
+        p.what = what
+        p.due = due
+        return json.encode({ promised = id, due = due, replaced = true })
+      end
     end
     local list = promises()
     list[#list + 1] = { id = id, what = what, due = due }
@@ -71,12 +82,12 @@ function M.exec(name, args)
   if name == "resolve_promise" then
     local id = tostring(args.id or "")
     for _, p in ipairs(promises()) do
-      if p.id == id and not p.status then
+      if p.id == id then
         p.status = args.outcome == "failed" and "failed" or "kept"
         return json.encode({ resolved = id, outcome = p.status })
       end
     end
-    return "no pending promise: " .. id
+    return "unknown promise: " .. id
   end
   return nil
 end

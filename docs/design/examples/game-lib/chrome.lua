@@ -24,8 +24,8 @@ end
 
 -- The deterministic cleaning every delegate view shares: strip legacy
 -- [sys]…[/sys], <button>…</button>, and [HUD…]; trim. Transcript and the
--- event span BOTH use this — the frozen-prefix property of the event span
--- depends on the cleaning never diverging between views.
+-- event span BOTH use this — the append-only-prefix property of the event
+-- span depends on the cleaning never diverging between views.
 function M.clean(text)
   return (tostring(text or "")
     :gsub("%s*%[sys%].-%[/sys%]%s*", "\n\n")
