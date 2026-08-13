@@ -19,6 +19,8 @@ export interface SqlOrphans {
   danglingChatMembers: Array<{ chatId: string; characterId: string }>;
   chatsWithDeletedCharacters: string[];
   messagesWithDeletedParents: string[];
+  /** message_ids present in message_parts but missing from messages (FK-off deletes). */
+  danglingMessageParts: string[];
 }
 
 export interface FilesystemOrphans {
@@ -54,7 +56,8 @@ export class DataMaid {
       sqlOrphans.staleGenerations.length +
       sqlOrphans.danglingChatMembers.length +
       sqlOrphans.chatsWithDeletedCharacters.length +
-      sqlOrphans.messagesWithDeletedParents.length;
+      sqlOrphans.messagesWithDeletedParents.length +
+      sqlOrphans.danglingMessageParts.length;
 
     const totalFilesystemOrphans =
       filesystemOrphans.orphanedAvatarFiles.length +
@@ -131,6 +134,16 @@ export class DataMaid {
       deletedSql += ids.length;
     }
 
+    if (report.sqlOrphans.danglingMessageParts.length > 0) {
+      const ids = report.sqlOrphans.danglingMessageParts;
+      const placeholders = ids.map(() => '?').join(',');
+      await this.client.execute({
+        sql: `DELETE FROM message_parts WHERE message_id IN (${placeholders})`,
+        args: ids,
+      });
+      deletedSql += ids.length;
+    }
+
     // Iterative leaf-first GC for messages in deleted chats (preserves soft forks)
     const gcResult = await this.gcMessages();
     deletedSql += gcResult.deleted;
@@ -161,6 +174,7 @@ export class DataMaid {
       danglingChatMembers,
       chatsWithDeletedCharacters,
       messagesWithDeletedParents,
+      danglingMessageParts,
     ] = await Promise.all([
       this.client.execute('SELECT id FROM attachments WHERE message_id IS NULL'),
       this.client.execute(
@@ -179,6 +193,9 @@ export class DataMaid {
       this.client.execute(
         'SELECT m.id FROM messages m LEFT JOIN messages p ON m.parent_id = p.id WHERE m.parent_id IS NOT NULL AND p.id IS NULL',
       ),
+      this.client.execute(
+        'SELECT DISTINCT mp.message_id AS id FROM message_parts mp LEFT JOIN messages m ON mp.message_id = m.id WHERE m.id IS NULL',
+      ),
     ]);
 
     return {
@@ -192,6 +209,7 @@ export class DataMaid {
       })),
       chatsWithDeletedCharacters: chatsWithDeletedCharacters.rows.map((r) => str(r.id)),
       messagesWithDeletedParents: messagesWithDeletedParents.rows.map((r) => str(r.id)),
+      danglingMessageParts: danglingMessageParts.rows.map((r) => str(r.id)),
     };
   }
 

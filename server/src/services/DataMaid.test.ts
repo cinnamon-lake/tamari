@@ -56,6 +56,15 @@ async function initSchema() {
     )
   `);
   await client.execute(`
+    CREATE TABLE IF NOT EXISTS message_parts (
+      message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      idx INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      data TEXT NOT NULL,
+      PRIMARY KEY (message_id, idx)
+    )
+  `);
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS attachments (
       id TEXT PRIMARY KEY,
       message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
@@ -114,6 +123,7 @@ beforeEach(async () => {
   await client.execute('DELETE FROM chat_members');
   await client.execute('DELETE FROM generations');
   await client.execute('DELETE FROM attachments');
+  await client.execute('DELETE FROM message_parts');
   await client.execute('DELETE FROM messages');
   await client.execute('DELETE FROM chats');
   await client.execute('DELETE FROM characters');

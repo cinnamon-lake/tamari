@@ -19,6 +19,13 @@ import type { Chat, ChatInsert, Message, MessageInsert, MessageUpdate } from '@t
 import { ConflictError, NotFoundError } from '../errors.js';
 import { z } from 'zod';
 import { mapRowsLenient } from './rows.js';
+import {
+  fetchPartsByMessageId,
+  insertMessageParts,
+  replaceMessageParts,
+  splitExtraParts,
+  type SqlExecutor,
+} from '../db/messageParts.js';
 
 export interface IChatRepository {
   getChatById(id: string): Promise<Chat | undefined>;
@@ -126,6 +133,8 @@ function rowToChat(row: unknown): Chat {
 
 function rowToMessage(row: unknown): Message {
   const r = MessageRowSchema.parse(row);
+  // Parts normally come from message_parts via hydrateParts(); the blob only
+  // still carries them on rows written outside the repository (fallback).
   const extra = safeParseJson(r.extra, MessageExtraSchema, {});
   return MessageSchema.parse({
     id: r.id,
@@ -157,6 +166,21 @@ function rowToChatSummary(row: unknown): ChatSummaryItem {
 
 export class ChatRepository implements IChatRepository {
   constructor(private client: Client) {}
+
+  /**
+   * Attach content parts from message_parts to freshly-read messages.
+   * Table rows are authoritative; a message with no rows keeps whatever
+   * (legacy) parts its extra blob may still carry.
+   */
+  private async hydrateParts<T extends Message>(messages: T[], q: SqlExecutor = this.client): Promise<T[]> {
+    if (messages.length === 0) return messages;
+    const byId = await fetchPartsByMessageId(q, messages.map((m) => m.id));
+    for (const m of messages) {
+      const parts = byId.get(m.id);
+      if (parts && parts.length > 0) m.extra.parts = parts;
+    }
+    return messages;
+  }
 
   // ---- Chats ----
 
@@ -396,7 +420,7 @@ export class ChatRepository implements IChatRepository {
         `,
         args: [messageId],
       });
-      const ancestors = ancestorsRs.rows.map((r) => rowToMessage(r));
+      const ancestors = await this.hydrateParts(ancestorsRs.rows.map((r) => rowToMessage(r)), tx);
 
       const id = crypto.randomUUID();
       const now = Math.floor(Date.now() / 1000);
@@ -424,13 +448,15 @@ export class ChatRepository implements IChatRepository {
       let lastNewId: number | null = null;
       for (const msg of ancestors) {
         const newParentId = msg.parentId !== null ? (idMap.get(msg.parentId) ?? null) : null;
+        const { extraJson, parts } = splitExtraParts(msg.extra);
         const insertRs = await tx.execute({
           sql: `INSERT INTO messages (parent_id, role, content, extra, created_at, updated_at)
                  VALUES (?, ?, ?, ?, ?, ?)
                  RETURNING id`,
-          args: [newParentId, msg.role, '', JSON.stringify(msg.extra), msg.createdAt, msg.updatedAt],
+          args: [newParentId, msg.role, '', extraJson, msg.createdAt, msg.updatedAt],
         });
         const newId = (insertRs.rows[0]?.id as number | undefined) ?? 0;
+        await insertMessageParts(tx, newId, parts);
         idMap.set(msg.id, newId);
         lastNewId = newId;
       }
@@ -449,16 +475,20 @@ export class ChatRepository implements IChatRepository {
             sql: `SELECT * FROM messages WHERE parent_id = ? ORDER BY created_at ASC, id ASC`,
             args: [sourceHeadId],
           });
-          for (const r of swipesRs.rows) {
-            const swipe = rowToMessage(r);
+          const swipes = await this.hydrateParts(swipesRs.rows.map((r) => rowToMessage(r)), tx);
+          for (const swipe of swipes) {
             // The active child (the forked assistant) was already cloned as the
             // tip of the spine — skip it so it isn't duplicated.
             if (idMap.has(swipe.id)) continue;
-            await tx.execute({
+            const { extraJson, parts } = splitExtraParts(swipe.extra);
+            const insertRs = await tx.execute({
               sql: `INSERT INTO messages (parent_id, role, content, extra, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)`,
-              args: [copiedHeadId, swipe.role, '', JSON.stringify(swipe.extra), swipe.createdAt, swipe.updatedAt],
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    RETURNING id`,
+              args: [copiedHeadId, swipe.role, '', extraJson, swipe.createdAt, swipe.updatedAt],
             });
+            const newSwipeId = (insertRs.rows[0]?.id as number | undefined) ?? 0;
+            await insertMessageParts(tx, newSwipeId, parts);
           }
         }
 
@@ -489,7 +519,8 @@ export class ChatRepository implements IChatRepository {
   async getMessageById(id: number): Promise<Message | undefined> {
     const rs = await this.client.execute({ sql: 'SELECT * FROM messages WHERE id = ?', args: [id] });
     if (rs.rows.length === 0) return undefined;
-    return rowToMessage(rs.rows[0]);
+    const [message] = await this.hydrateParts([rowToMessage(rs.rows[0])]);
+    return message;
   }
 
   /**
@@ -591,7 +622,7 @@ export class ChatRepository implements IChatRepository {
       args: [chatId, maxDepth, limit, offset],
     });
 
-    return mapRowsLenient(rs.rows, rowToMessage, 'ChatRepository.getActiveBranch');
+    return this.hydrateParts(mapRowsLenient(rs.rows, rowToMessage, 'ChatRepository.getActiveBranch'), tx);
   }
 
   /**
@@ -623,7 +654,7 @@ export class ChatRepository implements IChatRepository {
       args: [opts.beforeId ?? null, chatId, maxDepth, offset],
     });
 
-    return mapRowsLenient(rs.rows, rowToMessage, 'ChatRepository.getBulkOfMessages');
+    return this.hydrateParts(mapRowsLenient(rs.rows, rowToMessage, 'ChatRepository.getBulkOfMessages'));
   }
 
   /**
@@ -670,7 +701,7 @@ export class ChatRepository implements IChatRepository {
       args: [chatId, chatId],
     });
 
-    return mapRowsLenient(rs.rows, rowToMessage, 'ChatRepository.getMessageChain');
+    return this.hydrateParts(mapRowsLenient(rs.rows, rowToMessage, 'ChatRepository.getMessageChain'));
   }
 
   async getMessageCount(chatId: string): Promise<number> {
@@ -692,20 +723,24 @@ export class ChatRepository implements IChatRepository {
 
   async insertMessage(msg: MessageInsert): Promise<Message> {
     const now = Math.floor(Date.now() / 1000);
-    const rs = await this.client.execute({
-      sql: `INSERT INTO messages (parent_id, role, content, extra, created_at, updated_at)
+    const { extraJson, parts } = splitExtraParts(msg.extra);
+    const tx = await this.client.transaction('write');
+    try {
+      const rs = await tx.execute({
+        sql: `INSERT INTO messages (parent_id, role, content, extra, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
             RETURNING *`,
-      args: [
-        msg.parentId ?? null,
-        msg.role,
-        '',
-        JSON.stringify(msg.extra),
-        now,
-        now,
-      ],
-    });
-    return rowToMessage(rs.rows[0]);
+        args: [msg.parentId ?? null, msg.role, '', extraJson, now, now],
+      });
+      const message = rowToMessage(rs.rows[0]);
+      await insertMessageParts(tx, message.id, parts);
+      await tx.commit();
+      if (parts.length > 0) message.extra.parts = parts;
+      return message;
+    } catch (err) {
+      await tx.rollback();
+      throw err;
+    }
   }
 
   async appendMessage(chatId: string, msg: MessageInsert): Promise<Message> {
@@ -731,14 +766,16 @@ export class ChatRepository implements IChatRepository {
       }
 
       const isUser = msg.role === 'user';
+      const { extraJson, parts } = splitExtraParts(msg.extra);
 
       const insertRs = await tx.execute({
         sql: `INSERT INTO messages (parent_id, role, content, extra, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?)
              RETURNING *`,
-        args: [parentId, msg.role, '', JSON.stringify(msg.extra), now, now],
+        args: [parentId, msg.role, '', extraJson, now, now],
       });
       const insertedId = z.coerce.number().parse(insertRs.rows[0]?.id);
+      await insertMessageParts(tx, insertedId, parts);
 
       const updateSql = `UPDATE chats SET head_message_id = ?, active_child_id = ?, updated_at = ? WHERE id = ?`;
       const updateArgs = isUser
@@ -751,7 +788,9 @@ export class ChatRepository implements IChatRepository {
       });
 
       await tx.commit();
-      return rowToMessage(insertRs.rows[0]);
+      const message = rowToMessage(insertRs.rows[0]);
+      if (parts.length > 0) message.extra.parts = parts;
+      return message;
     } catch (err) {
       await tx.rollback();
       throw err;
@@ -769,14 +808,24 @@ export class ChatRepository implements IChatRepository {
       sets.push('role = ?');
       values.push(patch.role);
     }
+
+    // Parts sync only when the patch's extra actually carries a parts array;
+    // a metadata-only extra patch (e.g. {hidden: true}) leaves part rows
+    // untouched instead of wiping them.
+    const syncParts = patch.extra !== undefined && Array.isArray(patch.extra.parts);
+    let extraJson: string | undefined;
+    let parts: ReturnType<typeof splitExtraParts>['parts'] = [];
     if (patch.extra !== undefined) {
-      // Message text lives in extra.parts; the legacy content column stays
+      // Message text lives in message_parts; the legacy content column stays
       // blank — clear it only alongside an extra rewrite, so role-only
       // patches don't touch it (and an empty patch hits the no-op guard).
+      const split = splitExtraParts(patch.extra);
+      extraJson = split.extraJson;
+      parts = split.parts;
       sets.push('content = ?');
       values.push('');
       sets.push('extra = ?');
-      values.push(JSON.stringify(patch.extra));
+      values.push(extraJson);
     }
 
     if (sets.length === 0) return existing;
@@ -785,7 +834,17 @@ export class ChatRepository implements IChatRepository {
     values.push(Math.floor(Date.now() / 1000));
     values.push(id);
 
-    await this.client.execute({ sql: `UPDATE messages SET ${sets.join(', ')} WHERE id = ?`, args: values });
+    const tx = await this.client.transaction('write');
+    try {
+      await tx.execute({ sql: `UPDATE messages SET ${sets.join(', ')} WHERE id = ?`, args: values });
+      if (syncParts) {
+        await replaceMessageParts(tx, id, parts);
+      }
+      await tx.commit();
+    } catch (err) {
+      await tx.rollback();
+      throw err;
+    }
     const updated = await this.getMessageById(id);
     if (!updated) throw new NotFoundError('Message', String(id));
     return updated;
@@ -919,7 +978,7 @@ export class ChatRepository implements IChatRepository {
       sql: `SELECT * FROM messages WHERE parent_id IS ? ORDER BY created_at, id ASC`,
       args: [parentId],
     });
-    return mapRowsLenient(rs.rows, rowToMessage, 'ChatRepository.getSiblings');
+    return this.hydrateParts(mapRowsLenient(rs.rows, rowToMessage, 'ChatRepository.getSiblings'));
   }
 
   async repairActiveChild(chatId: string): Promise<Chat | undefined> {

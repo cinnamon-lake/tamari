@@ -29,9 +29,10 @@ import {
 import { randomUUID } from 'node:crypto';
 import { join, basename, extname, dirname } from 'node:path';
 import { convertLegacyScopedScripts } from '../services/characterRegex.js';
+import { insertMessageParts } from './messageParts.js';
 import extract from 'png-chunks-extract';
 import PNGtext from 'png-chunk-text';
-import type { WorldInfoEntry, BackendConfigInsert, PromptListInsert, PresetPromptDef, PresetPromptOrderEntry } from '@tamari/types';
+import type { WorldInfoEntry, BackendConfigInsert, PromptListInsert, PresetPromptDef, PresetPromptOrderEntry, ContentPart } from '@tamari/types';
 
 /**
  * CWD-relative default for the v1 flat-file `data/` dir. Relative on purpose:
@@ -953,7 +954,8 @@ export async function importLegacyData(
                 // Insert active swipe on the main chain
                 const activeText = swipes[swipeId] ?? msg.mes ?? '';
                 const activeSwipeInfo = swipeInfo[swipeId] ?? {};
-                const activeExtra: Record<string, unknown> = { ...msg.extra, parts: [{ type: 'text', text: activeText }] };
+                const activeParts = [{ type: 'text', text: activeText }];
+                const activeExtra: Record<string, unknown> = { ...msg.extra };
 
                 const insertRs = await client.execute({
                   sql: `INSERT INTO messages (parent_id, role, content, extra, created_at, updated_at)
@@ -969,6 +971,7 @@ export async function importLegacyData(
                   ],
                 });
                 const activeMsgId = (insertRs.rows[0] as Record<string, unknown>).id as number;
+                await insertMessageParts(client, activeMsgId, activeParts as ContentPart[]);
                 stats.messages++;
 
                 // Insert inactive swipes as siblings (same parent_id)
@@ -976,18 +979,23 @@ export async function importLegacyData(
                   if (s === swipeId) continue;
                   const info = swipeInfo[s] ?? {};
                   const swipeText = swipes[s] ?? '';
-                  await client.execute({
+                  const swipeRs = await client.execute({
                     sql: `INSERT INTO messages (parent_id, role, content, extra, created_at, updated_at)
-                           VALUES (?, ?, ?, ?, ?, ?)`,
+                           VALUES (?, ?, ?, ?, ?, ?)
+                           RETURNING id`,
                     args: [
                       parentId,
                       role,
                       swipeText,
-                      JSON.stringify({ ...msg.extra, swipe: true, parts: [{ type: 'text', text: swipeText }] }),
+                      JSON.stringify({ ...msg.extra, swipe: true }),
                       safeDateToUnix((info.send_date ?? info.sendDate) as string | undefined, chatMtime),
                       chatMtime,
                     ],
                   });
+                  const swipeMsgId = (swipeRs.rows[0] as Record<string, unknown>).id as number;
+                  await insertMessageParts(client, swipeMsgId, [
+                    { type: 'text', text: swipeText },
+                  ] as ContentPart[]);
                   stats.messages++;
                 }
 
@@ -1121,12 +1129,13 @@ export async function importLegacyData(
                     parentId,
                     role,
                     groupText,
-                    JSON.stringify({ ...msg.extra, parts: [{ type: 'text', text: groupText }] }),
+                    JSON.stringify({ ...msg.extra }),
                     safeDateToUnix((msg.send_date ?? msg.sendDate) as string | undefined, mtime),
                     mtime,
                   ],
                 });
                 const msgId = (insertRs.rows[0] as Record<string, unknown>).id as number;
+                await insertMessageParts(client, msgId, [{ type: 'text', text: groupText }] as ContentPart[]);
                 lastMessageParentId = parentId;
                 lastMessageId = msgId;
                 parentId = msgId;

@@ -38,6 +38,17 @@ async function initSchema() {
       updated_at INTEGER DEFAULT (unixepoch())
     )
   `);
+  // Mirror db/migrations/014_message_parts.sql.
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS message_parts (
+      message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      idx INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      data TEXT NOT NULL,
+      PRIMARY KEY (message_id, idx)
+    )
+  `);
+  await client.execute('PRAGMA foreign_keys = ON');
 }
 
 /** Insert a message row and return its id. Real content lives in `extra`. */
@@ -185,5 +196,115 @@ describe('ChatRepository.softFork (swipe reachability parity)', () => {
     expect(fork.headMessageId).toBe(userId);
     const swipes = await repo.getSiblings(fork.headMessageId);
     expect(swipes).toHaveLength(3);
+  });
+});
+
+describe('ChatRepository message parts storage', () => {
+  const parts = [
+    { type: 'text' as const, text: 'hello' },
+    { type: 'reasoning' as const, text: 'hmm' },
+    { type: 'text' as const, text: 'world' },
+  ];
+
+  it('stores parts in message_parts and returns them on insert', async () => {
+    const msg = await repo.insertMessage({ role: 'assistant', extra: { tokenCount: 5, parts } });
+    expect(msg.extra.parts).toEqual(parts);
+    expect(msg.extra.tokenCount).toBe(5);
+  });
+
+  it('hydrates parts on getMessageById / getBulkOfMessages / getSiblings', async () => {
+    const parent = await repo.insertMessage({ role: 'user', extra: { parts: [{ type: 'text', text: 'q' }] } });
+    const reply = await repo.insertMessage({ parentId: parent.id, role: 'assistant', extra: { parts } });
+    await client.execute({
+      sql: `INSERT INTO chats (id, name, head_message_id, active_child_id) VALUES (?, ?, ?, ?)`,
+      args: ['chat-parts', 't', parent.id, reply.id],
+    });
+
+    const byId = await repo.getMessageById(reply.id);
+    expect(byId?.extra.parts).toEqual(parts);
+
+    const branch = await repo.getActiveBranch('chat-parts');
+    expect(branch.find((m) => m.id === reply.id)?.extra.parts).toEqual(parts);
+    expect(branch.find((m) => m.id === parent.id)?.extra.parts).toEqual([{ type: 'text', text: 'q' }]);
+
+    const siblings = await repo.getSiblings(parent.id);
+    expect(siblings[0]?.extra.parts).toEqual(parts);
+  });
+
+  it('keeps parts out of the stored extra blob', async () => {
+    const msg = await repo.insertMessage({ role: 'assistant', extra: { tokenCount: 5, parts } });
+    const rs = await client.execute({ sql: 'SELECT extra FROM messages WHERE id = ?', args: [msg.id] });
+    const stored = JSON.parse(String(rs.rows[0]?.extra)) as Record<string, unknown>;
+    expect(stored).toEqual({ tokenCount: 5 });
+
+    const rows = await client.execute({
+      sql: 'SELECT idx, type FROM message_parts WHERE message_id = ? ORDER BY idx',
+      args: [msg.id],
+    });
+    expect(rows.rows.map((r) => [Number(r.idx), String(r.type)])).toEqual([
+      [0, 'text'],
+      [1, 'reasoning'],
+      [2, 'text'],
+    ]);
+  });
+
+  it('replaces parts only when the patch extra carries a parts array', async () => {
+    const msg = await repo.insertMessage({ role: 'assistant', extra: { parts } });
+
+    // Metadata-only patch: parts preserved.
+    const hidden = await repo.updateMessage(msg.id, { extra: { ...msg.extra, hidden: true, parts: undefined } });
+    expect(hidden.extra.hidden).toBe(true);
+
+    // Explicit new parts: replaced.
+    const newParts = [{ type: 'text' as const, text: 'edited' }];
+    const edited = await repo.updateMessage(msg.id, { extra: { ...msg.extra, parts: newParts } });
+    expect(edited.extra.parts).toEqual(newParts);
+
+    // Explicit empty array: cleared.
+    const cleared = await repo.updateMessage(msg.id, { extra: { parts: [] } });
+    expect(cleared.extra.parts).toBeUndefined();
+    const rows = await client.execute({ sql: 'SELECT 1 FROM message_parts WHERE message_id = ?', args: [msg.id] });
+    expect(rows.rows).toHaveLength(0);
+  });
+
+  it('preserves parts on a metadata-only extra patch (no parts key)', async () => {
+    const msg = await repo.insertMessage({ role: 'assistant', extra: { parts } });
+    // Simulate a caller that builds extra without consulting the hydrated message.
+    const updated = await repo.updateMessage(msg.id, { extra: { hidden: true } });
+    expect(updated.extra.hidden).toBe(true);
+    expect(updated.extra.parts).toEqual(parts);
+  });
+
+  it('copies part rows on hardFork', async () => {
+    const userMsg = await repo.insertMessage({ role: 'user', extra: { parts: [{ type: 'text', text: 'hi' }] } });
+    const reply = await repo.insertMessage({
+      parentId: userMsg.id,
+      role: 'assistant',
+      extra: { parts },
+    });
+    await client.execute({
+      sql: `INSERT INTO chats (id, name, head_message_id, active_child_id) VALUES (?, ?, ?, ?)`,
+      args: ['chat-fork', 'source', userMsg.id, reply.id],
+    });
+
+    const fork = await repo.hardFork('chat-fork', reply.id, 'fork');
+    const branch = await repo.getActiveBranch(fork.id);
+    const copiedReply = branch.find((m) => m.role === 'assistant');
+    expect(copiedReply).toBeDefined();
+    expect(copiedReply!.id).not.toBe(reply.id);
+    expect(copiedReply!.extra.parts).toEqual(parts);
+  });
+
+  it('cascades part rows on message delete', async () => {
+    const msg = await repo.insertMessage({ role: 'assistant', extra: { parts } });
+    await repo.deleteMessage(msg.id);
+    const rows = await client.execute({ sql: 'SELECT 1 FROM message_parts WHERE message_id = ?', args: [msg.id] });
+    expect(rows.rows).toHaveLength(0);
+  });
+
+  it('falls back to blob parts for rows written outside the repository', async () => {
+    const id = await insertMessage(null, 'assistant', { parts: [{ type: 'text', text: 'legacy' }] });
+    const msg = await repo.getMessageById(id);
+    expect(msg?.extra.parts).toEqual([{ type: 'text', text: 'legacy' }]);
   });
 });

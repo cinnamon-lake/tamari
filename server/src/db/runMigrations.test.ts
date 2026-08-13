@@ -36,7 +36,7 @@ describe('applyMigrations', () => {
     const client = makeClient();
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(13);
+    expect(await userVersion(client)).toBe(15);
 
     const tables = await client.execute(
       "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
@@ -45,6 +45,7 @@ describe('applyMigrations', () => {
     expect(names).toContain('characters');
     expect(names).toContain('chats');
     expect(names).toContain('messages');
+    expect(names).toContain('message_parts');
     expect(names).toContain('tool_templates');
 
     // 002 / 003 columns landed.
@@ -79,7 +80,7 @@ describe('applyMigrations', () => {
     await applyMigrations(client);
     // Second run must be a no-op: no errors, version unchanged.
     await applyMigrations(client);
-    expect(await userVersion(client)).toBe(13);
+    expect(await userVersion(client)).toBe(15);
     client.close();
   });
 
@@ -91,7 +92,7 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 1');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(13);
+    expect(await userVersion(client)).toBe(15);
     // 002's ALTER was tolerated as duplicate and its UPDATE re-ran cleanly.
     const rs = await client.execute("SELECT name FROM pragma_table_info('chats')");
     expect(rs.rows.map((r) => String(r.name))).toContain('materialized');
@@ -116,15 +117,73 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 9');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(13);
+    expect(await userVersion(client)).toBe(15);
 
     const migrated = await client.execute("SELECT content, extra FROM messages WHERE role = 'user'");
     expect(String(migrated.rows[0]?.content)).toBe('');
-    const extra = JSON.parse(String(migrated.rows[0]?.extra)) as { parts: { type: string; text: string }[] };
-    expect(extra.parts).toEqual([{ type: 'text', text: 'hello world' }]);
+    // 010 moved text into extra.parts; 015 (also re-run here) then moved the
+    // parts into message_parts and stripped the blob.
+    const migratedExtra = JSON.parse(String(migrated.rows[0]?.extra)) as Record<string, unknown>;
+    expect(migratedExtra.parts).toBeUndefined();
+    const migratedParts = await client.execute(
+      "SELECT p.data FROM message_parts p JOIN messages m ON p.message_id = m.id WHERE m.role = 'user' ORDER BY p.idx",
+    );
+    expect(migratedParts.rows.map((r) => JSON.parse(String(r.data)))).toEqual([{ type: 'text', text: 'hello world' }]);
 
     const untouched = await client.execute("SELECT content, extra FROM messages WHERE role = 'assistant'");
     expect(String(untouched.rows[0]?.content)).toBe('already');
+
+    client.close();
+  });
+
+  it('migration 015 moves extra.parts into message_parts and strips the blob', async () => {
+    const client = makeClient();
+    await applyMigrations(client);
+
+    // Simulate a pre-015 row: parts inside the extra blob, other keys alongside.
+    await client.execute({
+      sql: "INSERT INTO messages (role, content, extra) VALUES ('assistant', '', ?)",
+      args: [
+        JSON.stringify({
+          tokenCount: 3,
+          parts: [
+            { type: 'text', text: 'hi' },
+            { type: 'reasoning', text: 'thinking' },
+          ],
+        }),
+      ],
+    });
+    // ...and a row with no parts (must be left alone).
+    await client.execute({
+      sql: "INSERT INTO messages (role, content, extra) VALUES ('user', '', ?)",
+      args: [JSON.stringify({ tokenCount: 1 })],
+    });
+
+    // Rewind to just before 015 and re-run.
+    await client.execute('PRAGMA user_version = 14');
+    await applyMigrations(client);
+
+    expect(await userVersion(client)).toBe(15);
+
+    const rows = await client.execute('SELECT idx, type, data FROM message_parts ORDER BY idx');
+    expect(rows.rows.map((r) => [Number(r.idx), String(r.type)])).toEqual([
+      [0, 'text'],
+      [1, 'reasoning'],
+    ]);
+    expect(JSON.parse(String(rows.rows[1]?.data))).toEqual({ type: 'reasoning', text: 'thinking' });
+
+    const assistant = await client.execute("SELECT extra FROM messages WHERE role = 'assistant'");
+    const extra = JSON.parse(String(assistant.rows[0]?.extra)) as Record<string, unknown>;
+    expect(extra).toEqual({ tokenCount: 3 });
+
+    const user = await client.execute("SELECT extra FROM messages WHERE role = 'user'");
+    expect(JSON.parse(String(user.rows[0]?.extra))).toEqual({ tokenCount: 1 });
+
+    // Idempotent: re-running finds nothing to do.
+    await client.execute('PRAGMA user_version = 14');
+    await applyMigrations(client);
+    const count = await client.execute('SELECT COUNT(*) as c FROM message_parts');
+    expect(Number(count.rows[0]?.c)).toBe(2);
 
     client.close();
   });
