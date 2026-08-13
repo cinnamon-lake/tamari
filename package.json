@@ -13,6 +13,7 @@
   },
   "overrides": {
     "uuid": "^14.0.0",
+    "nanoid": "^3.3.18",
     "vectra": {
       "openai": "^4.17.0"
     },
