@@ -94,8 +94,7 @@ import { FileStorage } from './services/FileStorage.js';
 import { RAGService } from './services/RAGService.js';
 import { getRAGConfig } from './services/ragConfig.js';
 import { getProxySettings, initProxy } from './proxy.js';
-import { ClientMessageSchema, QuickReplyAutoExecute, sanitizeProviderParams } from '@tamari/types';
-import type { PresetPromptDef, PresetPromptOrderEntry } from '@tamari/types';
+import { ClientMessageSchema, QuickReplyAutoExecute } from '@tamari/types';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { resizeThumbnail } from './lib/avatar.js';
@@ -184,19 +183,9 @@ const quickReplies = withLogging(new QuickReplyRepository(db), 'quickReplies');
 const toolsets = withLogging(new ToolsetRepository(db), 'toolsets');
 const toolTemplates = withLogging(new ToolTemplateRepository(db), 'toolTemplates');
 
-// Boot-time migration: split old presets table into backend_configs and prompt_lists
-await migratePresetsToSplitTables(db, backendConfigs, promptLists, settings);
-
 // Ensure at least one backend config and prompt list exist
 await ensureDefaultBackendConfig(backendConfigs, settings);
 await ensureDefaultPromptList(promptLists, settings);
-
-// One-time migration: copy global apiUrl/apiKey into active backend config
-await migrateConnectionSettingsToBackendConfigs(backendConfigs, settings);
-
-// Sweep: drop undeclared providerParams keys (legacy v1 settings dumps) from
-// configs written before the repository started sanitizing on write.
-await sanitizeStoredProviderParams(backendConfigs);
 
 // Ensure at least one persona exists
 await ensureDefaultPersona(personas);
@@ -727,119 +716,6 @@ async function ensureDefaultPromptList(promptListRepo: PromptListRepository, set
       await settingsRepo.setValue('activePromptListId', first.id);
     }
   }
-}
-
-/** Drop undeclared providerParams keys (legacy v1 settings dumps) from every stored config. */
-async function sanitizeStoredProviderParams(backendConfigRepo: BackendConfigRepository): Promise<void> {
-  for (const config of await backendConfigRepo.list()) {
-    const clean = sanitizeProviderParams(config.providerParams);
-    const dropped = Object.keys(config.providerParams).filter((k) => !(k in clean));
-    if (dropped.length > 0) {
-      await backendConfigRepo.update(config.id, { providerParams: clean });
-      log.info({ configId: config.id, name: config.name, dropped }, 'dropped undeclared providerParams keys');
-    }
-  }
-}
-
-async function migrateConnectionSettingsToBackendConfigs(
-  backendConfigRepo: BackendConfigRepository,
-  settingsRepo: ISettingsRepository,
-): Promise<void> {
-  const allSettings = await settingsRepo.list();
-  const globalApiUrl = allSettings['api_url'];
-  const globalApiKey = allSettings['api_key'];
-  const hasGlobalConnection =
-    (globalApiUrl && str(globalApiUrl).trim().length > 0) ||
-    (globalApiKey && str(globalApiKey).trim().length > 0);
-  if (!hasGlobalConnection) return;
-
-  const activeBackendConfigId = String(allSettings['activeBackendConfigId']);
-  const backendConfig = activeBackendConfigId ? await backendConfigRepo.getById(activeBackendConfigId) : null;
-  if (!backendConfig) return;
-
-  const patch: { apiUrl?: string; apiKey?: string } = {};
-  if (!backendConfig.apiUrl && globalApiUrl) patch.apiUrl = str(globalApiUrl);
-  if (!backendConfig.apiKey && globalApiKey) patch.apiKey = str(globalApiKey);
-  if (Object.keys(patch).length > 0) {
-    await backendConfigRepo.update(backendConfig.id, patch);
-    log.info('migrated global api_url/api_key into active backend config');
-  }
-
-  await settingsRepo.delete('api_url');
-  await settingsRepo.delete('api_key');
-  await settingsRepo.delete('reverseProxyUrl');
-  await settingsRepo.delete('proxyPassword');
-  log.info('removed deprecated global connection settings');
-}
-
-async function migratePresetsToSplitTables(
-  dbClient: Awaited<ReturnType<typeof initDatabase>>,
-  backendConfigRepo: BackendConfigRepository,
-  promptListRepo: PromptListRepository,
-  settingsRepo: ISettingsRepository,
-): Promise<void> {
-  const tableCheck = await dbClient.execute({
-    sql: "SELECT name FROM sqlite_master WHERE type='table' AND name='presets'",
-  });
-  if (tableCheck.rows.length === 0) return;
-
-  const presets = await dbClient.execute('SELECT * FROM presets');
-  for (const row of presets.rows) {
-    const r = row as Record<string, unknown>;
-    const id = str(r.id) || randomUUID();
-
-    const backendConfigExists = await backendConfigRepo.getById(id).catch(() => undefined);
-    if (!backendConfigExists) {
-      await backendConfigRepo.create(id, {
-        name: str(r.name, 'Migrated Preset'),
-        description: str(r.description),
-        backendProvider: str(r.backend_provider, 'openai'),
-        generationMode: str(r.generation_mode, 'chat') as 'chat' | 'text',
-        model: str(r.model),
-        temperature: r.temperature != null ? Number(r.temperature) : null,
-        maxTokens: r.max_tokens != null ? Number(r.max_tokens) : null,
-        topP: r.top_p != null ? Number(r.top_p) : null,
-        topK: r.top_k != null ? Number(r.top_k) : null,
-        minP: r.min_p != null ? Number(r.min_p) : null,
-        topA: r.top_a != null ? Number(r.top_a) : null,
-        repetitionPenalty: r.repetition_penalty != null ? Number(r.repetition_penalty) : null,
-        frequencyPenalty: r.frequency_penalty != null ? Number(r.frequency_penalty) : null,
-        presencePenalty: r.presence_penalty != null ? Number(r.presence_penalty) : null,
-        instructTemplate: str(r.instruct_template),
-        contextLength: r.context_length != null ? Number(r.context_length) : null,
-        promptHistoryLimit: r.prompt_history_limit != null ? Number(r.prompt_history_limit) : null,
-        providerParams: r.provider_params_json ? (JSON.parse(str(r.provider_params_json)) as Record<string, unknown>) : {},
-        stopStrings: r.stop_strings_json ? (JSON.parse(str(r.stop_strings_json)) as string[]) : [],
-        openrouterProvider: r.openrouter_provider ? str(r.openrouter_provider) : null,
-        apiUrl: r.api_url ? str(r.api_url) : null,
-        apiKey: r.api_key ? str(r.api_key) : null,
-        logitBias: r.logit_bias_json ? (JSON.parse(str(r.logit_bias_json)) as Record<string, number>) : null,
-      });
-    }
-
-    const promptListExists = await promptListRepo.getById(id).catch(() => undefined);
-    if (!promptListExists) {
-      await promptListRepo.create(id, {
-        name: str(r.name, 'Migrated Preset'),
-        description: str(r.description),
-        prompts: r.prompts_json ? (JSON.parse(str(r.prompts_json)) as PresetPromptDef[]) : [],
-        promptOrder: r.prompt_order_json ? (JSON.parse(str(r.prompt_order_json)) as PresetPromptOrderEntry[]) : [],
-      });
-    }
-  }
-
-  const allSettings = await settingsRepo.list();
-  const activePresetId = allSettings['activePresetId'];
-  if (activePresetId) {
-    const presetId = str(activePresetId);
-    await settingsRepo.setValue('activeBackendConfigId', presetId);
-    await settingsRepo.setValue('activePromptListId', presetId);
-  }
-
-  await dbClient.execute('DROP TABLE presets');
-  log.info('migrated presets table to backend_configs and prompt_lists');
-
-  await settingsRepo.delete('activePresetId');
 }
 
 function shutdown(signal: string) {
