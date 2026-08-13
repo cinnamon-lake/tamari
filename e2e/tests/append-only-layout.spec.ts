@@ -133,6 +133,10 @@ test.describe('Append-only prompt layout', () => {
     // Persistence across reload: the checkbox is still on.
     await page.reload();
     await page.locator('.app-shell').waitFor({ state: 'visible', timeout: 10000 });
+    // The modal's signals initialize from state.settings at open time — wait
+    // for the post-reload snapshot or the checkbox renders the default
+    // (slow-runner read race, seen on Windows CI).
+    await app.waitForInitialSnapshot();
     const modal2 = await app.openSettings();
     await expect(modal2.locator('label.checkbox-row:has-text("Append-only prompt layout") input')).toBeChecked();
     await app.closeSettings();
