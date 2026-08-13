@@ -9,15 +9,15 @@ A backend config is a named connection + generation preset. The **active** confi
 |---|---|
 | \`name\` | Display name. |
 | \`backendProvider\` | \`openai\`, \`openrouter\`, \`claude\`, \`gemini\`, \`moonshot\`, \`llamacpp\`, \`tabbyapi\`, \`koboldcpp\`, or \`custom\` (Lua backend). |
-| \`generationMode\` | \`chat\` (message list) or \`text\` (flat story string via instruct template). \`text\` forces the text-completion adapter regardless of provider. |
+| \`generationMode\` | \`chat\` (message list) or \`text\` (flat prompt string). \`text\` forces the text-completion adapter regardless of provider; the adapter flattens the message list with its instruct template. |
 | \`model\` | Model id. Never validated — anything goes. |
 | \`apiUrl\` | Empty = canonical provider URL. Point at any OpenAI-compatible endpoint / reverse proxy. |
 | \`apiKey\` | Raw key **or** a vault reference \`secret:<key>\`. Never validated; never exposed to tools/Lua. Local providers (\`llamacpp\`, \`tabbyapi\`, \`koboldcpp\`) need no key. |
 | Samplers | \`temperature\`, \`topP\`, \`topK\`, \`minP\`, \`topA\`, \`frequencyPenalty\`, \`presencePenalty\`, \`repetitionPenalty\` — all nullable (null = don't send). |
 | \`maxTokens\` | Response cap. |
-| \`contextLength\` | Prompt budget; World Info gets 25% of it. |
+| \`contextLength\` | Declared context size (reporting/metadata only — prompt content is never truncated on a token budget; history length is bounded by \`promptHistoryLimit\`/\`chatTruncation\` message counts). |
 | \`stopStrings\` | Custom stop sequences (macro-resolved when \`customStoppingStringsMacro\` is set). |
-| \`instructTemplate\` | For text mode: wraps the story string (system/instruction wrappers, BOS/EOS, reasoning prefix/suffix). |
+| \`instructTemplate\` | For text mode: how the adapter wraps messages into the flat prompt (system/instruction wrappers, BOS/EOS, reasoning prefix/suffix). |
 | \`providerParams\` | Advanced bag — see below. |
 | \`logitBias\` | \`token: bias\` map, sent to OpenAI-family and textgen params. |
 | \`openrouterProvider\` | OpenRouter provider routing (\`order\`, \`allow_fallbacks\`). |

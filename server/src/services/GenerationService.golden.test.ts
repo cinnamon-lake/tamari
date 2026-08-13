@@ -31,7 +31,6 @@ class RecordingBackend extends TrivialBackendAdapter {
 function golden(prompt: Prompt) {
   return {
     messages: prompt.messages,
-    text: prompt.text,
     params: prompt.params,
     cacheDepth: prompt.cacheDepth,
   };

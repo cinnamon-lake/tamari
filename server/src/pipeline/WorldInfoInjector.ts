@@ -47,7 +47,6 @@ export interface InjectionResult {
   top: ActivatedEntry[];
   bottom: ActivatedEntry[];
   atDepth: ActivatedEntry[];
-  totalTokens: number;
   /** Entry IDs that actually triggered this turn (excludes sticky carry-over). */
   activatedEntryIds: string[];
 }
@@ -68,7 +67,6 @@ export class WorldInfoInjector {
     const activatedIds = new Set<string>();
     const activated: ActivatedEntry[] = [];
     const activatedThisTurn: string[] = [];
-    let totalTokens = 0;
 
     const messages = chatHistory ?? [];
 
@@ -201,7 +199,6 @@ export class WorldInfoInjector {
       for (const item of roundActivated) {
         activated.push(item);
         roundAdded.push(item);
-        totalTokens += item.tokens;
       }
 
       // Build scan text for next round from recursive entries
@@ -220,7 +217,6 @@ export class WorldInfoInjector {
       top: activated.filter((e) => e.entry.position === 'top'),
       bottom: activated.filter((e) => e.entry.position === 'bottom'),
       atDepth: activated.filter((e) => e.entry.position === 'atDepth'),
-      totalTokens,
       activatedEntryIds: activatedThisTurn,
     };
   }

@@ -40,7 +40,7 @@ describe('KoboldCppBackendAdapter', () => {
     } as Response);
 
     const { result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Once upon a time', tokenUsage: { prompt: 10, completion: 100 } },
+      { messages: [{ role: 'user', content: 'Once upon a time' }], tokenUsage: { prompt: 10, completion: 100 } },
       new AbortController().signal,
     ));
     expect(result.finishReason).toBe('stop');
@@ -65,7 +65,7 @@ describe('KoboldCppBackendAdapter', () => {
     } as Response);
 
     const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Hi', tokenUsage: { prompt: 5, completion: 50 } },
+      { messages: [{ role: 'user', content: 'Hi' }], tokenUsage: { prompt: 5, completion: 50 } },
       new AbortController().signal,
     ));
     const emitted = items.filter((i) => i.type === 'text').map((i) => i.token);
@@ -88,7 +88,7 @@ describe('KoboldCppBackendAdapter', () => {
     } as Response);
 
     const { result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Test', tokenUsage: { prompt: 1, completion: 10 } },
+      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
       new AbortController().signal,
     ));
     expect(result.finishReason).toBe('stop');
@@ -117,7 +117,7 @@ describe('KoboldCppBackendAdapter', () => {
 
     const controller = new AbortController();
     const promise = consumeStream(adapter.stream(
-      { messages: [], text: 'Test', tokenUsage: { prompt: 1, completion: 10 } },
+      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
       controller.signal,
     ));
 
@@ -146,7 +146,7 @@ describe('KoboldCppBackendAdapter', () => {
     } as Response);
 
     const { result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Test', tokenUsage: { prompt: 1, completion: 10 } },
+      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
       new AbortController().signal,
     ));
 
@@ -166,7 +166,7 @@ describe('KoboldCppBackendAdapter', () => {
     } as Response);
 
     const { result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Test', tokenUsage: { prompt: 1, completion: 10 } },
+      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
       new AbortController().signal,
     ));
     expect(result.finishReason).toBe('stop');

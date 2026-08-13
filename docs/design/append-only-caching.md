@@ -55,7 +55,7 @@ All overrides below are applied **at assembly time** — stored user settings ar
 ## Where it plugs in
 
 - `PromptStages`: `historyRegex`, `authorsNoteSplice`, `worldInfoAtDepth` early-return or collect into `ctx.volatileBlock` when the flag is on; macro resolution in the renderer is skipped. Stage list unchanged — stages branch on the flag.
-- Renderers (`ChatCompletionRenderer`, `TextCompletionRenderer`): emit `volatileBlock` at the pinned position, deterministic order; history messages pass through without macro/regex transforms.
+- The renderer (`ChatCompletionRenderer`) and the text-completion formatter (`backends/formatTextPrompt.ts`): emit `volatileBlock` at the pinned position, deterministic order; history messages pass through without macro/regex transforms.
 - Generation pipeline: `trimSentences` / `removeXML` / `singleLine` / `whitespaceMode='none'` / output-regex forced off, `reasoningAddToPrompts` forced on — all at assembly time.
 - `packages/types/src/schemas.ts`: the setting next to `claudeCacheMode`; `SettingsModal.tsx`: checkbox + greyed overridden controls.
 - `generations.meta`: suppressions and hoists recorded per generation.

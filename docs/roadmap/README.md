@@ -88,7 +88,7 @@ These are **deliberate, permanent changes** that improve the codebase. They are 
 
 | Decision | Old Way | New Way | Why |
 |---|---|---|---|
-| **Story string templates** | Separate `renderStoryString` system for text-completion APIs | `PromptManager` + `TextCompletionRenderer` use the same `PromptCollection` for all APIs | One prompt assembly pipeline, less code, no divergence between chat and text modes |
+| **Story string templates** | Separate `renderStoryString` system for text-completion APIs | One `PromptManager` pipeline assembles messages for all APIs; text-completion adapters flatten them with their `InstructTemplate` | One prompt assembly pipeline, less code, no divergence between chat and text modes |
 | **SillyTavern system prompt presets** | Parallel `sysprompt.js` preset system alongside instruct mode | System prompt is the `main` prompt slot in `PromptManager`, overridable per-character | Eliminates a redundant preset system that confused users |
 | **Client-side macro engine** | Regex-based substitution in `substituteParams()`, client-side only | Server-side `MacroResolver.ts` with typed, pluggable handlers and block control structures | Macros must resolve before WI scanning and prompt building; server-side is the only place with full context |
 | **jQuery + global mutable state** | `chat[]`, `characters[]`, direct DOM manipulation | SolidJS reactive stores + WebSocket sync | Enables multi-tab sync, testability, and eliminates an entire class of sync bugs |

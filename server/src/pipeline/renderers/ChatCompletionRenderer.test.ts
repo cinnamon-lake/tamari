@@ -67,7 +67,7 @@ describe('ChatCompletionRenderer', () => {
     expect(result.messages[result.messages.length - 1]!.role).toBe('assistant');
   });
 
-  it('respects token budget', () => {
+  it('renders the full chat history — there is no token budget', () => {
     const macroResolver = MacroResolver.createPromptResolver();
     const chatHistory: Message[] = [];
     for (let i = 0; i < 100; i++) {
@@ -83,13 +83,14 @@ describe('ChatCompletionRenderer', () => {
       maxResponseTokens: 100,
     });
 
-    expect(result.tokenUsage.prompt).toBeLessThanOrEqual(900);
-    expect(result.messages.length).toBeGreaterThanOrEqual(1);
+    // Way over the old 900-token budget — tokens are reported, never enforced.
+    expect(result.tokenUsage.prompt).toBeGreaterThan(900);
+    const historyMessages = result.messages.filter((m) => m.role !== 'system');
+    expect(historyMessages.length).toBe(100);
   });
 
-  it('never drops system prompts, even when they exceed the budget', () => {
+  it('never drops system prompts, no matter their size', () => {
     const macroResolver = MacroResolver.createPromptResolver();
-    // ~1000 tokens by the test counter — alone exceeds the 900-token budget
     const huge = `Huge persona. ${'A'.repeat(4000)}`;
     const result = renderer.render(makeCollection({ charDescription: huge }), {
       macroResolver,

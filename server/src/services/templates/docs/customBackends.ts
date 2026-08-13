@@ -288,7 +288,7 @@ The whole loop is invisible sub-generation inside one turn — the calls and res
 
 ## Full branch history (the \`chat\` global)
 
-\`prompt.messages\` is the budgeted view — capped by \`promptHistoryLimit\`/\`chatTruncation\` and the token budget, because it is assembled FOR the model. The script itself is not so limited: the \`chat\` global serves the FULL current branch (active swipes resolved), loaded lazily at most once per turn and only when called:
+\`prompt.messages\` is the capped view — bounded by the \`promptHistoryLimit\`/\`chatTruncation\` message counts, because it is assembled FOR the model. The script itself is not so limited: the \`chat\` global serves the FULL current branch (active swipes resolved), loaded lazily at most once per turn and only when called:
 
 - \`chat.count():await()\` → branch length.
 - \`chat.get(index):await()\` → 1-based, chronological: \`{ id, role, content, characterId?, personaId? }\`; out of range → nil.

@@ -9,7 +9,8 @@
  * - TogetherAI
  * - KoboldCPP (when used in OpenAI-compat mode)
  *
- * Uses `prompt.text` from the Prompt and expects SSE streaming
+ * Owns the chat→string flattening: `prompt.messages` are formatted with the
+ * configured instruct template (formatTextPrompt). Expects SSE streaming
  * with `choices[0].text` deltas.
  */
 
@@ -18,6 +19,8 @@ import { logger } from '../lib/logger.js';
 import { logDelta } from './RequestLogger.js';
 import { executeRequest, type BaseAdapterConfig } from './executeRequest.js';
 import { convertParamsToSnakeCase } from './camelToSnake.js';
+import { getInstructTemplate, type InstructTemplate } from './InstructTemplate.js';
+import { formatTextPrompt } from './formatTextPrompt.js';
 import {
   TextCompletionStreamChunkSchema,
   OpenAIModelListSchema,
@@ -29,6 +32,10 @@ export interface TextCompletionAdapterConfig extends BaseAdapterConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+  /** Instruct template for the chat→string flattening (default: 'none'). */
+  template?: InstructTemplate;
+  /** Inline past reasoning blocks into the flat prompt (template delimiters). */
+  includeReasoning?: boolean;
 }
 
 
@@ -38,7 +45,13 @@ export class TextCompletionBackendAdapter implements BackendAdapter {
   readonly supportsStreaming = true;
   readonly supportsTools = false;
 
-  constructor(private config: TextCompletionAdapterConfig) {}
+  private readonly template: InstructTemplate;
+  readonly outputReasoning?: InstructTemplate['reasoning'];
+
+  constructor(private config: TextCompletionAdapterConfig) {
+    this.template = config.template ?? getInstructTemplate();
+    this.outputReasoning = this.template.reasoning;
+  }
 
   async *stream(prompt: Prompt, signal: AbortSignal): AsyncGenerator<BackendStreamItem, GenerationResult> {
     const outcome = await executeRequest({
@@ -130,7 +143,9 @@ export class TextCompletionBackendAdapter implements BackendAdapter {
 
     const body: TextCompletionRequest = {
       model: this.config.model,
-      prompt: prompt.text ?? '',
+      prompt: formatTextPrompt(prompt.messages, this.template, {
+        includeReasoning: this.config.includeReasoning ?? false,
+      }),
       stream: true,
     };
 

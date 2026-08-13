@@ -36,7 +36,6 @@ A library by the sea.",
     },
   ],
   "params": {},
-  "text": undefined,
 }
 `;
 
@@ -50,7 +49,6 @@ exports[`generation golden prompts > genraw: raw prompt reaches the backend with
     },
   ],
   "params": {},
-  "text": undefined,
 }
 `;
 
@@ -86,7 +84,6 @@ A library by the sea.",
     },
   ],
   "params": {},
-  "text": undefined,
 }
 `;
 
@@ -126,7 +123,6 @@ A library by the sea.",
     },
   ],
   "params": {},
-  "text": undefined,
 }
 `;
 
@@ -166,6 +162,5 @@ A library by the sea.",
     },
   ],
   "params": {},
-  "text": undefined,
 }
 `;

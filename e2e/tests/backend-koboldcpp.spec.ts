@@ -18,15 +18,11 @@
  *   1. Factory quirk: generationMode 'text' routes to TextCompletion BEFORE
  *      the koboldcpp branch (server/src/backends/factory.ts ~194), so the
  *      config keeps generationMode 'chat'.
- *   2. In chat mode PromptBuilder leaves prompt.text undefined (it only
- *      instruct-renders in 'text' mode), so the adapter's
- *      `prompt: prompt.text ?? ''` goes out EMPTY and the mock answers with
- *      its default response — flat-prompt selectors (respond:/slow:/length:)
- *      can't reach the mock through the chat pipeline. Tests that need a
- *      selector therefore install a providerParams.requestScript (the app's
- *      user-facing Lua request hook) that sets the outgoing body prompt —
- *      the adapter, its stream loop, abort path and finish mapping are still
- *      exercised end to end through the real stack.
+ *   2. The pipeline always produces a message list; the adapter flattens it
+ *      into the flat `prompt` itself (formatTextPrompt with the configured
+ *      instruct template — 'none' here, so messages go out unwrapped). The
+ *      mock's flat-prompt selectors (respond:/slow:/length:) match against
+ *      the newest matching prompt line.
  *
  * Assertions use the mock's generic capture
  * (GET /last-request?route=<prefix>), which records the LAST request per route
@@ -39,9 +35,6 @@ import { resetLlmRequests } from '../helpers/llm.js';
 import { App } from '../helpers/app.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
-
-/** The mock's reply when no prompt selector matches (fixtures/mockLlmServer.ts). */
-const MOCK_DEFAULT_REPLY = 'deterministic mock response';
 
 interface RouteCapture {
   route: string;
@@ -102,18 +95,18 @@ test.describe('KoboldCpp backend adapter', () => {
     const charName = `Kobold Basic ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
-    // Chat mode → prompt.text is undefined → the adapter sends prompt:'' and
-    // the mock answers with its default text. The stream still flows through
-    // the adapter's SSE loop (token chunks + final finish_reason).
+    // The adapter flattens the message list into `prompt` ('none' template:
+    // unwrapped), so the respond: selector in the user turn reaches the mock.
     await app.sendUserMessage('respond: hello kobold', { expectReply: true });
-    await app.waitForAssistantText(MOCK_DEFAULT_REPLY);
+    await app.waitForAssistantText('hello kobold');
 
     const cap = await waitForRouteCapture('/api/extra/generate/stream');
     const body = cap.body;
 
     // Core KoboldCpp request shape from buildBody: a flat prompt string plus
-    // the context/length knobs. NOTE: prompt is '' in chat mode (see header).
+    // the context/length knobs.
     expect(typeof body['prompt']).toBe('string');
+    expect(body['prompt'] as string).toContain('respond: hello kobold');
     expect(body['messages']).toBeUndefined();
     expect(typeof body['max_context_length']).toBe('number');
     expect(body['max_context_length'] as number).toBeGreaterThan(0);
@@ -149,7 +142,7 @@ test.describe('KoboldCpp backend adapter', () => {
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
     await app.sendUserMessage('respond: kobold samplers', { expectReply: true });
-    await app.waitForAssistantText(MOCK_DEFAULT_REPLY);
+    await app.waitForAssistantText('kobold samplers');
 
     const cap = await waitForRouteCapture('/api/extra/generate/stream');
     const body = cap.body;
@@ -170,15 +163,9 @@ test.describe('KoboldCpp backend adapter', () => {
   });
 
   test('stop button halts a slow stream', async ({ page }) => {
-    // Inject the slow: selector into the outgoing prompt via the request
-    // script — in chat mode the pipeline prompt is empty (see header), so the
-    // mock would otherwise answer instantly and there'd be nothing to stop.
-    await patchActiveBackendConfig(page, {
-      providerParams: {
-        requestScript:
-          'request.body.prompt = "slow:150:a very long kobold reply that keeps streaming for a while"',
-      },
-    });
+    // The slow: selector travels in the user turn itself — the adapter's flat
+    // prompt carries it to the mock (a providerParams.requestScript overriding
+    // body.prompt would work too, but the direct path is the realistic one).
 
     const app = new App(page);
     const charName = `Kobold Abort ${Date.now()}`;
@@ -186,7 +173,7 @@ test.describe('KoboldCpp backend adapter', () => {
 
     // The mock streams one char per 150ms, so the reply takes several seconds —
     // long enough to click Stop mid-stream.
-    await app.sendUserMessage('start the slow stream');
+    await app.sendUserMessage('slow:150:a very long kobold reply that keeps streaming for a while');
 
     // During streaming the send button swaps for a Stop button (btn-danger).
     const stopButton = page.locator('.message-input-area .send-btn.btn-danger');
@@ -208,13 +195,7 @@ test.describe('KoboldCpp backend adapter', () => {
   });
 
   test('maps a length finish_reason to a length finish', async ({ page }) => {
-    // Inject the length: selector via the request script (see header).
-    await patchActiveBackendConfig(page, {
-      providerParams: {
-        requestScript: 'request.body.prompt = "length:partial kobold reply"',
-      },
-    });
-
+    // The length: selector travels in the user turn itself (see header).
     const app = new App(page);
     const charName = `Kobold Length ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
@@ -222,7 +203,7 @@ test.describe('KoboldCpp backend adapter', () => {
     // The mock reports finish_reason "length"; canonicalFinishReason maps it to
     // 'length'. The partial text still renders; the client surfaces no finish
     // badge — the affordance is the per-message Continue action.
-    await app.sendUserMessage('trigger the length finish', { expectReply: true });
+    await app.sendUserMessage('length:partial kobold reply', { expectReply: true });
     await app.waitForAssistantText('partial kobold reply');
 
     const bubble = app.lastBubble('assistant');

@@ -28,7 +28,7 @@ A prompt list is an ordered set of prompt slots — the system-prompt stack. The
 - Disabled prompts are dropped from the stack — \`main\` included.
 - A character's \`systemPrompt\` / \`postHistoryInstructions\` override \`main\` / \`jailbreak\` content unless the prompt sets \`forbidOverrides\`.
 - Order is the stacking order of the system block; markers determine where card fields, world info, examples, and history land.
-- World Info fills its markers within a 25%-of-context budget (see topic \`lorebooks\`).
+- World Info fills its markers with every activated entry — there is no token budget (see topic \`lorebooks\`).
 - Deleting the active list falls back to defaults; the last list can't be deleted.
 
 ## Note for tools

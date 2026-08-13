@@ -1,9 +1,9 @@
 /**
  * Prompt pipeline orchestrator.
  *
- * Assembles the final prompt sent to backend adapters.
- * Uses PromptManager + a PromptRenderer to build prompts for either
- * chat-completion or text-completion backends.
+ * Assembles the final prompt sent to backend adapters: always a message
+ * list — text-completion adapters flatten it themselves with their
+ * configured instruct template.
  *
  * `build()` is a thin driver over an ordered, replaceable stage list
  * (PromptStages.ts): the stage SEQUENCE is data; the stage BODIES are the
@@ -19,7 +19,6 @@ import { applyRules, filterRulesByRole } from '../services/RegexEngine.js';
 import { PromptManager, type PromptDef, type PromptOrderEntry } from './PromptManager.js';
 import { ChatCompletionRenderer } from './renderers/ChatCompletionRenderer.js';
 import { PROMPT_SEPARATOR } from './renderers/Renderer.js';
-import type { InstructTemplate } from './renderers/InstructTemplate.js';
 import type { RegexRule } from '@tamari/types';
 import type { ITokenCounter } from '../tokenizers/TokenCounter.js';
 import type { BackendToolDefinition } from '../services/ToolRegistry.js';
@@ -45,12 +44,6 @@ export interface BuildOptions {
   model?: string;
   /** Optional persona description */
   personaDescription?: string;
-  /** Backend mode: 'chat' or 'text' */
-  mode?: 'chat' | 'text';
-  /** Instruct template name for text-completion mode */
-  instructTemplate?: string;
-  /** User-defined instruct templates (keyed by template ID) */
-  customInstructTemplates?: Record<string, InstructTemplate>;
   /** Custom stopping strings for this generation */
   stopStrings?: string[];
   /** Whether to include reasoning blocks in prompt context */

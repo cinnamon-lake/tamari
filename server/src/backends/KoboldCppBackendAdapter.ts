@@ -6,13 +6,16 @@
  * - POST /api/extra/generate/stream (SSE streaming)
  * - POST /api/extra/abort          (cancel generation)
  *
- * The prompt is sent as a flat string (prompt.text from TextCompletionRenderer).
+ * The prompt is sent as a flat string: this adapter flattens `prompt.messages`
+ * with the configured instruct template (formatTextPrompt).
  */
 
 import type { BackendAdapter, BackendStreamItem, GenerationResult, ModelInfo, Prompt } from './BackendAdapter.js';
 import { logger } from '../lib/logger.js';
 import { logDelta } from './RequestLogger.js';
 import { executeRequest, type BaseAdapterConfig } from './executeRequest.js';
+import { getInstructTemplate, type InstructTemplate } from './InstructTemplate.js';
+import { formatTextPrompt } from './formatTextPrompt.js';
 import {
   KoboldStreamEventSchema,
   type KoboldStreamEvent,
@@ -23,6 +26,10 @@ export interface KoboldCppAdapterConfig extends BaseAdapterConfig {
   baseUrl: string;
   apiKey: string;
   contextLength?: number;
+  /** Instruct template for the chat→string flattening (default: 'none'). */
+  template?: InstructTemplate;
+  /** Inline past reasoning blocks into the flat prompt (template delimiters). */
+  includeReasoning?: boolean;
 }
 
 
@@ -32,7 +39,13 @@ export class KoboldCppBackendAdapter implements BackendAdapter {
   readonly supportsStreaming = true;
   readonly supportsTools = false;
 
-  constructor(private config: KoboldCppAdapterConfig) {}
+  private readonly template: InstructTemplate;
+  readonly outputReasoning?: InstructTemplate['reasoning'];
+
+  constructor(private config: KoboldCppAdapterConfig) {
+    this.template = config.template ?? getInstructTemplate();
+    this.outputReasoning = this.template.reasoning;
+  }
 
   async *stream(prompt: Prompt, signal: AbortSignal): AsyncGenerator<BackendStreamItem, GenerationResult> {
     const baseUrl = this.normalizeBaseUrl(this.config.baseUrl);
@@ -132,7 +145,9 @@ export class KoboldCppBackendAdapter implements BackendAdapter {
 
   private buildBody(prompt: Prompt): KoboldCppGenerateRequest {
     const body: KoboldCppGenerateRequest = {
-      prompt: prompt.text ?? '',
+      prompt: formatTextPrompt(prompt.messages, this.template, {
+        includeReasoning: this.config.includeReasoning ?? false,
+      }),
       max_context_length: this.config.contextLength ?? 4096,
       max_length: prompt.tokenUsage.completion,
     };

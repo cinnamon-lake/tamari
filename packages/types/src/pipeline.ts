@@ -117,21 +117,19 @@ export interface ToolDefinition {
 export type ResponseFormat =
   { type: 'json_schema'; schema: Record<string, unknown> } | { type: 'json_object' } | { type: 'text' };
 
+/**
+ * The prompt handed to a backend adapter: always a message list.
+ * Text-completion adapters flatten `messages` into a single prompt string
+ * with their configured instruct template (server backends/formatTextPrompt).
+ */
 export interface Prompt {
   messages: PipelineMessage[];
-  text?: string;
   tokenUsage: { prompt: number; completion: number };
   systemPrompt?: string;
   tools?: ToolDefinition[];
   params?: Record<string, unknown>;
   responseFormat?: ResponseFormat;
   cacheDepth?: number;
-  reasoning?: {
-    pattern: string;
-    prefix: string;
-    suffix: string;
-    separator: string;
-  };
   /**
    * IDs of World Info entries that triggered during this generation.
    * Stored in message extra for branch-aware sticky/cooldown/delay state.

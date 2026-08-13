@@ -30,10 +30,16 @@ import {
   type LlamaCppCompletionRequest,
 } from './types.js';
 import { convertParamsToSnakeCase } from './camelToSnake.js';
+import { getInstructTemplate, type InstructTemplate } from './InstructTemplate.js';
+import { formatTextPrompt } from './formatTextPrompt.js';
 
 export interface LlamaCppAdapterConfig extends BaseAdapterConfig {
   baseUrl: string;
   model: string;
+  /** Instruct template for the chat→string flattening (default: 'none'). */
+  template?: InstructTemplate;
+  /** Inline past reasoning blocks into the flat prompt (template delimiters). */
+  includeReasoning?: boolean;
 }
 
 
@@ -43,7 +49,13 @@ export class LlamaCppBackendAdapter implements BackendAdapter {
   readonly supportsStreaming = true;
   readonly supportsTools = false;
 
-  constructor(private config: LlamaCppAdapterConfig) {}
+  private readonly template: InstructTemplate;
+  readonly outputReasoning?: InstructTemplate['reasoning'];
+
+  constructor(private config: LlamaCppAdapterConfig) {
+    this.template = config.template ?? getInstructTemplate();
+    this.outputReasoning = this.template.reasoning;
+  }
 
   async *stream(prompt: Prompt, signal: AbortSignal): AsyncGenerator<BackendStreamItem, GenerationResult> {
     const outcome = await executeRequest({
@@ -140,7 +152,9 @@ export class LlamaCppBackendAdapter implements BackendAdapter {
     const url = `${this.config.baseUrl.replace(/\/+$/, '')}/completion`;
 
     const body: LlamaCppCompletionRequest = {
-      prompt: prompt.text ?? '',
+      prompt: formatTextPrompt(prompt.messages, this.template, {
+        includeReasoning: this.config.includeReasoning ?? false,
+      }),
       stream: true,
     };
 

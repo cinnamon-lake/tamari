@@ -37,8 +37,8 @@ interface GenerationTarget {
                                        // is the message's *slot* until then)
 
   /** POLICY 1: prompt assembly. The backend is handed down (model-aware
-      token budgeting, chat-vs-text render mode); the target resolves
-      nothing itself. */
+      token counting, wire formatting — text adapters flatten via their
+      instruct template); the target resolves nothing itself. */
   prompt(backend: BackendAdapter, settings: BackendSettings): Promise<Prompt>;
 
   /** The target's accumulated content. For chat targets, ALWAYS appended

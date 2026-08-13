@@ -1,13 +1,15 @@
 /**
- * Instruct templates for text-completion rendering.
+ * Instruct templates for text-completion adapters.
  *
- * An instruct template defines how to wrap system prompts, user messages,
- * and assistant messages when flattening a PromptCollection into a single
- * string for text-completion APIs.
+ * An instruct template defines how a text-completion adapter wraps system
+ * prompts, user messages, and assistant messages when flattening
+ * `Prompt.messages` into a single string for the wire (formatTextPrompt.ts).
  *
  * This replaces the old ST's separate instruct-mode system (BOS, BOU, BOA,
  * etc. fields) with a single declarative template.
  */
+
+import { str } from '../lib/coerce.js';
 
 export interface InstructTemplate {
   name: string;
@@ -624,6 +626,36 @@ export function getInstructTemplate(
     if (lookup) return lookup;
   }
   return BUILTIN_TEMPLATES.get(name) ?? fallbackTemplate();
+}
+
+/**
+ * Parse user-defined instruct templates from the global `instructTemplates`
+ * setting (an array of template objects keyed by `id`). Moved here from
+ * ChatPromptAssembly: template parsing is a backend-adapter concern.
+ */
+export function parseCustomInstructTemplates(raw: unknown): Record<string, InstructTemplate> | undefined {
+  if (!raw || !Array.isArray(raw)) return undefined;
+  const result: Record<string, InstructTemplate> = {};
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const id = str((item as Record<string, unknown>)['id']);
+    if (!id) continue;
+    const t = item as Record<string, unknown>;
+    result[id] = {
+      name: str(t['name'], id),
+      bos: t['bos'] !== undefined ? str(t['bos']) : undefined,
+      eos: t['eos'] !== undefined ? str(t['eos']) : undefined,
+      separator: t['separator'] !== undefined ? str(t['separator']) : undefined,
+      systemPrefix: t['systemPrefix'] !== undefined ? str(t['systemPrefix']) : undefined,
+      systemSuffix: t['systemSuffix'] !== undefined ? str(t['systemSuffix']) : undefined,
+      userPrefix: t['userPrefix'] !== undefined ? str(t['userPrefix']) : undefined,
+      userSuffix: t['userSuffix'] !== undefined ? str(t['userSuffix']) : undefined,
+      assistantPrefix: t['assistantPrefix'] !== undefined ? str(t['assistantPrefix']) : undefined,
+      assistantSuffix: t['assistantSuffix'] !== undefined ? str(t['assistantSuffix']) : undefined,
+      responsePrefix: t['responsePrefix'] !== undefined ? str(t['responsePrefix']) : undefined,
+    };
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 

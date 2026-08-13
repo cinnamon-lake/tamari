@@ -10,14 +10,13 @@ function uniqueName(base: string): string {
 }
 
 // Covers ReasoningEngine (extractReasoning / reconstructWithReasoning) and the
-// GenerationService text-level think-tag parse — all of which only run in
-// text-completion mode: PromptBuilder only sets `prompt.reasoning` from the
-// instruct template in the `mode === 'text'` branch, so the fallback parse at
-// GenerationService (no native reasoning streamed -> parse text) cannot fire
-// in chat mode.
+// text-level think-tag parse — all of which only run in text-completion mode:
+// the text adapters carry their instruct template's reasoning delimiters
+// (`adapter.outputReasoning`), so the fallback parse at the message target (no
+// native reasoning streamed -> parse text) cannot fire in chat mode.
 //
 // Template: 'deepseek-v4-pro-thinking' (built-in, see
-// server/src/pipeline/renderers/InstructTemplate.ts) — reasoning pattern
+// server/src/backends/InstructTemplate.ts) — reasoning pattern
 // `(.*?<\/think>\s*)?(.*)`, prefix `<think>`, suffix `</think>`, separator ''.
 //
 // Selector note: the mock's /completions endpoint finds respond:/seq: by

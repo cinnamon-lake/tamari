@@ -36,9 +36,9 @@ Parsed only when content **starts with** \`@@\`; parsing stops at the first unkn
 
 1. Decorator pre-pass on every entry.
 2. Sticky pre-evaluation: entries within their sticky window force-activate (sticky does NOT self-renew — it expires N messages after the last genuine trigger).
-3. Up to **3 recursive rounds**. Per round: constants activate; others roll probability and check triggers against the scan text. Round results sort by \`order\` and fill the budget greedily.
+3. Up to **3 recursive rounds**. Per round: constants activate; others roll probability and check triggers against the scan text. Round results sort by \`order\`.
 4. **Recursion:** content of activated \`recursive: true\` entries REPLACES the scan text for the next round (so entry content can trigger further entries). An empty round ends early.
-5. **Budget:** 25% of the config's \`contextLength\`. First entry that doesn't fit ends the round's budgeting — oversized constants starve everything after them.
+5. **No token budget:** activation is bounded only by the deterministic knobs above (scan depth, recursion rounds, sticky/cooldown/delay, probability) — entry content is never dropped because of its size.
 
 ## Placement
 

@@ -68,11 +68,12 @@ export interface BackendCallContext {
    */
   scriptState?: string;
   /**
-   * Lazy loader for the FULL branch history (unbounded by promptHistoryLimit /
-   * chatTruncation / the token budget) — exposed to Lua scripts as the `chat`
-   * global. Absent when there is no branch (dry-run without canned history,
-   * non-chat targets). Supplied by GenerationRunner; consumed only by
-   * LuaBackendAdapter; the loader runs at most once per call when scripts use it.
+   * Lazy loader for the FULL branch history (unbounded by the
+   * promptHistoryLimit / chatTruncation message counts) — exposed to Lua
+   * scripts as the `chat` global. Absent when there is no branch (dry-run
+   * without canned history, non-chat targets). Supplied by GenerationRunner;
+   * consumed only by LuaBackendAdapter; the loader runs at most once per call
+   * when scripts use it.
    */
   branchHistory?: () => Promise<BranchHistoryMessage[]>;
 }
@@ -167,6 +168,14 @@ export interface BackendAdapter {
   readonly id: string;
   readonly supportsStreaming: boolean;
   readonly supportsTools: boolean;
+
+  /**
+   * Text-completion adapters only: reasoning-block delimiters from the
+   * adapter's instruct template. The generation target uses these to split a
+   * reasoning block out of the flat text stream at stream end. Chat adapters
+   * leave this undefined — their reasoning arrives as native stream items.
+   */
+  readonly outputReasoning?: { pattern: string; prefix: string; suffix: string; separator: string };
 
   stream(prompt: Prompt, signal: AbortSignal, ctx?: BackendCallContext): AsyncGenerator<BackendStreamItem, GenerationResult>;
 

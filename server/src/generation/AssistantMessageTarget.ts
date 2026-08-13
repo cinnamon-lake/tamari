@@ -102,12 +102,14 @@ export class AssistantMessageTarget implements GenerationTarget {
   private model: string | undefined;
   private generationStartTime = Date.now();
 
-  // Last built prompt (reasoning extraction, wiActivations merge).
-  private lastPrompt: Prompt | null = null;
   private lastPromptHistoryLimit: number | null = null;
   private accumulatedWiActivations: string[] = [];
   /** The streaming backend's id (scriptState key), captured in prompt(). */
   private backendId = '';
+  /** Text-mode reasoning delimiters from the adapter's instruct template,
+      captured in prompt() — used to split reasoning out of a flat text
+      stream at stream end (settleRound). */
+  private outputReasoning: { pattern: string; prefix: string; suffix: string; separator: string } | undefined;
 
   private flushTimeout: ReturnType<typeof setTimeout> | null = null;
   /** Serializes fire-and-forget persists (round-end, timer flush) against the
@@ -242,6 +244,7 @@ export class AssistantMessageTarget implements GenerationTarget {
     this.allSettings = resolved.allSettings;
     this.model = str(resolved.backendSettings['model']);
     this.backendId = resolved.backend.id;
+    this.outputReasoning = resolved.backend.outputReasoning;
     const { messages: historyMessages } = await getChatSnapshotMessages(this.deps.chats, this.chatId, 100);
     this.historyMessages = historyMessages;
 
@@ -258,7 +261,6 @@ export class AssistantMessageTarget implements GenerationTarget {
       lastGenerationType: this.kind,
     });
 
-    this.lastPrompt = prompt;
     this.lastPromptHistoryLimit = promptHistoryLimit;
     const newWiActivations = prompt.wiActivations ?? [];
     if (newWiActivations.length > 0) {
@@ -629,11 +631,11 @@ export class AssistantMessageTarget implements GenerationTarget {
       (parts[lastTextPartIndex] as { type: 'text'; text: string }).text = baseText + this.streamingText;
     }
 
-    if (!this.streamingReasoning && this.lastPrompt?.reasoning) {
+    if (!this.streamingReasoning && this.outputReasoning) {
       // Parse text-based reasoning if no native reasoning was streamed.
       // When reasoning is found, replace the text part with a reasoning part
       // followed by a text part containing the remaining content.
-      const r = this.lastPrompt.reasoning;
+      const r = this.outputReasoning;
       const lastText = lastTextPartIndex !== -1
         ? (parts[lastTextPartIndex] as { type: 'text'; text: string }).text
         : '';

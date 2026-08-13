@@ -332,9 +332,10 @@ export class LuaBackendAdapter implements BackendAdapter {
       // the engine), and card scripts live on string ops.
       lua.global.set('backends', backendsGlobal);
 
-      // The `chat` global: FULL branch history (unbudgeted — unlike
-      // prompt.messages, which is capped by promptHistoryLimit/chatTruncation
-      // and the token budget). Lazy: the branch loads at most once per turn,
+      // The `chat` global: FULL branch history (unbounded — unlike
+      // prompt.messages, which is capped by the promptHistoryLimit/
+      // chatTruncation message counts). Lazy: the branch loads at most once
+      // per turn,
       // and only when the script actually calls chat.* — this is the recall
       // source for scripts that compress the delegate's view of history.
       // Absent entirely when the generation has no branch (scripts must

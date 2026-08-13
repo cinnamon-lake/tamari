@@ -32,7 +32,8 @@ const MARKER_TEMPLATE = {
   responsePrefix: '<RSP>',
 };
 
-// TextCompletionRenderer + TextCompletionBackendAdapter edge paths.
+// Adapter-side text formatting (backends/formatTextPrompt.ts) +
+// TextCompletionBackendAdapter edge paths.
 //
 // Deliberately NOT covered here (uncoverable without mock-server changes):
 // usage capture from the final stream chunk (adapter ~106-109) — the mock's

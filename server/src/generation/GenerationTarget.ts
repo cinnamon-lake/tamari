@@ -81,8 +81,8 @@ export interface GenerationTarget {
       accumulated messages for transcript targets). */
   toolContextMessages(): Promise<ToolContextMessage[]>;
 
-  /** The FULL branch — unbounded by promptHistoryLimit / chatTruncation /
-      token budget (FULL_BRANCH_MESSAGE_LIMIT applies). Powers Lua-backend
+  /** The FULL branch — unbounded by the promptHistoryLimit / chatTruncation
+      message counts (FULL_BRANCH_MESSAGE_LIMIT applies). Powers Lua-backend
       history access (the `chat` global) and full-branch script-state scans.
       Chat targets: uncapped branch read; transcript targets: same span as
       toolContextMessages(); ephemeral targets: empty. */

@@ -41,7 +41,7 @@ describe('TextCompletionBackendAdapter', () => {
     } as Response);
 
     const { result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Once upon a time', tokenUsage: { prompt: 10, completion: 100 } },
+      { messages: [{ role: 'user', content: 'Once upon a time' }], tokenUsage: { prompt: 10, completion: 100 } },
       new AbortController().signal,
     ));
     expect(result.finishReason).toBe('stop');
@@ -77,7 +77,7 @@ describe('TextCompletionBackendAdapter', () => {
     } as Response);
 
     const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Say hello', tokenUsage: { prompt: 5, completion: 50 } },
+      { messages: [{ role: 'user', content: 'Say hello' }], tokenUsage: { prompt: 5, completion: 50 } },
       new AbortController().signal,
     ));
     const tokens = items.filter((i) => i.type === 'text').map((i) => i.token);
@@ -104,7 +104,7 @@ describe('TextCompletionBackendAdapter', () => {
     } as Response);
 
     const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Greet me', tokenUsage: { prompt: 5, completion: 50 } },
+      { messages: [{ role: 'user', content: 'Greet me' }], tokenUsage: { prompt: 5, completion: 50 } },
       new AbortController().signal,
     ));
     const tokens = items.filter((i) => i.type === 'text').map((i) => i.token);
@@ -127,7 +127,7 @@ describe('TextCompletionBackendAdapter', () => {
     } as Response);
 
     const { result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Test', tokenUsage: { prompt: 1, completion: 10 } },
+      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
       new AbortController().signal,
     ));
 
@@ -178,7 +178,7 @@ describe('TextCompletionBackendAdapter', () => {
     } as Response);
 
     const { result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Test', tokenUsage: { prompt: 1, completion: 10 } },
+      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
       new AbortController().signal,
     ));
     expect(result.finishReason).toBe('error');
@@ -197,7 +197,7 @@ describe('TextCompletionBackendAdapter', () => {
     });
 
     const { result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Test', tokenUsage: { prompt: 1, completion: 10 } },
+      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
       new AbortController().signal,
     ));
     expect(result.finishReason).toBe('error');
@@ -226,7 +226,7 @@ describe('TextCompletionBackendAdapter', () => {
     });
 
     const { result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Test', tokenUsage: { prompt: 1, completion: 10 } },
+      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
       controller.signal,
     ));
     expect(result.finishReason).toBe('error');
@@ -251,7 +251,7 @@ describe('TextCompletionBackendAdapter', () => {
     } as Response);
 
     const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Test', tokenUsage: { prompt: 1, completion: 10 } },
+      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
       new AbortController().signal,
     ));
     expect(items.filter((i) => i.type === 'text').map((i) => i.token)).toEqual(['ok']);
@@ -274,7 +274,7 @@ describe('TextCompletionBackendAdapter', () => {
       } as Response);
 
       const { result } = await consumeStream(adapter.stream(
-        { messages: [], text: 'Test', tokenUsage: { prompt: 1, completion: 10 } },
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
         new AbortController().signal,
       ));
       expect(result.finishReason).toBe(expected);
@@ -295,7 +295,7 @@ describe('TextCompletionBackendAdapter', () => {
     } as Response);
 
     const { result } = await consumeStream(adapter.stream(
-      { messages: [], text: 'Test', tokenUsage: { prompt: 1, completion: 10 } },
+      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
       new AbortController().signal,
     ));
     expect(result.finishReason).toBe('stop');

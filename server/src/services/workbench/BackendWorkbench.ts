@@ -297,7 +297,6 @@ export class BackendWorkbench {
     const promptText = prompt ?? DEFAULT_TEST_PROMPT;
     const testPrompt: Prompt = {
       messages: [{ role: 'user', content: promptText }],
-      text: promptText, // text-completion adapters read prompt.text
       tokenUsage: { prompt: 8, completion: 16 },
     };
 

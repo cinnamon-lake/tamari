@@ -21,6 +21,7 @@ import { KoboldCppBackendAdapter } from './KoboldCppBackendAdapter.js';
 import type { BackendAdapter } from './BackendAdapter.js';
 import type { BackendConfig } from '@tamari/types';
 import { buildBackendSettings } from './buildBackendSettings.js';
+import { getInstructTemplate, parseCustomInstructTemplates, type InstructTemplate } from './InstructTemplate.js';
 import { str } from '../lib/coerce.js';
 
 /**
@@ -90,6 +91,12 @@ export interface AdapterFactoryInput {
   /** Cache TTL for Claude prompt caching (direct or via OpenRouter). */
   cacheTTL?: string;
   contextLength?: number;
+  /** Instruct template name for text-completion adapters. */
+  instructTemplate?: string;
+  /** User-defined instruct templates (keyed by template ID). */
+  customInstructTemplates?: Record<string, InstructTemplate>;
+  /** Whether past reasoning blocks are inlined into flat text prompts. */
+  reasoningAddToPrompts?: boolean;
   openaiParams?: Record<string, unknown>;
   textgenParams?: Record<string, unknown>;
   claudeParams?: Record<string, unknown>;
@@ -120,6 +127,9 @@ export function buildAdapterFactoryInput(
       parseOptionalString(settings['requestScript']) ?? parseOptionalString(settings['custom.requestScript']),
     cacheTTL: parseOptionalString(settings['claudeCacheTTL']),
     contextLength: parseNumber(settings['contextLength']),
+    instructTemplate: parseOptionalString(settings['instructTemplate']),
+    customInstructTemplates: parseCustomInstructTemplates(settings['instructTemplates']),
+    reasoningAddToPrompts: parseOptionalBoolean(settings['reasoningAddToPrompts']),
     openaiParams: parseParams(settings['openai.params']),
     textgenParams: parseParams(settings['textgen.params']),
     claudeParams: parseParams(settings['claude.params']),
@@ -133,6 +143,15 @@ export function buildAdapterFactoryInput(
       reasoningEffort: parseReasoningEffort(settings['openrouter.reasoningEffort']),
       reasoningSummary: parseReasoningSummary(settings['openrouter.reasoningSummary']),
     },
+  };
+}
+
+/** Shared text-formatting config for text-completion adapters: the adapter
+    owns the chat→string flattening, so it needs the resolved template. */
+function textFormatting(input: AdapterFactoryInput): { template: InstructTemplate; includeReasoning: boolean } {
+  return {
+    template: getInstructTemplate(input.instructTemplate, input.customInstructTemplates),
+    includeReasoning: input.reasoningAddToPrompts ?? false,
   };
 }
 
@@ -183,6 +202,7 @@ export function createBackendAdapter(
     return new TextCompletionBackendAdapter({
       ...connection,
       params: input.textgenParams,
+      ...textFormatting(input),
     });
   }
 
@@ -236,6 +256,7 @@ registerBackendProvider('llamacpp', (input, connection) =>
   new LlamaCppBackendAdapter({
     ...connection,
     params: input.textgenParams,
+    ...textFormatting(input),
   }),
 );
 
@@ -243,6 +264,7 @@ registerBackendProvider('tabbyapi', (input, connection) =>
   new TextCompletionBackendAdapter({
     ...connection,
     params: input.textgenParams,
+    ...textFormatting(input),
   }),
 );
 
@@ -253,6 +275,7 @@ registerBackendProvider('koboldcpp', (input, connection) =>
     requestScript: connection.requestScript,
     params: input.koboldcppParams ?? input.textgenParams,
     contextLength: input.contextLength ?? 4096,
+    ...textFormatting(input),
   }),
 );
 

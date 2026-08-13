@@ -1,8 +1,11 @@
 /**
- * ChatCompletionRenderer — assembles PipelineMessages for chat-completion backends.
+ * ChatCompletionRenderer — assembles PipelineMessages for the backend.
  *
- * Takes a PromptCollection, resolves macros, counts tokens, and fits as much
- * chat history as the budget allows.
+ * Takes a PromptCollection, resolves macros, and produces the full message
+ * list. Nothing is gated on a token budget: every prompt and the whole chat
+ * history render in full (history length is bounded upstream by the
+ * message-count limits promptHistoryLimit/chatTruncation). Text-completion
+ * adapters flatten the result themselves (backends/formatTextPrompt.ts).
  */
 
 import { getMessageText } from '@tamari/types';
@@ -10,7 +13,7 @@ import { str } from '../../lib/coerce.js';
 import type { PipelineMessage, ContentPart, TextPart } from '../../backends/BackendAdapter.js';
 import type { PromptDef } from '../PromptManager.js';
 import type { RenderOptions, PromptCollection, ChatRenderResult, PromptRenderer } from './Renderer.js';
-import { FRAME_RESERVE_TOKENS, MESSAGE_OVERHEAD_TOKENS, PROMPT_SEPARATOR, TokenBudget, promptBudgetTotal } from './Renderer.js';
+import { PROMPT_SEPARATOR } from './Renderer.js';
 import { getLogger } from '../../lib/logger.js';
 
 const rendererLog = getLogger('ChatCompletionRenderer');
@@ -21,10 +24,6 @@ export class ChatCompletionRenderer implements PromptRenderer {
       { chatHistoryLength: opts.chatHistory.length, chatHistoryIds: opts.chatHistory.map((m) => m.id), chatHistoryRoles: opts.chatHistory.map((m) => m.role), maxContext: opts.maxContext, maxResponseTokens: opts.maxResponseTokens },
       'render() called',
     );
-    const budget = new TokenBudget(promptBudgetTotal(opts.maxContext, opts.maxResponseTokens));
-
-    // Reserve a tiny amount for the assistant reply priming
-    budget.reserve(FRAME_RESERVE_TOKENS);
 
     // First pass: resolve content for marker prompts from runtime data
     const resolvedPrompts = collection.prompts.map((p) => this.resolveMarkerContent(p, collection.markers));
@@ -56,7 +55,7 @@ export class ChatCompletionRenderer implements PromptRenderer {
     const beforeRel = markerIndex === -1 ? relativePrompts : relativePrompts.slice(0, markerIndex);
     const afterRel = markerIndex === -1 ? [] : relativePrompts.slice(markerIndex + 1);
 
-    const messages = this.renderRelativePrompts(beforeRel, collection, opts, budget);
+    const messages = this.renderRelativePrompts(beforeRel, collection, opts);
 
     // Squash consecutive system messages
     const squashed = this.squashConsecutiveSystemMessages(messages);
@@ -79,8 +78,6 @@ export class ChatCompletionRenderer implements PromptRenderer {
       }
       if (blockParts.length > 0) {
         const content = blockParts.join(PROMPT_SEPARATOR);
-        // The volatile block always renders — only chat history is budget-gated.
-        budget.spend(opts.tokenCounter.count(content) + MESSAGE_OVERHEAD_TOKENS);
         volatileMessages = [{ role: 'system', content }];
       }
     }
@@ -99,11 +96,11 @@ export class ChatCompletionRenderer implements PromptRenderer {
       }
     }
 
-    // Add chat history within remaining budget
-    // We iterate newest-first so we can stop when budget runs out
-    const history = [...opts.chatHistory];
+    // Add the full chat history. We iterate newest-first (unshift) so the
+    // absolute-prompt depth accounting below counts from the end of history.
     // The trailing empty assistant message (stream target) is NOT stripped here.
     // Stripping it is the backend adapter's responsibility.
+    const history = [...opts.chatHistory];
     history.reverse();
     const historyMessages: PipelineMessage[] = [];
     let messagesProcessed = 0;
@@ -120,8 +117,6 @@ export class ChatCompletionRenderer implements PromptRenderer {
             if (!prompt) continue;
             const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
             if (!resolvedContent.trim()) continue;
-            // Depth-injected prompts always render — only history is budget-gated.
-            budget.spend(opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS);
             historyMessages.unshift({
               role: prompt.role,
               content: resolvedContent,
@@ -132,10 +127,6 @@ export class ChatCompletionRenderer implements PromptRenderer {
 
       const messageText = getMessageText(msg.extra.parts);
       const resolvedText = opts.macroResolver.resolve(messageText, opts.macroCtx);
-      // Approximate per-message cost: content + framing overhead
-      const tokens = opts.tokenCounter.count(resolvedText) + MESSAGE_OVERHEAD_TOKENS;
-      if (!budget.canAfford(tokens)) break;
-      budget.spend(tokens);
 
       // Build content: plain string or ContentPart[] when attachments / parts are present
       let content: string | ContentPart[] = resolvedText;
@@ -253,8 +244,6 @@ export class ChatCompletionRenderer implements PromptRenderer {
             if (!prompt) continue;
             const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
             if (!resolvedContent.trim()) continue;
-            // Depth-injected prompts always render — only history is budget-gated.
-            budget.spend(opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS);
             historyMessages.unshift({
               role: prompt.role,
               content: resolvedContent,
@@ -266,7 +255,7 @@ export class ChatCompletionRenderer implements PromptRenderer {
 
     // Prompts ordered after the chatHistory marker render after the history
     // (squash stays group-local — groups straddling history never merge).
-    const afterMessages = this.renderRelativePrompts(afterRel, collection, opts, budget);
+    const afterMessages = this.renderRelativePrompts(afterRel, collection, opts);
     const squashedAfter = this.squashConsecutiveSystemMessages(afterMessages);
 
     const finalMessages = [...squashed, ...volatileMessages, ...historyMessages, ...squashedAfter];
@@ -304,14 +293,11 @@ export class ChatCompletionRenderer implements PromptRenderer {
   }
 
   /** Render relative-position prompts in order (dialogueExamples expand into
-      their parsed example messages; empty markers are skipped). These prompts
-      are never budget-gated — the budget only decides how much chat history
-      fits; their cost is still charged so the history cut accounts for them. */
+      their parsed example messages; empty markers are skipped). */
   private renderRelativePrompts(
     prompts: PromptDef[],
     collection: PromptCollection,
     opts: RenderOptions,
-    budget: TokenBudget,
   ): PipelineMessage[] {
     const messages: PipelineMessage[] = [];
     for (const prompt of prompts) {
@@ -320,9 +306,6 @@ export class ChatCompletionRenderer implements PromptRenderer {
         for (const ex of collection.dialogueExamples) {
           const resolvedContent = opts.macroResolver.resolve(ex.content, opts.macroCtx);
           if (!resolvedContent.trim()) continue;
-
-          // Charge the cost against the history budget (framing overhead included)
-          budget.spend(opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS);
 
           messages.push({
             role: ex.role,
@@ -336,9 +319,6 @@ export class ChatCompletionRenderer implements PromptRenderer {
 
       const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
       if (!resolvedContent.trim()) continue;
-
-      // Charge the cost against the history budget (framing overhead included)
-      budget.spend(opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS);
 
       messages.push({
         role: prompt.role,

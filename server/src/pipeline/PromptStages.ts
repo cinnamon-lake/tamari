@@ -26,8 +26,6 @@ import { MacroResolver } from './MacroResolver.js';
 import { TokenCounter, type ITokenCounter } from '../tokenizers/TokenCounter.js';
 import type { ExampleMessage, ExampleBuilder } from './ExampleBuilder.js';
 import type { ChatCompletionRenderer } from './renderers/ChatCompletionRenderer.js';
-import { TextCompletionRenderer } from './renderers/TextCompletionRenderer.js';
-import { getInstructTemplate } from './renderers/InstructTemplate.js';
 import type { WorldInfoEntry, RegexRule, MemorySummary } from '@tamari/types';
 
 /** The subset of PromptBuilder the stage closures call (all `@internal`). */
@@ -341,31 +339,13 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
           };
         }
 
-        // Pick renderer based on mode
-        const mode = opts.mode ?? 'chat';
-
         const tools = opts.toolDefinitions && opts.toolDefinitions.length > 0
           ? opts.toolDefinitions
           : undefined;
 
-        if (mode === 'text') {
-          const template = getInstructTemplate(opts.instructTemplate, opts.customInstructTemplates);
-          const renderer = new TextCompletionRenderer(template);
-          const result = renderer.render(ctx.collection, renderOpts);
-          ctx.result = {
-            messages: [], // text adapters use prompt.text
-            text: result.text,
-            tokenUsage: result.tokenUsage,
-            params,
-            cacheDepth: ctx.cacheDepth,
-            reasoning: template.reasoning,
-            tools,
-            wiActivations: ctx.wi.activatedEntryIds,
-            ...(appendOnlyTrace ? { appendOnlyTrace } : {}),
-          };
-          return;
-        }
-
+        // One renderer for every backend: the pipeline always produces a
+        // message list. Text-completion adapters flatten it themselves with
+        // their configured instruct template (backends/formatTextPrompt.ts).
         const result = host.chatRenderer.render(ctx.collection, renderOpts);
         ctx.result = {
           messages: result.messages,

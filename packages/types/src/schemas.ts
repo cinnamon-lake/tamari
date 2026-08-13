@@ -1149,21 +1149,12 @@ const ResponseFormatSchema = z.union([
 
 export const PromptSchema = z.object({
   messages: z.array(PipelineMessageSchema),
-  text: z.string().optional(),
   tokenUsage: z.object({ prompt: z.number(), completion: z.number() }),
   systemPrompt: z.string().optional(),
   tools: z.array(ToolDefinitionSchema).optional(),
   params: z.record(z.string(), z.unknown()).optional(),
   responseFormat: ResponseFormatSchema.optional(),
   cacheDepth: z.number().optional(),
-  reasoning: z
-    .object({
-      pattern: z.string(),
-      prefix: z.string(),
-      suffix: z.string(),
-      separator: z.string(),
-    })
-    .optional(),
   wiActivations: z.array(z.string()).optional(),
 });
 

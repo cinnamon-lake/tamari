@@ -21,7 +21,6 @@ import type { IAttachmentRepository } from '../repos/AttachmentRepository.js';
 import type { IWorldInfoRepository } from '../repos/WorldInfoRepository.js';
 import type { ICharacterAssetRepository } from '../repos/CharacterAssetRepository.js';
 import type { PromptBuilder, AuthorsNoteConfig } from '../pipeline/PromptBuilder.js';
-import type { InstructTemplate } from '../pipeline/renderers/InstructTemplate.js';
 import type { ToolRegistry } from '../services/ToolRegistry.js';
 import type { IToolsetRepository } from '../repos/ToolsetRepository.js';
 import type { RAGService } from '../services/RAGService.js';
@@ -174,34 +173,6 @@ export class ChatPromptAssembly {
     });
   }
 
-  private extractCustomInstructTemplates(
-    settings: Record<string, unknown>,
-  ): Record<string, InstructTemplate> | undefined {
-    const raw = settings['instructTemplates'];
-    if (!raw || !Array.isArray(raw)) return undefined;
-    const result: Record<string, InstructTemplate> = {};
-    for (const item of raw) {
-      if (!item || typeof item !== 'object') continue;
-      const id = str((item as Record<string, unknown>)['id']);
-      if (!id) continue;
-      const t = item as Record<string, unknown>;
-      result[id] = {
-        name: str(t['name'], id),
-        bos: t['bos'] !== undefined ? str(t['bos']) : undefined,
-        eos: t['eos'] !== undefined ? str(t['eos']) : undefined,
-        separator: t['separator'] !== undefined ? str(t['separator']) : undefined,
-        systemPrefix: t['systemPrefix'] !== undefined ? str(t['systemPrefix']) : undefined,
-        systemSuffix: t['systemSuffix'] !== undefined ? str(t['systemSuffix']) : undefined,
-        userPrefix: t['userPrefix'] !== undefined ? str(t['userPrefix']) : undefined,
-        userSuffix: t['userSuffix'] !== undefined ? str(t['userSuffix']) : undefined,
-        assistantPrefix: t['assistantPrefix'] !== undefined ? str(t['assistantPrefix']) : undefined,
-        assistantSuffix: t['assistantSuffix'] !== undefined ? str(t['assistantSuffix']) : undefined,
-        responsePrefix: t['responsePrefix'] !== undefined ? str(t['responsePrefix']) : undefined,
-      };
-    }
-    return Object.keys(result).length > 0 ? result : undefined;
-  }
-
   private extractAuthorsNote(metadata?: Record<string, unknown> | null): AuthorsNoteConfig | null {
     if (!metadata) return null;
     const an = metadata['authorsNote'];
@@ -308,7 +279,6 @@ export class ChatPromptAssembly {
       }
     }
 
-    const customTemplates = this.extractCustomInstructTemplates(allSettings);
     const regexRules = this.extractRegexRules(allSettings, character);
     // Append-only: reasoning always re-sent verbatim (the provider's snapshot
     // includes it); stop strings stay literal (macros are off wholesale).
@@ -363,9 +333,6 @@ export class ChatPromptAssembly {
       maxResponseTokens,
       userName: macroCtx.userName,
       model: macroCtx.model,
-      mode: backendConfig?.generationMode ?? allSettings.generationMode,
-      instructTemplate: backendConfig?.instructTemplate ?? String(allSettings['instructTemplate']),
-      customInstructTemplates: customTemplates,
       stopStrings,
       regexRules,
       reasoningAddToPrompts,

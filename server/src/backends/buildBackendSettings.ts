@@ -72,6 +72,7 @@ export function buildBackendSettings(
   backendSettings['backendProvider'] = backendConfig.backendProvider;
   backendSettings['model'] = backendConfig.model;
   backendSettings['generationMode'] = backendConfig.generationMode;
+  backendSettings['instructTemplate'] = backendConfig.instructTemplate;
   if (backendConfig.apiUrl) backendSettings['apiUrl'] = backendConfig.apiUrl;
   if (backendConfig.apiKey) backendSettings['apiKey'] = backendConfig.apiKey;
 
