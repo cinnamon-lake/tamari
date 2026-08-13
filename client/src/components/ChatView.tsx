@@ -608,7 +608,16 @@ function MessageBubble(props: {
     setEditingPartIndex(partIndex);
   };
 
-  const firstTextPartIndex = () => parts().findIndex((p) => p.type === 'text');
+  // The pencil edits the LAST text part — the model's definitive answer
+  // after any reasoning/tool parts (and the part action.continue appends
+  // to). Click-to-edit targets the clicked part explicitly.
+  const lastTextPartIndex = () => {
+    const list = parts();
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i]!.type === 'text') return i;
+    }
+    return -1;
+  };
 
   const saveEdit = () => {
     const idx = editingPartIndex();
@@ -1029,7 +1038,7 @@ function MessageBubble(props: {
           <button
             class="action-btn"
             onClick={() => {
-              const idx = firstTextPartIndex();
+              const idx = lastTextPartIndex();
               startEdit(idx === -1 ? parts().length : idx);
             }}
             title={t('common.edit')} aria-label={t('common.edit')}

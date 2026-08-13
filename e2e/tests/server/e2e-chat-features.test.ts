@@ -143,6 +143,18 @@ describe('e2e chat features', () => {
     } as ClientMessage);
     const err = h.expectBroadcast('error');
     expect(err.code).toBe('BAD_REQUEST');
+
+    // Without partIndex, the edit targets the LAST text part.
+    await h.send(client, {
+      type: 'action.edit',
+      chatId,
+      messageId: msgId,
+      content: 'last wins',
+    } as ClientMessage);
+    const defaulted = h.expectBroadcast('message.snapshot');
+    const defaultParts = defaulted.message.extra!.parts!;
+    expect(defaultParts[0]).toEqual({ type: 'text', text: 'first half' });
+    expect(defaultParts[2]).toEqual({ type: 'text', text: 'last wins' });
   });
 
   it('hides and unhides a message', async () => {

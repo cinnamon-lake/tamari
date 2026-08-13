@@ -64,9 +64,17 @@ export function buildMessageHandlers(
       const extra: MessageExtra = { ...(existing?.extra ?? {}), editedAt: Math.floor(Date.now() / 1000) };
       const existingParts = existing?.extra.parts ?? [];
       // Per-part editing: partIndex addresses exactly one text part. When
-      // omitted (legacy callers), target the first text part; append one if
-      // the message has none.
-      const idx = msg.partIndex ?? existingParts.findIndex((p) => p.type === 'text');
+      // omitted (legacy callers), target the LAST text part — that's the
+      // model's definitive answer after any reasoning/tool-call parts (and
+      // the part `action.continue` appends to); append one if none exists.
+      let defaultIdx = -1;
+      for (let i = existingParts.length - 1; i >= 0; i--) {
+        if (existingParts[i]!.type === 'text') {
+          defaultIdx = i;
+          break;
+        }
+      }
+      const idx = msg.partIndex ?? defaultIdx;
       let newParts: ContentPart[];
       if (idx >= 0 && idx < existingParts.length) {
         const target = existingParts[idx]!;

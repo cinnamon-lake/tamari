@@ -884,7 +884,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     messageId: z.number().int(),
     content: z.string(),
     // When set, edit exactly this part (must be a text part). When omitted,
-    // the first text part is targeted (or one is appended if none exists).
+    // the LAST text part is targeted — the definitive answer after any
+    // reasoning/tool parts — or one is appended if none exists.
     partIndex: z.number().int().min(0).optional(),
   }),
   z.object({
