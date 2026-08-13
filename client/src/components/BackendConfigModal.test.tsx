@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@solidjs/testing-library';
+import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { BackendConfigModal } from './BackendConfigModal.js';
 import { setState } from '../stores/serverStore.js';
 import { bus } from '../bus/WebSocketBus.js';
@@ -282,5 +282,42 @@ describe('BackendConfigModal custom provider', () => {
     const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
     render(() => <BackendConfigModal onClose={() => {}} />);
     expect(sendSpy).toHaveBeenCalledWith({ type: 'custombackend.list' });
+  });
+});
+
+describe('BackendConfigModal model picker on config switch', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('drops the stale list, restores the text input, and refetches for the new config', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [{ id: 'model-a', name: 'Model A' }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [{ id: 'model-b', name: 'Model B' }] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    setState('settings', {});
+    setState('activeBackendConfig', makeConfig({ id: 'cfg-1', model: 'model-a' }));
+
+    render(() => <BackendConfigModal onClose={() => {}} />);
+
+    // List A loaded → picker is a select offering Model A.
+    await screen.findByRole('option', { name: 'Model A' });
+    expect(screen.queryByPlaceholderText('Enter model name')).toBeNull();
+
+    // Server snapshot for a different config lands (config switch).
+    setState('activeBackendConfig', makeConfig({ id: 'cfg-2', model: 'model-b' }));
+
+    // The stale list is dropped immediately: the text input comes back with
+    // the new config's model, and a fresh fetch goes out.
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Enter model name')).toHaveValue('model-b');
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // The fresh list lands → select returns with the new config's model.
+    const option = await screen.findByRole('option', { name: 'Model B' });
+    expect((option.closest('select') as HTMLSelectElement).value).toBe('model-b');
   });
 });

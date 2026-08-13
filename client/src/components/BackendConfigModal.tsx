@@ -213,28 +213,33 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     setDirty(true);
   };
 
-  // Model listing
+  // Model listing. fetchSeq makes out-of-order responses harmless: only the
+  // latest request may write results, so a list fetched for the previous
+  // config never repopulates the picker after a config switch.
   const [availableModels, setAvailableModels] = createSignal<
     Array<{ id: string; name: string; contextLength?: number }>
   >([]);
   const [modelsLoading, setModelsLoading] = createSignal(false);
   const [modelsFailed, setModelsFailed] = createSignal(false);
+  let fetchSeq = 0;
 
   const fetchModels = async () => {
-    if (untrack(modelsLoading)) return;
+    const seq = ++fetchSeq;
     setModelsLoading(true);
     setModelsFailed(false);
     try {
       const res = await apiFetch('/api/models');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { items?: Array<{ id: string; name: string; contextLength?: number }> };
+      if (seq !== fetchSeq) return;
       setAvailableModels(data.items ?? []);
     } catch (err) {
+      if (seq !== fetchSeq) return;
       console.error('[BackendConfigModal] Model listing failed:', err);
       setModelsFailed(true);
       setAvailableModels([]);
     } finally {
-      setModelsLoading(false);
+      if (seq === fetchSeq) setModelsLoading(false);
     }
   };
 
@@ -260,7 +265,6 @@ export function BackendConfigModal(props: { onClose: () => void }) {
 
   onMount(() => {
     saveFocus();
-    void fetchModels();
     // Cheap — keeps the `custom` provider dropdown populated even when the
     // Custom Backends modal was never opened this session.
     bus.send({ type: 'custombackend.list' });
@@ -317,6 +321,17 @@ export function BackendConfigModal(props: { onClose: () => void }) {
   };
 
   const loadConfigData = (config: NonNullable<typeof state.activeBackendConfig>) => {
+    // A different config means a different model list: drop the previous
+    // config's list (and failure state) so the picker falls back to the text
+    // input with this config's model until the fresh fetch lands — otherwise
+    // the <select> renders the old list with no valid selection. The initial
+    // load skips the refetch (the mount effect above already covers it).
+    const prevConfigId = untrack(loadedConfigId);
+    if (prevConfigId !== config.id) {
+      setAvailableModels([]);
+      setModelsFailed(false);
+      if (prevConfigId !== null) void fetchModels();
+    }
     setConfigName(config.name);
     setModel(config.model);
     setGenerationMode(config.generationMode);
