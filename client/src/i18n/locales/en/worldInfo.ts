@@ -39,7 +39,7 @@ export const worldInfo = {
   secondaryKeysLabel: 'Secondary Keys',
   saved: 'Saved',
   entryHints: {
-    order: 'Insertion order — higher numbers are inserted later (lower priority when the context budget runs out).',
+    order: 'Insertion order — higher numbers are inserted later.',
     probability: 'Chance (0–100) that this entry fires when its keys match.',
     delay: 'Only fire after this many messages have been sent in the chat.',
     cooldown: 'After firing, do not fire again for this many messages.',

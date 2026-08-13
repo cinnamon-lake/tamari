@@ -205,6 +205,23 @@ describe('TextCompletionRenderer', () => {
     expect(result.text.length).toBeGreaterThan(0);
   });
 
+  it('never drops system prompts, even when they exceed the budget', () => {
+    const renderer = new TextCompletionRenderer(getInstructTemplate('none'));
+    const macroResolver = MacroResolver.createPromptResolver();
+    // ~1000 tokens by the test counter — alone exceeds the 900-token budget
+    const huge = `Huge persona. ${'A'.repeat(4000)}`;
+    const result = renderer.render(makeCollection({ charDescription: huge }), {
+      macroResolver,
+      macroCtx: { userName: 'User', charName: 'Bot' },
+      tokenCounter,
+      chatHistory: [makeMsg(1, 'user', 'Hello')],
+      maxContext: 1000,
+      maxResponseTokens: 100,
+    });
+
+    expect(result.text).toContain(huge);
+  });
+
   it('skips empty prompts', () => {
     const renderer = new TextCompletionRenderer(getInstructTemplate('none'));
     const macroResolver = MacroResolver.createPromptResolver();

@@ -60,7 +60,7 @@ Two rules govern what actually reaches the provider:
 
 ### Context & Limits
 
-- **Context Length** (`contextLength`) — the total prompt budget; World Info gets 25% of it (see [World Info](./world-info.md)).
+- **Context Length** (`contextLength`) — the total prompt budget. Chat history is trimmed oldest-first to fit it; preset prompts and World Info entries always render in full (see [World Info](./world-info.md)).
 - **Prompt History Limit** (`promptHistoryLimit`) — cap on messages pulled into context.
 - **Stop Strings** (`stopStrings`) — custom stop sequences, one per line. Macros inside them are resolved when **Settings → Generation → Resolve macros in custom stopping strings** is enabled.
 - **Logit Bias** (`logitBias`) — a `token: bias` map, one per line (e.g. `12345:5` or `word:-10`). Sent to OpenAI-family and text-completion providers.
@@ -129,5 +129,5 @@ To see exactly what your config sends (request script included, credentials scru
 - [Request Scripts](./request-scripts.md) — the request transformer contract
 - [The Workbench](./workbench.md) — editing and dry-testing backend configs through the AI
 - [Macro System](./macros.md) — macros in stop strings; non-deterministic macros and prompt caching
-- [World Info](./world-info.md) — the 25% context budget
+- [World Info](./world-info.md) — lorebooks and keyword-triggered injection
 - [Getting Started](./getting-started.md) — first-run setup

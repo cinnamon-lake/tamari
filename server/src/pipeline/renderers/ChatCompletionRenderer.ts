@@ -79,11 +79,9 @@ export class ChatCompletionRenderer implements PromptRenderer {
       }
       if (blockParts.length > 0) {
         const content = blockParts.join(PROMPT_SEPARATOR);
-        const tokens = opts.tokenCounter.count(content) + MESSAGE_OVERHEAD_TOKENS;
-        if (budget.canAfford(tokens)) {
-          budget.spend(tokens);
-          volatileMessages = [{ role: 'system', content }];
-        }
+        // The volatile block always renders — only chat history is budget-gated.
+        budget.spend(opts.tokenCounter.count(content) + MESSAGE_OVERHEAD_TOKENS);
+        volatileMessages = [{ role: 'system', content }];
       }
     }
 
@@ -122,9 +120,8 @@ export class ChatCompletionRenderer implements PromptRenderer {
             if (!prompt) continue;
             const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
             if (!resolvedContent.trim()) continue;
-            const tokens = opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS;
-            if (!budget.canAfford(tokens)) break;
-            budget.spend(tokens);
+            // Depth-injected prompts always render — only history is budget-gated.
+            budget.spend(opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS);
             historyMessages.unshift({
               role: prompt.role,
               content: resolvedContent,
@@ -256,9 +253,8 @@ export class ChatCompletionRenderer implements PromptRenderer {
             if (!prompt) continue;
             const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
             if (!resolvedContent.trim()) continue;
-            const tokens = opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS;
-            if (!budget.canAfford(tokens)) break;
-            budget.spend(tokens);
+            // Depth-injected prompts always render — only history is budget-gated.
+            budget.spend(opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS);
             historyMessages.unshift({
               role: prompt.role,
               content: resolvedContent,
@@ -308,8 +304,9 @@ export class ChatCompletionRenderer implements PromptRenderer {
   }
 
   /** Render relative-position prompts in order (dialogueExamples expand into
-      their parsed example messages; empty markers are skipped; budget checks
-      apply per message with the MESSAGE_OVERHEAD_TOKENS framing fudge). */
+      their parsed example messages; empty markers are skipped). These prompts
+      are never budget-gated — the budget only decides how much chat history
+      fits; their cost is still charged so the history cut accounts for them. */
   private renderRelativePrompts(
     prompts: PromptDef[],
     collection: PromptCollection,
@@ -324,10 +321,8 @@ export class ChatCompletionRenderer implements PromptRenderer {
           const resolvedContent = opts.macroResolver.resolve(ex.content, opts.macroCtx);
           if (!resolvedContent.trim()) continue;
 
-          // Approximate per-message cost: content + framing overhead
-          const tokens = opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS;
-          if (!budget.canAfford(tokens)) break;
-          budget.spend(tokens);
+          // Charge the cost against the history budget (framing overhead included)
+          budget.spend(opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS);
 
           messages.push({
             role: ex.role,
@@ -342,10 +337,8 @@ export class ChatCompletionRenderer implements PromptRenderer {
       const resolvedContent = opts.macroResolver.resolve(prompt.content, opts.macroCtx);
       if (!resolvedContent.trim()) continue;
 
-      // Approximate per-message cost: content + framing overhead
-      const tokens = opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS;
-      if (!budget.canAfford(tokens)) break;
-      budget.spend(tokens);
+      // Charge the cost against the history budget (framing overhead included)
+      budget.spend(opts.tokenCounter.count(resolvedContent) + MESSAGE_OVERHEAD_TOKENS);
 
       messages.push({
         role: prompt.role,

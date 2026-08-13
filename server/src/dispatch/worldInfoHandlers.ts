@@ -71,7 +71,6 @@ export function buildWorldInfoHandlers(
       const result = worldInfoInjector.scan({
         entries: msg.entries,
         scanText: msg.text,
-        budget: Number.MAX_SAFE_INTEGER,
         tokenCounter,
       });
       bus.sendTo(client.id, {

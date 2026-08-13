@@ -81,28 +81,21 @@ export interface PromptRenderer {
 }
 
 /**
- * Token-budget authority for the whole pipeline. The renderers fit content
- * into `promptBudgetTotal`, and the World Info scan claims at most
- * `worldInfoBudget` of it — both derived here so the numbers can't drift
- * apart (previously WI took 25% of maxContext while renderers budgeted
- * maxContext - maxResponseTokens, double-counting the completion reserve).
+ * Token-budget authority for the renderers. The budget exists to decide how
+ * much CHAT HISTORY fits — nothing else is gated on it. Preset prompts
+ * (system prompts, examples, depth injections) always render in full; World
+ * Info activation is governed by its own deterministic caps (scan depth,
+ * recursion depth), not a token budget.
  */
 
 /** Per-message framing overhead (role tokens etc.) charged on top of content. */
 export const MESSAGE_OVERHEAD_TOKENS = 4;
 /** Fudge reserve for wrapper tokens the counter can't see (template frame). */
 export const FRAME_RESERVE_TOKENS = 3;
-/** Fraction of the usable prompt budget World Info may claim. */
-export const WI_BUDGET_FRACTION = 0.25;
 
 /** Usable prompt budget: context window minus the reserved completion. */
 export function promptBudgetTotal(maxContext: number, maxResponseTokens: number): number {
   return maxContext - maxResponseTokens;
-}
-
-/** World Info's share of the usable prompt budget. */
-export function worldInfoBudget(maxContext: number, maxResponseTokens: number): number {
-  return Math.round(promptBudgetTotal(maxContext, maxResponseTokens) * WI_BUDGET_FRACTION);
 }
 
 /**

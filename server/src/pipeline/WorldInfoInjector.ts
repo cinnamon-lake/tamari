@@ -1,15 +1,19 @@
 /**
  * WorldInfoInjector — scans chat history for lorebook triggers and
- * returns activated entries within a token budget.
+ * returns activated entries.
  *
  * This is a simplified v2 port. It covers:
  * - Constant entries (always active)
  * - Keyword/regex triggers against chat text
  * - Probability rolls
  * - Position-aware ordering
- * - Token budget enforcement
  * - Recursive activation (entries triggering other entries)
  * - Branch-aware sticky, cooldown, and delay
+ *
+ * Activation is bounded by the deterministic knobs only: per-entry scan
+ * depth, `maxRecursionDepth`, sticky/cooldown/delay. There is deliberately
+ * no token budget — entry content is never silently dropped based on an
+ * estimated token count.
  *
  * State is branch-aware: activation history is read from `_wiActivations`
  * stored in message extras. Each chat branch carries its own timeline.
@@ -24,7 +28,6 @@ export interface ScanOptions {
   entries: WorldInfoEntry[];
   chatHistory?: Message[];
   scanText?: string;
-  budget: number;
   tokenCounter: { count(text: string): number };
   caseSensitive?: boolean;
   matchWholeWords?: boolean;
@@ -55,7 +58,6 @@ export class WorldInfoInjector {
       entries,
       chatHistory,
       scanText: explicitScanText,
-      budget,
       tokenCounter,
       caseSensitive = false,
       matchWholeWords = false,
@@ -66,7 +68,7 @@ export class WorldInfoInjector {
     const activatedIds = new Set<string>();
     const activated: ActivatedEntry[] = [];
     const activatedThisTurn: string[] = [];
-    let spent = 0;
+    let totalTokens = 0;
 
     const messages = chatHistory ?? [];
 
@@ -136,7 +138,7 @@ export class WorldInfoInjector {
       const roundActivated: ActivatedEntry[] = [];
 
       // In round 0, add sticky entries alongside normal triggers so
-      // everything is sorted by order and budgeted together.
+      // everything is sorted by order together.
       if (round === 0) {
         for (const item of stickyBuffer) {
           roundActivated.push(item);
@@ -168,11 +170,9 @@ export class WorldInfoInjector {
         // Constant entries are always active
         if (entry.constant) {
           const tokens = tokenCounter.count(entry.content);
-          if (spent + tokens <= budget) {
-            roundActivated.push({ entry, tokens });
-            activatedIds.add(entry.id);
-            activatedThisTurn.push(entry.id);
-          }
+          roundActivated.push({ entry, tokens });
+          activatedIds.add(entry.id);
+          activatedThisTurn.push(entry.id);
           continue;
         }
 
@@ -187,24 +187,21 @@ export class WorldInfoInjector {
         if (!triggered) continue;
 
         const tokens = tokenCounter.count(entry.content);
-        if (spent + tokens <= budget) {
-          roundActivated.push({ entry, tokens });
-          activatedIds.add(entry.id);
-          activatedThisTurn.push(entry.id);
-        }
+        roundActivated.push({ entry, tokens });
+        activatedIds.add(entry.id);
+        activatedThisTurn.push(entry.id);
       }
 
       if (roundActivated.length === 0) break;
 
-      // Sort by order and apply budget greedily within this round
+      // Sort by order so lower-order entries inject first within a round
       roundActivated.sort((a, b) => a.entry.order - b.entry.order);
 
       const roundAdded: ActivatedEntry[] = [];
       for (const item of roundActivated) {
-        if (spent + item.tokens > budget) break;
         activated.push(item);
         roundAdded.push(item);
-        spent += item.tokens;
+        totalTokens += item.tokens;
       }
 
       // Build scan text for next round from recursive entries
@@ -223,7 +220,7 @@ export class WorldInfoInjector {
       top: activated.filter((e) => e.entry.position === 'top'),
       bottom: activated.filter((e) => e.entry.position === 'bottom'),
       atDepth: activated.filter((e) => e.entry.position === 'atDepth'),
-      totalTokens: spent,
+      totalTokens,
       activatedEntryIds: activatedThisTurn,
     };
   }

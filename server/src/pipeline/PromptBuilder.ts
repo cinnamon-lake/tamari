@@ -18,7 +18,7 @@ import { MacroResolver, type MacroContext } from './MacroResolver.js';
 import { applyRules, filterRulesByRole } from '../services/RegexEngine.js';
 import { PromptManager, type PromptDef, type PromptOrderEntry } from './PromptManager.js';
 import { ChatCompletionRenderer } from './renderers/ChatCompletionRenderer.js';
-import { PROMPT_SEPARATOR, worldInfoBudget } from './renderers/Renderer.js';
+import { PROMPT_SEPARATOR } from './renderers/Renderer.js';
 import type { InstructTemplate } from './renderers/InstructTemplate.js';
 import type { RegexRule } from '@tamari/types';
 import type { ITokenCounter } from '../tokenizers/TokenCounter.js';
@@ -196,9 +196,8 @@ export class PromptBuilder {
       return result;
     }
 
-    // WI claims at most its share of the usable prompt budget (Renderer.ts is
-    // the single authority — the completion reserve is already subtracted).
-    const wiBudget = worldInfoBudget(opts.maxContext, opts.maxResponseTokens);
+    // WI activation is bounded by its own deterministic caps (scan depth,
+    // recursion depth) — no token budget is applied here.
     // Resolve macros on a COPY of chat history so WI keyword matching works
     // against expanded names ({{char}} → Seraphina) without mutating originals
     const resolvedHistoryForWI = visibleHistory.map((msg) => ({
@@ -208,7 +207,6 @@ export class PromptBuilder {
     const wiResult = this.worldInfo.scan({
       entries,
       chatHistory: resolvedHistoryForWI,
-      budget: wiBudget,
       tokenCounter,
       semanticMatches: opts.worldInfo?.semanticMatches,
     });

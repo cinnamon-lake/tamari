@@ -87,6 +87,26 @@ describe('ChatCompletionRenderer', () => {
     expect(result.messages.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('never drops system prompts, even when they exceed the budget', () => {
+    const macroResolver = MacroResolver.createPromptResolver();
+    // ~1000 tokens by the test counter — alone exceeds the 900-token budget
+    const huge = `Huge persona. ${'A'.repeat(4000)}`;
+    const result = renderer.render(makeCollection({ charDescription: huge }), {
+      macroResolver,
+      macroCtx: { userName: 'User', charName: 'Bot' },
+      tokenCounter,
+      chatHistory: [makeMsg(1, 'user', 'Hello')],
+      maxContext: 1000,
+      maxResponseTokens: 100,
+    });
+
+    const systemText = result.messages
+      .filter((m) => m.role === 'system')
+      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .join('');
+    expect(systemText).toContain(huge);
+  });
+
   it('squashes consecutive system messages', () => {
     const macroResolver = MacroResolver.createPromptResolver();
     const result = renderer.render(

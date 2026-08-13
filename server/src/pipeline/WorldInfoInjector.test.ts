@@ -45,7 +45,6 @@ describe('WorldInfoInjector', () => {
     const result = injector.scan({
       entries,
       chatHistory: [makeMessage('I draw my sword.')],
-      budget: 1000,
       tokenCounter: dummyTokenCounter,
     });
     expect(result.before.length).toBe(1);
@@ -56,7 +55,6 @@ describe('WorldInfoInjector', () => {
     const result = injector.scan({
       entries,
       chatHistory: [makeMessage('I draw my sword.')],
-      budget: 1000,
       tokenCounter: dummyTokenCounter,
     });
     expect(result.before.length).toBe(0);
@@ -67,24 +65,22 @@ describe('WorldInfoInjector', () => {
     const result = injector.scan({
       entries,
       chatHistory: [makeMessage('Hello world.')],
-      budget: 1000,
       tokenCounter: dummyTokenCounter,
     });
     expect(result.before.length).toBe(1);
   });
 
-  it('respects token budget', () => {
+  it('activates all triggered entries regardless of size (no token budget)', () => {
     const entries = [
-      makeEntry({ keys: ['a'], content: 'A'.repeat(4) }),
-      makeEntry({ keys: ['b'], content: 'B'.repeat(4) }),
+      makeEntry({ id: '1', keys: ['a'], content: 'A'.repeat(400) }),
+      makeEntry({ id: '2', keys: ['b'], content: 'B'.repeat(400) }),
     ];
     const result = injector.scan({
       entries,
       chatHistory: [makeMessage('a and b')],
-      budget: 1,
       tokenCounter: dummyTokenCounter,
     });
-    expect(result.before.length).toBe(1);
+    expect(result.before.length).toBe(2);
   });
 
   describe('regex keys', () => {
@@ -93,7 +89,6 @@ describe('WorldInfoInjector', () => {
       const result = injector.scan({
         entries,
         chatHistory: [makeMessage('The year is 1984.')],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       expect(result.before.length).toBe(1);
@@ -104,7 +99,6 @@ describe('WorldInfoInjector', () => {
       const result = injector.scan({
         entries,
         chatHistory: [makeMessage('say hello there')],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       expect(result.before.length).toBe(0);
@@ -115,7 +109,6 @@ describe('WorldInfoInjector', () => {
       const result = injector.scan({
         entries,
         chatHistory: [makeMessage('anything')],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       expect(result.before.length).toBe(0);
@@ -126,7 +119,6 @@ describe('WorldInfoInjector', () => {
       const result = injector.scan({
         entries,
         chatHistory: [makeMessage('there is magic here')],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
         caseSensitive: false,
       });
@@ -138,7 +130,6 @@ describe('WorldInfoInjector', () => {
       const result = injector.scan({
         entries,
         chatHistory: [makeMessage('there is magic here')],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
         caseSensitive: true,
       });
@@ -157,7 +148,6 @@ describe('WorldInfoInjector', () => {
       const result = injector.scan({
         entries,
         chatHistory: [makeMessage('The castle is old but no warrior lives here.')],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       expect(result.before.length).toBe(0);
@@ -175,7 +165,6 @@ describe('WorldInfoInjector', () => {
       const result = injector.scan({
         entries,
         chatHistory: [makeMessage('The castle is home to a brave knight.')],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       expect(result.before.length).toBe(1);
@@ -189,7 +178,6 @@ describe('WorldInfoInjector', () => {
         entries,
         chatHistory: [makeMessage('nothing here')],
         scanText: 'override present',
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       expect(result.before.length).toBe(1);
@@ -201,7 +189,6 @@ describe('WorldInfoInjector', () => {
         entries,
         chatHistory: [],
         scanText: 'test value',
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       expect(result.before.length).toBe(1);
@@ -219,7 +206,6 @@ describe('WorldInfoInjector', () => {
       const result = injector.scan({
         entries,
         chatHistory: [makeMessage('a b c d')],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       expect(result.top.length).toBe(1);
@@ -233,7 +219,6 @@ describe('WorldInfoInjector', () => {
       const result = injector.scan({
         entries,
         chatHistory: [makeMessage('x')],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       expect(result.atDepth.length).toBe(1);
@@ -256,7 +241,6 @@ describe('recursive activation', () => {
     const result = injector.scan({
       entries,
       chatHistory: [makeMessage('I cast a magic spell.')],
-      budget: 1000,
       tokenCounter: dummyTokenCounter,
     });
     // Round 0: "magic" triggers entry 1
@@ -274,7 +258,6 @@ describe('recursive activation', () => {
     const result = injector.scan({
       entries,
       chatHistory: [makeMessage('I cast a magic spell.')],
-      budget: 1000,
       tokenCounter: dummyTokenCounter,
     });
     expect(result.before.length).toBe(1);
@@ -290,7 +273,6 @@ describe('recursive activation', () => {
     const result = injector.scan({
       entries,
       chatHistory: [makeMessage('alpha')],
-      budget: 1000,
       tokenCounter: dummyTokenCounter,
     });
     expect(result.before.length).toBe(3);
@@ -308,7 +290,6 @@ describe('recursive activation', () => {
     const result = injector.scan({
       entries,
       chatHistory: [makeMessage('alpha')],
-      budget: 1000,
       tokenCounter: dummyTokenCounter,
       maxRecursionDepth: 1,
     });
@@ -323,25 +304,9 @@ describe('recursive activation', () => {
     const result = injector.scan({
       entries,
       chatHistory: [makeMessage('magic')],
-      budget: 1000,
       tokenCounter: dummyTokenCounter,
     });
     expect(result.before.length).toBe(1);
-  });
-
-  it('applies budget across all recursive rounds', () => {
-    const entries = [
-      makeEntry({ id: '1', keys: ['a'], content: 'bbbb', recursive: true }),
-      makeEntry({ id: '2', keys: ['b'], content: 'cccc' }),
-    ];
-    const result = injector.scan({
-      entries,
-      chatHistory: [makeMessage('a')],
-      budget: 1, // each entry is 1 token (4 chars / 4), so only first fits
-      tokenCounter: dummyTokenCounter,
-    });
-    expect(result.before.length).toBe(1);
-    expect(result.before[0]!.entry.id).toBe('1');
   });
 
   it('constant entries participate in recursion when recursive', () => {
@@ -352,7 +317,6 @@ describe('recursive activation', () => {
     const result = injector.scan({
       entries,
       chatHistory: [makeMessage('hello')],
-      budget: 1000,
       tokenCounter: dummyTokenCounter,
     });
     expect(result.before.length).toBe(2);
@@ -379,7 +343,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
       const result = injector.scan({
         entries,
         chatHistory: [makeMessage('dragon')],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       expect(result.before.length).toBe(0);
@@ -391,7 +354,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
       const result = injector.scan({
         entries,
         chatHistory: [makeMessage('a'), makeMessage('b'), makeMessage('dragon')],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       expect(result.before.length).toBe(1);
@@ -409,7 +371,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
           makeAssistantMessage('y', ['1']),
           makeMessage('dragon'),
         ],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       // Entry was activated 1 message ago (cooldown=3), should not fire
@@ -428,7 +389,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
           makeMessage('b'),
           makeMessage('dragon'),
         ],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       // Entry was activated 3 messages ago (cooldown=2), should fire
@@ -447,7 +407,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
           makeAssistantMessage('y', ['1']),
           makeMessage('no dragon here'),
         ],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       // Entry was activated 1 message ago (sticky=3), should stay active
@@ -467,7 +426,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
           makeMessage('b'),
           makeMessage('no monsters here'),
         ],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       // Entry was activated 3 messages ago (sticky=2), should not be active
@@ -484,7 +442,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
           makeMessage('a'),
           makeMessage('dragon'),
         ],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       // Sticky expired (activated 2 messages ago, sticky=1), but trigger is present
@@ -492,20 +449,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
       expect(result.activatedEntryIds).toContain('1');
     });
 
-    it('respects budget for sticky entries', () => {
-      const entries = [makeEntry({ id: '1', keys: ['dragon'], sticky: 3, content: 'A'.repeat(40) })];
-      const result = injector.scan({
-        entries,
-        chatHistory: [
-          makeMessage('x'),
-          makeAssistantMessage('y', ['1']),
-          makeMessage('no dragon here'),
-        ],
-        budget: 1, // 40 chars / 4 = 10 tokens, but budget is 1
-        tokenCounter: dummyTokenCounter,
-      });
-      expect(result.before.length).toBe(0);
-    });
   });
 
   describe('combined effects', () => {
@@ -518,7 +461,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
           makeAssistantMessage('y', ['1']),
           makeMessage('no dragon here'),
         ],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       // Sticky should keep it active despite cooldown
@@ -535,7 +477,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
           makeMessage('a'),
           makeMessage('dragon'),
         ],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       // Sticky expired (2 messages ago), cooldown=3 should block re-activation
@@ -552,7 +493,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
           makeAssistantMessage('y', ['1']),
           makeMessage('dragon'),
         ],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       // Only 3 messages total, delay=5 should block everything
@@ -571,7 +511,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
           makeAssistantMessage('y', ['other-entry']),
           makeMessage('no monsters here'),
         ],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       // No activation of entry 1 on this branch, so sticky should not apply
@@ -589,7 +528,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
           makeMessage('a'),
           makeMessage('b'),
         ],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       // Parent: activated 2 messages ago, sticky=3 → still active
@@ -604,7 +542,6 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
           makeMessage('a'),
           // fork diverges here — no 'b' in this branch, and no new activation
         ],
-        budget: 1000,
         tokenCounter: dummyTokenCounter,
       });
       // Fork: same distance (2 messages from activation), sticky=3 → still active

@@ -15,14 +15,14 @@ An entry has these fields:
 | **Keys** (`keys`) | `[]` | Trigger keywords, comma-separated. An entry fires when any key matches the chat history. |
 | **Content** (`content`) | `""` | The text injected into the prompt. Supports the full [macro system](./macros.md) and `@@` decorators (see below). |
 | **Comment** (`comment`) | `""` | A note for you — never injected. (Not editable in the modal; set it through the [workbench](./workbench.md) per-field files.) |
-| **Order** (`order`) | `0` | Sort order when entries compete for the token budget — lower numbers are inserted first. New entries created in the modal default to `100` (matching card imports). |
+| **Order** (`order`) | `0` | Injection sequence within an activation round — lower numbers are injected first. New entries created in the modal default to `100` (matching card imports). |
 | **Position** (`position`) | `before_char` | Where the content lands — see [Placement](#placement). |
 | **Depth** (`depth`) / **Role** (`role`) | — | Only for the **At Depth** position — see [At-Depth Injection](#at-depth-injection). |
 | **Probability** (`probability`) | `100` | 0–100; the chance the entry fires when its keys match. Rolled fresh on every generation. (Constant entries skip the roll.) |
 | **Constant** (`constant`) | off | Always injected — no key match needed. |
 | **Selective** + **Secondary Keys** (`selective`, `secondaryKeys`) | off | Require a primary key **and** a secondary key to both match (AND-logic only). |
 | **Regex** (`regex`) | off | Treat *all* keys (primary and secondary) as JavaScript regex patterns. Invalid patterns are silently skipped. |
-| **Recursive** (`recursive`) | off | This entry's content becomes the scan text for the next recursion round — see [Recursion](#recursion-and-the-token-budget). |
+| **Recursive** (`recursive`) | off | This entry's content becomes the scan text for the next recursion round — see [Recursion](#recursion). |
 | **Sticky / Cooldown / Delay** (`sticky`, `cooldown`, `delay`) | `0` | Time-based activation controls, in messages — see below. |
 | **Disable** (`disable`) | off | Turn the entry off without deleting it. (Set through the workbench or the API; the modal has no checkbox for it.) |
 | **Retrieval mode** (`retrievalMode`) | `keyword` | `keyword`, `semantic` (vector search), or `constant` — see [Semantic World Info](#semantic-world-info-rag). |
@@ -42,7 +42,7 @@ On every generation, tamari scans the **full chat history** (a macro-resolved co
 1. **Decorator pre-pass.** `@@` decorators at the top of each entry's content are parsed and applied as field overrides (see [Decorators](#-decorators)).
 2. **Sticky pre-evaluation.** Entries still inside their sticky window are force-activated.
 3. **Scan rounds.** Constant entries activate; everything else rolls its probability and checks its keys against the scan text. Then up to 3 recursion rounds run (see below).
-4. **Budgeting.** Each round's results are sorted by `order` and fill the token budget greedily.
+4. **Ordering.** Each round's activated entries are sorted by `order` and all of them are injected — there is no token budget.
 
 ### Matching rules
 
@@ -50,13 +50,11 @@ On every generation, tamari scans the **full chat history** (a macro-resolved co
 - With **Regex** on, each key is compiled as a JavaScript regex (case-insensitive flag). A key that fails to compile is skipped silently — test regex keys with the **Test Triggers** panel.
 - **Selective** entries need one primary key *and* one secondary key to both match somewhere in the scan text.
 
-### Recursion and the token budget
-
-The World Info budget is **25% of the context length** (`maxContext`) of the active generation. Entries sorted by `order` are added until the next one wouldn't fit — and that first oversized entry **ends the round**, so a huge constant entry can starve everything sorted after it.
+### Recursion
 
 Entries with **Recursive** enabled feed the next round: their *content* replaces the scan text, so activated lore can trigger further entries (e.g. an entry about a tavern mentions a character, whose own entry then fires). This repeats for up to 3 extra rounds and stops early when a round activates nothing new or no recursive content was added.
 
-> **Note:** Token costs are counted on the raw entry content, before macros are resolved. A content full of `{{getvar}}` placeholders is budgeted as-written, not as-expanded.
+There is no token budget on activation: every entry whose keys match is injected, every time. The bounding knobs are the deterministic ones — **Constant**, **Probability**, **Sticky / Cooldown / Delay**, and the recursion-round limit.
 
 ### Placement
 
@@ -142,7 +140,7 @@ Books are standalone — you create them in the **World Info** modal — but wor
 
 ### Test Triggers
 
-At the bottom of the book editor, the **Test Triggers** panel runs your entries against any sample text you paste and lists which would fire, with token counts and positions. It runs with an unlimited budget and no chat history, so it exercises keys, regex, selective logic, and constants — but not sticky/cooldown/delay (those need a message timeline) and not semantic retrieval.
+At the bottom of the book editor, the **Test Triggers** panel runs your entries against any sample text you paste and lists which would fire, with token counts and positions. It runs with no chat history, so it exercises keys, regex, selective logic, and constants — but not sticky/cooldown/delay (those need a message timeline) and not semantic retrieval.
 
 ### The `/wi` slash command
 
@@ -162,10 +160,10 @@ Quick Replies and Lua tools can read and write the linked book through the `st` 
 ## Tips & Gotchas
 
 - **Keys are substrings, not words.** `art` matches "start" and "artwork". Prefer distinctive keys, or switch the entry to **Regex** and use `\bart\b` yourself.
-- **Constants go first in the budget fight.** Set `order` deliberately: low numbers on the entries you can't live without. One oversized low-order entry can starve everything after it in the same round.
+- **`order` is pure sequencing.** Entries activate unconditionally — `order` only decides which content appears first within a round, not whether it appears at all.
 - **`{{getvar}}` in entries makes "live state" lore.** Entry content is macro-resolved (at-depth content at injection; static content via the prompt pipeline), so an entry can read variables set by `{{setvar}}` in message text, `st.setvar` from a quick reply, or a custom backend. See [Macro System](./macros.md).
 - **Sticky expires from the last *real* trigger.** It doesn't chain: a sticky entry that stays active via carry-over won't extend its own window.
-- **Recursion is one-way fuel.** Only content from entries that *activated and fit the budget* in a round becomes the next round's scan text — an entry that lost the budget fight triggers nothing.
+- **Recursion is one-way fuel.** Only content from entries that *activated* in a round becomes the next round's scan text — an entry that didn't fire triggers nothing.
 - **Regex keys are case-insensitive too.** If you need case sensitivity in a key, bake it into the pattern itself with character classes like `[A-Z]`.
 - **Prefer At Depth for dynamic lore.** Static-position entries that toggle on and off disable prompt caching; at-depth entries don't.
 - **Deleting a book doesn't warn its characters.** Characters that linked it simply fall back to no world info. Re-link from the character editor's **Linked Lorebook** dropdown after recreating a book.

@@ -456,7 +456,9 @@ export class AssistantMessageTarget implements GenerationTarget {
       .map((p) => p.text)
       .join('');
 
-    // Count tokens for the final assistant message
+    // Count tokens for the final assistant message. Display-only (the
+    // messageTokenCountEnabled badge) — behavior like auto-continue counts
+    // lazily instead of trusting this frozen value.
     newExtra.tokenCount = tokenCounterProvider.provideTokenCounter(this.model).count(newContent);
 
     // Store generation duration
@@ -498,7 +500,12 @@ export class AssistantMessageTarget implements GenerationTarget {
 
     const updated = await this.deps.chats.getMessageById(this.message!.id);
     const targetLength = allSettings.autoContinueTargetLength;
-    const tokenCount = updated?.extra.tokenCount ?? 0;
+    // Count lazily instead of trusting extra.tokenCount: the persisted count is
+    // a display value frozen with whatever tokenizer was active at write time.
+    const content = updated ? getMessageText(updated.extra.parts) : '';
+    const tokenCount = content.trim()
+      ? tokenCounterProvider.provideTokenCounter(this.model).count(content)
+      : 0;
     if (!(tokenCount > 0 && tokenCount < targetLength)) return null;
 
     // Resolve character from message or chat (as handleContinue does).

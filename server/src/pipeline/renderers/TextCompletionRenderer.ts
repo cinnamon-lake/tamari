@@ -60,8 +60,9 @@ export class TextCompletionRenderer implements PromptRenderer {
             const resolved = opts.macroResolver.resolve(ex.content, opts.macroCtx);
             if (!resolved.trim()) continue;
 
+            // Never gated — the budget only cuts history; the cost is still
+            // charged so the history cut accounts for it.
             const tokens = opts.tokenCounter.count(resolved);
-            if (!budget.canAfford(tokens)) break;
             budget.spend(tokens);
             promptTokens += tokens;
 
@@ -77,8 +78,9 @@ export class TextCompletionRenderer implements PromptRenderer {
         const resolved = opts.macroResolver.resolve(content, opts.macroCtx);
         if (!resolved.trim()) continue;
 
+        // Never gated — the budget only cuts history; the cost is still
+        // charged so the history cut accounts for it.
         const tokens = opts.tokenCounter.count(resolved);
-        if (!budget.canAfford(tokens)) break;
         budget.spend(tokens);
         promptTokens += tokens;
 
@@ -104,12 +106,11 @@ export class TextCompletionRenderer implements PromptRenderer {
       }
       if (blockParts.length > 0) {
         const content = blockParts.join(PROMPT_SEPARATOR);
+        // The volatile block always renders — only chat history is budget-gated.
         const tokens = opts.tokenCounter.count(content);
-        if (budget.canAfford(tokens)) {
-          budget.spend(tokens);
-          promptTokens += tokens;
-          parts.push(this.wrap(content, 'system'));
-        }
+        budget.spend(tokens);
+        promptTokens += tokens;
+        parts.push(this.wrap(content, 'system'));
       }
     }
 
