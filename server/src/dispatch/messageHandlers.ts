@@ -3,6 +3,7 @@
  */
 
 import type { ContentPart, MessageExtra } from '@tamari/types';
+import { getMessageText } from '@tamari/types';
 import type { ClientConnection } from '../bus/EventBus.js';
 import { MacroResolver } from '../pipeline/MacroResolver.js';
 import { performSwipe } from '../lib/swipe.js';
@@ -62,19 +63,36 @@ export function buildMessageHandlers(
 
       const extra: MessageExtra = { ...(existing?.extra ?? {}), editedAt: Math.floor(Date.now() / 1000) };
       const existingParts = existing?.extra.parts ?? [];
-      const hadTextPart = existingParts.some((p) => p.type === 'text');
-      const newParts: ContentPart[] = existingParts.map((p) => {
-        if (p.type === 'text') {
-          return { ...p, text: resolvedContent };
+      // Per-part editing: partIndex addresses exactly one text part. When
+      // omitted (legacy callers), target the first text part; append one if
+      // the message has none.
+      const idx = msg.partIndex ?? existingParts.findIndex((p) => p.type === 'text');
+      let newParts: ContentPart[];
+      if (idx >= 0 && idx < existingParts.length) {
+        const target = existingParts[idx]!;
+        if (target.type !== 'text') {
+          bus.sendTo(client.id, {
+            type: 'error',
+            message: `Part ${idx} is not a text part`,
+            code: 'BAD_REQUEST',
+          });
+          return;
         }
-        return p;
-      });
-      if (!hadTextPart) {
-        newParts.push({ type: 'text', text: resolvedContent });
+        newParts = existingParts.map((p, i) => (i === idx ? { ...p, text: resolvedContent } : p));
+      } else if (msg.partIndex !== undefined) {
+        // Explicit index out of range — don't silently edit the wrong thing.
+        bus.sendTo(client.id, {
+          type: 'error',
+          message: `Part index ${msg.partIndex} out of range`,
+          code: 'BAD_REQUEST',
+        });
+        return;
+      } else {
+        newParts = [...existingParts, { type: 'text', text: resolvedContent }];
       }
       extra.parts = newParts;
       extra.macroVars = { ...existingVars, ...newVars };
-      extra.tokenCount = tokenCounter.count(resolvedContent);
+      extra.tokenCount = tokenCounter.count(getMessageText(newParts));
       const message = await chats.updateMessage(msg.messageId, { extra });
       await chatBroadcast.broadcastMessageSnapshot(msg.chatId, message.id, client.id);
     },

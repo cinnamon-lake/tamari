@@ -547,7 +547,7 @@ export const MessageSchema = z.object({
   extra: MessageExtraSchema,
   createdAt: z.number(),
   updatedAt: z.number(),
-  renderedHtml: z.string().optional(),
+  renderedHtml: z.array(z.string().nullable()).optional(),
 });
 
 export const WorldInfoSchema = z.object({
@@ -883,6 +883,9 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     chatId: z.string(),
     messageId: z.number().int(),
     content: z.string(),
+    // When set, edit exactly this part (must be a text part). When omitted,
+    // the first text part is targeted (or one is appended if none exists).
+    partIndex: z.number().int().min(0).optional(),
   }),
   z.object({
     type: z.literal('action.delete'),
@@ -1106,7 +1109,7 @@ const InlineContentPartSchema = z.union([
   VideoContentPartSchema,
 ]);
 
-const ContentPartSchema = z.union([
+export const ContentPartSchema = z.union([
   TextContentPartSchema,
   ImageContentPartSchema,
   AudioContentPartSchema,
@@ -1205,6 +1208,18 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('message.snapshot'),
     chatId: z.string(),
     message: MessageSchema,
+    clientId: z.string().optional(),
+  }),
+  // Per-part streaming update: replace (or append, when partIndex is one past
+  // the end) one part of a message. renderedHtml is the rendered HTML for a
+  // text part, null for any other type (client renders those from raw data).
+  z.object({
+    type: z.literal('part.snapshot'),
+    chatId: z.string(),
+    messageId: z.number().int(),
+    partIndex: z.number().int().min(0),
+    part: ContentPartSchema,
+    renderedHtml: z.string().nullable(),
     clientId: z.string().optional(),
   }),
   z.object({

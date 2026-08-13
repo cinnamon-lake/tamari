@@ -72,7 +72,12 @@ export interface DisplayRenderContext {
   charName: string;
 }
 
-async function renderTextPart(text: string, ctx: DisplayRenderContext): Promise<string> {
+/**
+ * Render a single text part to sanitized HTML (storage macros → display
+ * regexes → display macros → asset URI resolution → markdown → sanitize).
+ * Exported for the per-part snapshot path (ChatBroadcastService).
+ */
+export async function renderTextPartHtml(text: string, ctx: DisplayRenderContext): Promise<string> {
   // 0. Storage macros (backward compat for old messages that were saved before
   //    write-time resolution; for new messages this is a no-op)
   const storageResolver = MacroResolver.createStorageResolver();
@@ -144,117 +149,33 @@ async function renderTextPart(text: string, ctx: DisplayRenderContext): Promise<
   return DOMPurify.sanitize(rawHtml, config);
 }
 
-function renderReasoningPart(text: string): string {
-  return `<details class="reasoning-block"><summary class="reasoning-summary">Reasoning</summary><pre class="reasoning-content">${escapeHtml(text)}</pre></details>`;
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-export async function renderMessageHtml(ctx: DisplayRenderContext): Promise<string> {
+/**
+ * Render a message's parts to per-part HTML. The returned array is aligned
+ * 1:1 with `message.extra.parts`: index `i` holds rendered HTML when
+ * `parts[i]` is a non-empty text part, `null` for every other part type
+ * (the client renders reasoning/media/tool parts from the raw part data).
+ *
+ * Legacy messages without parts fall back to a single-element array rendered
+ * from their flat text.
+ */
+export async function renderMessageParts(ctx: DisplayRenderContext): Promise<(string | null)[]> {
   const parts = ctx.message.extra.parts;
-  const blocks: string[] = [];
-
-  // Pre-scan: tool_use ids whose matching tool_result is rendered client-side
-  // as a widget (extra.renderType). Their tool-call blocks are suppressed so
-  // the widget alone represents the call.
-  const widgetToolUseIds = new Set<string>();
-  if (parts) {
-    for (const part of parts) {
-      if (part.type !== 'tool_result') continue;
-      const renderType = part.extra?.renderType;
-      if (typeof renderType === 'string' && renderType.length > 0 && part.toolUseId) {
-        widgetToolUseIds.add(part.toolUseId);
-      }
-    }
-  }
 
   if (parts && parts.length > 0) {
-    for (let index = 0; index < parts.length; index++) {
-      const part = parts[index]!;
-      switch (part.type) {
-        case 'text': {
-          if (part.text.trim()) {
-            blocks.push(await renderTextPart(part.text, ctx));
-          }
-          break;
-        }
-        case 'reasoning': {
-          if (part.text.trim()) {
-            blocks.push(renderReasoningPart(part.text));
-          }
-          break;
-        }
-        case 'backend_debug': {
-          if (part.text.trim()) {
-            blocks.push(
-              `<details class="backend-debug-block"><summary class="backend-debug-summary">Backend debug</summary><pre class="backend-debug-content">${escapeHtml(part.text)}</pre></details>`,
-            );
-          }
-          break;
-        }
-        case 'image': {
-          blocks.push(`<img class="message-inline-img" src="${escapeHtml(part.source)}" alt="" loading="lazy" />`);
-          break;
-        }
-        case 'audio': {
-          blocks.push(`<audio class="message-inline-audio" controls src="${escapeHtml(part.source)}" preload="metadata" />`);
-          break;
-        }
-        case 'video': {
-          blocks.push(`<video class="message-inline-video" controls src="${escapeHtml(part.source)}" preload="metadata" />`);
-          break;
-        }
-        case 'tool_use': {
-          // Suppressed when the matching tool_result renders as a client-side
-          // widget — the widget represents the call.
-          if (widgetToolUseIds.has(part.id)) {
-            break;
-          }
-          const args = JSON.stringify(part.input, null, 2);
-          blocks.push(
-            `<div class="tool-call-block"><div class="tool-call-header"><i class="bi bi-tools"></i> ${escapeHtml(
-              part.name || 'Tool',
-            )}</div><pre class="tool-call-args">${escapeHtml(args)}</pre></div>`,
-          );
-          break;
-        }
-        case 'tool_result': {
-          // Parts carrying extra.renderType are rendered client-side by the
-          // tool-renderers registry; emit a slot the client hydrates into.
-          const renderType = part.extra?.renderType;
-          if (typeof renderType === 'string' && renderType.length > 0) {
-            blocks.push(`<div class="tool-widget-slot" data-part-index="${index}"></div>`);
-            break;
-          }
-          const rawContent = typeof part.content === 'string' ? part.content : '';
-          const isError = part.isError === true;
-          const icon = isError ? 'bi-exclamation-triangle' : 'bi-check-circle';
-          const label = isError ? 'Error' : 'Result';
-          // Raw content in a <pre> (like tool-call-args): tool results are JSON /
-          // plain text — markdown-rendering them mangles headings, escapes, etc.
-          blocks.push(
-            `<div class="tool-result-block${isError ? ' error' : ''}"><div class="tool-result-header"><i class="bi ${icon}"></i> ${label}</div><pre class="tool-result-content">${escapeHtml(rawContent)}</pre></div>`,
-          );
-          break;
-        }
+    const out: (string | null)[] = [];
+    for (const part of parts) {
+      if (part.type === 'text' && part.text.trim()) {
+        out.push(await renderTextPartHtml(part.text, ctx));
+      } else {
+        out.push(null);
       }
     }
-  }
-
-  if (blocks.length > 0) {
-    return blocks.join('\n');
+    return out;
   }
 
   // Fallback: legacy messages with flat text only
   const text = ctx.message.extra.content ?? getMessageText(ctx.message.extra.parts);
-  return renderTextPart(text, ctx);
+  return [await renderTextPartHtml(text, ctx)];
 }
 
 /** Render markdown text to sanitized HTML (no macro/regex processing). */

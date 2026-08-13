@@ -693,6 +693,55 @@ describe('serverStore', () => {
       expect(getMessageText(state.swipes['chat-1']![0]!.extra.parts)).toBe('Edited');
     });
 
+    it('part.snapshot replaces only the addressed part, keeping sibling identity', () => {
+      const first = makeMessage({
+        id: 1,
+        extra: {
+          parts: [
+            { type: 'reasoning', text: 'thinking' },
+            { type: 'text', text: 'First' },
+          ],
+        },
+        renderedHtml: [null, '<p>First</p>'],
+      });
+      setState('messages', 'chat-1', [first]);
+      setState('swipes', 'chat-1', [first]);
+      // The store wraps objects in proxies; capture the proxied reference to
+      // compare identity against after the update.
+      const untouchedPart = state.messages['chat-1']![0]!.extra.parts![0];
+
+      mockWs.simulateMessage({
+        type: 'part.snapshot',
+        chatId: 'chat-1',
+        messageId: 1,
+        partIndex: 1,
+        part: { type: 'text', text: 'First, continued' },
+        renderedHtml: '<p>First, continued</p>',
+      });
+
+      const updated = state.messages['chat-1']![0]!;
+      // Untouched part keeps its object identity (no re-render client-side).
+      expect(updated.extra.parts![0]).toBe(untouchedPart);
+      expect(updated.extra.parts![1]).toEqual({ type: 'text', text: 'First, continued' });
+      expect(updated.renderedHtml).toEqual([null, '<p>First, continued</p>']);
+      // Swipe list gets the same treatment.
+      expect(getMessageText(state.swipes['chat-1']![0]!.extra.parts)).toBe('First, continued');
+    });
+
+    it('part.snapshot appends when partIndex is one past the end', () => {
+      mockWs.simulateMessage({
+        type: 'part.snapshot',
+        chatId: 'chat-1',
+        messageId: 1,
+        partIndex: 1,
+        part: { type: 'reasoning', text: 'late thought' },
+        renderedHtml: null,
+      });
+      const parts = state.messages['chat-1']![0]!.extra.parts!;
+      expect(parts).toHaveLength(2);
+      expect(parts[1]).toEqual({ type: 'reasoning', text: 'late thought' });
+    });
+
     it('message.deleted removes from messages and swipes', () => {
       setState('swipes', 'chat-1', [makeMessage({ id: 1 })]);
       mockWs.simulateMessage({

@@ -229,8 +229,13 @@ export interface Message {
   extra: MessageExtra;
   createdAt: number;
   updatedAt: number;
-  /** Server-computed HTML for display. Not persisted to DB. */
-  renderedHtml?: string;
+  /**
+   * Server-computed HTML for display, aligned 1:1 with `extra.parts`.
+   * Index `i` holds the rendered HTML for `parts[i]` when it is a non-empty
+   * `text` part; `null` for every other part type (the client renders those
+   * from the raw part data). Not persisted to DB.
+   */
+  renderedHtml?: (string | null)[];
 }
 
 export type MessageInsert = Omit<Message, 'id' | 'parentId' | 'createdAt' | 'updatedAt'> & {

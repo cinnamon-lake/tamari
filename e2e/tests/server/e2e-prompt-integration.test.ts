@@ -629,11 +629,12 @@ describe('e2e prompt integration', () => {
 
     const snapshot = h.expectBroadcast('chat.snapshot');
 
-    // Stored text is raw; renderedHtml applies display regex
+    // Stored text is raw; renderedHtml applies display regex (per-part array,
+    // aligned with extra.parts — the user message has a single text part)
     const userMsg = snapshot.messages.find((m: any) => m.role === 'user');
     expect(userMsg).toBeDefined();
     expect(getMessageText(userMsg!.extra.parts)).toBe('foo foo foo');
-    expect(userMsg!.renderedHtml).toContain('bar bar bar');
+    expect(userMsg!.renderedHtml?.[0]).toContain('bar bar bar');
   });
 
   it('resolves {% if %} blocks conditionally', async () => {

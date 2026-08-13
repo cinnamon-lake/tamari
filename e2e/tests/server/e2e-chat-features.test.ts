@@ -95,6 +95,56 @@ describe('e2e chat features', () => {
     expect(edited.message.extra!.editedAt).toBeDefined();
   });
 
+  it('edits a single text part by index', async () => {
+    const { chatId } = await setupFullChat();
+
+    await h.send(client, { type: 'action.send', chatId, content: 'Hi' } as ClientMessage);
+    h.expectBroadcast('chat.snapshot');
+    await h.send(client, { type: 'action.generate', chatId } as ClientMessage);
+    const patched = h.expectBroadcast('message.snapshot');
+    const msgId = patched.message.id;
+
+    // Give the message a multi-part shape: text / reasoning / text.
+    const existing = await h.deps.chats.getMessageById(msgId);
+    await h.deps.chats.updateMessage(msgId, {
+      extra: {
+        ...existing!.extra,
+        parts: [
+          { type: 'text', text: 'first half' },
+          { type: 'reasoning', text: 'some thinking' },
+          { type: 'text', text: 'second half' },
+        ],
+      },
+    });
+
+    // Edit only the second text part (index 2).
+    await h.send(client, {
+      type: 'action.edit',
+      chatId,
+      messageId: msgId,
+      content: 'edited second half',
+      partIndex: 2,
+    } as ClientMessage);
+    const edited = h.expectBroadcast('message.snapshot');
+    const parts = edited.message.extra!.parts!;
+    expect(parts).toHaveLength(3);
+    expect(parts[0]).toEqual({ type: 'text', text: 'first half' });
+    expect(parts[1]).toEqual({ type: 'reasoning', text: 'some thinking' });
+    expect(parts[2]).toEqual({ type: 'text', text: 'edited second half' });
+    expect(edited.message.renderedHtml?.[2]).toContain('edited second half');
+
+    // Editing a non-text part is rejected.
+    await h.send(client, {
+      type: 'action.edit',
+      chatId,
+      messageId: msgId,
+      content: 'nope',
+      partIndex: 1,
+    } as ClientMessage);
+    const err = h.expectBroadcast('error');
+    expect(err.code).toBe('BAD_REQUEST');
+  });
+
   it('hides and unhides a message', async () => {
     const { chatId } = await setupFullChat();
 

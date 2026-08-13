@@ -308,6 +308,24 @@ bus.on('message.snapshot', (msg) => {
   setState('swipes', msg.chatId, (swipes = []) => swipes.map(replacer));
 });
 
+// Per-part streaming update: replace (or append) a single part of a message.
+// Mirrors message.snapshot's ID-match replacement at part granularity — only
+// the swapped part object gets a new reference, so MessagePartsView's <For>
+// re-renders exactly that part.
+bus.on('part.snapshot', (msg) => {
+  if (msg.chatId !== activeChatId()) return;
+  const updater = (m: (typeof state.messages)[string][0]) => {
+    if (m.id !== msg.messageId) return m;
+    const parts = [...(m.extra.parts ?? [])];
+    parts[msg.partIndex] = msg.part;
+    const html = [...(m.renderedHtml ?? [])];
+    html[msg.partIndex] = msg.renderedHtml;
+    return { ...m, extra: { ...m.extra, parts }, renderedHtml: html };
+  };
+  setState('messages', msg.chatId, (msgs = []) => msgs.map(updater));
+  setState('swipes', msg.chatId, (swipes = []) => swipes.map(updater));
+});
+
 bus.on('message.deleted', (msg) => {
   if (msg.chatId !== activeChatId()) return;
   setState('messages', msg.chatId, (msgs = []) => msgs.filter((m) => m.id !== msg.messageId));

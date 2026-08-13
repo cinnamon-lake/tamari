@@ -14,7 +14,7 @@ function makeMsg(id: number, text: string, extra?: Record<string, unknown>): Mes
     extra: { parts: [{ type: 'text', text }], ...(extra ?? {}) },
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    renderedHtml: `<p>${text}</p>`,
+    renderedHtml: [`<p>${text}</p>`],
   };
 }
 
@@ -229,7 +229,7 @@ describe('ChatView', () => {
     it('shows load more button when older messages exist', () => {
       setState('activeChat', makeChat({ headMessageId: 2 }));
       setState('messages', {
-        'chat-1': [{ ...makeMsg(2, 'Head'), parentId: 1, renderedHtml: '<p>Head</p>' }],
+        'chat-1': [{ ...makeMsg(2, 'Head'), parentId: 1, renderedHtml: ['<p>Head</p>'] }],
       });
       render(() => <ChatView />);
       expect(screen.getByText('Load more messages')).toBeInTheDocument();
@@ -535,9 +535,10 @@ describe('ChatView', () => {
       setState('settings', {} as any);
       setState('activeChat', makeChat());
       const msg = makeMsg(1, 'battle menu');
-      msg.renderedHtml =
+      msg.renderedHtml = [
         '<div class="hud"><button data-post-response="attack">Attack!</button>' +
-        '<button data-post-response="flee">Run away</button></div>';
+        '<button data-post-response="flee">Run away</button></div>',
+      ];
       setState('messages', { 'chat-1': [msg] });
       setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
       render(() => <ChatView />);
@@ -560,7 +561,7 @@ describe('ChatView', () => {
       setState('settings', {} as any);
       setState('activeChat', makeChat());
       const msg = makeMsg(1, 'plain text');
-      msg.renderedHtml = '<div class="hud"><span>just text</span></div>';
+      msg.renderedHtml = ['<div class="hud"><span>just text</span></div>'];
       setState('messages', { 'chat-1': [msg] });
       setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
       render(() => <ChatView />);
@@ -577,14 +578,15 @@ describe('ChatView', () => {
       setState('settings', {} as any);
       setState('activeChat', makeChat());
       const msg = makeMsg(1, 'battle form');
-      msg.renderedHtml =
+      msg.renderedHtml = [
         '<form data-post-response="action">' +
         '<input name="target" type="text" value="the goblin">' +
         '<input type="checkbox" name="sneak" value="yes" checked>' +
         '<input type="checkbox" name="shield" value="yes">' +
         '<select name="weapon"><option value="sword">Sword</option><option value="bow" selected>Bow</option></select>' +
         '<textarea name="flourish"></textarea>' +
-        '<button type="submit">Attack</button></form>';
+        '<button type="submit">Attack</button></form>',
+      ];
       setState('messages', { 'chat-1': [msg] });
       setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
       render(() => <ChatView />);
@@ -616,7 +618,7 @@ describe('ChatView', () => {
       setState('settings', {} as any);
       setState('activeChat', makeChat());
       const msg = makeMsg(1, 'plain form');
-      msg.renderedHtml = '<form><input name="a" type="text" value="v"><button type="submit">go</button></form>';
+      msg.renderedHtml = ['<form><input name="a" type="text" value="v"><button type="submit">go</button></form>'];
       setState('messages', { 'chat-1': [msg] });
       setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
       render(() => <ChatView />);
@@ -635,9 +637,10 @@ describe('ChatView', () => {
       setState('settings', {} as any);
       setState('activeChat', makeChat());
       const msg = makeMsg(1, 'empty form');
-      msg.renderedHtml =
+      msg.renderedHtml = [
         '<form data-post-response="action"><input type="text" value="no-name">' +
-        '<button type="submit">go</button></form>';
+        '<button type="submit">go</button></form>',
+      ];
       setState('messages', { 'chat-1': [msg] });
       setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
       render(() => <ChatView />);

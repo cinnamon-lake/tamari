@@ -112,6 +112,9 @@ export class AssistantMessageTarget implements GenerationTarget {
   private outputReasoning: { pattern: string; prefix: string; suffix: string; separator: string } | undefined;
 
   private flushTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** Index of the part currently being streamed into (set by write()); the
+      throttled flush broadcasts a part.snapshot for just this part. */
+  private dirtyPartIndex: number | null = null;
   /** Serializes fire-and-forget persists (round-end, timer flush) against the
       runner-awaited ones (tool outcomes, finalize) so DB writes land in
       logical order. */
@@ -229,6 +232,7 @@ export class AssistantMessageTarget implements GenerationTarget {
     this.streamingReasoning = '';
     this.streamingReasoningSignature = '';
     this.streamedSinceLastSettle = false;
+    this.dirtyPartIndex = null;
     this.roundToolCalls = [];
     this.generationStartTime = Date.now();
   }
@@ -337,6 +341,7 @@ export class AssistantMessageTarget implements GenerationTarget {
         } else {
           this.streamingParts.push({ type: 'text', text: item.token });
         }
+        this.dirtyPartIndex = this.streamingParts.length - 1;
         this.deps.generationBroadcast.broadcastGenerationToken(this.chatId, this.generationId, item.token);
         this.scheduleFlush();
         break;
@@ -349,6 +354,7 @@ export class AssistantMessageTarget implements GenerationTarget {
         } else {
           this.streamingParts.push({ type: 'reasoning', text: item.token });
         }
+        this.dirtyPartIndex = this.streamingParts.length - 1;
         this.deps.generationBroadcast.broadcastGenerationReasoningToken(this.chatId, this.generationId, item.token);
         this.scheduleFlush();
         break;
@@ -363,6 +369,7 @@ export class AssistantMessageTarget implements GenerationTarget {
         } else {
           this.streamingParts.push({ type: 'backend_debug', text: item.token });
         }
+        this.dirtyPartIndex = this.streamingParts.length - 1;
         this.deps.generationBroadcast.broadcastGenerationDebugToken(this.chatId, this.generationId, item.token);
         this.scheduleFlush();
         break;
@@ -578,7 +585,14 @@ export class AssistantMessageTarget implements GenerationTarget {
       try {
         await this.deps.chats.updateMessage(this.message!.id, { extra: flushExtra });
         this.baseExtra = flushExtra;
-        await this.deps.chatBroadcast.broadcastMessageSnapshot(this.chatId, this.message!.id);
+        // Per-part streaming: only the dirty part changed since the last
+        // broadcast — send a part.snapshot so clients re-render just that
+        // part instead of the whole message.
+        if (this.dirtyPartIndex !== null) {
+          await this.deps.chatBroadcast.broadcastPartSnapshot(this.chatId, this.message!.id, this.dirtyPartIndex);
+        } else {
+          await this.deps.chatBroadcast.broadcastMessageSnapshot(this.chatId, this.message!.id);
+        }
       } catch (err) {
         log.error({ err, chatId: this.chatId, targetMessageId: this.message!.id }, 'streaming flush failed');
       }
@@ -587,11 +601,13 @@ export class AssistantMessageTarget implements GenerationTarget {
 
   private scheduleFlush(): void {
     if (this.flushTimeout) return;
-    // Throttle mid-stream full-message snapshots to ~1/s. Per-token
-    // broadcastGenerationToken still drives the live UX, and the complete
-    // rendered snapshot is broadcast on stream completion regardless. This
-    // keeps the server→client blast from congesting the client's WS send
-    // buffer (which was starving outgoing action frames under load).
+    // Throttle mid-stream persists to ~1/s. Each flush broadcasts a
+    // part.snapshot for just the dirty part (clients re-render only that
+    // part); per-token broadcastGenerationToken still drives the live UX, and
+    // a complete rendered message.snapshot goes out on stream completion
+    // regardless. This keeps the server→client blast from congesting the
+    // client's WS send buffer (which was starving outgoing action frames
+    // under load).
     this.flushTimeout = setTimeout(() => void this.flushToDb(), 1000);
   }
 

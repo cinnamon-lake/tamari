@@ -8,7 +8,7 @@ import type {
   ICharacterAssetRepository,
 } from '../repos/index.js';
 import { getChatSnapshotMessages } from '../lib/swipeInfo.js';
-import { renderMessageHtml, renderMarkdownToHtml } from './DisplayRenderer.js';
+import { renderMessageParts, renderTextPartHtml, renderMarkdownToHtml, type DisplayRenderContext } from './DisplayRenderer.js';
 import { applyRules, filterRulesByRole } from './RegexEngine.js';
 import { mergeRegexRules } from './characterRegex.js';
 import {
@@ -166,7 +166,7 @@ export class ChatBroadcastService {
 
     const renderMessage = async (msg: Message): Promise<Message> => {
       if (msg.role === 'tool') return msg;
-      const html = await renderMessageHtml({
+      const html = await renderMessageParts({
         message: msg,
         character,
         characterAssets: chatCharacterAssets,
@@ -236,12 +236,50 @@ export class ChatBroadcastService {
     );
   }
 
-  private async renderSingleMessage(
+  /**
+   * Broadcast a single-part update (streaming flush path). Replaces (or, when
+   * partIndex is one past the end, appends) one part client-side — the client
+   * re-renders only that part instead of the whole message.
+   */
+  async broadcastPartSnapshot(
+    chatId: string,
+    messageId: number,
+    partIndex: number,
+    excludeClientId?: string,
+  ): Promise<void> {
+    const message = await this.deps.chats.getMessageById(messageId);
+    if (!message) throw new Error('Message not found');
+
+    const chat = await this.deps.chats.getChatById(chatId);
+    if (!chat) throw new Error('Chat not found');
+
+    const part = message.extra.parts?.[partIndex];
+    if (!part) return;
+
+    let renderedHtml: string | null = null;
+    if (message.role !== 'tool' && part.type === 'text' && part.text.trim()) {
+      const ctx = await this.buildDisplayContext(chat, message);
+      renderedHtml = await renderTextPartHtml(part.text, ctx);
+    }
+
+    this.deps.bus.broadcast(
+      {
+        type: 'part.snapshot',
+        chatId,
+        messageId,
+        partIndex,
+        part,
+        renderedHtml,
+      },
+      excludeClientId,
+    );
+  }
+
+  /** Assemble the DisplayRenderContext shared by full-message and per-part rendering. */
+  private async buildDisplayContext(
     chat: NonNullable<Awaited<ReturnType<IChatRepository['getChatById']>>>,
     message: Message,
-  ): Promise<Message> {
-    if (message.role === 'tool') return message;
-
+  ): Promise<DisplayRenderContext> {
     const character = chat.characterId ? await this.deps.characters.getById(chat.characterId) : undefined;
     const persona = chat.personaId ? await this.deps.personas.getById(chat.personaId) : undefined;
 
@@ -254,6 +292,23 @@ export class ChatBroadcastService {
     const characterAssets = character && this.deps.characterAssets
       ? await this.deps.characterAssets.listForCharacter(character.id)
       : [];
+
+    return {
+      message,
+      character,
+      characterAssets,
+      regexRules,
+      strictHtmlSanitization: strictHtml,
+      userName,
+      charName,
+    };
+  }
+
+  private async renderSingleMessage(
+    chat: NonNullable<Awaited<ReturnType<IChatRepository['getChatById']>>>,
+    message: Message,
+  ): Promise<Message> {
+    if (message.role === 'tool') return message;
 
     // Enrich with canonical names/avatars
     const charIds = new Set<string>();
@@ -287,15 +342,8 @@ export class ChatBroadcastService {
     }
     const enrichedMessage = { ...message, extra: nextExtra };
 
-    const html = await renderMessageHtml({
-      message: enrichedMessage,
-      character,
-      characterAssets,
-      regexRules,
-      strictHtmlSanitization: strictHtml,
-      userName,
-      charName,
-    });
+    const ctx = await this.buildDisplayContext(chat, enrichedMessage);
+    const html = await renderMessageParts(ctx);
 
     return { ...enrichedMessage, renderedHtml: html };
   }

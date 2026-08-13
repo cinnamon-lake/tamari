@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { QuickReplyAutoExecute } from '@tamari/types';
 import type { RegexRule } from '@tamari/types';
 import { mergeRegexRules } from '../services/characterRegex.js';
-import { renderMessageHtml } from '../services/DisplayRenderer.js';
+import { renderMessageParts } from '../services/DisplayRenderer.js';
 import { materializeGreetings } from '../lib/greetings.js';
 import { toChatSummary, withChatUrls } from '../lib/summaries.js';
 import { broadcastQuickReplyList } from '../services/quickReplyBroadcast.js';
@@ -60,7 +60,7 @@ export function buildChatHandlers(
       const renderedMessages = await Promise.all(
         messages.map(async (msg) => {
           if (msg.role === 'tool') return msg;
-          const html = await renderMessageHtml({
+          const html = await renderMessageParts({
             message: msg,
             character,
             characterAssets: assets,

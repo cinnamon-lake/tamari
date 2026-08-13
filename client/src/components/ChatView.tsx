@@ -23,7 +23,8 @@ import { appendPendingDropFiles } from '../stores/dndStore.js';
 import { SafeImage } from './SafeImage.js';
 import { AudioPlayer } from './AudioPlayer.js';
 
-import { getToolRenderer, mountToolWidgets } from './tool-renderers/index.js';
+import { getToolRenderer } from './tool-renderers/index.js';
+import { MessagePartsView } from './MessagePartsView.js';
 import { useI18n } from '../i18n/index.js';
 import './ChatView.css';
 
@@ -70,6 +71,10 @@ export function ChatView() {
 
   const [displayLimit, setDisplayLimit] = createSignal(50);
   const visibleMessages = createMemo(() => messages().slice(-displayLimit()));
+  // Iterate stable message IDs (not message objects) so a store update —
+  // message.snapshot / part.snapshot — re-renders inside the live bubble
+  // instead of remounting it.
+  const visibleMessageIds = createMemo(() => visibleMessages().map((m) => m.id));
   const canLoadMore = createMemo(() => {
     const msgs = messages();
     const first = msgs[0];
@@ -250,7 +255,7 @@ export function ChatView() {
       extra: { characterId: char?.id, parts: [{ type: 'text', text: state.greeting ?? '' }] },
       createdAt: 0,
       updatedAt: 0,
-      renderedHtml: state.greetingHtml ?? undefined,
+      renderedHtml: state.greetingHtml != null ? [state.greetingHtml] : undefined,
     };
   });
 
@@ -321,19 +326,20 @@ export function ChatView() {
               when={showVirtualGreetings()}
               fallback={
                 <>
-                  <For each={visibleMessages()}>
-                    {(msg) => {
-                      return <MessageBubble id={String(msg.id)} message={msg} isLast={false} />;
+                  <For each={visibleMessageIds()}>
+                    {(id) => {
+                      return <MessageBubble id={String(id)} messageId={id} isLast={false} />;
                     }}
                   </For>
                   <Show when={activeChild()}>
-                    {(child) => <MessageBubble id={String(child().id)} message={child()} isLast={true} />}
+                    {(child) => <MessageBubble id={String(child().id)} messageId={child().id} isLast={true} />}
                   </Show>
                 </>
               }
             >
               <MessageBubble
-                message={greetingMessage()}
+                messageId={-1}
+                fallbackMessage={greetingMessage()}
                 isLast={true}
                 readOnly
                 onSwipeLeft={greetings().length > 1 ? () => cycleGreeting('left') : undefined}
@@ -372,7 +378,8 @@ interface MessageBubbleShellProps {
   role: string;
   avatarUrl?: string;
   name: string;
-  htmlContent?: string;
+  /** Per-part content view (MessagePartsView), rendered as the bubble body. */
+  content?: JSX.Element;
   isStreamingTarget?: boolean;
   streamFadeIn?: boolean;
   hideAvatar?: boolean;
@@ -384,13 +391,8 @@ interface MessageBubbleShellProps {
   actions?: JSX.Element;
   bodyExtra?: JSX.Element;
   suppressContent?: boolean;
-  message?: Message;
-  widgetsDisabled?: boolean;
   isEditing?: boolean;
-  editArea?: JSX.Element;
   rawText?: string;
-  onContentClick?: (e: MouseEvent) => void;
-  onContentSubmit?: (e: SubmitEvent) => void;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
 }
@@ -406,20 +408,6 @@ function MessageBubbleShell(props: MessageBubbleShellProps) {
   let tracking = false;
 
   const isSwipeable = () => Boolean(props.onSwipeLeft || props.onSwipeRight);
-
-  let contentEl: HTMLDivElement | undefined;
-
-  // Hydrate interactive tool widgets into the server-rendered
-  // `.tool-widget-slot` placeholders. Keyed on htmlContent so streaming
-  // re-renders dispose and re-mount cleanly.
-  createEffect(() => {
-    const html = props.htmlContent;
-    const message = props.message;
-    const el = contentEl;
-    if (!el || !message || !html || encodedText()) return;
-    const dispose = mountToolWidgets(el, message, { disabled: props.widgetsDisabled });
-    onCleanup(dispose);
-  });
 
   const encodedText = createMemo(() => {
     if (!state.settings['encodeTags']) return '';
@@ -509,38 +497,16 @@ function MessageBubbleShell(props: MessageBubbleShellProps) {
           </div>
         </Show>
       </div>
-      <Show
-        when={props.isEditing && props.editArea}
-        fallback={
-          <>
-            {props.bodyExtra}
-            <Show when={!props.suppressContent}>
-              <Show
-                when={encodedText()}
-                fallback={
-                  <div
-                    class={`message-content${props.isStreamingTarget && props.streamFadeIn ? ' stream-fade-in' : ''}`}
-                    innerHTML={props.htmlContent ?? ''}
-                    onClick={props.onContentClick}
-                    onSubmit={props.onContentSubmit}
-                    ref={(el) => {
-                      contentEl = el;
-                    }}
-                  />
-                }
-              >
-                <pre class="encoded-tags">
-                  <code class="encoded-tags-code">{encodedText()}</code>
-                </pre>
-              </Show>
-            </Show>
-            <Show when={props.isStreamingTarget && !encodedText()}>
-              <span class="cursor">▋</span>
-            </Show>
-          </>
-        }
-      >
-        {props.editArea}
+      {props.bodyExtra}
+      <Show when={!props.suppressContent}>
+        <Show when={encodedText()} fallback={props.content}>
+          <pre class="encoded-tags">
+            <code class="encoded-tags-code">{encodedText()}</code>
+          </pre>
+        </Show>
+      </Show>
+      <Show when={props.isStreamingTarget && !encodedText()}>
+        <span class="cursor">▋</span>
       </Show>
     </div>
   );
@@ -548,7 +514,13 @@ function MessageBubbleShell(props: MessageBubbleShellProps) {
 
 function MessageBubble(props: {
   id?: string;
-  message: (typeof state.messages)[string][0];
+  /** Stable message id — the live message is looked up in the store so
+      part.snapshot / message.snapshot updates re-render in place instead of
+      remounting the bubble. */
+  messageId: number;
+  /** Message object for bubbles that don't live in the store (the virtual
+      greeting, id -1). */
+  fallbackMessage?: Message;
   isLast: boolean;
   readOnly?: boolean;
   onSwipeLeft?: () => void;
@@ -558,22 +530,35 @@ function MessageBubble(props: {
   swipeIndex?: number;
   swipeTotal?: number;
 }) {
-  const [editing, setEditing] = createSignal(false);
-  const [editText, setEditText] = createSignal(getMessageText(props.message.extra?.parts));
+  const message = createMemo<Message>(() => {
+    const chatId = state.activeChat?.id ?? activeChatId() ?? '';
+    const live =
+      state.messages[chatId]?.find((m) => m.id === props.messageId) ??
+      state.swipes[chatId]?.find((m) => m.id === props.messageId);
+    if (live) return live;
+    if (props.fallbackMessage) return props.fallbackMessage;
+    return { id: props.messageId, parentId: null, role: 'assistant', extra: {}, createdAt: 0, updatedAt: 0 };
+  });
+
+  const [editingPartIndex, setEditingPartIndex] = createSignal<number | null>(null);
+  const [editText, setEditText] = createSignal('');
   const { t } = useI18n();
 
-  const isUser = () => props.message.role === 'user';
-  const isAssistant = () => props.message.role === 'assistant';
+  const parts = createMemo(() => message().extra?.parts ?? []);
+  const editing = () => editingPartIndex() !== null;
+
+  const isUser = () => message().role === 'user';
+  const isAssistant = () => message().role === 'assistant';
   const isGroupChat = () => state.activeChat?.characterId === null;
 
   const isEdited = () => {
-    return typeof props.message.extra?.editedAt === 'number';
+    return typeof message().extra?.editedAt === 'number';
   };
 
   const isStreamingTarget = createMemo(() =>
     state.generation.status === 'streaming' &&
     state.generation.chatId === (activeChatId() ?? '') &&
-    state.generation.targetMessageId === props.message.id
+    state.generation.targetMessageId === message().id
   );
 
   const streamFadeInEnabled = createMemo(
@@ -583,15 +568,11 @@ function MessageBubble(props: {
   const hideAvatar = createMemo(() => Boolean(state.settings['hideChatAvatars']));
   const hideName = createMemo(() => Boolean(state.settings['hideChatNames']));
 
-  const htmlContent = createMemo(() => props.message.renderedHtml);
-
-  const hasParts = createMemo(() => {
-    const parts = props.message.extra?.parts;
-    return Array.isArray(parts) && parts.length > 0;
-  });
+  const hasParts = createMemo(() => parts().length > 0);
+  const hasRenderedHtml = createMemo(() => (message().renderedHtml ?? []).some((h) => h != null && h !== ''));
 
   const attachments = createMemo(() => {
-    return props.message.extra?.attachments ?? [];
+    return message().extra?.attachments ?? [];
   });
 
   const avatarUrl = createMemo(() => {
@@ -601,7 +582,7 @@ function MessageBubble(props: {
         return state.chatCharacter.thumbnailUrl ?? state.chatCharacter.avatarUrl ?? null;
       }
       // Group chats: server enriches messages with characterAvatarUrl.
-      const enrichedUrl = props.message.extra?.characterAvatarUrl;
+      const enrichedUrl = message().extra?.characterAvatarUrl;
       if (typeof enrichedUrl === 'string') {
         return enrichedUrl;
       }
@@ -610,7 +591,7 @@ function MessageBubble(props: {
     if (isUser()) {
       // Server enriches messages with personaAvatarUrl; fall back to current active persona
       // for messages that haven't been enriched yet (e.g. newly created before next snapshot).
-      const enrichedUrl = props.message.extra?.personaAvatarUrl;
+      const enrichedUrl = message().extra?.personaAvatarUrl;
       if (typeof enrichedUrl === 'string') {
         return enrichedUrl;
       }
@@ -619,14 +600,29 @@ function MessageBubble(props: {
     return null;
   });
 
+  // Per-part editing: partIndex addresses one text part; an index one past the
+  // end means "append a new text part" (message with no text part yet).
+  const startEdit = (partIndex: number) => {
+    const part = parts()[partIndex];
+    setEditText(part && part.type === 'text' ? part.text : '');
+    setEditingPartIndex(partIndex);
+  };
+
+  const firstTextPartIndex = () => parts().findIndex((p) => p.type === 'text');
+
   const saveEdit = () => {
+    const idx = editingPartIndex();
+    if (idx === null) return;
     bus.send({
       type: 'action.edit',
       chatId: activeChatId() ?? '',
-      messageId: props.message.id,
+      messageId: message().id,
       content: editText(),
+      // Appending (index beyond the current parts) → omit partIndex; the
+      // server appends a text part when none exists.
+      ...(idx < parts().length ? { partIndex: idx } : {}),
     });
-    setEditing(false);
+    setEditingPartIndex(null);
   };
 
   // Grow the edit box with its content (capped) instead of a fixed 9-row
@@ -638,8 +634,7 @@ function MessageBubble(props: {
   };
 
   const cancelEdit = () => {
-    setEditText(getMessageText(props.message.extra?.parts));
-    setEditing(false);
+    setEditingPartIndex(null);
   };
 
   const onEditKeyDown = (e: KeyboardEvent) => {
@@ -658,6 +653,37 @@ function MessageBubble(props: {
     }
   };
 
+  const renderEditArea = (_partIndex: number, _partText: string): JSX.Element => (
+    <div class="message-edit">
+      <textarea class="edit-textarea"
+        ref={(el) => {
+          queueMicrotask(() => {
+            el.focus();
+            el.setSelectionRange(el.value.length, el.value.length);
+            autoresizeEditArea(el);
+            el.closest('.message-bubble')?.scrollIntoView({ block: 'nearest' });
+          });
+        }}
+        rows={3}
+        value={editText()}
+        onInput={(e) => {
+          setEditText(e.currentTarget.value);
+          autoresizeEditArea(e.currentTarget);
+          // As the box grows, keep it (and the Save/Cancel row below it)
+          // in view — the caret alone can leave the actions clipped.
+          e.currentTarget.closest('.message-edit')?.scrollIntoView({ block: 'nearest' });
+        }}
+        onKeyDown={onEditKeyDown}
+        onBlur={onEditBlur}
+      />
+      <div class="edit-actions">
+        <span class="text-xs text-muted">{t('chat.editHint')}</span>
+        <button class="btn btn-ghost" onClick={cancelEdit}>{t('common.cancel')}</button>
+        <button class="btn btn-primary" onClick={saveEdit}>{t('common.save')}</button>
+      </div>
+    </div>
+  );
+
   const deleteMessage = async () => {
     if (state.settings['confirmMessageDelete']) {
       if (!(await confirmPopup(t('chat.deleteMessageConfirm')))) return;
@@ -665,7 +691,7 @@ function MessageBubble(props: {
     bus.send({
       type: 'action.delete',
       chatId: activeChatId() ?? '',
-      messageId: props.message.id,
+      messageId: message().id,
     });
   };
 
@@ -673,7 +699,7 @@ function MessageBubble(props: {
     bus.send({
       type: 'action.hide',
       chatId: activeChatId() ?? '',
-      messageId: props.message.id,
+      messageId: message().id,
     });
   };
 
@@ -681,7 +707,7 @@ function MessageBubble(props: {
     bus.send({
       type: 'action.unhide',
       chatId: activeChatId() ?? '',
-      messageId: props.message.id,
+      messageId: message().id,
     });
   };
 
@@ -689,7 +715,7 @@ function MessageBubble(props: {
     bus.send({
       type: 'action.regenerate',
       chatId: activeChatId() ?? '',
-      messageId: props.message.id,
+      messageId: message().id,
     });
   };
 
@@ -697,7 +723,7 @@ function MessageBubble(props: {
     bus.send({
       type: state.settings['useSoftFork'] ? 'chat.softFork' : 'chat.hardFork',
       chatId: activeChatId() ?? '',
-      messageId: props.message.id,
+      messageId: message().id,
       name: t('chat.forkOf', { name: state.activeChat?.name || t('chat.defaultChatName') }),
     });
   };
@@ -721,7 +747,7 @@ function MessageBubble(props: {
     bus.send({
       type: 'action.swipe',
       chatId: activeChatId() ?? '',
-      messageId: props.message.id,
+      messageId: message().id,
       direction,
     });
   };
@@ -731,7 +757,7 @@ function MessageBubble(props: {
       return { swipeIndex: props.swipeIndex, swipeTotal: props.swipeTotal };
     }
     const swipes = state.swipes[activeChatId() ?? ''] ?? [];
-    const idx = swipes.findIndex((s) => s.id === props.message.id);
+    const idx = swipes.findIndex((s) => s.id === message().id);
     if (idx === -1) return undefined;
     return { swipeIndex: idx + 1, swipeTotal: swipes.length };
   });
@@ -761,40 +787,109 @@ function MessageBubble(props: {
   );
 
   const messageName = createMemo(() => {
-    if (props.message.role === 'assistant') {
-      const enrichedName = props.message.extra?.characterName;
+    if (message().role === 'assistant') {
+      const enrichedName = message().extra?.characterName;
       if (typeof enrichedName === 'string') return enrichedName;
       return state.chatCharacter?.name ?? t('chat.role.character');
     }
-    if (props.message.role === 'user') {
-      const enrichedName = props.message.extra?.personaName;
+    if (message().role === 'user') {
+      const enrichedName = message().extra?.personaName;
       if (typeof enrichedName === 'string') return enrichedName;
       return state.chatPersona?.name ?? t('chat.role.user');
     }
-    if (props.message.role === 'tool') {
-      const toolName = props.message.extra?.toolName;
+    if (message().role === 'tool') {
+      const toolName = message().extra?.toolName;
       if (typeof toolName === 'string') return t('chat.role.toolWithName', { name: toolName });
       return t('chat.role.tool');
     }
-    return props.message.role;
+    return message().role;
   });
+
+  const onContentClick = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    // Layer-3 button protocol (docs/design/scriptable-layers.md): a
+    // <button data-post-response="..."> inside message HTML posts the
+    // attribute value as the user's next message, then generates — the
+    // chat log is the IPC channel (honest text, principle 3).
+    // Buttons stay live in the read-only virtual greeting: readOnly there
+    // only gates editing, and first_mes is exactly where cards put their
+    // menus. The greeting is materialized first (chat.materialize, same as
+    // MessageInput.send) — otherwise the posted message would land in an
+    // unmaterialized chat and the greeting would never reach the DB.
+    const postButton = target.closest('button[data-post-response]');
+    if (postButton) {
+      e.stopPropagation();
+      const content = postButton.getAttribute('data-post-response') ?? '';
+      const chatId = activeChatId();
+      if (!content || !chatId) return;
+      void materializeChat(chatId).then(() => {
+        bus.send({ type: 'action.sendAndGenerate', chatId, content });
+      });
+      return;
+    }
+    if (target.tagName === 'IMG') {
+      e.stopPropagation();
+      openLightbox((target as HTMLImageElement).src);
+      return;
+    }
+    if (!props.readOnly && state.settings['clickToEdit']) {
+      // Per-part editing: edit the text part the click landed in; clicks on
+      // non-text parts (reasoning, media, tool blocks) are ignored.
+      const partEl = target.closest('[data-part-index]');
+      const idx = partEl ? Number((partEl as HTMLElement).dataset.partIndex) : NaN;
+      if (Number.isInteger(idx) && parts()[idx]?.type === 'text') {
+        startEdit(idx);
+      }
+    }
+  };
+
+  const onContentSubmit = (e: SubmitEvent) => {
+    // Layer-3 form protocol (docs/design/scriptable-layers.md §4 "Forms"):
+    // a <form data-post-response="root"> inside message HTML serializes its
+    // fields to a fenced XML block posted as the user's next message — same
+    // channel, same honesty as the button protocol. Forms in messages are
+    // decorative, so navigation is prevented unconditionally; only marked
+    // forms post anything. Like buttons, forms stay submittable in the
+    // read-only virtual greeting; the greeting is materialized first, same
+    // as the button path above.
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    if (!form.hasAttribute('data-post-response')) return;
+    const content = serializeResponseForm(form);
+    const chatId = activeChatId();
+    if (!content || !chatId) return;
+    void materializeChat(chatId).then(() => {
+      bus.send({ type: 'action.sendAndGenerate', chatId, content });
+    });
+  };
 
   return (
     <MessageBubbleShell
       id={props.id}
-      role={props.message.role}
+      role={message().role}
       avatarUrl={avatarUrl() ?? undefined}
       name={messageName()}
-      htmlContent={htmlContent()}
+      content={
+        <MessagePartsView
+          message={message()}
+          isStreamingTarget={!props.readOnly && isStreamingTarget()}
+          streamFadeIn={streamFadeInEnabled()}
+          widgetsDisabled={!props.isLast}
+          editingPartIndex={editingPartIndex()}
+          renderEditArea={renderEditArea}
+          onContentClick={onContentClick}
+          onContentSubmit={onContentSubmit}
+        />
+      }
       isStreamingTarget={!props.readOnly && isStreamingTarget()}
       streamFadeIn={streamFadeInEnabled()}
       hideAvatar={hideAvatar()}
       hideName={hideName()}
-      hidden={Boolean(props.message.extra?.hidden)}
+      hidden={Boolean(message().extra?.hidden)}
       headerMeta={
         <Show when={!props.readOnly}>
           <span class="message-timestamp">
-            {new Date((props.message.createdAt ?? 0) * 1000).toLocaleTimeString([], {
+            {new Date((message().createdAt ?? 0) * 1000).toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
             })}
@@ -805,29 +900,29 @@ function MessageBubble(props: {
             </span>
           </Show>
           <Show when={state.settings['messageTokenCountEnabled']}>
-            <Show when={typeof props.message.extra?.tokenCount === 'number'}>
+            <Show when={typeof message().extra?.tokenCount === 'number'}>
               <span class="message-token-count" title={t('chat.meta.tokenCount')}>
-                {props.message.extra?.tokenCount}tk
+                {message().extra?.tokenCount}tk
               </span>
             </Show>
           </Show>
           <Show when={state.settings['timerEnabled']}>
-            <Show when={typeof props.message.extra?.generationTime === 'number'}>
+            <Show when={typeof message().extra?.generationTime === 'number'}>
               <span class="message-timer" title={t('chat.meta.generationTime')}>
-                {Number(props.message.extra?.generationTime).toFixed(1)}s
+                {Number(message().extra?.generationTime).toFixed(1)}s
               </span>
             </Show>
           </Show>
           <Show when={state.settings['timestampModelIcon']}>
-            <Show when={typeof props.message.extra?.model === 'string'}>
+            <Show when={typeof message().extra?.model === 'string'}>
               <span class="message-model" title={t('chat.meta.model')}>
-                {String(props.message.extra?.model)}
+                {String(message().extra?.model)}
               </span>
             </Show>
           </Show>
           <Show when={state.settings['showMessageIds']}>
             <span class="message-id" title={t('chat.meta.messageId')}>
-              #{props.message.id}
+              #{message().id}
             </span>
           </Show>
         </Show>
@@ -890,7 +985,7 @@ function MessageBubble(props: {
                     {(swipe, i) => {
                       const text = getMessageText(swipe.extra?.parts);
                       const preview = text.length > 120 ? text.slice(0, 120) + '…' : text;
-                      const isActive = swipe.id === props.message.id;
+                      const isActive = swipe.id === message().id;
                       return (
                         <div
                           class={`swipe-picker-row${isActive ? ' active' : ''}`}
@@ -934,20 +1029,20 @@ function MessageBubble(props: {
           <button
             class="action-btn"
             onClick={() => {
-              setEditText(getMessageText(props.message.extra?.parts));
-              setEditing(true);
+              const idx = firstTextPartIndex();
+              startEdit(idx === -1 ? parts().length : idx);
             }}
             title={t('common.edit')} aria-label={t('common.edit')}
             type="button"
           >
             <i class="bi bi-pencil" />
           </button>
-          <Show when={props.message.extra?.hidden}>
+          <Show when={message().extra?.hidden}>
             <button class="action-btn" onClick={unhideMessage} title={t('chat.unhide')} aria-label={t('chat.unhide')} type="button">
               <i class="bi bi-eye" />
             </button>
           </Show>
-          <Show when={!props.message.extra?.hidden}>
+          <Show when={!message().extra?.hidden}>
             <button class="action-btn" onClick={hideMessage} title={t('chat.hide')} aria-label={t('chat.hide')} type="button">
               <i class="bi bi-eye-slash" />
             </button>
@@ -957,7 +1052,7 @@ function MessageBubble(props: {
               <i class="bi bi-trash" />
             </button>
           </Show>
-          <Show when={props.message.parentId !== null}>
+          <Show when={message().parentId !== null}>
             <button class="action-btn" onClick={forkMessage} title={t('chat.forkAtMessage')} aria-label={t('chat.forkAtMessage')} type="button">
               <i class="bi bi-diagram-2" />
             </button>
@@ -973,19 +1068,17 @@ function MessageBubble(props: {
 
         </Show>
       }
-      suppressContent={!htmlContent() && hasParts()}
-      message={props.message}
-      widgetsDisabled={!props.isLast}
+      suppressContent={(message().role === 'tool' || (!hasParts() && !hasRenderedHtml())) && !editing()}
       bodyExtra={
         <>
-          <Show when={!props.readOnly && props.message.role === 'tool'}>
+          <Show when={!props.readOnly && message().role === 'tool'}>
             {(() => {
-              const Renderer = getToolRenderer(props.message.extra?.renderType);
+              const Renderer = getToolRenderer(message().extra?.renderType);
               return (
                 <Renderer
-                  content={getMessageText(props.message.extra?.parts)}
-                  isError={Boolean(props.message.extra?.isError)}
-                  extra={props.message.extra}
+                  content={getMessageText(message().extra?.parts)}
+                  isError={Boolean(message().extra?.isError)}
+                  extra={message().extra}
                 />
               );
             })()}
@@ -1037,88 +1130,7 @@ function MessageBubble(props: {
         </>
       }
       isEditing={!props.readOnly && editing()}
-      rawText={getMessageText(props.message.extra?.parts)}
-      editArea={
-        <div class="message-edit">
-          <textarea class="edit-textarea"
-            ref={(el) => {
-              queueMicrotask(() => {
-                el.focus();
-                el.setSelectionRange(el.value.length, el.value.length);
-                autoresizeEditArea(el);
-                el.closest('.message-bubble')?.scrollIntoView({ block: 'nearest' });
-              });
-            }}
-            rows={3}
-            value={editText()}
-            onInput={(e) => {
-              setEditText(e.currentTarget.value);
-              autoresizeEditArea(e.currentTarget);
-              // As the box grows, keep it (and the Save/Cancel row below it)
-              // in view — the caret alone can leave the actions clipped.
-              e.currentTarget.closest('.message-edit')?.scrollIntoView({ block: 'nearest' });
-            }}
-            onKeyDown={onEditKeyDown}
-            onBlur={onEditBlur}
-          />
-          <div class="edit-actions">
-            <span class="text-xs text-muted">{t('chat.editHint')}</span>
-            <button class="btn btn-ghost" onClick={cancelEdit}>{t('common.cancel')}</button>
-            <button class="btn btn-primary" onClick={saveEdit}>{t('common.save')}</button>
-          </div>
-        </div>
-      }
-      onContentClick={(e) => {
-        const target = e.target as HTMLElement;
-        // Layer-3 button protocol (docs/design/scriptable-layers.md): a
-        // <button data-post-response="..."> inside message HTML posts the
-        // attribute value as the user's next message, then generates — the
-        // chat log is the IPC channel (honest text, principle 3).
-        // Buttons stay live in the read-only virtual greeting: readOnly there
-        // only gates editing, and first_mes is exactly where cards put their
-        // menus. The greeting is materialized first (chat.materialize, same as
-        // MessageInput.send) — otherwise the posted message would land in an
-        // unmaterialized chat and the greeting would never reach the DB.
-        const postButton = target.closest('button[data-post-response]');
-        if (postButton) {
-          e.stopPropagation();
-          const content = postButton.getAttribute('data-post-response') ?? '';
-          const chatId = activeChatId();
-          if (!content || !chatId) return;
-          void materializeChat(chatId).then(() => {
-            bus.send({ type: 'action.sendAndGenerate', chatId, content });
-          });
-          return;
-        }
-        if (target.tagName === 'IMG') {
-          e.stopPropagation();
-          openLightbox((target as HTMLImageElement).src);
-          return;
-        }
-        if (!props.readOnly && state.settings['clickToEdit']) {
-          setEditText(getMessageText(props.message.extra?.parts));
-          setEditing(true);
-        }
-      }}
-      onContentSubmit={(e) => {
-        // Layer-3 form protocol (docs/design/scriptable-layers.md §4 "Forms"):
-        // a <form data-post-response="root"> inside message HTML serializes its
-        // fields to a fenced XML block posted as the user's next message — same
-        // channel, same honesty as the button protocol. Forms in messages are
-        // decorative, so navigation is prevented unconditionally; only marked
-        // forms post anything. Like buttons, forms stay submittable in the
-        // read-only virtual greeting; the greeting is materialized first, same
-        // as the button path above.
-        e.preventDefault();
-        const form = e.target as HTMLFormElement;
-        if (!form.hasAttribute('data-post-response')) return;
-        const content = serializeResponseForm(form);
-        const chatId = activeChatId();
-        if (!content || !chatId) return;
-        void materializeChat(chatId).then(() => {
-          bus.send({ type: 'action.sendAndGenerate', chatId, content });
-        });
-      }}
+      rawText={getMessageText(message().extra?.parts)}
       onSwipeLeft={isSwipeable() ? () => handleSwipe('left') : undefined}
       onSwipeRight={isSwipeable() ? () => handleSwipe('right') : undefined}
     />
