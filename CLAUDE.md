@@ -40,6 +40,11 @@ npm run lint --workspace=client
 npm run format --workspace=server    # prettier
 npm run lint:css                     # root: CSS §16 hookable-elements audit (CI-enforced)
 
+# Full local CI (Linux steps of .github/workflows/ci.yml: audit, lints, lint:css,
+# unit tests, e2e incl. journeys). Run this — or at least npm run lint:css —
+# before considering frontend work done.
+./ci.sh
+
 # Unit tests (Vitest) — runs across all workspaces
 npm test
 npm test --workspace=server
@@ -63,7 +68,7 @@ npm run db:migrate                   # tsx server/src/db/migrate.ts
 npm run db:seed                      # tsx server/src/db/seed.ts
 ```
 
-CI (`.github/workflows/ci.yml`) runs: `npm ci`, `npm audit`, lint for client/server/`packages/types` plus `npm run lint:css`, then client+server tests. A separate `e2e` job builds the app and runs `npm run test:e2e:smoke` on every PR/push; the full suite (smoke + journeys, `npm run test:e2e`) runs only on push to main.
+CI (`.github/workflows/ci.yml`) runs: `npm ci`, `npm audit`, lint for client/server/`packages/types` plus `npm run lint:css`, then client+server tests. A separate `e2e` job builds the app and runs `npm run test:e2e:smoke` on every PR/push; the full suite (smoke + journeys, `npm run test:e2e`) runs only on push to main. `./ci.sh` reproduces the Linux steps locally.
 
 ## Architecture (read `docs/design/AGENTS.md` for the full rules — it is authoritative)
 
