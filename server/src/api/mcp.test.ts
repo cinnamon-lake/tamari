@@ -70,7 +70,7 @@ describe('createMcpRouter', () => {
     const { deps } = makeDeps({ enabled: false });
     const app = createApp(deps);
     const res = await post(app, { jsonrpc: '2.0', id: 1, method: 'tools/list' }).expect(404);
-    expect(res.body.error).toMatch(/disabled/);
+    expect(res.body.error).toMatch(/unavailable/);
   });
 
   it('requires auth when mounted behind requireAuth', async () => {

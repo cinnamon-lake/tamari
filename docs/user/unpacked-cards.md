@@ -4,7 +4,7 @@ An **unpacked card** is a character card that lives as a plain folder on disk in
 
 ## Enabling
 
-Set **`unpackedCards.enabled`** to `true` in settings, then restart. When the flag is off, tamari never even looks at the folder. Cards that were loaded while the flag was on stay in the character list (as leftover database rows) and can be deleted from the UI while the flag is off. Cards land in:
+Enable **Settings → Developer → Unpacked cards** (setting key `unpackedCards.enabled`), then restart — the folder scanner only starts at boot. When the flag is off, tamari never even looks at the folder. Cards that were loaded while the flag was on stay in the character list (as leftover database rows) and can be deleted from the UI while the flag is off. Cards land in:
 
 ```
 <dataDir>/unpacked-cards/<folderName>/
@@ -52,8 +52,16 @@ Disk is always right. If the app also wrote to these cards, edits could silently
 
 If you run a coding agent on your tamari data directory, it can edit unpacked card files directly. To let it *test* cards, enable the built-in **MCP server**:
 
-- Set **`mcp.enabled`** to `true` (restart required).
-- The endpoint is `POST /api/mcp` (MCP Streamable HTTP, stateless), authenticated with the same bearer token as the rest of the API (`TAMARI_SECRET`).
+- Enable **Settings → Developer → MCP server** (setting key `mcp.enabled`). It applies immediately — no restart needed.
+- The endpoint is `POST /api/mcp` (MCP Streamable HTTP, **stateless**), authenticated with the same bearer token as the rest of the API (`TAMARI_SECRET`).
+
+Transport notes for hand-rolled clients (anything that isn't a full MCP SDK):
+
+- Every POST is self-contained: **no `initialize` handshake and no session id** — you can send `tools/list` / `tools/call` directly.
+- Send `Accept: application/json, text/event-stream` (the transport requires both).
+- Responses are **SSE-framed** (`Content-Type: text/event-stream`, one `event: message` + `data: <json-rpc reply>` per message) even for single requests — parse the `data:` lines, don't expect a bare JSON body.
+- `GET`/`DELETE` on the endpoint return `405`; a disabled server returns `404` with a message telling the agent to ask the user to enable it.
+- A minimal CLI client lives at [`tools/tamari-mcp.mjs`](../../tools/tamari-mcp.mjs) (`node tools/tamari-mcp.mjs list` / `call <tool> '<json-args>'`).
 
 The MCP surface is deliberately **read/test-only** — no tool on it can mutate your data:
 
@@ -74,3 +82,5 @@ The MCP surface is deliberately **read/test-only** — no tool on it can mutate 
 A typical session flow: `test_session_start` → read the greeting → `test_session_message` per turn → `test_session_state` to inspect the chain, script state, or captured prompts → `test_session_end` (or let it expire).
 
 `test_card` and the session tools use whatever backend config is active unless `backendConfigId` is passed. For **deterministic runs**, create a backend config with provider **`mock`** once (in the UI: no API key needed) and put a canned-response script in its `mockScript` provider param — one directive per line: `respond:<text>` (default reply), `seq:<n>:<text>` (reply for the nth call), `tool:<name>:<json>` (emit a tool call; a sequence of `tool:` lines is walked as tool results accumulate). Then pass that config's id as `backendConfigId` to `test_session_start` or `test_card`. The active config is never touched.
+
+An even more self-contained option: give the unpacked card its own [`backend_logic/main.lua`](./custom-backends.md) that implements `generate` without delegating to a real backend. The card then replies deterministically in any test session, no mock config or `backendConfigId` needed — and the script ships inside the card folder itself.

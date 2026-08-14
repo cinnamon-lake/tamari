@@ -70,6 +70,15 @@ export const settings = {
     cacheTtlPlaceholder: 'e.g. 5m, 1h',
     cacheTtlHint: 'TTL for Claude prompt caching, e.g. 5m, 1h. Leave blank for provider default.',
   },
+  developer: {
+    heading: 'Developer',
+    mcpServer: 'MCP server (read/test-only tools for external LLM agents)',
+    mcpServerHint:
+      'Exposes POST /api/mcp so coding agents can test unpacked cards against the real generation path. Applies immediately — no restart needed.',
+    unpackedCards: 'Unpacked cards (on-disk character card folders)',
+    unpackedCardsHint:
+      'Loads character cards from <dataDir>/unpacked-cards/ as plain folders you edit with external tools. Takes effect after restart.',
+  },
   memory: {
     heading: 'Memory',
     description:

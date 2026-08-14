@@ -202,6 +202,10 @@ export function SettingsModal(props: { onClose: () => void }) {
     String(s['claudeCacheTTL'] ?? ''),
   );
 
+  // Developer settings
+  const [mcpEnabled, setMcpEnabled] = createSignal(Boolean(s['mcp.enabled']));
+  const [unpackedCardsEnabled, setUnpackedCardsEnabled] = createSignal(Boolean(s['unpackedCards.enabled']));
+
   // Memory settings
   const memory = () => {
     const m = s['memory'];
@@ -886,6 +890,37 @@ export function SettingsModal(props: { onClose: () => void }) {
             />
             <span class="hint-text">{t('settings.generation.cacheTtlHint')}</span>
           </label>
+        </section>
+
+        {/* Developer Settings */}
+        <section class="settings-section">
+          <h3 class="section-heading">{t('settings.developer.heading')}</h3>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={mcpEnabled()}
+              onChange={(e) => {
+                setMcpEnabled(e.currentTarget.checked);
+                sendSetting('mcp.enabled', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.developer.mcpServer')}
+          </label>
+          <span class="hint-text">{t('settings.developer.mcpServerHint')}</span>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={unpackedCardsEnabled()}
+              onChange={(e) => {
+                setUnpackedCardsEnabled(e.currentTarget.checked);
+                sendSetting('unpackedCards.enabled', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.developer.unpackedCards')}
+          </label>
+          <span class="hint-text">{t('settings.developer.unpackedCardsHint')}</span>
         </section>
 
         {/* Memory Settings */}

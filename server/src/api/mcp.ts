@@ -248,7 +248,10 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
       .get('mcp.enabled')
       .then((enabled) => {
         if (enabled === true) next();
-        else res.status(404).json({ error: 'MCP server is disabled (set mcp.enabled to true)' });
+        else
+          res.status(404).json({
+            error: 'The MCP server is unavailable! Please ask the user to enable it in the settings menu (Settings → Developer → MCP server).',
+          });
       })
       .catch(next);
   });
