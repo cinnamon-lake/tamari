@@ -9,9 +9,9 @@
   color: var(--color-text-secondary);
 }
 
-.form-row input,
-.form-row select,
-.form-row textarea {
+.form-row .input,
+.form-row .select,
+.form-row .qr-script-textarea {
   padding-top: 0.4rem;
   padding-bottom: 0.4rem;
   padding-left: 0.6rem;
@@ -64,6 +64,6 @@
   cursor: pointer;
 }
 
-.qr-checkbox input {
+.qr-checkbox .qr-checkbox-input {
   width: auto;
 }

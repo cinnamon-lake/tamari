@@ -334,10 +334,10 @@ export function CharacterEditor(props: CharacterEditorProps) {
           <div class="external-banner" role="status">
             <i class="bi bi-hdd" />
             <div class="external-banner-body">
-              <span>{t('character.externalBanner', { slug: unpackedSlug() })}</span>
+              <span class="external-banner-text">{t('character.externalBanner', { slug: unpackedSlug() })}</span>
               <Show when={unpackedErrors().length > 0}>
                 <ul class="external-banner-errors">
-                  <For each={unpackedErrors()}>{(err) => <li>{err}</li>}</For>
+                  <For each={unpackedErrors()}>{(err) => <li class="external-banner-error">{err}</li>}</For>
                 </ul>
               </Show>
             </div>

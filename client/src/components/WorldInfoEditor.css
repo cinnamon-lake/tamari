@@ -57,14 +57,14 @@
   margin-top: var(--space-md);
 }
 
-.test-triggers-panel textarea {
+.test-triggers-panel .textarea {
   resize: vertical;
   display: block;
   width: 100%;
   margin-top: var(--space-sm);
 }
 
-.test-triggers-panel button {
+.test-triggers-panel .btn {
   margin-top: var(--space-sm);
 }
 
@@ -137,8 +137,8 @@
     padding-right: var(--space-md);
   }
 
-  .entry-row-inline select,
-  .entry-row-inline input {
+  .entry-row-inline .select,
+  .entry-row-inline .input {
     width: 100%;
     min-width: 0;
     max-width: 100%;

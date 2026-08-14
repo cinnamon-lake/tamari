@@ -182,10 +182,6 @@
   transform: translateY(0);
 }
 
-.attach-btn input {
-  display: none;
-}
-
 @media (max-width: 768px) {
   .message-input {
     flex-direction: row;

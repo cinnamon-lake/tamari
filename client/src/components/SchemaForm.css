@@ -41,7 +41,7 @@
   box-shadow: var(--shadow-glow);
 }
 
-.schema-field input[type='checkbox'] {
+.schema-field .schema-checkbox {
   accent-color: var(--color-accent);
   width: 1.1rem;
   height: 1.1rem;

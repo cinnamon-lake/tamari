@@ -831,14 +831,14 @@
   /* The on-screen keyboard takes ~half the phone screen — cap the inline
      editor so the box + Save/Cancel actions fit above it instead of sliding
      underneath. This also clamps the JS autoresize (320px desktop cap). */
-  .message-edit textarea {
+  .message-edit .edit-textarea {
     max-height: 35vh;
   }
 
   /* Keyboard-open heights: even tighter, so the whole edit container (box +
      actions) fits in the shrunken chat list and scrollIntoView can pin it. */
   @media (max-height: 500px) {
-    .message-edit textarea {
+    .message-edit .edit-textarea {
       max-height: 22vh;
     }
   }

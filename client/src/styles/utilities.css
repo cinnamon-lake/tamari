@@ -333,10 +333,6 @@ label.radio-row .hint-text {
   align-items: center;
 }
 
-.input-row input {
-  flex: 1;
-}
-
 .stack-xs {
   display: flex;
   flex-direction: column;
@@ -856,7 +852,7 @@ label.radio-row .hint-text {
   cursor: pointer;
 }
 
-.toggle-label input[type='checkbox'] {
+.toggle-label .toggle-input {
   width: 18px;
   height: 18px;
   accent-color: var(--color-accent);
@@ -1073,8 +1069,8 @@ label.radio-row .hint-text {
   width: 100%;
 }
 
-.model-picker-row > select,
-.model-picker-row > input {
+.model-picker-row > .select,
+.model-picker-row > .input {
   flex: 1 1 auto;
   min-width: 0;
 }

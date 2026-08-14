@@ -109,7 +109,7 @@ export function QuickReplyEditor(props: Props) {
               value={script()}
               onInput={(e) => setScript(e.currentTarget.value)}
               rows={10}
-              class="font-mono w-full"
+              class="qr-script-textarea font-mono w-full"
               placeholder="st.send('Hello')"
             />
           </div>

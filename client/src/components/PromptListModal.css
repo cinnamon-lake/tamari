@@ -32,7 +32,7 @@
   white-space: nowrap;
 }
 
-.prompt-item-body textarea {
+.prompt-item-body .textarea {
   width: 100%;
   font-size: var(--text-sm);
   min-height: 48px;

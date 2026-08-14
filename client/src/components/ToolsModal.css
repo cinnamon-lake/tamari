@@ -176,7 +176,7 @@
   flex-shrink: 0;
 }
 
-.instance-param input {
+.instance-param .instance-input {
   width: 100%;
 }
 
@@ -224,7 +224,7 @@
   letter-spacing: 0.03em;
 }
 
-.lua-tool-editor-code textarea {
+.lua-tool-editor-code .textarea {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   line-height: var(--leading-normal);
