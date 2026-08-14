@@ -68,10 +68,12 @@ test.describe('Settings — Display', () => {
     await settingSelect(modal, 'Avatar Style').selectOption('round');
     await expect.poll(() => rootCssVar(page, '--avatar-border-radius')).toBe('50%');
 
-    // noShadows: --shadow-opacity forced to 0 (default shadowWidth is 1).
-    await setCheckbox(modal, 'No shadows', true);
+    // shadowWidth: 0 flattens the UI (the old "No shadows" checkbox was merged
+    // into the slider); 1 restores the default intensity.
+    const shadowSlider = modal.locator('label.field-label:has-text("Shadow Width") input[type="range"]');
+    await shadowSlider.fill('0');
     await expect.poll(() => rootCssVar(page, '--shadow-opacity')).toBe('0');
-    await setCheckbox(modal, 'No shadows', false);
+    await shadowSlider.fill('1');
     await expect.poll(() => rootCssVar(page, '--shadow-opacity')).toBe('1');
 
     // compactInputArea: toggles a class on the app shell.

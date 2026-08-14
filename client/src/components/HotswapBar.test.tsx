@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { reconcile } from 'solid-js/store';
+import type { AppSettings } from '@tamari/types';
 import { render, screen } from '@solidjs/testing-library';
 import { HotswapBar } from './HotswapBar.js';
 import { setState } from '../stores/serverStore.js';
@@ -70,6 +72,15 @@ describe('HotswapBar', () => {
 
     render(() => <HotswapBar />);
     expect(screen.queryByText('Alice')).not.toBeInTheDocument();
+  });
+
+  it('renders by default when the setting is unset', () => {
+    setState('settings', reconcile({} as AppSettings));
+    setState('characters', [makeChar('c1', 'Alice')]);
+    setState('chats', [makeChat('ch1', 'c1', 'Chat 1')]);
+
+    render(() => <HotswapBar />);
+    expect(screen.getByText('Alice')).toBeInTheDocument();
   });
 
   it('selects character when clicked', () => {

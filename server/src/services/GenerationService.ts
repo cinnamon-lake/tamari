@@ -40,6 +40,7 @@ import type { ChatPromptAssembly } from '../generation/ChatPromptAssembly.js';
 import { AssistantMessageTarget, type AssistantMessageTargetDeps } from '../generation/AssistantMessageTarget.js';
 import { DraftTarget, type DraftTargetDeps } from '../generation/DraftTarget.js';
 import { TranscriptTarget, type TranscriptTargetDeps } from '../generation/TranscriptTarget.js';
+import { resolveEffectiveSettings } from '../generation/appendOnlyLocks.js';
 
 function applyInputWhitespace(content: string, mode: string): string {
   if (mode === 'none') return content;
@@ -159,8 +160,10 @@ export class GenerationService {
     const appSettings = await this.deps.settings.getTyped();
     let processedContent = content;
 
-    // Apply whitespace trimming to user messages
-    processedContent = applyInputWhitespace(processedContent, appSettings.whitespaceMode);
+    // Apply whitespace trimming to user messages. Read through the append-only
+    // lock resolver: under append-only this is locked to 'none' (any input
+    // mutation would desync persisted text from already-sent prompt bytes).
+    processedContent = applyInputWhitespace(processedContent, resolveEffectiveSettings(appSettings).whitespaceMode);
 
     // Resolve model for accurate token counting
     const backendConfig = appSettings.activeBackendConfigId

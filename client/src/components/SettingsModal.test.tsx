@@ -236,4 +236,107 @@ describe('SettingsModal', () => {
     removeBtn.click();
     expect(sendSpy).toHaveBeenLastCalledWith({ type: 'settings.set', key: 'customStoppingStrings', value: [] });
   });
+
+  it('disables memory sub-fields while memory is disabled', () => {
+    render(() => <SettingsModal onClose={() => {}} />);
+
+    expect(screen.getByLabelText<HTMLInputElement>(/Update interval/i).disabled).toBe(true);
+    expect(screen.getByLabelText<HTMLInputElement>(/Summarization backend/i).disabled).toBe(true);
+    expect(screen.getByLabelText<HTMLInputElement>(/Summarization system prompt/i).disabled).toBe(true);
+  });
+
+  it('enables memory sub-fields when memory is enabled', () => {
+    setState('settings', 'memory', 'enabled', true);
+    render(() => <SettingsModal onClose={() => {}} />);
+
+    expect(screen.getByLabelText<HTMLInputElement>(/Update interval/i).disabled).toBe(false);
+    expect(screen.getByLabelText<HTMLInputElement>(/Summarization backend/i).disabled).toBe(false);
+  });
+
+  it('disables unfocused-only sound toggle while message sound is off', () => {
+    render(() => <SettingsModal onClose={() => {}} />);
+    expect(screen.getByLabelText<HTMLInputElement>(/Only play sound when unfocused/i).disabled).toBe(true);
+  });
+
+  it('disables smooth streaming delay while smooth streaming is off', () => {
+    render(() => <SettingsModal onClose={() => {}} />);
+    expect(screen.getByLabelText<HTMLInputElement>(/Delay between tokens/i).disabled).toBe(true);
+  });
+
+  it('disables avatar style while chat avatars are hidden', () => {
+    setState('settings', 'hideChatAvatars', true);
+    render(() => <SettingsModal onClose={() => {}} />);
+    expect(screen.getByLabelText<HTMLSelectElement>(/Avatar Style/i).disabled).toBe(true);
+  });
+
+  it('disables cache TTL while Claude caching is off', () => {
+    render(() => <SettingsModal onClose={() => {}} />);
+    expect(screen.getByLabelText<HTMLInputElement>(/Cache TTL/i).disabled).toBe(true);
+  });
+
+  it('enables cache TTL when Claude caching is manual', () => {
+    setState('settings', 'claudeCacheMode', 'manual');
+    render(() => <SettingsModal onClose={() => {}} />);
+    expect(screen.getByLabelText<HTMLInputElement>(/Cache TTL/i).disabled).toBe(false);
+  });
+
+  it('locks the full post-processing/macro set when append-only layout is on', () => {
+    setState('settings', 'appendOnlyPromptLayout', true);
+    render(() => <SettingsModal onClose={() => {}} />);
+
+    expect(screen.getByLabelText<HTMLInputElement>(/Auto-fix generated markdown/i).disabled).toBe(true);
+    expect(screen.getByLabelText<HTMLInputElement>(/Resolve macros in custom stopping strings/i).disabled).toBe(true);
+    expect(screen.getByLabelText<HTMLInputElement>(/Remove XML tags/i).disabled).toBe(true);
+  });
+
+  it('edits impersonation prompt and sends the update', () => {
+    const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
+    render(() => <SettingsModal onClose={() => {}} />);
+
+    const textarea = screen.getByLabelText<HTMLTextAreaElement>(/Impersonation prompt/i);
+    fireEvent.change(textarea, { target: { value: 'Write as the user.' } });
+    expect(sendSpy).toHaveBeenCalledWith({
+      type: 'settings.set',
+      key: 'impersonationPrompt',
+      value: 'Write as the user.',
+    });
+  });
+
+  it('renders sections in the expected order with no duplicate headings', () => {
+    render(() => <SettingsModal onClose={() => {}} />);
+
+    const headings = Array.from(document.querySelectorAll('.section-heading')).map((h) => h.textContent);
+    expect(headings).toEqual([
+      'Language',
+      'Display',
+      'Chat behavior',
+      'Input & Interaction',
+      'Generation',
+      'Post-processing',
+      'Sound & Streaming',
+      'Notifications',
+      'Memory',
+      'Security & content',
+      'Theme',
+      'Custom Instruct Templates',
+      'Regex Rules',
+      'Quick Replies',
+      'Developer',
+    ]);
+    expect(new Set(headings).size).toBe(headings.length);
+  });
+
+  it('renders regex replace type as a radio group', () => {
+    render(() => <SettingsModal onClose={() => {}} />);
+
+    screen.getByText('New Regex Rule').click();
+    const radios = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="radio"][name="regexReplaceType"]'));
+    expect(radios.length).toBe(2);
+    const [textRadio, luaRadio] = radios as [HTMLInputElement, HTMLInputElement];
+    expect(textRadio.checked).toBe(true);
+
+    fireEvent.click(luaRadio);
+    expect(luaRadio.checked).toBe(true);
+    expect(textRadio.checked).toBe(false);
+  });
 });

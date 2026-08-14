@@ -70,4 +70,38 @@ describe('settings.set handler', () => {
     expect(writeSpy).not.toHaveBeenCalled();
     expect(changedCount()).toBe(1);
   });
+
+  it('rejects a wrong-typed value with an error and no echo', async () => {
+    await h.send(client, { type: 'settings.set', key: 'userName', value: 42 });
+
+    const errors = client.messages.filter((m) => m.type === 'error');
+    expect(errors.length).toBe(1);
+    expect(errors[0]).toMatchObject({ code: 'SETTINGS_INVALID' });
+    expect(changedCount()).toBe(0);
+    // Untouched — still the schema default.
+    expect(await h.deps.settings.get('userName')).toBe('User');
+  });
+
+  it('strips secret keys from settings.loaded', async () => {
+    await h.deps.settings.setValue('apiKey', 'sk-secret');
+    await h.deps.settings.setValue('tts.elevenlabs.apiKey', 'el-secret');
+    await h.deps.settings.setValue('userName', 'Alice');
+
+    await h.send(client, { type: 'settings.get' });
+    const loaded = client.messages.find((m) => m.type === 'settings.loaded');
+    expect(loaded).toBeDefined();
+    const blob = (loaded as { settings: Record<string, unknown> }).settings;
+    expect(blob['apiKey']).toBeUndefined();
+    expect(blob['tts.elevenlabs.apiKey']).toBeUndefined();
+    expect(blob['userName']).toBe('Alice');
+  });
+
+  it('masks secret values in the settings.changed echo', async () => {
+    await h.send(client, { type: 'settings.set', key: 'apiKey', value: 'sk-secret' });
+
+    const changed = client.messages.find((m) => m.type === 'settings.changed');
+    expect(changed).toMatchObject({ key: 'apiKey', value: null });
+    // ...but the server-side store keeps the real value.
+    expect(await h.deps.settings.get('apiKey')).toBe('sk-secret');
+  });
 });

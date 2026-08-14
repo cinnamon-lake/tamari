@@ -41,6 +41,7 @@ import { getChatSnapshotMessages } from '../lib/swipeInfo.js';
 import type { ChatPromptAssembly } from './ChatPromptAssembly.js';
 import type { GenerationTarget, ResolvedGenerationBackend, ToolContextMessage } from './GenerationTarget.js';
 import { FULL_BRANCH_MESSAGE_LIMIT } from './GenerationTarget.js';
+import { resolveEffectiveSettings } from './appendOnlyLocks.js';
 
 const log = getLogger('AssistantMessageTarget');
 
@@ -579,9 +580,13 @@ export class AssistantMessageTarget implements GenerationTarget {
 
   // ── Internals ──────────────────────────────────────────────────────────
 
-  /** Append-only layout is on (global setting, read at prepare/prompt time). */
-  private isAppendOnly(): boolean {
-    return this.allSettings['appendOnlyPromptLayout'] === true;
+  /**
+   * Effective generation settings with append-only locks applied
+   * (appendOnlyLocks.ts) — the only sanctioned way to read settings whose
+   * values the append-only invariant overrides.
+   */
+  private effective() {
+    return resolveEffectiveSettings(this.allSettings as import('@tamari/types').SettingsMap);
   }
 
   private buildMacroCtx(vars: Record<string, string>) {
@@ -618,7 +623,7 @@ export class AssistantMessageTarget implements GenerationTarget {
     this.flushTimeout = null;
     return this.chain(async () => {
       const flushExtra: MessageExtra = { ...this.baseExtra };
-      if (this.isAppendOnly()) {
+      if (!this.effective().storageMacrosEnabled) {
         // Append-only: macros are off wholesale — persist the raw provider bytes.
         flushExtra.parts = this.streamingParts;
         flushExtra.macroVars = this.currentVars;
@@ -713,26 +718,26 @@ export class AssistantMessageTarget implements GenerationTarget {
     }
 
     // Apply post-processing to the last text part (all prior text was
-    // already post-processed in earlier generation rounds). Append-only:
-    // skipped wholesale — persisted text must be the raw provider stream.
-    const lastTextPart = lastTextPartIndex !== -1 && !this.isAppendOnly()
+    // already post-processed in earlier generation rounds). Values come from
+    // the append-only lock resolver: under append-only they are all neutral,
+    // so persisted text stays the raw provider stream.
+    const eff = this.effective();
+    const lastTextPart = lastTextPartIndex !== -1
       ? (parts[lastTextPartIndex] as { type: 'text'; text: string })
       : null;
     if (lastTextPart) {
-      const allSettings = this.allSettings as import('@tamari/types').SettingsMap;
-      const whitespaceMode = allSettings.whitespaceMode;
-      lastTextPart.text = applyOutputWhitespace(lastTextPart.text, whitespaceMode);
+      lastTextPart.text = applyOutputWhitespace(lastTextPart.text, eff.whitespaceMode);
 
-      if (allSettings['removeXML']) {
+      if (eff.removeXML) {
         lastTextPart.text = lastTextPart.text.replace(/<[^>]+>/g, '');
       }
-      if (allSettings['singleLine']) {
+      if (eff.singleLine) {
         const firstNewline = lastTextPart.text.search(/\r?\n/);
         if (firstNewline !== -1) {
           lastTextPart.text = lastTextPart.text.slice(0, firstNewline);
         }
       }
-      if (allSettings['trimSentences']) {
+      if (eff.trimSentences) {
         const sentenceEnd = /[.!?]+(?:\s+|$)/g;
         let lastMatchEnd = -1;
         let match: RegExpExecArray | null;
@@ -743,19 +748,19 @@ export class AssistantMessageTarget implements GenerationTarget {
           lastTextPart.text = lastTextPart.text.slice(0, lastMatchEnd).trimEnd();
         }
       }
-      if (allSettings['autoFixGeneratedMarkdown']) {
+      if (eff.autoFixGeneratedMarkdown) {
         lastTextPart.text = this.autoFixMarkdown(lastTextPart.text);
       }
-      if (!allSettings['disableGroupTrimming'] && this.character) {
+      if (!eff.disableGroupTrimming && this.character) {
         lastTextPart.text = await this.cleanGroupMessage(this.character, lastTextPart.text);
       }
     }
 
     // Resolve storage macros on the whole message; the resolved parts become
     // the message state (the legacy code re-loaded resolved parts from the DB
-    // at every round boundary). Append-only: skipped — parts persist raw and
-    // macroVars pass through unchanged (macros are off wholesale).
-    if (!this.isAppendOnly()) {
+    // at every round boundary). Append-only (storageMacrosEnabled false):
+    // skipped — parts persist raw and macroVars pass through unchanged.
+    if (eff.storageMacrosEnabled) {
       const { parts: resolvedParts, vars } = this.resolveStorageMacros(parts, this.currentVars);
       this.streamingParts = resolvedParts;
       this.currentVars = vars;

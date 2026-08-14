@@ -124,8 +124,8 @@ export function SettingsModal(props: { onClose: () => void }) {
   const [avatarStyle, setAvatarStyle] = createSignal(String(s['avatarStyle'] ?? 'round'));
   const [fontScale, setFontScale] = createSignal(Number(s['fontScale'] ?? 1));
   const [chatWidth, setChatWidth] = createSignal(Number(s['chatWidth'] ?? 50));
-  const [shadowWidth, setShadowWidth] = createSignal(Number(s['shadowWidth'] ?? 1));
-  const [noShadows, setNoShadows] = createSignal(Boolean(s['noShadows']));
+  // Legacy `noShadows: true` maps to shadow width 0; moving the slider clears it.
+  const [shadowWidth, setShadowWidth] = createSignal(s['noShadows'] ? 0 : Number(s['shadowWidth'] ?? 1));
   const [blurStrength, setBlurStrength] = createSignal(Number(s['blurStrength'] ?? 1));
   const [compactInputArea, setCompactInputArea] = createSignal(Boolean(s['compactInputArea']));
   const [hideChatAvatars, setHideChatAvatars] = createSignal(Boolean(s['hideChatAvatars']));
@@ -161,7 +161,7 @@ export function SettingsModal(props: { onClose: () => void }) {
   const [clickToEdit, setClickToEdit] = createSignal(Boolean(s['clickToEdit']));
   const [autoSelectInput, setAutoSelectInput] = createSignal(Boolean(s['autoSelectInput']));
 
-  // Behavior settings
+  // Chat behavior settings
   const [confirmMessageDelete, setConfirmMessageDelete] = createSignal(Boolean(s['confirmMessageDelete']));
   const [useSoftFork, setUseSoftFork] = createSignal(Boolean(s['useSoftFork']));
   const [autoSaveMessageEdits, setAutoSaveMessageEdits] = createSignal(Boolean(s['autoSaveMessageEdits']));
@@ -170,10 +170,9 @@ export function SettingsModal(props: { onClose: () => void }) {
   const [showHiddenMessages, setShowHiddenMessages] = createSignal(Boolean(s['showHiddenMessages']));
   const [autoScrollToBottom, setAutoScrollToBottom] = createSignal(Boolean(s['autoScrollToBottom'] !== false));
   const [disableGroupTrimming, setDisableGroupTrimming] = createSignal(Boolean(s['disableGroupTrimming']));
-  const [charListGrid, setCharListGrid] = createSignal(Boolean(s['charListGrid']));
   const [autoContinueEnabled, setAutoContinueEnabled] = createSignal(Boolean(s['autoContinueEnabled']));
   const [autoContinueTargetLength, setAutoContinueTargetLength] = createSignal(
-    Number(s['autoContinueTargetLength'] ?? 400),
+    Number(s['autoContinueTargetLength'] ?? 100),
   );
   const [mediaDisplayMode, setMediaDisplayMode] = createSignal(String(s['mediaDisplayMode'] ?? 'list'));
   const [mediaVerboseMode, setMediaVerboseMode] = createSignal(Boolean(s['mediaVerboseMode']));
@@ -181,6 +180,7 @@ export function SettingsModal(props: { onClose: () => void }) {
   const [allowExternalMedia, setAllowExternalMedia] = createSignal(Boolean(s['allowExternalMedia']));
   const [fuzzySearch, setFuzzySearch] = createSignal(Boolean(s['fuzzySearch']));
   const [showHotswapBar, setShowHotswapBar] = createSignal(s['showHotswapBar'] !== false);
+  const [impersonationPrompt, setImpersonationPrompt] = createSignal(String(s['impersonationPrompt'] ?? ''));
 
   // Generation settings
   const [customStoppingStrings, setCustomStoppingStrings] = createSignal<string[]>(
@@ -206,25 +206,15 @@ export function SettingsModal(props: { onClose: () => void }) {
   const [mcpEnabled, setMcpEnabled] = createSignal(Boolean(s['mcp.enabled']));
   const [unpackedCardsEnabled, setUnpackedCardsEnabled] = createSignal(Boolean(s['unpackedCards.enabled']));
 
-  // Memory settings
-  const memory = () => {
-    const m = s['memory'];
-    if (m && typeof m === 'object') return m;
-    return {
-      enabled: false,
-      updateInterval: 5,
-      depth: 10,
-      backendConfigId: '',
-      systemPrompt: 'Summarize the most important facts and events in the story so far. For each event, include a citation to the message ID(s) it came from using [msg:ID] format. Be concise.',
-      maxSummaryTokens: 512,
-    };
-  };
+  // Memory settings — the server populates schema defaults; the `??` fallbacks below
+  // only guard the brief window before `settings.loaded` arrives.
+  const memory = () => (s['memory'] ?? {}) as Partial<MemorySettings>;
   const [memoryEnabled, setMemoryEnabled] = createSignal(Boolean(memory().enabled));
-  const [memoryUpdateInterval, setMemoryUpdateInterval] = createSignal(Number(memory().updateInterval));
-  const [memoryDepth, setMemoryDepth] = createSignal(Number(memory().depth));
-  const [memoryBackendConfigId, setMemoryBackendConfigId] = createSignal(String(memory().backendConfigId));
-  const [memoryMaxSummaryTokens, setMemoryMaxSummaryTokens] = createSignal(Number(memory().maxSummaryTokens));
-  const [memorySystemPrompt, setMemorySystemPrompt] = createSignal(String(memory().systemPrompt));
+  const [memoryUpdateInterval, setMemoryUpdateInterval] = createSignal(Number(memory().updateInterval ?? 5));
+  const [memoryDepth, setMemoryDepth] = createSignal(Number(memory().depth ?? 10));
+  const [memoryBackendConfigId, setMemoryBackendConfigId] = createSignal(String(memory().backendConfigId ?? ''));
+  const [memoryMaxSummaryTokens, setMemoryMaxSummaryTokens] = createSignal(Number(memory().maxSummaryTokens ?? 512));
+  const [memorySystemPrompt, setMemorySystemPrompt] = createSignal(String(memory().systemPrompt ?? ''));
 
   const sendSetting = (key: string, value: unknown) => {
     bus.send({ type: 'settings.set', key, value });
@@ -401,9 +391,358 @@ export function SettingsModal(props: { onClose: () => void }) {
           </label>
         </section>
 
-        {/* Behavior Settings */}
+        {/* Display Settings */}
         <section class="settings-section">
-          <h3 class="section-heading">{t('settings.behavior.heading')}</h3>
+          <h3 class="section-heading">{t('settings.display.heading')}</h3>
+          <label class="field-label">
+            {t('settings.display.chatStyle')}
+            <select
+              class="select"
+              value={chatStyle()}
+              onChange={(e) => {
+                setChatStyle(e.currentTarget.value);
+                sendSetting('chatStyle', e.currentTarget.value);
+              }}
+            >
+              <option value="default" class="select-option">{t('settings.display.chatStyleDefault')}</option>
+              <option value="bubbles" class="select-option">{t('settings.display.chatStyleBubbles')}</option>
+              <option value="document" class="select-option">{t('settings.display.chatStyleDocument')}</option>
+            </select>
+          </label>
+          <label class="field-label">
+            {t('settings.display.avatarStyle')}
+            <select
+              class="select"
+              value={avatarStyle()}
+              disabled={hideChatAvatars()}
+              onChange={(e) => {
+                setAvatarStyle(e.currentTarget.value);
+                sendSetting('avatarStyle', e.currentTarget.value);
+              }}
+            >
+              <option value="round" class="select-option">{t('settings.display.avatarStyleRound')}</option>
+              <option value="rectangular" class="select-option">{t('settings.display.avatarStyleRectangular')}</option>
+              <option value="square" class="select-option">{t('settings.display.avatarStyleSquare')}</option>
+              <option value="rounded" class="select-option">{t('settings.display.avatarStyleRounded')}</option>
+            </select>
+          </label>
+          <label class="field-label">
+            {t('settings.display.fontScale')}
+            <input
+              type="range"
+              min={0.8}
+              max={1.5}
+              step={0.05}
+              value={fontScale()}
+              onInput={(e) => setFontScale(Number(e.currentTarget.value))}
+              onChange={(e) => sendSetting('fontScale', Number(e.currentTarget.value))}
+              class="range-input"
+            />
+            <span class="hint-text">{fontScale().toFixed(2)}x</span>
+          </label>
+          <label class="field-label">
+            {t('settings.display.chatWidth')}
+            <input
+              type="range"
+              min={30}
+              max={70}
+              step={1}
+              value={chatWidth()}
+              onInput={(e) => setChatWidth(Number(e.currentTarget.value))}
+              onChange={(e) => sendSetting('chatWidth', Number(e.currentTarget.value))}
+              class="range-input"
+            />
+            <span class="hint-text">{chatWidth()}rem</span>
+          </label>
+          <label class="field-label">
+            {t('settings.display.shadowWidth')}
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={0.25}
+              value={shadowWidth()}
+              onInput={(e) => setShadowWidth(Number(e.currentTarget.value))}
+              onChange={(e) => {
+                const val = Number(e.currentTarget.value);
+                sendSetting('shadowWidth', val);
+                // Clear the legacy kill-switch so it can't pin shadows to off.
+                if (s['noShadows']) sendSetting('noShadows', false);
+              }}
+              class="range-input"
+            />
+            <span class="hint-text">
+              {shadowWidth() === 0 ? t('settings.display.shadowsOff') : `${shadowWidth().toFixed(2)}x`}
+            </span>
+          </label>
+          <label class="field-label">
+            {t('settings.display.backdropBlur')}
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={0.25}
+              value={blurStrength()}
+              onInput={(e) => setBlurStrength(Number(e.currentTarget.value))}
+              onChange={(e) => sendSetting('blurStrength', Number(e.currentTarget.value))}
+              class="range-input"
+            />
+            <span class="hint-text">{blurStrength().toFixed(2)}x</span>
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={compactInputArea()}
+              onChange={(e) => {
+                setCompactInputArea(e.currentTarget.checked);
+                sendSetting('compactInputArea', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.display.compactInput')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={reducedMotion()}
+              onChange={(e) => {
+                setReducedMotion(e.currentTarget.checked);
+                sendSetting('reducedMotion', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.display.reducedMotion')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={hideChatAvatars()}
+              onChange={(e) => {
+                setHideChatAvatars(e.currentTarget.checked);
+                sendSetting('hideChatAvatars', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.display.hideAvatars')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={hideChatNames()}
+              onChange={(e) => {
+                setHideChatNames(e.currentTarget.checked);
+                sendSetting('hideChatNames', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.display.hideNames')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={swipeNumbersOnAllMessages()}
+              onChange={(e) => {
+                setSwipeNumbersOnAllMessages(e.currentTarget.checked);
+                sendSetting('swipeNumbersOnAllMessages', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.display.swipeNumbersAll')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={showMessageIds()}
+              onChange={(e) => {
+                setShowMessageIds(e.currentTarget.checked);
+                sendSetting('showMessageIds', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.display.showMessageIds')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={timestampModelIcon()}
+              onChange={(e) => {
+                setTimestampModelIcon(e.currentTarget.checked);
+                sendSetting('timestampModelIcon', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.display.showModelInTimestamps')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={timerEnabled()}
+              onChange={(e) => {
+                setTimerEnabled(e.currentTarget.checked);
+                sendSetting('timerEnabled', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.display.showTimer')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={encodeTags()}
+              onChange={(e) => {
+                setEncodeTags(e.currentTarget.checked);
+                sendSetting('encodeTags', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.display.encodeTags')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={showHotswapBar()}
+              onChange={(e) => {
+                setShowHotswapBar(e.currentTarget.checked);
+                sendSetting('showHotswapBar', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.display.showHotswapBar')}
+            <span class="hint-text">{t('settings.display.showHotswapBarHint')}</span>
+          </label>
+          <label class="field-label">
+            {t('settings.display.mediaMode')}
+            <select
+              class="select"
+              value={mediaDisplayMode()}
+              onChange={(e) => {
+                setMediaDisplayMode(e.currentTarget.value);
+                sendSetting('mediaDisplayMode', e.currentTarget.value);
+              }}
+            >
+              <option value="list" class="select-option">{t('settings.display.mediaModeList')}</option>
+              <option value="grid" class="select-option">{t('settings.display.mediaModeGrid')}</option>
+            </select>
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={fuzzySearch()}
+              onChange={(e) => {
+                setFuzzySearch(e.currentTarget.checked);
+                sendSetting('fuzzySearch', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.display.fuzzySearch')}
+            <span class="hint-text">{t('settings.display.fuzzySearchHint')}</span>
+          </label>
+        </section>
+
+        {/* Chat Behavior Settings */}
+        <section class="settings-section">
+          <h3 class="section-heading">{t('settings.chatBehavior.heading')}</h3>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={confirmMessageDelete()}
+              onChange={(e) => {
+                setConfirmMessageDelete(e.currentTarget.checked);
+                sendSetting('confirmMessageDelete', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.behavior.confirmMessageDelete')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={useSoftFork()}
+              onChange={(e) => {
+                setUseSoftFork(e.currentTarget.checked);
+                sendSetting('useSoftFork', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.behavior.useSoftFork')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={autoSaveMessageEdits()}
+              onChange={(e) => {
+                setAutoSaveMessageEdits(e.currentTarget.checked);
+                sendSetting('autoSaveMessageEdits', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.behavior.autoSaveEdits')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={restoreUserInput()}
+              onChange={(e) => {
+                setRestoreUserInput(e.currentTarget.checked);
+                sendSetting('restoreUserInput', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.behavior.restoreUserInput')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={autoLoadLastChat()}
+              onChange={(e) => {
+                setAutoLoadLastChat(e.currentTarget.checked);
+                sendSetting('autoLoadLastChat', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.behavior.autoLoadLastChat')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={showHiddenMessages()}
+              onChange={(e) => {
+                setShowHiddenMessages(e.currentTarget.checked);
+                sendSetting('showHiddenMessages', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.behavior.showHiddenMessages')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={autoScrollToBottom()}
+              onChange={(e) => {
+                setAutoScrollToBottom(e.currentTarget.checked);
+                sendSetting('autoScrollToBottom', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.behavior.autoScroll')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={disableGroupTrimming()}
+              onChange={(e) => {
+                setDisableGroupTrimming(e.currentTarget.checked);
+                sendSetting('disableGroupTrimming', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.behavior.disableGroupTrimming')}
+          </label>
+        </section>
+
+        {/* Input & Interaction Settings */}
+        <section class="settings-section">
+          <h3 class="section-heading">{t('settings.interaction.heading')}</h3>
           <label class="field-label">
             {t('settings.behavior.sendOnEnter')}
             <select
@@ -466,6 +805,257 @@ export function SettingsModal(props: { onClose: () => void }) {
               class="checkbox"
             />
             {t('settings.behavior.hideQuickReplies')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={clickToEdit()}
+              onChange={(e) => {
+                setClickToEdit(e.currentTarget.checked);
+                sendSetting('clickToEdit', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.interaction.clickToEdit')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={autoSelectInput()}
+              onChange={(e) => {
+                setAutoSelectInput(e.currentTarget.checked);
+                sendSetting('autoSelectInput', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.interaction.autoFocusInput')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={neverResizeAvatars()}
+              onChange={(e) => {
+                setNeverResizeAvatars(e.currentTarget.checked);
+                sendSetting('neverResizeAvatars', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.interaction.neverResizeAvatars')}
+          </label>
+        </section>
+
+        {/* Generation Settings */}
+        <section class="settings-section">
+          <h3 class="section-heading">{t('settings.generation.heading')}</h3>
+          <label class="field-label">
+            {t('settings.generation.customStoppingStrings')}
+            <div class="stack-xs">
+              <For each={customStoppingStrings()}>
+                {(str, index) => (
+                  <div class="input-row" id={`stop-str-${index()}`}>
+                    <input
+                      type="text"
+                      value={str}
+                      onChange={(e) => {
+                        const next = [...customStoppingStrings()];
+                        next[index()] = e.currentTarget.value;
+                        setCustomStoppingStrings(next);
+                        sendSetting('customStoppingStrings', next);
+                      }}
+                      class="flex-1"
+                    />
+                    <button
+                      type="button"
+                      class="icon-btn small danger"
+                      onClick={() => {
+                        const next = [...customStoppingStrings()];
+                        next.splice(index(), 1);
+                        setCustomStoppingStrings(next);
+                        sendSetting('customStoppingStrings', next);
+                      }}
+                      title={t('common.remove')} aria-label={t('common.remove')}
+                    >
+                      <i class="bi bi-trash" />
+                    </button>
+                  </div>
+                )}
+              </For>
+              <button
+                type="button"
+                class="text-btn small"
+                onClick={() => {
+                  const next = [...customStoppingStrings(), ''];
+                  setCustomStoppingStrings(next);
+                  sendSetting('customStoppingStrings', next);
+                }}
+              >
+                <i class="bi bi-plus" /> {t('settings.generation.addStopString')}
+              </button>
+            </div>
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={customStoppingStringsMacro()}
+              disabled={appendOnlyLayout()}
+              onChange={(e) => {
+                setCustomStoppingStringsMacro(e.currentTarget.checked);
+                sendSetting('customStoppingStringsMacro', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.generation.resolveStoppingMacros')}
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={stripExamples()}
+              onChange={(e) => {
+                setStripExamples(e.currentTarget.checked);
+                sendSetting('stripExamples', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.generation.stripExamples')}
+          </label>
+          <label class="field-label">
+            {t('settings.generation.impersonationPrompt')}
+            <textarea
+              rows={3}
+              value={impersonationPrompt()}
+              onInput={(e) => setImpersonationPrompt(e.currentTarget.value)}
+              onChange={(e) => sendSetting('impersonationPrompt', e.currentTarget.value)}
+              class="textarea"
+            />
+            <span class="hint-text">{t('settings.generation.impersonationPromptHint')}</span>
+          </label>
+          <label class="field-label">
+            {t('settings.generation.chatMessageLoadLimit')}
+            <input
+              type="number"
+              min={1}
+              max={10000}
+              value={chatMessageLoadLimit()}
+              onChange={(e) => {
+                setChatMessageLoadLimit(Number(e.currentTarget.value));
+                sendSetting('chatMessageLoadLimit', Number(e.currentTarget.value));
+              }}
+              class="input"
+            />
+            <span class="hint-text">{t('settings.generation.chatMessageLoadLimitHint')}</span>
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={autoContinueEnabled()}
+              onChange={(e) => {
+                setAutoContinueEnabled(e.currentTarget.checked);
+                sendSetting('autoContinueEnabled', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.generation.autoContinue')}
+          </label>
+          <Show when={autoContinueEnabled()}>
+            <label class="field-label">
+              {t('settings.generation.autoContinueTargetLength')}
+              <input
+                type="number"
+                min={10}
+                max={2000}
+                value={autoContinueTargetLength()}
+                onChange={(e) => {
+                  setAutoContinueTargetLength(Number(e.currentTarget.value));
+                  sendSetting('autoContinueTargetLength', Number(e.currentTarget.value));
+                }}
+                class="input"
+              />
+              <span class="hint-text">{t('settings.generation.autoContinueTargetLengthHint')}</span>
+            </label>
+          </Show>
+
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={mediaVerboseMode()}
+              onChange={(e) => {
+                setMediaVerboseMode(e.currentTarget.checked);
+                sendSetting('mediaVerboseMode', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.generation.mediaVerbose')}
+            <span class="hint-text">{t('settings.generation.mediaVerboseHint')}</span>
+          </label>
+
+          <label class="field-label">
+            {t('settings.generation.claudeCaching')}
+            <select
+              class="select"
+              value={claudeCacheMode()}
+              onChange={(e) => {
+                const mode = e.currentTarget.value as 'off' | 'auto' | 'manual';
+                setClaudeCacheMode(mode);
+                sendSetting('claudeCacheMode', mode);
+              }}
+            >
+              <option value="off" class="select-option">{t('settings.generation.claudeCachingOff')}</option>
+              <option value="auto" class="select-option">{t('settings.generation.claudeCachingAuto')}</option>
+              <option value="manual" class="select-option">{t('settings.generation.claudeCachingManual')}</option>
+            </select>
+            <span class="hint-text">
+              {t('settings.generation.claudeCachingHint')}
+            </span>
+          </label>
+
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={appendOnlyLayout()}
+              onChange={(e) => {
+                setAppendOnlyLayout(e.currentTarget.checked);
+                sendSetting('appendOnlyPromptLayout', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.generation.appendOnlyLayout')}
+          </label>
+          <span class="hint-text">{t('settings.generation.appendOnlyLayoutHint')}</span>
+
+          <Show when={claudeCacheMode() === 'manual'}>
+            <label class="field-label">
+              {t('settings.generation.manualCacheDepth')}
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={claudeCacheDepth()}
+                onChange={(e) => {
+                  const val = Number(e.currentTarget.value);
+                  setClaudeCacheDepth(val);
+                  sendSetting('claudeCacheDepth', val);
+                }}
+                class="input"
+              />
+              <span class="hint-text">{t('settings.generation.manualCacheDepthHint')}</span>
+            </label>
+          </Show>
+
+          <label class="field-label">
+            {t('settings.generation.cacheTtl')}
+            <input
+              type="text"
+              value={claudeCacheTTL()}
+              disabled={claudeCacheMode() === 'off'}
+              onChange={(e) => {
+                const val = e.currentTarget.value;
+                setClaudeCacheTTL(val);
+                sendSetting('claudeCacheTTL', val || null);
+              }}
+              placeholder={t('settings.generation.cacheTtlPlaceholder')}
+              class="input"
+            />
+            <span class="hint-text">{t('settings.generation.cacheTtlHint')}</span>
           </label>
         </section>
 
@@ -569,6 +1159,7 @@ export function SettingsModal(props: { onClose: () => void }) {
             <input
               type="checkbox"
               checked={autoFixGeneratedMarkdown()}
+              disabled={appendOnlyLayout()}
               onChange={(e) => {
                 setAutoFixGeneratedMarkdown(e.currentTarget.checked);
                 sendSetting('autoFixGeneratedMarkdown', e.currentTarget.checked);
@@ -577,350 +1168,97 @@ export function SettingsModal(props: { onClose: () => void }) {
             />
             {t('settings.postProcessing.autoFixMarkdown')}
           </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={timerEnabled()}
-              onChange={(e) => {
-                setTimerEnabled(e.currentTarget.checked);
-                sendSetting('timerEnabled', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.postProcessing.showTimer')}
-          </label>
         </section>
 
-        {/* Behavior Settings */}
+        {/* Sound & Streaming Settings */}
         <section class="settings-section">
-          <h3 class="section-heading">{t('settings.behavior.heading')}</h3>
+          <h3 class="section-heading">{t('settings.soundStreaming.heading')}</h3>
           <label class="checkbox-row">
             <input
               type="checkbox"
-              checked={confirmMessageDelete()}
+              checked={messageSoundEnabled()}
               onChange={(e) => {
-                setConfirmMessageDelete(e.currentTarget.checked);
-                sendSetting('confirmMessageDelete', e.currentTarget.checked);
+                setMessageSoundEnabled(e.currentTarget.checked);
+                sendSetting('messageSoundEnabled', e.currentTarget.checked);
               }}
               class="checkbox"
             />
-            {t('settings.behavior.confirmMessageDelete')}
+            {t('settings.soundStreaming.playSound')}
           </label>
           <label class="checkbox-row">
             <input
               type="checkbox"
-              checked={useSoftFork()}
+              checked={messageSoundUnfocusedOnly()}
+              disabled={!messageSoundEnabled()}
               onChange={(e) => {
-                setUseSoftFork(e.currentTarget.checked);
-                sendSetting('useSoftFork', e.currentTarget.checked);
+                setMessageSoundUnfocusedOnly(e.currentTarget.checked);
+                sendSetting('messageSoundUnfocusedOnly', e.currentTarget.checked);
               }}
               class="checkbox"
             />
-            {t('settings.behavior.useSoftFork')}
+            {t('settings.soundStreaming.unfocusedOnly')}
           </label>
           <label class="checkbox-row">
             <input
               type="checkbox"
-              checked={autoSaveMessageEdits()}
+              checked={smoothStreaming()}
               onChange={(e) => {
-                setAutoSaveMessageEdits(e.currentTarget.checked);
-                sendSetting('autoSaveMessageEdits', e.currentTarget.checked);
+                setSmoothStreaming(e.currentTarget.checked);
+                sendSetting('smoothStreaming', e.currentTarget.checked);
               }}
               class="checkbox"
             />
-            {t('settings.behavior.autoSaveEdits')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={restoreUserInput()}
-              onChange={(e) => {
-                setRestoreUserInput(e.currentTarget.checked);
-                sendSetting('restoreUserInput', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.behavior.restoreUserInput')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={autoLoadLastChat()}
-              onChange={(e) => {
-                setAutoLoadLastChat(e.currentTarget.checked);
-                sendSetting('autoLoadLastChat', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.behavior.autoLoadLastChat')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={showHiddenMessages()}
-              onChange={(e) => {
-                setShowHiddenMessages(e.currentTarget.checked);
-                sendSetting('showHiddenMessages', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.behavior.showHiddenMessages')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={autoScrollToBottom()}
-              onChange={(e) => {
-                setAutoScrollToBottom(e.currentTarget.checked);
-                sendSetting('autoScrollToBottom', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.behavior.autoScroll')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={disableGroupTrimming()}
-              onChange={(e) => {
-                setDisableGroupTrimming(e.currentTarget.checked);
-                sendSetting('disableGroupTrimming', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.behavior.disableGroupTrimming')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={charListGrid()}
-              onChange={(e) => {
-                setCharListGrid(e.currentTarget.checked);
-                sendSetting('charListGrid', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.behavior.charListGrid')}
-          </label>
-        </section>
-
-        {/* Generation Settings */}
-        <section class="settings-section">
-          <h3 class="section-heading">{t('settings.generation.heading')}</h3>
-          <label class="field-label">
-            {t('settings.generation.customStoppingStrings')}
-            <div class="stack-xs">
-              <For each={customStoppingStrings()}>
-                {(str, index) => (
-                  <div class="input-row" id={`stop-str-${index()}`}>
-                    <input
-                      type="text"
-                      value={str}
-                      onChange={(e) => {
-                        const next = [...customStoppingStrings()];
-                        next[index()] = e.currentTarget.value;
-                        setCustomStoppingStrings(next);
-                        sendSetting('customStoppingStrings', next);
-                      }}
-                      class="flex-1"
-                    />
-                    <button
-                      type="button"
-                      class="icon-btn small danger"
-                      onClick={() => {
-                        const next = [...customStoppingStrings()];
-                        next.splice(index(), 1);
-                        setCustomStoppingStrings(next);
-                        sendSetting('customStoppingStrings', next);
-                      }}
-                      title={t('common.remove')} aria-label={t('common.remove')}
-                    >
-                      <i class="bi bi-trash" />
-                    </button>
-                  </div>
-                )}
-              </For>
-              <button
-                type="button"
-                class="text-btn small"
-                onClick={() => {
-                  const next = [...customStoppingStrings(), ''];
-                  setCustomStoppingStrings(next);
-                  sendSetting('customStoppingStrings', next);
-                }}
-              >
-                <i class="bi bi-plus" /> {t('settings.generation.addStopString')}
-              </button>
-            </div>
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={customStoppingStringsMacro()}
-              onChange={(e) => {
-                setCustomStoppingStringsMacro(e.currentTarget.checked);
-                sendSetting('customStoppingStringsMacro', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.generation.resolveStoppingMacros')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={stripExamples()}
-              onChange={(e) => {
-                setStripExamples(e.currentTarget.checked);
-                sendSetting('stripExamples', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.generation.stripExamples')}
+            {t('settings.soundStreaming.smoothStreaming')}
           </label>
           <label class="field-label">
-            {t('settings.generation.chatMessageLoadLimit')}
+            {t('settings.soundStreaming.tokenDelay')}
             <input
               type="number"
-              min={1}
-              max={10000}
-              value={chatMessageLoadLimit()}
-              onChange={(e) => {
-                setChatMessageLoadLimit(Number(e.currentTarget.value));
-                sendSetting('chatMessageLoadLimit', Number(e.currentTarget.value));
-              }}
+              min={5}
+              max={500}
+              value={smoothStreamingDelay()}
+              disabled={!smoothStreaming()}
+              onInput={(e) => setSmoothStreamingDelay(Number(e.currentTarget.value))}
+              onChange={(e) => sendSetting('smoothStreamingDelay', Number(e.currentTarget.value))}
               class="input"
             />
-            <span class="hint-text">{t('settings.generation.chatMessageLoadLimitHint')}</span>
           </label>
           <label class="checkbox-row">
             <input
               type="checkbox"
-              checked={autoContinueEnabled()}
+              checked={streamFadeIn()}
               onChange={(e) => {
-                setAutoContinueEnabled(e.currentTarget.checked);
-                sendSetting('autoContinueEnabled', e.currentTarget.checked);
+                setStreamFadeIn(e.currentTarget.checked);
+                sendSetting('streamFadeIn', e.currentTarget.checked);
               }}
               class="checkbox"
             />
-            {t('settings.generation.autoContinue')}
-          </label>
-          <Show when={autoContinueEnabled()}>
-            <label class="field-label">
-              {t('settings.generation.autoContinueTargetLength')}
-              <input
-                type="number"
-                min={10}
-                max={2000}
-                value={autoContinueTargetLength()}
-                onChange={(e) => {
-                  setAutoContinueTargetLength(Number(e.currentTarget.value));
-                  sendSetting('autoContinueTargetLength', Number(e.currentTarget.value));
-                }}
-                class="input"
-              />
-              <span class="hint-text">{t('settings.generation.autoContinueTargetLengthHint')}</span>
-            </label>
-          </Show>
-
-          <label class="field-label">
-            {t('settings.generation.claudeCaching')}
-            <select
-              class="select"
-              value={claudeCacheMode()}
-              onChange={(e) => {
-                const mode = e.currentTarget.value as 'off' | 'auto' | 'manual';
-                setClaudeCacheMode(mode);
-                sendSetting('claudeCacheMode', mode);
-              }}
-            >
-              <option value="off" class="select-option">{t('settings.generation.claudeCachingOff')}</option>
-              <option value="auto" class="select-option">{t('settings.generation.claudeCachingAuto')}</option>
-              <option value="manual" class="select-option">{t('settings.generation.claudeCachingManual')}</option>
-            </select>
-            <span class="hint-text">
-              {t('settings.generation.claudeCachingHint')}
-            </span>
-          </label>
-
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={appendOnlyLayout()}
-              onChange={(e) => {
-                setAppendOnlyLayout(e.currentTarget.checked);
-                sendSetting('appendOnlyPromptLayout', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.generation.appendOnlyLayout')}
-          </label>
-          <span class="hint-text">{t('settings.generation.appendOnlyLayoutHint')}</span>
-
-          <Show when={claudeCacheMode() === 'manual'}>
-            <label class="field-label">
-              {t('settings.generation.manualCacheDepth')}
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={claudeCacheDepth()}
-                onChange={(e) => {
-                  const val = Number(e.currentTarget.value);
-                  setClaudeCacheDepth(val);
-                  sendSetting('claudeCacheDepth', val);
-                }}
-                class="input"
-              />
-              <span class="hint-text">{t('settings.generation.manualCacheDepthHint')}</span>
-            </label>
-          </Show>
-
-          <label class="field-label">
-            {t('settings.generation.cacheTtl')}
-            <input
-              type="text"
-              value={claudeCacheTTL()}
-              onChange={(e) => {
-                const val = e.currentTarget.value;
-                setClaudeCacheTTL(val);
-                sendSetting('claudeCacheTTL', val || null);
-              }}
-              placeholder={t('settings.generation.cacheTtlPlaceholder')}
-              class="input"
-            />
-            <span class="hint-text">{t('settings.generation.cacheTtlHint')}</span>
+            {t('settings.soundStreaming.fadeIn')}
           </label>
         </section>
 
-        {/* Developer Settings */}
+        {/* Notifications Settings */}
         <section class="settings-section">
-          <h3 class="section-heading">{t('settings.developer.heading')}</h3>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={mcpEnabled()}
+          <h3 class="section-heading">{t('settings.notifications.heading')}</h3>
+          <label class="field-label">
+            {t('settings.notifications.toastPosition')}
+            <select
+              class="select"
+              value={toastPosition()}
               onChange={(e) => {
-                setMcpEnabled(e.currentTarget.checked);
-                sendSetting('mcp.enabled', e.currentTarget.checked);
+                const value = e.currentTarget.value as 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+                setToastPosition(value);
+                sendSetting('toastPosition', value);
               }}
-              class="checkbox"
-            />
-            {t('settings.developer.mcpServer')}
+            >
+              <option class="toast-position-option" value="top-left">{t('settings.notifications.toastTopLeft')}</option>
+              <option class="toast-position-option" value="top-center">{t('settings.notifications.toastTopCenter')}</option>
+              <option class="toast-position-option" value="top-right">{t('settings.notifications.toastTopRight')}</option>
+              <option class="toast-position-option" value="bottom-left">{t('settings.notifications.toastBottomLeft')}</option>
+              <option class="toast-position-option" value="bottom-center">{t('settings.notifications.toastBottomCenter')}</option>
+              <option class="toast-position-option" value="bottom-right">{t('settings.notifications.toastBottomRight')}</option>
+            </select>
           </label>
-          <span class="hint-text">{t('settings.developer.mcpServerHint')}</span>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={unpackedCardsEnabled()}
-              onChange={(e) => {
-                setUnpackedCardsEnabled(e.currentTarget.checked);
-                sendSetting('unpackedCards.enabled', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.developer.unpackedCards')}
-          </label>
-          <span class="hint-text">{t('settings.developer.unpackedCardsHint')}</span>
         </section>
 
         {/* Memory Settings */}
@@ -951,6 +1289,7 @@ export function SettingsModal(props: { onClose: () => void }) {
               min={1}
               max={250}
               value={memoryUpdateInterval()}
+              disabled={!memoryEnabled()}
               onInput={(e) => setMemoryUpdateInterval(Number(e.currentTarget.value))}
               onChange={(e) => sendMemorySetting({ updateInterval: Number(e.currentTarget.value) })}
               class="input"
@@ -965,6 +1304,7 @@ export function SettingsModal(props: { onClose: () => void }) {
               min={0}
               max={250}
               value={memoryDepth()}
+              disabled={!memoryEnabled()}
               onInput={(e) => setMemoryDepth(Number(e.currentTarget.value))}
               onChange={(e) => sendMemorySetting({ depth: Number(e.currentTarget.value) })}
               class="input"
@@ -979,6 +1319,7 @@ export function SettingsModal(props: { onClose: () => void }) {
               min={1}
               max={4096}
               value={memoryMaxSummaryTokens()}
+              disabled={!memoryEnabled()}
               onInput={(e) => setMemoryMaxSummaryTokens(Number(e.currentTarget.value))}
               onChange={(e) => sendMemorySetting({ maxSummaryTokens: Number(e.currentTarget.value) })}
               class="input"
@@ -990,6 +1331,7 @@ export function SettingsModal(props: { onClose: () => void }) {
             <select
               class="select"
               value={memoryBackendConfigId()}
+              disabled={!memoryEnabled()}
               onChange={(e) => {
                 const value = e.currentTarget.value;
                 setMemoryBackendConfigId(value);
@@ -1013,6 +1355,7 @@ export function SettingsModal(props: { onClose: () => void }) {
             <textarea
               rows={6}
               value={memorySystemPrompt()}
+              disabled={!memoryEnabled()}
               onInput={(e) => setMemorySystemPrompt(e.currentTarget.value)}
               onChange={(e) => sendMemorySetting({ systemPrompt: e.currentTarget.value })}
               class="textarea"
@@ -1020,207 +1363,9 @@ export function SettingsModal(props: { onClose: () => void }) {
           </label>
         </section>
 
-        {/* Display Settings */}
+        {/* Security & Content Settings */}
         <section class="settings-section">
-          <h3 class="section-heading">{t('settings.display.heading')}</h3>
-          <label class="field-label">
-            {t('settings.display.chatStyle')}
-            <select
-              class="select"
-              value={chatStyle()}
-              onChange={(e) => {
-                setChatStyle(e.currentTarget.value);
-                sendSetting('chatStyle', e.currentTarget.value);
-              }}
-            >
-              <option value="default" class="select-option">{t('settings.display.chatStyleDefault')}</option>
-              <option value="bubbles" class="select-option">{t('settings.display.chatStyleBubbles')}</option>
-              <option value="document" class="select-option">{t('settings.display.chatStyleDocument')}</option>
-            </select>
-          </label>
-          <label class="field-label">
-            {t('settings.display.avatarStyle')}
-            <select
-              class="select"
-              value={avatarStyle()}
-              onChange={(e) => {
-                setAvatarStyle(e.currentTarget.value);
-                sendSetting('avatarStyle', e.currentTarget.value);
-              }}
-            >
-              <option value="round" class="select-option">{t('settings.display.avatarStyleRound')}</option>
-              <option value="rectangular" class="select-option">{t('settings.display.avatarStyleRectangular')}</option>
-              <option value="square" class="select-option">{t('settings.display.avatarStyleSquare')}</option>
-              <option value="rounded" class="select-option">{t('settings.display.avatarStyleRounded')}</option>
-            </select>
-          </label>
-          <label class="field-label">
-            {t('settings.display.fontScale')}
-            <input
-              type="range"
-              min={0.8}
-              max={1.5}
-              step={0.05}
-              value={fontScale()}
-              onInput={(e) => setFontScale(Number(e.currentTarget.value))}
-              onChange={(e) => sendSetting('fontScale', Number(e.currentTarget.value))}
-              class="range-input"
-            />
-            <span class="hint-text">{fontScale().toFixed(2)}x</span>
-          </label>
-          <label class="field-label">
-            {t('settings.display.chatWidth')}
-            <input
-              type="range"
-              min={30}
-              max={70}
-              step={1}
-              value={chatWidth()}
-              onInput={(e) => setChatWidth(Number(e.currentTarget.value))}
-              onChange={(e) => sendSetting('chatWidth', Number(e.currentTarget.value))}
-              class="range-input"
-            />
-            <span class="hint-text">{chatWidth()}rem</span>
-          </label>
-          <label class="field-label">
-            {t('settings.display.shadowWidth')}
-            <input
-              type="range"
-              min={0}
-              max={2}
-              step={0.25}
-              value={shadowWidth()}
-              onInput={(e) => setShadowWidth(Number(e.currentTarget.value))}
-              onChange={(e) => sendSetting('shadowWidth', Number(e.currentTarget.value))}
-              class="range-input"
-            />
-            <span class="hint-text">{shadowWidth().toFixed(2)}x</span>
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={noShadows()}
-              onChange={(e) => {
-                setNoShadows(e.currentTarget.checked);
-                sendSetting('noShadows', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.display.noShadows')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={hideChatAvatars()}
-              onChange={(e) => {
-                setHideChatAvatars(e.currentTarget.checked);
-                sendSetting('hideChatAvatars', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.display.hideAvatars')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={hideChatNames()}
-              onChange={(e) => {
-                setHideChatNames(e.currentTarget.checked);
-                sendSetting('hideChatNames', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.display.hideNames')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={swipeNumbersOnAllMessages()}
-              onChange={(e) => {
-                setSwipeNumbersOnAllMessages(e.currentTarget.checked);
-                sendSetting('swipeNumbersOnAllMessages', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.display.swipeNumbersAll')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={showMessageIds()}
-              onChange={(e) => {
-                setShowMessageIds(e.currentTarget.checked);
-                sendSetting('showMessageIds', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.display.showMessageIds')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={encodeTags()}
-              onChange={(e) => {
-                setEncodeTags(e.currentTarget.checked);
-                sendSetting('encodeTags', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.display.encodeTags')}
-          </label>
-          <label class="field-label">
-            {t('settings.display.backdropBlur')}
-            <input
-              type="range"
-              min={0}
-              max={2}
-              step={0.25}
-              value={blurStrength()}
-              onInput={(e) => setBlurStrength(Number(e.currentTarget.value))}
-              onChange={(e) => sendSetting('blurStrength', Number(e.currentTarget.value))}
-              class="range-input"
-            />
-            <span class="hint-text">{blurStrength().toFixed(2)}x</span>
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={compactInputArea()}
-              onChange={(e) => {
-                setCompactInputArea(e.currentTarget.checked);
-                sendSetting('compactInputArea', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.display.compactInput')}
-          </label>
-          <label class="field-label">
-            {t('settings.display.mediaMode')}
-            <select
-              class="select"
-              value={mediaDisplayMode()}
-              onChange={(e) => {
-                setMediaDisplayMode(e.currentTarget.value);
-                sendSetting('mediaDisplayMode', e.currentTarget.value);
-              }}
-            >
-              <option value="list" class="select-option">{t('settings.display.mediaModeList')}</option>
-              <option value="grid" class="select-option">{t('settings.display.mediaModeGrid')}</option>
-            </select>
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={mediaVerboseMode()}
-              onChange={(e) => {
-                setMediaVerboseMode(e.currentTarget.checked);
-                sendSetting('mediaVerboseMode', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.display.mediaVerbose')}
-            <span class="hint-text">{t('settings.display.mediaVerboseHint')}</span>
-          </label>
+          <h3 class="section-heading">{t('settings.security.heading')}</h3>
           <label class="checkbox-row">
             <input
               type="checkbox"
@@ -1231,8 +1376,8 @@ export function SettingsModal(props: { onClose: () => void }) {
               }}
               class="checkbox"
             />
-            {t('settings.display.strictHtml')}
-            <span class="hint-text">{t('settings.display.strictHtmlHint')}</span>
+            {t('settings.security.strictHtml')}
+            <span class="hint-text">{t('settings.security.strictHtmlHint')}</span>
           </label>
           <label class="checkbox-row">
             <input
@@ -1244,39 +1389,8 @@ export function SettingsModal(props: { onClose: () => void }) {
               }}
               class="checkbox"
             />
-            {t('settings.display.allowExternalMedia')}
-            <span class="hint-text">{t('settings.display.allowExternalMediaHint')}</span>
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={showHotswapBar()}
-              onChange={(e) => {
-                setShowHotswapBar(e.currentTarget.checked);
-                sendSetting('showHotswapBar', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.display.showHotswapBar')}
-            <span class="hint-text">{t('settings.display.showHotswapBarHint')}</span>
-          </label>
-        </section>
-
-        {/* Search Settings */}
-        <section class="settings-section">
-          <h3 class="section-heading">{t('settings.search.heading')}</h3>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={fuzzySearch()}
-              onChange={(e) => {
-                setFuzzySearch(e.currentTarget.checked);
-                sendSetting('fuzzySearch', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.search.fuzzy')}
-            <span class="hint-text">{t('settings.search.fuzzyHint')}</span>
+            {t('settings.security.allowExternalMedia')}
+            <span class="hint-text">{t('settings.security.allowExternalMediaHint')}</span>
           </label>
         </section>
 
@@ -1558,28 +1672,33 @@ export function SettingsModal(props: { onClose: () => void }) {
                     class="input"
                   />
                 </label>
-                <div class="flex-row-sm">
-                  <button
-                    class="text-btn small"
-                    type="button"
-                    aria-pressed={!r().replaceLua?.trim()}
-                    onClick={() => updateRegexField('replaceLua', undefined)}
-                  >
+                <fieldset class="settings-radio-group">
+                  <legend class="settings-radio-label">{t('settings.regex.replaceTypeLegend')}</legend>
+                  <label class="radio-row">
+                    <input
+                      type="radio"
+                      name="regexReplaceType"
+                      checked={!r().replaceLua?.trim()}
+                      onChange={() => updateRegexField('replaceLua', undefined)}
+                      class="radio"
+                    />
                     {t('settings.regex.replaceTypeText')}
-                  </button>
-                  <button
-                    class="text-btn small"
-                    type="button"
-                    aria-pressed={Boolean(r().replaceLua?.trim())}
-                    onClick={() => {
-                      if (!r().replaceLua?.trim()) {
-                        updateRegexField('replaceLua', 'function replace(match, captures)\n  return match\nend');
-                      }
-                    }}
-                  >
+                  </label>
+                  <label class="radio-row">
+                    <input
+                      type="radio"
+                      name="regexReplaceType"
+                      checked={Boolean(r().replaceLua?.trim())}
+                      onChange={() => {
+                        if (!r().replaceLua?.trim()) {
+                          updateRegexField('replaceLua', 'function replace(match, captures)\n  return match\nend');
+                        }
+                      }}
+                      class="radio"
+                    />
                     {t('settings.regex.replaceTypeLua')}
-                  </button>
-                </div>
+                  </label>
+                </fieldset>
                 <Show
                   when={r().replaceLua?.trim()}
                   fallback={
@@ -1636,6 +1755,9 @@ export function SettingsModal(props: { onClose: () => void }) {
                     {t('settings.regex.disabledCheckbox')}
                   </label>
                 </div>
+                <Show when={appendOnlyLayout() && r().prompt}>
+                  <span class="hint-text">{t('settings.regex.appendOnlyPromptNote')}</span>
+                </Show>
                 <div class="flex-between">
                   <label class="checkbox-row">
                     <input
@@ -1686,160 +1808,41 @@ export function SettingsModal(props: { onClose: () => void }) {
           </Show>
         </section>
 
+        {/* Quick Replies */}
         <section class="settings-section">
           <h3 class="section-heading">{t('settings.quickReplies.heading')}</h3>
           <QuickReplySettings />
         </section>
 
+        {/* Developer Settings */}
         <section class="settings-section">
-          <h3 class="section-heading">{t('settings.soundStreaming.heading')}</h3>
+          <h3 class="section-heading">{t('settings.developer.heading')}</h3>
           <label class="checkbox-row">
             <input
               type="checkbox"
-              checked={messageSoundEnabled()}
+              checked={mcpEnabled()}
               onChange={(e) => {
-                setMessageSoundEnabled(e.currentTarget.checked);
-                sendSetting('messageSoundEnabled', e.currentTarget.checked);
+                setMcpEnabled(e.currentTarget.checked);
+                sendSetting('mcp.enabled', e.currentTarget.checked);
               }}
               class="checkbox"
             />
-            {t('settings.soundStreaming.playSound')}
+            {t('settings.developer.mcpServer')}
           </label>
+          <span class="hint-text">{t('settings.developer.mcpServerHint')}</span>
           <label class="checkbox-row">
             <input
               type="checkbox"
-              checked={messageSoundUnfocusedOnly()}
+              checked={unpackedCardsEnabled()}
               onChange={(e) => {
-                setMessageSoundUnfocusedOnly(e.currentTarget.checked);
-                sendSetting('messageSoundUnfocusedOnly', e.currentTarget.checked);
+                setUnpackedCardsEnabled(e.currentTarget.checked);
+                sendSetting('unpackedCards.enabled', e.currentTarget.checked);
               }}
               class="checkbox"
             />
-            {t('settings.soundStreaming.unfocusedOnly')}
+            {t('settings.developer.unpackedCards')}
           </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={smoothStreaming()}
-              onChange={(e) => {
-                setSmoothStreaming(e.currentTarget.checked);
-                sendSetting('smoothStreaming', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.soundStreaming.smoothStreaming')}
-          </label>
-          <label class="field-label">
-            {t('settings.soundStreaming.tokenDelay')}
-            <input
-              type="number"
-              min={5}
-              max={500}
-              value={smoothStreamingDelay()}
-              onInput={(e) => setSmoothStreamingDelay(Number(e.currentTarget.value))}
-              onChange={(e) => sendSetting('smoothStreamingDelay', Number(e.currentTarget.value))}
-              class="input"
-            />
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={streamFadeIn()}
-              onChange={(e) => {
-                setStreamFadeIn(e.currentTarget.checked);
-                sendSetting('streamFadeIn', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.soundStreaming.fadeIn')}
-          </label>
-        </section>
-
-        <section class="settings-section">
-          <h3 class="section-heading">{t('settings.notifications.heading')}</h3>
-          <label class="field-label">
-            {t('settings.notifications.toastPosition')}
-            <select
-              class="select"
-              value={toastPosition()}
-              onChange={(e) => {
-                const value = e.currentTarget.value as 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
-                setToastPosition(value);
-                sendSetting('toastPosition', value);
-              }}
-            >
-              <option class="toast-position-option" value="top-left">{t('settings.notifications.toastTopLeft')}</option>
-              <option class="toast-position-option" value="top-center">{t('settings.notifications.toastTopCenter')}</option>
-              <option class="toast-position-option" value="top-right">{t('settings.notifications.toastTopRight')}</option>
-              <option class="toast-position-option" value="bottom-left">{t('settings.notifications.toastBottomLeft')}</option>
-              <option class="toast-position-option" value="bottom-center">{t('settings.notifications.toastBottomCenter')}</option>
-              <option class="toast-position-option" value="bottom-right">{t('settings.notifications.toastBottomRight')}</option>
-            </select>
-          </label>
-        </section>
-
-        <section class="settings-section">
-          <h3 class="section-heading">{t('settings.interaction.heading')}</h3>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={clickToEdit()}
-              onChange={(e) => {
-                setClickToEdit(e.currentTarget.checked);
-                sendSetting('clickToEdit', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.interaction.clickToEdit')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={autoSelectInput()}
-              onChange={(e) => {
-                setAutoSelectInput(e.currentTarget.checked);
-                sendSetting('autoSelectInput', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.interaction.autoFocusInput')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={timestampModelIcon()}
-              onChange={(e) => {
-                setTimestampModelIcon(e.currentTarget.checked);
-                sendSetting('timestampModelIcon', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.interaction.showModelInTimestamps')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={neverResizeAvatars()}
-              onChange={(e) => {
-                setNeverResizeAvatars(e.currentTarget.checked);
-                sendSetting('neverResizeAvatars', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.interaction.neverResizeAvatars')}
-          </label>
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              checked={reducedMotion()}
-              onChange={(e) => {
-                setReducedMotion(e.currentTarget.checked);
-                sendSetting('reducedMotion', e.currentTarget.checked);
-              }}
-              class="checkbox"
-            />
-            {t('settings.interaction.reducedMotion')}
-          </label>
+          <span class="hint-text">{t('settings.developer.unpackedCardsHint')}</span>
         </section>
 
         <div class="modal-actions">

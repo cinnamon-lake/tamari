@@ -23,8 +23,9 @@ export function DesignTokenInjector() {
       root.style.setProperty('--chat-max-width', '');
     }
 
-    // Avatar border radius
-    const avatarStyle = String(state.settings['avatarStyle'] ?? 'round');
+    // Avatar border radius ('circle' is a legacy value, treated as 'round')
+    const rawAvatarStyle = String(state.settings['avatarStyle'] ?? 'round');
+    const avatarStyle = rawAvatarStyle === 'circle' ? 'round' : rawAvatarStyle;
     const avatarRadiusMap: Record<string, string> = {
       round: '50%',
       rectangular: '0',

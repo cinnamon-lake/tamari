@@ -4,6 +4,12 @@
   gap: var(--space-md);
 }
 
+fieldset.settings-radio-group {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
 .settings-radio-label {
   font-size: var(--text-sm);
   color: var(--color-text-secondary);

@@ -131,10 +131,12 @@ test.describe('Settings — Behavior', () => {
     await expect(page.locator('.message-bubble').first()).toBeVisible();
     await app.ensureSetting('Load last chat on startup', false);
 
-    // charListGrid: the character list gets a grid class.
-    await app.ensureSetting('Grid view for character list', true);
+    // charListGrid: toggled from the sidebar toolbar (removed from Settings —
+    // the toolbar is the single control). The list gets a grid class.
+    const gridToggle = page.locator('button[title="Toggle grid view"]');
+    await gridToggle.click();
     await expect(page.locator('.character-list')).toHaveClass(/grid/);
-    await app.ensureSetting('Grid view for character list', false);
+    await gridToggle.click();
     await expect(page.locator('.character-list')).not.toHaveClass(/grid/);
   });
 

@@ -10,7 +10,7 @@ const MAX_RECENT = 8;
 export function HotswapBar() {
   const { t } = useI18n();
   const recentCharacters = createMemo(() => {
-    if (!state.settings['showHotswapBar']) return [];
+    if (state.settings['showHotswapBar'] === false) return [];
 
     const chatByCharacter = new Map<string, number>();
     for (const chat of state.chats) {

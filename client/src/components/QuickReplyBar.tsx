@@ -49,7 +49,7 @@ export function QuickReplyBar() {
   };
 
   return (
-    <Show when={state.settings['showQuickReplyBar'] !== false}>
+    <>
       <div class="quick-reply-bar">
         <For each={quickReplies()}>
           {(qr) => (
@@ -91,6 +91,6 @@ export function QuickReplyBar() {
           onClose={() => setShowEditor(false)}
         />
       </Show>
-    </Show>
+    </>
   );
 }

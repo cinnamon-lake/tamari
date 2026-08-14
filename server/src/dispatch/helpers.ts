@@ -48,3 +48,21 @@ export async function enrichChatMember(
   const char = await deps.characters.getById(member.characterId);
   return char ? toChatMemberSummary(member, char) : (member as ChatMemberSummary);
 }
+
+/**
+ * Top-level settings keys that must never reach a client. Server-side
+ * consumers (scripts, backend factory) read the full blob via the repository;
+ * the WS surface gets a filtered copy.
+ */
+export function isSecretSettingKey(key: string): boolean {
+  return key === 'apiKey' || key.endsWith('.apiKey') || key.endsWith('.api_key');
+}
+
+/** Copy a settings blob with secret values removed (for client-bound messages). */
+export function stripSecretSettings<T extends Record<string, unknown>>(blob: T): T {
+  const out = { ...blob };
+  for (const key of Object.keys(out)) {
+    if (isSecretSettingKey(key)) delete out[key];
+  }
+  return out;
+}

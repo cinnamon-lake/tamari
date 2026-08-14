@@ -75,14 +75,13 @@ The **Display** section of the Settings modal covers the chat view itself:
 | **Avatar Style** | `Round`, `Rectangular`, `Square`, or `Rounded`. Works by setting `--avatar-border-radius`, which you can also override directly. |
 | **Font Scale** | 0.80–1.50×. Scales the root font size; everything sized in `rem` follows. |
 | **Chat Width (rem)** | 30–70. Overrides `--chat-max-width`. |
-| **Shadow Width** | 0–2× shadow intensity (drives `--shadow-opacity`). |
-| **No shadows** | Flattens the UI by forcing shadow opacity to 0. |
-| **Hide chat avatars** | Removes avatars from chat messages. |
+| **Shadow Width** | 0–2× shadow intensity (drives `--shadow-opacity`). 0 flattens the UI entirely. |
+| **Hide chat avatars** | Removes avatars from chat messages (also greys out Avatar Style). |
 | **Hide chat names** | Removes sender names from chat messages. |
 | **Backdrop Blur** | 0–2× strength for the blur behind modals and overlays (drives `--backdrop-blur`). |
 | **Compact input area** | Tighter padding and smaller controls in the message input. |
 
-One related option lives under **Settings → Interaction**: **Reduced motion (disable animations)** kills animations and transitions app-wide (via a `.reduced-motion` class on `<html>`). tamari also honors your operating system's `prefers-reduced-motion` setting independently.
+The Display section also has **Reduced motion (disable animations)**, which kills animations and transitions app-wide (via a `.reduced-motion` class on `<html>`). tamari also honors your operating system's `prefers-reduced-motion` setting independently.
 
 ## Language
 

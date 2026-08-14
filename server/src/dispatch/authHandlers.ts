@@ -9,7 +9,7 @@ import {
   toBackendConfigSummary,
   toPromptListSummary,
 } from '../lib/summaries.js';
-import { getEnrichedChatMembers } from './helpers.js';
+import { getEnrichedChatMembers, stripSecretSettings } from './helpers.js';
 import type { DispatcherDeps, Handlers } from './types.js';
 
 export function buildAuthHandlers(deps: DispatcherDeps): Handlers<'auth'> {
@@ -38,7 +38,7 @@ export function buildAuthHandlers(deps: DispatcherDeps): Handlers<'auth'> {
       bus.sendSnapshot(client.id, {
         characters: (await characters.listSummaries()).items.map(toCharacterSummary),
         chats: (await chats.listChatSummaries({ limit: 1000 })).items.map(toChatSummary),
-        settings: allSettings,
+        settings: stripSecretSettings(allSettings),
         generation: activeGen
           ? {
               id: activeGen.id,

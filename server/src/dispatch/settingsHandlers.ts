@@ -4,7 +4,7 @@
  */
 
 import { getRAGConfig } from '../services/ragConfig.js';
-import { maybeRebroadcastGreetingSnapshot } from './helpers.js';
+import { maybeRebroadcastGreetingSnapshot, isSecretSettingKey, stripSecretSettings } from './helpers.js';
 import type { DispatcherDeps, Handlers } from './types.js';
 
 /**
@@ -45,8 +45,18 @@ export function buildSettingsHandlers(deps: DispatcherDeps): Handlers<'settings.
         bus.broadcast({ type: 'settings.changed', key: msg.key, value: msg.value }, client.id);
         return;
       }
-      await settings.setValue(msg.key, msg.value);
-      bus.broadcast({ type: 'settings.changed', key: msg.key, value: msg.value }, client.id);
+      try {
+        await settings.setValue(msg.key, msg.value);
+      } catch (err) {
+        // Schema validation failure (wrong-typed value for a known key) —
+        // tell the originating client instead of silently dropping the write.
+        const message = err instanceof Error ? err.message : String(err);
+        bus.sendTo(client.id, { type: 'error', message: `Invalid value for setting '${msg.key}': ${message}`, code: 'SETTINGS_INVALID' });
+        return;
+      }
+      // Never echo secret values back onto the wire.
+      const echoValue = isSecretSettingKey(msg.key) ? null : msg.value;
+      bus.broadcast({ type: 'settings.changed', key: msg.key, value: echoValue }, client.id);
       if (msg.key.startsWith('rag.')) {
         // Runtime RAG reconfigure — the service is built at boot with RAG
         // disabled by default, so `rag.*` edits must reach it live.
@@ -63,10 +73,11 @@ export function buildSettingsHandlers(deps: DispatcherDeps): Handlers<'settings.
     'settings.get': async (client, _msg) => {
       // NOTE: msg.keys is accepted by the wire schema but the reply always
       // carries the full parsed blob (settings.loaded's type requires it).
+      // Secret keys are stripped — server-side consumers read the repository.
       const blob = await settings.getMany();
       // Dedicated reply — a `snapshot` here would wholesale-replace the
       // client's sidebar lists with empty arrays.
-      bus.sendTo(client.id, { type: 'settings.loaded', settings: blob });
+      bus.sendTo(client.id, { type: 'settings.loaded', settings: stripSecretSettings(blob) });
     },
   };
 }

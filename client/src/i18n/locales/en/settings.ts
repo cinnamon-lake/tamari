@@ -11,7 +11,6 @@ export const settings = {
     label: 'Interface language',
   },
   behavior: {
-    heading: 'Behavior',
     sendOnEnter: 'Send on Enter',
     sendOnEnterAuto: 'Auto (disabled on touch devices)',
     sendOnEnterEnabled: 'Enabled',
@@ -28,7 +27,9 @@ export const settings = {
     showHiddenMessages: 'Show hidden messages',
     autoScroll: 'Auto-scroll to bottom on new messages',
     disableGroupTrimming: 'Disable group message trimming',
-    charListGrid: 'Grid view for character list',
+  },
+  chatBehavior: {
+    heading: 'Chat behavior',
   },
   postProcessing: {
     heading: 'Post-processing',
@@ -40,8 +41,8 @@ export const settings = {
     singleLine: 'Single-line mode (trim to first newline)',
     trimSentences: 'Trim to end of last complete sentence',
     autoFixMarkdown: 'Auto-fix generated markdown (close unclosed backticks, code blocks)',
-    disabledByAppendOnly: 'Overridden while append-only prompt layout is on (Settings → Generation).',
-    showTimer: 'Show generation timer per message',
+    disabledByAppendOnly:
+      'Locked while append-only prompt layout is on (Settings → Generation), together with: auto-fix markdown, stopping-string macros, prompt-side regex, memory summaries, and non-constant World Info.',
   },
   generation: {
     heading: 'Generation',
@@ -49,6 +50,9 @@ export const settings = {
     addStopString: 'Add stop string',
     resolveStoppingMacros: 'Resolve macros in custom stopping strings',
     stripExamples: 'Strip dialogue examples from prompt',
+    impersonationPrompt: 'Impersonation prompt',
+    impersonationPromptHint:
+      'System instruction used when generating a draft message as you (the Impersonate button). Leave blank for the built-in default.',
     chatMessageLoadLimit: 'Chat messages per page',
     chatMessageLoadLimitHint:
       'How many messages are rendered when you open a chat, and how many more load each time you scroll up. Display only — never affects what the model sees.',
@@ -63,12 +67,15 @@ export const settings = {
       'Auto computes optimal cache depth from injections. Manual uses the depth below.',
     appendOnlyLayout: 'Append-only prompt layout',
     appendOnlyLayoutHint:
-      'Snapshot-cache friendly: every turn is a strict byte-prefix of the next. Disables depth injections, non-constant World Info, macros, prompt/output regex, and output post-processing; reasoning is always re-sent verbatim.',
+      'Snapshot-cache friendly: every turn is a strict byte-prefix of the next. Locks: whitespace handling, output post-processing, storage/prompt macros, stop-string macros, prompt/output regex, depth injections, non-constant World Info, and memory summaries; reasoning is always re-sent verbatim.',
     manualCacheDepth: 'Manual Cache Depth',
     manualCacheDepthHint: 'Role-transition count at which to place the cache breakpoint',
     cacheTtl: 'Cache TTL',
     cacheTtlPlaceholder: 'e.g. 5m, 1h',
-    cacheTtlHint: 'TTL for Claude prompt caching, e.g. 5m, 1h. Leave blank for provider default.',
+    cacheTtlHint: 'TTL for Claude prompt caching, e.g. 5m, 1h. Leave blank for provider default. Only applies to Claude/OpenRouter backends while caching is on.',
+    mediaVerbose: 'Verbose media mode',
+    mediaVerboseHint:
+      'Replace media attachments with text placeholders when sending to the LLM',
   },
   developer: {
     heading: 'Developer',
@@ -108,34 +115,34 @@ export const settings = {
     fontScale: 'Font Scale',
     chatWidth: 'Chat Width (rem)',
     shadowWidth: 'Shadow Width',
-    noShadows: 'No shadows',
+    shadowsOff: 'Off',
     hideAvatars: 'Hide chat avatars',
     hideNames: 'Hide chat names',
     swipeNumbersAll: 'Show swipe numbers on all messages',
     showMessageIds: 'Show message IDs',
+    showModelInTimestamps: 'Show model name in message timestamps',
+    showTimer: 'Show generation timer per message',
     encodeTags: 'Show raw message text (encode tags)',
     backdropBlur: 'Backdrop Blur',
     compactInput: 'Compact input area',
+    reducedMotion: 'Reduced motion (disable animations)',
     mediaMode: 'Media display mode',
     mediaModeList: 'List',
     mediaModeGrid: 'Grid',
-    mediaVerbose: 'Verbose media mode',
-    mediaVerboseHint:
-      'Replace media attachments with text placeholders when sending to the LLM',
+    showHotswapBar: 'Show recently-used character bar',
+    showHotswapBarHint:
+      'Displays a quick-switch bar of recently used characters above the chat',
+    fuzzySearch: 'Fuzzy character search',
+    fuzzySearchHint: 'Use Fuse.js fuzzy matching in the character list search bar',
+  },
+  security: {
+    heading: 'Security & content',
     strictHtml: 'Strict HTML sanitization',
     strictHtmlHint:
       'Blocks images, tables, code blocks, and other rich formatting in messages',
     allowExternalMedia: 'Allow external images',
     allowExternalMediaHint:
       'Lets chat messages load images from external URLs by relaxing the CSP img-src directive',
-    showHotswapBar: 'Show recently-used character bar',
-    showHotswapBarHint:
-      'Displays a quick-switch bar of recently used characters above the chat',
-  },
-  search: {
-    heading: 'Search',
-    fuzzy: 'Fuzzy character search',
-    fuzzyHint: 'Use Fuse.js fuzzy matching in the character list search bar',
   },
   theme: {
     heading: 'Theme',
@@ -188,6 +195,7 @@ export const settings = {
     findPlaceholder: 'e.g. /\\*{2,}/g',
     replaceField: 'Replace With',
     replacePlaceholder: 'e.g. *',
+    replaceTypeLegend: 'Replace type',
     replaceTypeText: 'Text',
     replaceTypeLua: 'Lua',
     luaReplaceField: 'Replace With (Lua)',
@@ -196,6 +204,8 @@ export const settings = {
     luaNoPreview: 'Preview is unavailable for Lua replacements in the UI (runs server-side only).',
     luaBadge: 'Lua',
     disabledCheckbox: 'Disabled',
+    appendOnlyPromptNote:
+      'Prompt-side rules are locked off while append-only prompt layout is on (Settings → Generation).',
     testInput: 'Test Input',
     testInputPlaceholder: 'Type text to test...',
     testOutput: 'Test Output',
@@ -230,11 +240,9 @@ export const settings = {
     toastBottomRight: 'Bottom right',
   },
   interaction: {
-    heading: 'Interaction',
+    heading: 'Input & Interaction',
     clickToEdit: 'Click message to edit',
     autoFocusInput: 'Auto-focus input when switching chats',
-    showModelInTimestamps: 'Show model name in message timestamps',
     neverResizeAvatars: 'Never resize avatars (skip crop dialog)',
-    reducedMotion: 'Reduced motion (disable animations)',
   },
 };

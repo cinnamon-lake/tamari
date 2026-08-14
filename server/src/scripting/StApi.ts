@@ -19,6 +19,7 @@ import type { IWorldInfoRepository } from '../repos/WorldInfoRepository.js';
 import type { ScriptContext } from './ScriptContext.js';
 import { performSwipe } from '../lib/swipe.js';
 import { toChatSummary } from '../lib/summaries.js';
+import { isSecretSettingKey } from '../dispatch/helpers.js';
 import { tokenCounterProvider } from '../tokenizers/TokenCounter.js';
 import { getChatSnapshotMessages } from '../lib/swipeInfo.js';
 import { getMessageText } from '@tamari/types';
@@ -758,7 +759,12 @@ export function createStApi(ctx: ScriptContext, deps: StApiDeps): StApi {
     set_setting: async (key: string, value: unknown) => {
       checkAbort();
       await settings.setValue(String(key), value);
-      bus.broadcast({ type: 'settings.changed', key: String(key), value });
+      // Never echo secret values back onto the wire.
+      bus.broadcast({
+        type: 'settings.changed',
+        key: String(key),
+        value: isSecretSettingKey(String(key)) ? null : value,
+      });
     },
 
     get_settings: async () => {

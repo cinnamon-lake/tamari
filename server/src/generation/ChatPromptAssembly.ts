@@ -28,6 +28,7 @@ import type { MemoryService } from '../services/MemoryService.js';
 import type { FileStorage } from '../services/FileStorage.js';
 import { MacroResolver } from '../pipeline/MacroResolver.js';
 import { mergeRegexRules, getGlobalRegexRules } from '../services/characterRegex.js';
+import { resolveEffectiveSettings } from './appendOnlyLocks.js';
 import { getMessageText } from '@tamari/types';
 import type {
   Message,
@@ -218,6 +219,10 @@ export class ChatPromptAssembly {
     const { chatId, chat, character } = args;
     const { allSettings, backendConfig, promptList, backendSettings } = args.resolved;
 
+    // Effective settings with append-only locks applied (appendOnlyLocks.ts) —
+    // every byte-mutating feature below reads from this, never the raw flag.
+    const eff = resolveEffectiveSettings(allSettings);
+
     const persona = chat?.personaId ? await personas.getById(chat.personaId) : null;
     const authorsNote = this.extractAuthorsNote(chat?.metadata);
 
@@ -251,8 +256,10 @@ export class ChatPromptAssembly {
       }
     }
 
-    // Update rolling memory summary before building prompt.
-    const memorySummary = await this.getMemorySummary(chatId);
+    // Update rolling memory summary before building prompt. Locked off under
+    // append-only: a summary prepended before history would mutate
+    // already-sent bytes on every update interval.
+    const memorySummary = eff.memorySummaryEnabled ? await this.getMemorySummary(chatId) : null;
 
     // Load the current variable snapshot from the last message in the history
     const lastHistoryMsg = chatHistory[chatHistory.length - 1];
@@ -276,10 +283,10 @@ export class ChatPromptAssembly {
     }
 
     const regexRules = this.extractRegexRules(allSettings, character);
-    // Append-only: reasoning always re-sent verbatim (the provider's snapshot
-    // includes it); stop strings stay literal (macros are off wholesale).
-    const appendOnly = allSettings.appendOnlyPromptLayout;
-    const reasoningAddToPrompts = allSettings.reasoningAddToPrompts || appendOnly;
+    // Append-only (via the lock resolver): reasoning always re-sent verbatim
+    // (the provider's snapshot includes it); stop strings stay literal.
+    const appendOnly = eff.appendOnly;
+    const reasoningAddToPrompts = eff.reasoningAddToPrompts;
 
     const macroCtx = {
       userName: persona?.name || allSettings.userName || 'User',
@@ -294,7 +301,7 @@ export class ChatPromptAssembly {
     const stopStrings = this.resolveStopStrings(
       backendConfig?.stopStrings,
       allSettings.customStoppingStrings,
-      allSettings.customStoppingStringsMacro && !appendOnly,
+      eff.customStoppingStringsMacro,
       macroCtx,
     );
 
@@ -362,7 +369,7 @@ export class ChatPromptAssembly {
       caching: {
         mode: allSettings.claudeCacheMode,
         manualDepth: allSettings.claudeCacheDepth,
-        appendOnly: allSettings.appendOnlyPromptLayout,
+        appendOnly,
       },
     });
 

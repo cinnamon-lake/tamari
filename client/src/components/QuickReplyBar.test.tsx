@@ -9,7 +9,6 @@ import type { QuickReply } from '@tamari/types';
 describe('QuickReplyBar', () => {
   beforeEach(() => {
     setActiveChatId('chat-1');
-    setState('settings', { showQuickReplyBar: true });
     setState('activeChat', {
       id: 'chat-1',
       characterId: 'char-1',
@@ -26,10 +25,9 @@ describe('QuickReplyBar', () => {
     setState('quickReplies', []);
   });
 
-  it('does not render when disabled in settings', () => {
-    setState('settings', { showQuickReplyBar: false });
+  it('renders the bar container', () => {
     render(() => <QuickReplyBar />);
-    expect(document.querySelector('.quick-reply-bar')).not.toBeInTheDocument();
+    expect(document.querySelector('.quick-reply-bar')).toBeInTheDocument();
   });
 
   it('renders quick reply buttons', () => {
