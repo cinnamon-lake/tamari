@@ -31,6 +31,7 @@ import type { RAGService } from '../RAGService.js';
 import { createCharacter, updateCharacter } from '../characterMutations.js';
 import { setCharacterAvatarFromBuffer } from '../characterAvatar.js';
 import { validateVfsPath } from '../../scripting/LuaVfs.js';
+import { validateLuaSource as validateLuaSourceInSandbox } from '../../scripting/validateLuaSource.js';
 import { gameLibFiles } from './gameLib.js';
 import { getCharacterRegexRules, mergeRegexRules, getGlobalRegexRules, CHARACTER_REGEX_EXTENSION_KEY } from '../characterRegex.js';
 import { applyRules, filterRulesByRole, parseRegexString } from '../RegexEngine.js';
@@ -1150,30 +1151,9 @@ export class CharacterWorkbench {
     return { content: JSON.stringify(next) };
   }
 
-  /** Load-check Lua in a fresh sandbox WITH the card's module map: the chunk
-      must parse, requires against EXISTING modules must resolve and load, and
-      (for main.lua) generate() must be defined. A "module not found" error is
-      tolerated — main-before-modules is a legal authoring order; the dry-run
-      (test_backend_logic) validates the full set. Returns error string | null. */
-  private async validateLuaSource(source: string, files: Record<string, string>, needsGenerate: boolean): Promise<string | null> {
-    const attempt = async (withMap: boolean, stubRequire: boolean): Promise<string | null> => {
-      const { lua, cleanup } = await this.deps.luaRuntime.createState(withMap ? { vfsFiles: files } : {}, 10_000);
-      try {
-        if (stubRequire) lua.global.set('require', () => ({}));
-        await lua.doString(source);
-        if (needsGenerate && typeof lua.global.get('generate') !== 'function') {
-          return 'script must define generate(prompt, ctx)';
-        }
-        return null;
-      } catch (err) {
-        return err instanceof Error ? err.message : String(err);
-      } finally {
-        cleanup();
-      }
-    };
-    const err = await attempt(true, false);
-    if (err === null || !err.includes('module not found:')) return err;
-    return attempt(false, true);
+  /** Load-check Lua via the shared validator (scripting/validateLuaSource.ts). */
+  private validateLuaSource(source: string, files: Record<string, string>, needsGenerate: boolean): Promise<string | null> {
+    return validateLuaSourceInSandbox(this.deps.luaRuntime, source, files, needsGenerate);
   }
 
   /** Load-check a backend script: must load and define generate(). */

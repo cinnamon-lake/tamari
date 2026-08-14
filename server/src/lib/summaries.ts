@@ -23,7 +23,7 @@ function fileUrl(filePath: string | null): string | null {
 }
 
 export function toCharacterSummary(
-  char: Pick<Character, 'id' | 'name' | 'tags' | 'avatarPath' | 'avatarThumbnailPath' | 'createdAt' | 'updatedAt'>,
+  char: Pick<Character, 'id' | 'name' | 'tags' | 'avatarPath' | 'avatarThumbnailPath' | 'external' | 'createdAt' | 'updatedAt'>,
 ): CharacterSummary {
   return {
     id: char.id,
@@ -32,6 +32,7 @@ export function toCharacterSummary(
     avatarUrl: fileUrl(char.avatarPath),
     thumbnailUrl: fileUrl(char.avatarThumbnailPath),
     exportUrl: `/api/characters/${char.id}/export?format=v3`,
+    external: char.external,
     createdAt: char.createdAt,
     updatedAt: char.updatedAt,
   };

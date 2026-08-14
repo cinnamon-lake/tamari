@@ -23,6 +23,13 @@
 
 import { isNewSegment, stripJsonExt } from '../pathUtils.js';
 import {
+  FIELD_FILE_SPECS,
+  LOREBOOK_FIELDS,
+  META_FIELDS,
+  REGEX_FIELDS,
+  TEXT_FIELDS,
+} from '../../../cardFormat/fields.js';
+import {
   asArray,
   asString,
   callProvider,
@@ -48,73 +55,9 @@ import {
   type RouteCall,
 } from '../router.js';
 
-/** [file name, camelCase card field] — the writable text fields of a card. */
-const TEXT_FIELDS: ReadonlyArray<readonly [string, string]> = [
-  ['description', 'description'],
-  ['personality', 'personality'],
-  ['scenario', 'scenario'],
-  ['first_mes', 'firstMes'],
-  ['mes_example', 'mesExample'],
-  ['system_prompt', 'systemPrompt'],
-  ['post_history_instructions', 'postHistoryInstructions'],
-  ['creator_notes', 'creatorNotes'],
-  ['nickname', 'nickname'],
-];
+/** [file name, camelCase card field] tables live in services/cardFormat/fields.ts (imported above). */
 
 const SUBCOLLECTIONS = new Set(['lorebook', 'greetings', 'regex', 'assets', 'modules']);
-
-/**
- * meta.json's writable fields, also readable/writable one at a time as
- * meta.json/<file>. Read-only keys (avatarUrl, thumbnailUrl, worldInfoId)
- * stay whole-meta.json-only.
- */
-const META_FIELDS: readonly FieldSpec[] = [
-  { file: 'name', key: 'name', type: 'string' },
-  { file: 'tags', key: 'tags', type: 'json' },
-  { file: 'alternate_greetings', key: 'alternateGreetings', type: 'json' },
-];
-
-/** Regex rule fields exposed as regex/<ruleId>.json/<file> (patch keys of regex_update). */
-const REGEX_FIELDS: readonly FieldSpec[] = [
-  { file: 'name', key: 'name', type: 'string' },
-  { file: 'find_regex', key: 'findRegex', type: 'string' },
-  { file: 'replace_string', key: 'replaceString', type: 'string' },
-  { file: 'replace_lua', key: 'replaceLua', type: 'string' },
-  { file: 'disabled', key: 'disabled', type: 'json' },
-  { file: 'user_input', key: 'userInput', type: 'json' },
-  { file: 'ai_output', key: 'aiOutput', type: 'json' },
-  { file: 'prompt', key: 'prompt', type: 'json' },
-  { file: 'display', key: 'display', type: 'json' },
-];
-
-/** Lorebook entry fields exposed as lorebook/<entryId>.json/<file> (patch keys of lorebook_entry_update). */
-const LOREBOOK_FIELDS: readonly FieldSpec[] = [
-  { file: 'keys', key: 'keys', type: 'json' },
-  { file: 'content', key: 'content', type: 'string' },
-  { file: 'comment', key: 'comment', type: 'string' },
-  { file: 'order', key: 'order', type: 'json' },
-  { file: 'position', key: 'position', type: 'json' },
-  { file: 'depth', key: 'depth', type: 'json' },
-  { file: 'role', key: 'role', type: 'json' },
-  { file: 'probability', key: 'probability', type: 'json' },
-  { file: 'constant', key: 'constant', type: 'json' },
-  { file: 'selective', key: 'selective', type: 'json' },
-  { file: 'secondary_keys', key: 'secondaryKeys', type: 'json' },
-  { file: 'add_memo', key: 'addMemo', type: 'json' },
-  { file: 'disable', key: 'disable', type: 'json' },
-  { file: 'regex', key: 'regex', type: 'json' },
-  { file: 'recursive', key: 'recursive', type: 'json' },
-  { file: 'retrieval_mode', key: 'retrievalMode', type: 'json' },
-  { file: 'sticky', key: 'sticky', type: 'json' },
-  { file: 'cooldown', key: 'cooldown', type: 'json' },
-  { file: 'delay', key: 'delay', type: 'json' },
-];
-
-/** Sub-collections whose <id>.json entries expand into per-field files. */
-const FIELD_FILE_SPECS: Record<string, readonly FieldSpec[]> = {
-  lorebook: LOREBOOK_FIELDS,
-  regex: REGEX_FIELDS,
-};
 
 /** Risu module sections addressable as <moduleId>.json/<section>. */
 const MODULE_SECTIONS = new Set(['info', 'triggers', 'regex', 'lorebook', 'assets']);

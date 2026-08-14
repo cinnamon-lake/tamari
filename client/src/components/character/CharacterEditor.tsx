@@ -56,6 +56,19 @@ export function CharacterEditor(props: CharacterEditorProps) {
   const td = (key: string): string => t(key) as string;
   const char = props.character;
 
+  // Unpacked (on-disk) cards are read-only: disk is the source of truth and
+  // the server rejects all mutations — mirror that here by blocking every
+  // local edit path (save, autosave, delete, avatar upload, field inputs).
+  const isExternal = () => props.character.external === true;
+  const unpackedSlug = () =>
+    props.character.id.startsWith('unpacked/')
+      ? props.character.id.slice('unpacked/'.length)
+      : props.character.id;
+  const unpackedErrors = (): string[] => {
+    const raw = props.character.extensions['unpackedErrors'];
+    return Array.isArray(raw) ? raw.filter((e): e is string => typeof e === 'string') : [];
+  };
+
   const close = () => {
     restoreFocus();
     props.onClose();
@@ -202,6 +215,7 @@ export function CharacterEditor(props: CharacterEditorProps) {
   };
 
   const doSave = (closeAfter = false) => {
+    if (isExternal()) return;
     if (!name().trim()) return;
 
     bus.send({
@@ -216,6 +230,7 @@ export function CharacterEditor(props: CharacterEditorProps) {
   };
 
   const scheduleAutoSave = () => {
+    if (isExternal()) return;
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(() => doSave(false), AUTOSAVE_DEBOUNCE_MS);
   };
@@ -241,6 +256,7 @@ export function CharacterEditor(props: CharacterEditorProps) {
   };
 
   const deleteCharacter = async () => {
+    if (isExternal()) return;
     if (
       !(await confirmPopup(t('character.deleteConfirm', { name: char.name })))
     )
@@ -253,6 +269,7 @@ export function CharacterEditor(props: CharacterEditorProps) {
   const [cropImageUrl, setCropImageUrl] = createSignal<string>('');
 
   const handleAvatarUpload = (e: Event) => {
+    if (isExternal()) return;
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -268,6 +285,7 @@ export function CharacterEditor(props: CharacterEditorProps) {
   };
 
   const uploadAvatarFile = async (file: File) => {
+    if (isExternal()) return;
     const formData = new FormData();
     formData.append('avatar', file);
 
@@ -312,6 +330,20 @@ export function CharacterEditor(props: CharacterEditorProps) {
           </button>
         </div>
 
+        <Show when={isExternal()}>
+          <div class="external-banner" role="status">
+            <i class="bi bi-hdd" />
+            <div class="external-banner-body">
+              <span>{t('character.externalBanner', { slug: unpackedSlug() })}</span>
+              <Show when={unpackedErrors().length > 0}>
+                <ul class="external-banner-errors">
+                  <For each={unpackedErrors()}>{(err) => <li>{err}</li>}</For>
+                </ul>
+              </Show>
+            </div>
+          </div>
+        </Show>
+
         <div class="editor-tabs" role="tablist" aria-label={t('character.modalAriaLabel')}>
           <For each={EDITOR_TABS}>
             {(tab) => (
@@ -331,7 +363,7 @@ export function CharacterEditor(props: CharacterEditorProps) {
 
         {/* ---- Content: identity + prompt fields ---- */}
         <Show when={activeTab() === 'content'}>
-          <div class="editor-tab-panel" role="tabpanel">
+          <div class="editor-tab-panel" role="tabpanel"><fieldset class="editor-fieldset" disabled={isExternal()}>
             <div class="avatar-upload">
               <SafeImage
                 class="editor-avatar"
@@ -455,12 +487,12 @@ export function CharacterEditor(props: CharacterEditorProps) {
                 </select>
               </Show>
             </div>
-          </div>
+          </fieldset></div>
         </Show>
 
         {/* ---- Greetings: first-message variants ---- */}
         <Show when={activeTab() === 'greetings'}>
-          <div class="editor-tab-panel" role="tabpanel">
+          <div class="editor-tab-panel" role="tabpanel"><fieldset class="editor-fieldset" disabled={isExternal()}>
             <GreetingsEditor
               label={t('character.alternateGreetingsLabel')}
               items={alternateGreetings()}
@@ -477,12 +509,12 @@ export function CharacterEditor(props: CharacterEditorProps) {
                 scheduleAutoSave();
               }}
             />
-          </div>
+          </fieldset></div>
         </Show>
 
         {/* ---- Logic: regex, backend Lua, imported modules ---- */}
         <Show when={activeTab() === 'logic'}>
-          <div class="editor-tab-panel" role="tabpanel">
+          <div class="editor-tab-panel" role="tabpanel"><fieldset class="editor-fieldset" disabled={isExternal()}>
             <div class="character-regex-section">
               <h3 class="section-heading">{t('character.regexHeading')}</h3>
               <p class="text-sm text-muted">{t('character.regexDescription')}</p>
@@ -511,12 +543,12 @@ export function CharacterEditor(props: CharacterEditorProps) {
             {/* Imported RisuAI (.risum) modules — read-only porting reference.
                 Renders nothing when the character has no modules. */}
             <RisuModuleViewer characterId={char.id} />
-          </div>
+          </fieldset></div>
         </Show>
 
         {/* ---- Advanced: metadata + prompt overrides + assets ---- */}
         <Show when={activeTab() === 'advanced'}>
-          <div class="editor-tab-panel" role="tabpanel">
+          <div class="editor-tab-panel" role="tabpanel"><fieldset class="editor-fieldset" disabled={isExternal()}>
             <PromptTextarea label={t('character.creatorNotesLabel')} value={creatorNotes()} onInput={(v) => { setCreatorNotes(v); scheduleAutoSave(); }} />
             <PromptTextarea label={t('character.systemPromptLabel')} value={systemPrompt()} onInput={(v) => { setSystemPrompt(v); scheduleAutoSave(); }} rows={4} />
             <PromptTextarea label={t('character.postHistoryLabel')} value={postHistoryInstructions()} onInput={(v) => { setPostHistoryInstructions(v); scheduleAutoSave(); }} rows={4} />
@@ -594,13 +626,15 @@ export function CharacterEditor(props: CharacterEditorProps) {
                 </div>
               </Show>
             </Show>
-          </div>
+          </fieldset></div>
         </Show>
 
         <div class="modal-actions">
-          <button class="btn btn-danger danger-btn" onClick={deleteCharacter}>
-            {t('common.delete')}
-          </button>
+          <Show when={!isExternal()}>
+            <button class="btn btn-danger danger-btn" onClick={deleteCharacter}>
+              {t('common.delete')}
+            </button>
+          </Show>
           <div class="modal-actions-spacer" />
           <Show when={savedIndicator()}>
             <span class="save-indicator">{t('character.saved')}</span>

@@ -56,8 +56,10 @@ import { isBackendLogicPath } from './routes/characters.js';
 export function registerWorkbenchTemplate(
   registry: { registerTemplate(template: ToolTemplate): void },
   deps: WorkbenchProviders,
-): void {
-  registry.registerTemplate(new WorkbenchTemplate(deps));
+): WorkbenchTemplate {
+  const template = new WorkbenchTemplate(deps);
+  registry.registerTemplate(template);
+  return template;
 }
 
 /** ~400 lines per read, with a hint to page via offset. */
@@ -146,6 +148,14 @@ const RUN_VERBS: Record<string, RunVerb> = {
   test_regex: {
     summary: '{characterId?, text, role?} — preview merged regex rules (global + character-scoped) against sample text',
     run: (p, a, c) => p.characterWorkbench.execute('regex_test', a, c),
+  },
+  test_card: {
+    summary:
+      '{characterId?|folderPath?, turns: string[], keepChat?, timeoutMs?} — headless chat simulation: scripted user turns against the ACTIVE backend config; returns transcript + generation ids (prompts at /generations/<id>/prompt.json)',
+    run: (p, a) =>
+      p.cardTest !== undefined
+        ? p.cardTest.run(a)
+        : Promise.resolve({ content: 'Error: test_card is not available in this context' }),
   },
   clone_character: {
     summary: '{sourceCharacterId, name?} — deep-copy a character card (fields, lorebook, regex, modules, assets, avatar)',

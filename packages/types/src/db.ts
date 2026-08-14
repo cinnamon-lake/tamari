@@ -56,6 +56,8 @@ export interface Character {
   extensions: Record<string, unknown>;
   createDate: string;
   worldInfoId: string | null;
+  /** True for unpacked (on-disk) cards — read-only overlays; edit the folder, not the app. */
+  external?: boolean;
   createdAt: number;
   updatedAt: number;
   /** Populated at serve time from character_assets table. */
@@ -106,6 +108,8 @@ export interface CharacterSummary {
   thumbnailUrl?: string | null;
   /** Canonical V3 card export URL computed by the server. */
   exportUrl?: string | null;
+  /** True for unpacked (on-disk) cards — shown with a disk badge in list views. */
+  external?: boolean;
   createdAt: number;
   updatedAt: number;
 }

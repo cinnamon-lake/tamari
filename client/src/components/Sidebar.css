@@ -235,6 +235,12 @@
   box-shadow: var(--shadow-focus-soft);
 }
 
+.character-external-badge {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
 .character-item.selected {
   background: var(--color-accent-soft);
   box-shadow: var(--shadow-focus-inset);

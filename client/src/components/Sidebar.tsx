@@ -509,6 +509,9 @@ export function Sidebar() {
                       loading="lazy"
                     />
                     <span class="character-name">{char.name}</span>
+                    <Show when={char.external}>
+                      <i class="bi bi-hdd character-external-badge" title={t('sidebar.externalBadge')} aria-label={t('sidebar.externalBadge')} />
+                    </Show>
                   </div>
                   <div class="character-actions">
                     <button

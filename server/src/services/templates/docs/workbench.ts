@@ -78,6 +78,7 @@ grep {"pattern": "generate", "path": "/characters/abc123/"}
 For both dry-run verbs: \`state\` takes a JSON string OR a plain object (serialized for you — e.g. paste a previous run's \`stateOut\` either way), and \`delegateResponse\` takes plain text, \`{"text": "..."}\`, or \`{"error": "..."}\` to rehearse delegation failures.
 | \`test_luatool\` | \`{id?|code?, sandbox?, toolName, args?, config?}\` — run a tool from a stored template or ad-hoc code |
 | \`test_regex\` | \`{characterId?, text, role?}\` — preview merged regex rules (global + character) against sample text |
+| \`test_card\` | \`{characterId?|folderPath?, turns: string[], keepChat?, timeoutMs?}\` — headless chat simulation: creates a temporary chat, sends each scripted user turn against the ACTIVE backend config, returns the transcript + generation ids (debugPrompts is enabled for the run, so full prompts land at \`/generations/<id>/prompt.json\`). The temp chat is deleted unless \`keepChat\`. Deterministic runs: point the active config at a mock LLM first |
 | \`clone_character\` | \`{sourceCharacterId, name?}\` — deep-copy a card (fields, lorebook, regex, modules, assets, avatar) |
 | \`set_avatar\` | \`{characterId, attachmentId?|sourceCharacterId?}\` — avatar from an attachment image or another card |
 | \`copy_assets\` | \`{characterId, sourceCharacterId, assetId?}\` — omit assetId to copy all |

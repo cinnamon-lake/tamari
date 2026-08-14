@@ -32,6 +32,8 @@ import {
   CustomBackendRepository,
   ScriptBlobRepository,
 } from '../repos/index.js';
+import type { ICharacterRepository } from '../repos/CharacterRepository.js';
+import type { IWorldInfoRepository } from '../repos/WorldInfoRepository.js';
 import { GenerationService } from '../services/GenerationService.js';
 import { GenerationRunner } from '../generation/GenerationRunner.js';
 import { ChatPromptAssembly } from '../generation/ChatPromptAssembly.js';
@@ -62,6 +64,39 @@ export interface TestClient {
   messages: ServerMessage[];
 }
 
+/**
+ * Inner repos + infrastructure handed to the `wrapRepos` hook, so tests can
+ * build decorators that need them (e.g. UnpackedCardService + the read-through
+ * repository wrappers, which must hold the INNER repos while everything else
+ * gets the wrappers).
+ */
+export interface WrapReposContext {
+  bus: EventBus;
+  storage: FileStorage;
+  /** The harness tmp dir — doubles as the server data dir. */
+  dataDir: string;
+  characters: CharacterRepository;
+  characterAssets: CharacterAssetRepository;
+  quickReplies: QuickReplyRepository;
+  worldInfo: WorldInfoRepository;
+  settings: SettingsRepository;
+}
+
+export interface TestHarnessOpts {
+  backendFactory?: BackendAdapterFactory;
+  toolRegistry?: ToolRegistry;
+  /**
+   * Optional hook to decorate the inner repos before any service is built.
+   * Services (GenerationService, ChatPromptAssembly, …) capture repo references
+   * at construction time, so wrappers must be installed here — overriding
+   * `deps.characters` after construction would not reach them.
+   */
+  wrapRepos?: (ctx: WrapReposContext) => {
+    characters?: ICharacterRepository;
+    worldInfo?: IWorldInfoRepository;
+  };
+}
+
 export class TestHarness {
   bus: EventBus;
   db: Client;
@@ -77,7 +112,7 @@ export class TestHarness {
   private tmpDir: string;
   private clients: TestClient[] = [];
 
-  constructor(opts?: { backendFactory?: BackendAdapterFactory; toolRegistry?: ToolRegistry }) {
+  constructor(opts?: TestHarnessOpts) {
     this.tmpDir = mkdtempSync(join(tmpdir(), 'st-test-'));
     this.db = createClient({ url: `file:${join(this.tmpDir, 'test.db')}` });
     this.bus = new EventBus();
@@ -102,6 +137,21 @@ export class TestHarness {
     const scriptBlobs = new ScriptBlobRepository(this.db);
     const luaRuntime = new LuaRuntime();
 
+    // Give the wrapRepos hook a chance to decorate the inner repos (e.g. the
+    // unpacked-card read-through wrappers) BEFORE services capture them below.
+    const wrappedRepos = opts?.wrapRepos?.({
+      bus: this.bus,
+      storage,
+      dataDir: this.tmpDir,
+      characters,
+      characterAssets,
+      quickReplies,
+      worldInfo,
+      settings,
+    });
+    const charactersRepo: ICharacterRepository = wrappedRepos?.characters ?? characters;
+    const worldInfoRepo: IWorldInfoRepository = wrappedRepos?.worldInfo ?? worldInfo;
+
     const worldInfoInjector = new WorldInfoInjector();
     const tokenCounter = new TokenCounter();
 
@@ -119,7 +169,7 @@ export class TestHarness {
     const chatBroadcast = new ChatBroadcastService({
       bus: this.bus,
       chats,
-      characters,
+      characters: charactersRepo,
       personas,
       settings,
       characterAssets,
@@ -133,7 +183,7 @@ export class TestHarness {
       attachments,
       storage,
       promptBuilder: new PromptBuilder(worldInfoInjector),
-      worldInfo,
+      worldInfo: worldInfoRepo,
       characterAssets,
       ragService,
       toolRegistry: opts?.toolRegistry,
@@ -159,7 +209,7 @@ export class TestHarness {
     const generationService = new GenerationService({
       bus: this.bus,
       chats,
-      characters,
+      characters: charactersRepo,
       settings,
       personas,
       backendConfigs,
@@ -176,12 +226,12 @@ export class TestHarness {
       bus: this.bus,
       generationService,
       chats,
-      characters,
+      characters: charactersRepo,
       personas,
       settings,
       backendConfigs,
       promptLists,
-      worldInfo,
+      worldInfo: worldInfoRepo,
       quickReplies,
       chatMembers,
       extensionData: this.extensionData,
@@ -202,11 +252,11 @@ export class TestHarness {
 
     this.deps = {
       bus: this.bus,
-      characters,
+      characters: charactersRepo,
       characterAssets,
       chats,
       settings,
-      worldInfo,
+      worldInfo: worldInfoRepo,
       personas,
       backendConfigs,
       promptLists,

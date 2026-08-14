@@ -25,6 +25,25 @@ import { quickRepliesRoute } from './routes/quickReplies.js';
 import { luaToolsRoute } from './routes/luaTools.js';
 import { generationsRoute } from './routes/generations.js';
 import type { Generation } from '@tamari/types';
+import { isRecord, pretty } from '../../cardFormat/fields.js';
+
+// The pure field-format helpers and JSON helpers live in services/cardFormat
+// (shared with the unpacked-card folder parser); re-exported here so the
+// routes keep a single import surface.
+export {
+  asArray,
+  asString,
+  err,
+  fieldEntries,
+  fieldSpec,
+  isRecord,
+  parseFieldContent,
+  parseJsonBody,
+  parseJsonObjectBody,
+  pretty,
+  readField,
+  type FieldSpec,
+} from '../../cardFormat/fields.js';
 
 /** The five internal workbench providers the vfs dispatches to. */
 export interface WorkbenchProviders {
@@ -35,6 +54,8 @@ export interface WorkbenchProviders {
   luaToolWorkbench: LuaToolWorkbench;
   /** Generation records for the read-only /generations/ debug-trace route. */
   generations?: { getById(id: string): Promise<Generation | undefined> };
+  /** Headless card chat simulation backing the test_card run verb. */
+  cardTest?: { run(args: Record<string, unknown>): Promise<ToolExecuteResult> };
 }
 
 export interface RouteCall {
@@ -64,28 +85,8 @@ export interface DomainRoute {
 /** Refusal for `ls`/`grep` on any collection — there is no discovery mechanism, by design. */
 export const COLLECTION_REFUSAL = 'Error: cannot list collections — ids come from the user or chat context';
 
-export function err(message: string): string {
-  return `Error: ${message}`;
-}
-
 export function isError(content: string): boolean {
   return content.startsWith('Error:');
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-export function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-export function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-export function pretty(value: unknown): string {
-  return JSON.stringify(value, null, 2);
 }
 
 interface Executable {
@@ -122,23 +123,6 @@ export function resultToString(res: { value: unknown; raw: string }): string {
   return res.value === undefined ? res.raw : pretty(res.value);
 }
 
-/** Parse a `write` body. Syntax errors are vfs-level; schema validation stays with the providers. */
-export function parseJsonBody(content: string): { ok: true; value: unknown } | { ok: false; error: string } {
-  try {
-    return { ok: true, value: JSON.parse(content) as unknown };
-  } catch (e) {
-    return { ok: false, error: err(`invalid JSON — ${e instanceof Error ? e.message : String(e)}`) };
-  }
-}
-
-/** Parse + require a JSON object body. */
-export function parseJsonObjectBody(content: string): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
-  const parsed = parseJsonBody(content);
-  if (!parsed.ok) return parsed;
-  if (!isRecord(parsed.value)) return { ok: false, error: err('the JSON body must be an object') };
-  return { ok: true, value: parsed.value };
-}
-
 /** Extract the `id` field of a provider result (all creation results carry one). */
 export function idOf(value: unknown): string {
   return isRecord(value) && typeof value['id'] === 'string' ? value['id'] : '';
@@ -155,50 +139,6 @@ export async function fileEntry(call: RouteCall, read: (c: RouteCall) => Promise
   const content = await read(call);
   if (isError(content)) return content;
   return [{ name: call.segs[call.segs.length - 1] ?? '', dir: false }];
-}
-
-// ---------- Per-field virtual files ----------
-
-/**
- * One writable field of a JSON-blob entity, exposed as a virtual file next to
- * the whole-file `.json` (e.g. `/characters/<id>/regex/<ruleId>.json/find_regex`).
- * String fields carry raw content (no JSON escaping); `json` fields carry
- * JSON content that is syntax-checked at the vfs layer and schema-validated
- * by the provider patch op.
- */
-export interface FieldSpec {
-  /** Virtual file name, snake_case (e.g. 'find_regex'). */
-  file: string;
-  /** camelCase entity/patch key (e.g. 'findRegex'). */
-  key: string;
-  /** string → raw content; json → JSON.parse on write, pretty on read. */
-  type: 'string' | 'json';
-}
-
-/** Look up a field spec by virtual file name. */
-export function fieldSpec(specs: readonly FieldSpec[], file: string): FieldSpec | undefined {
-  return specs.find((s) => s.file === file);
-}
-
-/** `ls` entries for an entity's per-field files (all declared fields are always listed). */
-export function fieldEntries(specs: readonly FieldSpec[]): ListEntry[] {
-  return specs.map((s) => ({ name: s.file, dir: false }));
-}
-
-/** Project one field of an entity object into virtual file content. */
-export function readField(obj: Record<string, unknown>, spec: FieldSpec): string {
-  const value = obj[spec.key];
-  if (spec.type === 'string') return asString(value) ?? '';
-  return pretty(value ?? null);
-}
-
-/**
- * Parse `write` content for a field file: verbatim for string fields, JSON
- * for json fields (syntax errors surface before any provider call).
- */
-export function parseFieldContent(spec: FieldSpec, content: string): { ok: true; value: unknown } | { ok: false; error: string } {
-  if (spec.type === 'string') return { ok: true, value: content };
-  return parseJsonBody(content);
 }
 
 /** Render structured entries as ls output: dirs suffixed `/`, annotations as `<name>  "text"`. */

@@ -331,6 +331,12 @@ const _AppSettingsSchema = z.object({
   'proxy.url': z.string().default(''),
   'proxy.bypass': z.array(z.string()).default([]),
 
+  // Unpacked cards (on-disk card folders under <dataDir>/unpacked-cards/)
+  'unpackedCards.enabled': z.boolean().default(false),
+
+  // MCP server (read/test-only tool surface for external agents at /api/mcp)
+  'mcp.enabled': z.boolean().default(false),
+
   // Prompt / Context
   chatMessageLoadLimit: z.number().int().default(30),
   promptHistoryLimit: z.number().int().default(100),

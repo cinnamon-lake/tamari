@@ -33,6 +33,13 @@ import {
   ScriptBlobRepository,
 } from './repos/index.js';
 import type { ISettingsRepository } from './repos/SettingsRepository.js';
+import type { ICharacterRepository } from './repos/CharacterRepository.js';
+import type { IWorldInfoRepository } from './repos/WorldInfoRepository.js';
+import { UnpackedCardService } from './services/unpacked/UnpackedCardService.js';
+import { CardTestService } from './services/CardTestService.js';
+import { createMcpRouter } from './api/mcp.js';
+import { ReadThroughCharacterRepository } from './services/unpacked/ReadThroughCharacterRepository.js';
+import { ReadThroughWorldInfoRepository } from './services/unpacked/ReadThroughWorldInfoRepository.js';
 import { createDispatcher } from './dispatcher.js';
 import { QuickReplyRepository } from './repos/QuickReplyRepository.js';
 import { QuickReplyService } from './scripting/QuickReplyService.js';
@@ -145,11 +152,15 @@ const db = await initDatabase({ path: config.dbPath, dataDir: config.dataDir });
 // Database ready
 
 // Repositories
-const characters = withLogging(new CharacterRepository(db), 'characters');
+// Unpacked (on-disk) cards: these stay the INNER repos. Everything below sees
+// the read-through wrappers constructed after the bus/RAG service exist; only
+// UnpackedCardService holds the inner repos (it owns handle-row writes and
+// delete-time cleanup, which the wrappers reject).
+const innerCharacters = withLogging(new CharacterRepository(db), 'characters');
 const characterAssets = withLogging(new CharacterAssetRepository(db), 'characterAssets');
 const chats = withLogging(new ChatRepository(db), 'chats');
 const settings = withLogging(new CachedSettings(db), 'settings');
-const worldInfo = withLogging(new WorldInfoRepository(db), 'worldInfo');
+const innerWorldInfo = withLogging(new WorldInfoRepository(db), 'worldInfo');
 const generations = withLogging(new GenerationRepository(db), 'generations');
 const personas = withLogging(new PersonaRepository(db), 'personas');
 const backendConfigs = withLogging(new BackendConfigRepository(db), 'backendConfigs');
@@ -210,6 +221,22 @@ const groupChatService = new GroupChatService(chatMembers, chats, chatMetaBroadc
 // RAG service
 const ragService = new RAGService(getRAGConfig(allSettings), config.dataDir);
 
+// Unpacked-card loader + read-through wrappers. Constructed here because it
+// needs the bus and RAG service; every consumer below (dispatcher deps,
+// workbenches, generation, REST) gets the wrappers.
+const unpackedCards = new UnpackedCardService({
+  characters: innerCharacters,
+  characterAssets,
+  quickReplies,
+  storage,
+  bus,
+  settings,
+  ragService,
+  dataDir: config.dataDir,
+});
+const characters: ICharacterRepository = withLogging(new ReadThroughCharacterRepository(innerCharacters, unpackedCards), 'characters');
+const worldInfo: IWorldInfoRepository = withLogging(new ReadThroughWorldInfoRepository(innerWorldInfo, unpackedCards), 'worldInfo');
+
 // Memory service
 const memoryService = new MemoryService({
   chats,
@@ -240,7 +267,11 @@ const backendWorkbench = new BackendWorkbench({ backendConfigs, settings, bus, s
 const toolsetWorkbench = new ToolsetWorkbench({ toolsets, toolRegistry, bus });
 const quickReplyWorkbench = new QuickReplyWorkbench({ quickReplies, bus });
 const luaToolWorkbench = new LuaToolWorkbench({ toolTemplates, luaExecutor: luaToolExecutor, registry: toolRegistry, bus });
-registerWorkbenchTemplate(toolRegistry, { characterWorkbench, backendWorkbench, toolsetWorkbench, quickReplyWorkbench, luaToolWorkbench, generations });
+// Headless card chat simulation (test_card run verb) — drives the bus with an
+// internal client; safe to construct before the dispatcher since it only
+// dispatches at call time.
+const cardTest = new CardTestService({ bus, chats, characters, settings, unpackedCards });
+const workbenchTemplate = registerWorkbenchTemplate(toolRegistry, { characterWorkbench, backendWorkbench, toolsetWorkbench, quickReplyWorkbench, luaToolWorkbench, generations, cardTest });
 
 
 await seedToolTemplates(toolTemplates);
@@ -453,6 +484,9 @@ app.use('/api', requireAuth);
 // Character REST API
 app.use('/api/characters', createCharacterRouter(characters, characterAssets, worldInfo, storage, bus));
 
+// MCP endpoint for external agents (read/test-only; gated on mcp.enabled, behind requireAuth)
+app.use('/api/mcp', createMcpRouter({ workbench: workbenchTemplate, cardTest, settings }));
+
 // Model listing REST API
 app.use('/api/models', createModelsRouter(settings, backendConfigs, secretService, config.secret, createBackendAdapterResolved));
 
@@ -616,7 +650,10 @@ wss.on('connection', (ws, req) => {
 });
 
 // Backfill missing thumbnails for existing avatars
-await backfillThumbnails(db, storage, characters, personas);
+await backfillThumbnails(db, storage, innerCharacters, personas);
+
+// Unpacked cards: initial scan + folder watcher (no-op when the setting is off).
+await unpackedCards.start();
 
 server.listen(config.port, config.host, () => {
   const displayHost = config.host.includes(':') ? `[${config.host}]` : config.host;
@@ -721,6 +758,7 @@ async function ensureDefaultPromptList(promptListRepo: PromptListRepository, set
 function shutdown(signal: string) {
   log.info(`received ${signal}, shutting down gracefully...`);
 
+  unpackedCards.stop();
   if (db instanceof ProfiledClient) {
     db.report();
   }

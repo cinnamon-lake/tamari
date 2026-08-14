@@ -30,6 +30,8 @@ export const character = {
   addGreeting: 'Add greeting',
   sourceLabel: 'Source (one per line)',
   saved: 'Saved',
+  externalBanner:
+    'This card is unpacked on disk (unpacked-cards/{{slug}}/). Edit the files directly — changes apply immediately.',
   regexHeading: 'Regex Scripts (this character)',
   regexDescription:
     'Find/replace rules applied only to this character\'s messages, after global regex rules. Prompt rules affect what the AI sees; Display rules only affect rendering.',

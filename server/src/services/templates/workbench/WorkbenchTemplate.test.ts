@@ -847,6 +847,7 @@ describe('run', () => {
     'test_backend_logic',
     'test_luatool',
     'test_regex',
+    'test_card',
     'clone_character',
     'set_avatar',
     'copy_assets',

@@ -78,6 +78,7 @@ export const core = {
     toggleGridView: 'Toggle grid view',
     newChat: 'New chat',
     editCharacter: 'Edit character',
+    externalBadge: 'Unpacked card — lives on disk, read-only',
     openMenu: 'Open menu',
     closeMenu: 'Close menu',
     recentChats: 'Recent Chats',

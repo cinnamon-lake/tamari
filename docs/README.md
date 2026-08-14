@@ -35,6 +35,7 @@ This directory contains design documents, roadmaps, external specifications, and
 - [`user/lua-scripting.md`](./user/lua-scripting.md) — Guide to writing Lua scripts for Quick Replies and backend request transformations, with full `st` API reference.
 - [`user/tools.md`](./user/tools.md) — The tool-call loop, toolsets, the built-in template catalog, and authoring Lua tool templates.
 - [`user/workbench.md`](./user/workbench.md) — The workbench: a filesystem-style surface the LLM uses to read and edit your cards, backends, toolsets, and scripts.
+- [`user/unpacked-cards.md`](./user/unpacked-cards.md) — Unpacked cards: character cards as plain folders on disk (read-only in the app), plus the read/test-only MCP server and `test_card` chat simulation for LLM agents.
 - [`user/custom-backends.md`](./user/custom-backends.md) — Replacing or decorating the generation backend with Lua (registry scripts and card-coupled `backend_logic.lua`).
 - [`user/request-scripts.md`](./user/request-scripts.md) — Per-backend Lua request transformers: the `request` table, safety limits, and dry-run testing.
 

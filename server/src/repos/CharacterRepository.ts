@@ -34,7 +34,7 @@ export interface ICharacterRepository {
     offset?: number;
   }): Promise<{
     items: Array<
-      Pick<Character, 'id' | 'name' | 'tags' | 'avatarPath' | 'avatarThumbnailPath' | 'createdAt' | 'updatedAt'>
+      Pick<Character, 'id' | 'name' | 'tags' | 'avatarPath' | 'avatarThumbnailPath' | 'external' | 'createdAt' | 'updatedAt'>
     >;
     total: number;
   }>;
