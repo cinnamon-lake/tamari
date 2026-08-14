@@ -322,8 +322,12 @@ export interface GenerationMeta {
   rounds?: number;
   toolCalls?: Array<{ name: string; isError?: boolean }>;
   traceError?: TraceError;
-  /** Round-1 prompt snapshot — only when the debugPrompts setting is on. */
+  /** Round-1 prompt snapshot — only when prompt capture is on
+      (target.capturePrompts ?? the debugPrompts setting). */
   prompt?: Prompt;
+  /** Every round's prompt, in order (prompts[0] === prompt; rounds are
+      bounded by maxToolRounds). Same capture gating as `prompt`. */
+  prompts?: Prompt[];
   /** Append-only layout: what the mode suppressed/hoisted for this run
       (docs/design/append-only-caching.md). Present only when the mode is on. */
   appendOnly?: { suppressed: string[]; hoisted: string[] };

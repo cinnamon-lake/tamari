@@ -35,7 +35,7 @@ Entity ids come from **you** (paste the id into chat) or from **chat context** (
 
 What `ls` *can* list:
 
-- `/` — the six domain names
+- `/` — the seven domain names
 - One specific entity directory, e.g. `/characters/<id>/`
 - An entity's sub-collections, e.g. `/characters/<id>/lorebook/`
 - A scoped quick-reply collection, e.g. `/quickreplies/chat/<chatId>/`
@@ -43,7 +43,7 @@ What `ls` *can* list:
 ## Path Layout
 
 ```
-/                                          ls / → the six domain names
+/                                          ls / → the seven domain names
 ├── characters/
 │   └── <id>/                              non-empty text fields + meta.json + present subdirs
 │       ├── description                    plain-text card fields: description, personality,
@@ -218,11 +218,13 @@ Every writable key is also a per-field file (`meta.json/name`, `meta.json/tags`,
 | `test_backend_logic` | `{characterId, input, luaSource?, state?, delegateResponse?}` | Dry-run a card's backend_logic (main.lua + its `require`d modules) |
 | `test_luatool` | `{id?\|code?, sandbox?, toolName, args?, config?}` | Run a tool from a stored template or ad-hoc code |
 | `test_regex` | `{characterId?, text, role?}` | Preview merged regex rules (global + character) against sample text |
+| `test_card` | `{characterId?\|folderPath?, turns: string[], keepChat?, backendConfigId?, timeoutMs?}` | Scripted multi-turn card test in an in-memory test session (no real chat created, no DB writes): sends each scripted user turn and returns the transcript + generation ids. The session is kept by default (returns `sessionId`; prompts via `test_session_state`) — pass `keepChat: false` to end it immediately. Uses the active backend config unless `backendConfigId` pins another (e.g. a deterministic `mock` config) |
 | `clone_character` | `{sourceCharacterId, name?}` | Deep-copy a card: fields, lorebook, regex, modules, assets, avatar |
 | `set_avatar` | `{characterId, attachmentId?\|sourceCharacterId?}` | Set an avatar from an attachment image or another card |
 | `copy_assets` | `{characterId, sourceCharacterId, assetId?}` | Copy character assets; omit `assetId` to copy all |
 | `copy_module_assets` | `{characterId, sourceCharacterId, moduleId}` | Copy a Risu module's stored assets onto a card |
 | `move_lorebook_entry` | `{characterId, entryId, index}` | Move an entry to a 0-based position |
+| `add_game_lib` | `{characterId}` | Vendor the game-lib Lua modules (`lib/*.lua`: loop, ledger, todo, registry, …) into the card's `backend_logic/` lib/ folder |
 
 ## Worked Examples
 

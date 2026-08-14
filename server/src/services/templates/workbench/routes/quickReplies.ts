@@ -21,7 +21,6 @@ import {
   fieldSpec,
   fileEntry,
   idOf,
-  isError,
   isRecord,
   parseFieldContent,
   parseJsonObjectBody,
@@ -33,6 +32,7 @@ import {
   type ListEntry,
   type ProviderOutcome,
   type RouteCall,
+  type RouteError,
 } from '../router.js';
 
 const SCOPES = new Set(['global', 'character', 'chat']);
@@ -70,42 +70,42 @@ function checkScope(call: RouteCall): string | null {
   return null;
 }
 
-async function ls(call: RouteCall): Promise<ListEntry[] | string> {
+async function ls(call: RouteCall): Promise<ListEntry[] | RouteError> {
   const bad = checkScope(call);
-  if (bad !== null) return bad;
+  if (bad !== null) return { error: bad };
   const [scope, scopeId, file] = call.segs as [string, string, string | undefined];
   if (file !== undefined) {
     // A quick-reply file expands into per-field files; field paths list themselves.
     if (call.segs.length === 3 && !isNewSegment(file)) {
       const content = await read(call);
-      if (isError(content)) return content;
+      if (typeof content !== 'string') return content;
       return fieldEntries(QR_FIELDS);
     }
     return fileEntry(call, read);
   }
   const res = await provider(call, 'quickreply_list', { scope, scopeId: realScopeId(scopeId) });
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   return asArray(res.value)
     .filter(isRecord)
     .map((q) => ({ name: `${idOf(q)}.json`, dir: false, annotation: asString(q['label']) }));
 }
 
-async function read(call: RouteCall): Promise<string> {
+async function read(call: RouteCall): Promise<string | RouteError> {
   const [scope, scopeId, file, field, ...rest] = call.segs;
-  if (scope === undefined) return err(`is a directory (use ls): ${call.path}`);
-  if (!SCOPES.has(scope)) return err(`no such file: ${call.path}`);
-  if (scopeId === undefined) return err(`is a directory (use ls): ${call.path}`);
-  if (file === undefined) return err(`is a directory (use ls): ${call.path}`);
-  if (isNewSegment(file) || !isJson(file)) return err(`no such file: ${call.path}`);
-  if (rest.length > 0) return err(`no such file: ${call.path}`);
+  if (scope === undefined) return { error: err(`is a directory (use ls): ${call.path}`) };
+  if (!SCOPES.has(scope)) return { error: err(`no such file: ${call.path}`) };
+  if (scopeId === undefined) return { error: err(`is a directory (use ls): ${call.path}`) };
+  if (file === undefined) return { error: err(`is a directory (use ls): ${call.path}`) };
+  if (isNewSegment(file) || !isJson(file)) return { error: err(`no such file: ${call.path}`) };
+  if (rest.length > 0) return { error: err(`no such file: ${call.path}`) };
 
   const res = await provider(call, 'quickreply_list', { scope, scopeId: realScopeId(scopeId) });
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   const item = asArray(res.value).filter(isRecord).find((q) => q['id'] === stripJsonExt(file));
-  if (item === undefined) return err(`no such file: ${call.path}`);
+  if (item === undefined) return { error: err(`no such file: ${call.path}`) };
   if (field === undefined) return pretty(item);
   const spec = fieldSpec(QR_FIELDS, field);
-  if (spec === undefined) return err(`no such file: ${call.path}`);
+  if (spec === undefined) return { error: err(`no such file: ${call.path}`) };
   return readField(item, spec);
 }
 

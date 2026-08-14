@@ -20,6 +20,7 @@ import { z } from 'zod';
 import type { BackendConfig, BackendConfigUpdate, SettingsMap } from '@tamari/types';
 import { BackendConfigCreateInputSchema, BackendConfigUpdateSchema } from '@tamari/types';
 import type { ToolContext, ToolExecuteResult } from '../ToolTemplate.js';
+import { formatZodIssues } from '../ToolTemplate.js';
 import type { EventBus } from '../../bus/EventBus.js';
 import type { IBackendConfigRepository } from '../../repos/BackendConfigRepository.js';
 import type { ISettingsRepository } from '../../repos/SettingsRepository.js';
@@ -211,7 +212,7 @@ export class BackendWorkbench {
 
   private async getConfig(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = BackendGetArgs.safeParse(args);
-    if (!parsed.success) return { content: 'Error: invalid arguments' };
+    if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
     const config = await this.resolveConfig(parsed.data.configId);
     if (!config) return { content: 'Error: backend config not found' };
     return { content: JSON.stringify(redactConfig(config)) };
@@ -219,7 +220,7 @@ export class BackendWorkbench {
 
   private async createConfig(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = BackendCreateArgs.safeParse(args);
-    if (!parsed.success) return { content: `Error: invalid arguments: ${parsed.error.message}` };
+    if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
     const { activate, ...data } = parsed.data;
 
     const backendConfig = await this.deps.backendConfigs.create(randomUUID(), data);
@@ -239,13 +240,13 @@ export class BackendWorkbench {
   }
 
   private async updateConfig(args: Record<string, unknown>): Promise<ToolExecuteResult> {    const parsed = BackendUpdateArgs.safeParse(args);
-    if (!parsed.success) return { content: 'Error: invalid arguments' };
+    if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
 
     const config = await this.resolveConfig(parsed.data.configId);
     if (!config) return { content: 'Error: backend config not found' };
 
     const patch = BackendConfigUpdateSchema.safeParse(parsed.data.patch);
-    if (!patch.success) return { content: `Error: invalid patch: ${patch.error.message}` };
+    if (!patch.success) return { content: `Error: invalid patch — ${formatZodIssues(patch.error)}` };
 
     // Shallow-merge providerParams so a requestScript edit doesn't clobber sampler keys.
     const merged: BackendConfigUpdate = { ...(patch.data as BackendConfigUpdate) };
@@ -266,7 +267,7 @@ export class BackendWorkbench {
 
   private async testConfig(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = BackendTestArgs.safeParse(args);
-    if (!parsed.success) return { content: 'Error: invalid arguments' };
+    if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
     const { configId, patch, prompt, mode } = parsed.data;
 
     const persisted = await this.resolveConfig(configId);
@@ -277,7 +278,7 @@ export class BackendWorkbench {
     let candidate: BackendConfig = persisted;
     if (patch) {
       const validPatch = BackendConfigUpdateSchema.safeParse(patch);
-      if (!validPatch.success) return { content: `Error: invalid patch: ${validPatch.error.message}` };
+      if (!validPatch.success) return { content: `Error: invalid patch — ${formatZodIssues(validPatch.error)}` };
       const patchData = validPatch.data as BackendConfigUpdate;
       candidate = {
         ...persisted,
@@ -374,7 +375,7 @@ export class BackendWorkbench {
 
   private async customBackendGet(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = CustomBackendGetArgs.safeParse(args);
-    if (!parsed.success) return { content: 'Error: invalid arguments' };
+    if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
     const item = await this.deps.customBackends.getById(parsed.data.id);
     if (!item) return { content: `Error: custom backend "${parsed.data.id}" not found` };
     return { content: JSON.stringify(item) };
@@ -382,7 +383,7 @@ export class BackendWorkbench {
 
   private async customBackendCreate(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = CustomBackendCreateArgs.safeParse(args);
-    if (!parsed.success) return { content: 'Error: invalid arguments' };
+    if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
     const item = await this.deps.customBackends.create(randomUUID(), {
       name: parsed.data.name,
       description: parsed.data.description ?? '',
@@ -395,7 +396,7 @@ export class BackendWorkbench {
 
   private async customBackendUpdate(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = CustomBackendUpdateArgs.safeParse(args);
-    if (!parsed.success) return { content: 'Error: invalid arguments' };
+    if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
     const existing = await this.deps.customBackends.getById(parsed.data.id);
     if (!existing) return { content: `Error: custom backend "${parsed.data.id}" not found` };
     const item = await this.deps.customBackends.update(parsed.data.id, parsed.data.patch);
@@ -406,7 +407,7 @@ export class BackendWorkbench {
 
   private async customBackendDelete(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = CustomBackendDeleteArgs.safeParse(args);
-    if (!parsed.success) return { content: 'Error: invalid arguments' };
+    if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
     const existing = await this.deps.customBackends.getById(parsed.data.id);
     if (!existing) return { content: `Error: custom backend "${parsed.data.id}" not found` };
     await this.deps.customBackends.delete(parsed.data.id);
@@ -417,7 +418,7 @@ export class BackendWorkbench {
 
   private async customBackendTest(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = CustomBackendTestArgs.safeParse(args);
-    if (!parsed.success) return { content: 'Error: invalid arguments' };
+    if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
     const { id, luaSource, input, state, delegateResponse, history } = parsed.data;
 
     let source = luaSource;

@@ -8,7 +8,8 @@
 import { LuaFactory, LuaEngine } from 'wasmoon';
 import { luaFetch } from './LuaFetch.js';
 import { vfsRequirePrelude } from './LuaVfs.js';
-const MAX_EXECUTION_MS = 5000;
+/** Default execution deadline for createState — also the number friendlyLuaError reports. */
+export const MAX_EXECUTION_MS = 5000;
 
 /** Default Lua heap cap per execution — wasmoon enforces it in the allocator
     (traceAllocations), so a memory bomb fails with "not enough memory" instead
@@ -170,5 +171,15 @@ export class LuaRuntime {
  * anything else that aborts the engine, e.g. WASM OOM, reads as a timeout too.)
  */
 export function isLuaTimeoutError(err: unknown): boolean {
-  return err instanceof Error && /Aborted\(native code called abort/.test(err.message);
+  const message = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+  return /Aborted\(native code called abort/.test(message);
+}
+
+/**
+ * Model-facing message for a Lua failure: translates the opaque wasmoon
+ * timeout abort into something actionable, anything else passes through.
+ */
+export function friendlyLuaError(err: unknown, timeoutMs: number): string {
+  if (isLuaTimeoutError(err)) return `script timed out (${Math.round(timeoutMs / 1000)}s execution limit)`;
+  return err instanceof Error ? err.message : String(err);
 }

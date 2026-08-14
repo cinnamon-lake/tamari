@@ -37,6 +37,7 @@ import type { ICharacterRepository } from './repos/CharacterRepository.js';
 import type { IWorldInfoRepository } from './repos/WorldInfoRepository.js';
 import { UnpackedCardService } from './services/unpacked/UnpackedCardService.js';
 import { CardTestService } from './services/CardTestService.js';
+import { TestSessionService } from './services/TestSessionService.js';
 import { createMcpRouter } from './api/mcp.js';
 import { ReadThroughCharacterRepository } from './services/unpacked/ReadThroughCharacterRepository.js';
 import { ReadThroughWorldInfoRepository } from './services/unpacked/ReadThroughWorldInfoRepository.js';
@@ -267,10 +268,35 @@ const backendWorkbench = new BackendWorkbench({ backendConfigs, settings, bus, s
 const toolsetWorkbench = new ToolsetWorkbench({ toolsets, toolRegistry, bus });
 const quickReplyWorkbench = new QuickReplyWorkbench({ quickReplies, bus });
 const luaToolWorkbench = new LuaToolWorkbench({ toolTemplates, luaExecutor: luaToolExecutor, registry: toolRegistry, bus });
-// Headless card chat simulation (test_card run verb) — drives the bus with an
-// internal client; safe to construct before the dispatcher since it only
-// dispatches at call time.
-const cardTest = new CardTestService({ bus, chats, characters, settings, unpackedCards });
+// Card-testing sessions (test_card + test_session_*): a second generation
+// runner over in-memory repos sharing the production deps — no DB rows, no
+// UI broadcasts. Needs promptBuilder, so it is constructed here (the real
+// ChatPromptAssembly below reuses the same builder).
+const promptBuilder = new PromptBuilder(worldInfoInjector);
+const testSessions = new TestSessionService({
+  settings,
+  backendConfigs,
+  promptLists,
+  backendFactory: { create: createBackendAdapterResolved },
+  customBackends,
+  scriptBlobs,
+  luaRuntime,
+  characters,
+  personas,
+  chatMembers,
+  unpackedCards,
+  attachments,
+  storage,
+  promptBuilder,
+  worldInfo,
+  characterAssets,
+  ragService,
+  memoryService,
+  toolRegistry,
+  toolsetRepo: toolsets,
+  maxToolRounds: config.maxToolRounds,
+});
+const cardTest = new CardTestService({ testSessions });
 const workbenchTemplate = registerWorkbenchTemplate(toolRegistry, { characterWorkbench, backendWorkbench, toolsetWorkbench, quickReplyWorkbench, luaToolWorkbench, generations, cardTest });
 
 
@@ -287,7 +313,6 @@ const chatBroadcast = new ChatBroadcastService({
 
 const generationBroadcast = new GenerationBroadcastService({ bus });
 
-const promptBuilder = new PromptBuilder(worldInfoInjector);
 const chatPromptAssembly = new ChatPromptAssembly({
   chats,
   personas,
@@ -485,7 +510,7 @@ app.use('/api', requireAuth);
 app.use('/api/characters', createCharacterRouter(characters, characterAssets, worldInfo, storage, bus));
 
 // MCP endpoint for external agents (read/test-only; gated on mcp.enabled, behind requireAuth)
-app.use('/api/mcp', createMcpRouter({ workbench: workbenchTemplate, cardTest, settings }));
+app.use('/api/mcp', createMcpRouter({ workbench: workbenchTemplate, cardTest, testSessions, settings }));
 
 // Model listing REST API
 app.use('/api/models', createModelsRouter(settings, backendConfigs, secretService, config.secret, createBackendAdapterResolved));

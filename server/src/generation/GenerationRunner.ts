@@ -264,10 +264,11 @@ export class GenerationRunner {
       const maxToolRounds = this.deps.maxToolRounds ?? 100;
 
       // Debug-trace meta (docs/design/debug-traces.md): per-run layer/depth/
-      // rounds/tool calls + the structured error, plus the round-1 prompt when
-      // debugPrompts is on.
-      const debugPromptsOn = Boolean(await this.deps.settings.get('debugPrompts'));
+      // rounds/tool calls + the structured error, plus the captured prompts
+      // when capture is on (target-level flag wins over the global setting).
+      const capturePrompts = target.capturePrompts ?? (await this.deps.settings.get('debugPrompts')) === true;
       let firstPrompt: Prompt | undefined;
+      const roundPrompts: Prompt[] = [];
       const toolCallsMeta: Array<{ name: string; isError?: boolean }> = [];
       const buildMeta = (traceError?: TraceError): GenerationMeta => ({
         layer: resolved.backend.id,
@@ -275,7 +276,8 @@ export class GenerationRunner {
         rounds,
         ...(toolCallsMeta.length > 0 ? { toolCalls: toolCallsMeta } : {}),
         ...(traceError ? { traceError } : {}),
-        ...(debugPromptsOn && firstPrompt ? { prompt: firstPrompt } : {}),
+        ...(capturePrompts && firstPrompt ? { prompt: firstPrompt } : {}),
+        ...(capturePrompts && roundPrompts.length > 0 ? { prompts: roundPrompts } : {}),
         // Append-only layout: suppressions/hoists recorded by prompt assembly.
         ...(firstPrompt?.appendOnlyTrace ? { appendOnly: firstPrompt.appendOnlyTrace } : {}),
       });
@@ -308,6 +310,7 @@ export class GenerationRunner {
 
         const prompt = await target.prompt(resolved);
         firstPrompt ??= prompt;
+        roundPrompts.push(prompt);
         if (!recordCreated) {
           await this.deps.generations.create(generationId, {
             chatId: target.chatId,

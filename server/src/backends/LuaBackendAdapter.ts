@@ -37,7 +37,7 @@
  */
 
 import type { LuaRuntime } from '../scripting/LuaRuntime.js';
-import { isLuaTimeoutError } from '../scripting/LuaRuntime.js';
+import { friendlyLuaError, isLuaTimeoutError } from '../scripting/LuaRuntime.js';
 import type { IScriptBlobRepository } from '../repos/ScriptBlobRepository.js';
 import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
 import { storeAppend, storeGetJson, storePutJson, storeReadArray } from './scriptBlobArrays.js';
@@ -563,11 +563,7 @@ export class LuaBackendAdapter implements BackendAdapter {
       // the author left behind.
       for (const item of drainPrints()) yield item;
       const timeout = isLuaTimeoutError(err);
-      const message = timeout
-        ? `script timed out (${Math.round(this.generateTimeoutMs / 1000)}s execution limit)`
-        : err instanceof Error
-          ? err.message
-          : String(err);
+      const message = friendlyLuaError(err, this.generateTimeoutMs);
       log.warn({ err, backend: this.name }, 'custom backend generate failed');
       return errorResult(`custom backend "${this.name}": ${message}`, EMPTY_USAGE, {
         code: timeout ? 'LUA_TIMEOUT' : 'LUA_ERROR',

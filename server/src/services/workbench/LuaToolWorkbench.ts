@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { LuaSandboxFlagsSchema } from '@tamari/types';
 import type { ToolTemplate as StoredToolTemplate } from '@tamari/types';
 import type { ToolContext, ToolExecuteResult } from '../ToolTemplate.js';
+import { formatZodIssues } from '../ToolTemplate.js';
 import type { EventBus } from '../../bus/EventBus.js';
 import type { IToolTemplateRepository } from '../../repos/ToolTemplateRepository.js';
 import type { LuaToolExecutor } from '../LuaToolExecutor.js';
@@ -86,7 +87,7 @@ export class LuaToolWorkbench {
 
   private async getTemplate(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = LuaToolGetArgs.safeParse(args);
-    if (!parsed.success) return { content: 'Error: invalid arguments' };
+    if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
     const template = await this.deps.toolTemplates.getById(parsed.data.id);
     if (!template) return { content: `Error: Lua tool template "${parsed.data.id}" not found` };
     return { content: JSON.stringify(template) };
@@ -102,7 +103,7 @@ export class LuaToolWorkbench {
 
   private async createTemplate(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = LuaToolCreateArgs.safeParse(args);
-    if (!parsed.success) return { content: 'Error: invalid arguments' };
+    if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
     const { name, code, sandbox, configSchema } = parsed.data;
 
     // Validate by loading: getDefinition must succeed before anything is saved.
@@ -121,7 +122,7 @@ export class LuaToolWorkbench {
 
   private async updateTemplate(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = LuaToolUpdateArgs.safeParse(args);
-    if (!parsed.success) return { content: 'Error: invalid arguments' };
+    if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
     const { id, patch } = parsed.data;
 
     const existing = await this.deps.toolTemplates.getById(id);
@@ -141,7 +142,7 @@ export class LuaToolWorkbench {
   private async testTemplate(args: Record<string, unknown>, context?: ToolContext): Promise<ToolExecuteResult> {
     const parsed = LuaToolTestArgs.safeParse(args);
     if (!parsed.success) {
-      return { content: 'Error: invalid arguments (provide exactly one of id or code, plus toolName)' };
+      return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)} (provide exactly one of id or code, plus toolName)` };
     }
     const { id, toolName, config } = parsed.data;
     let { code, sandbox } = parsed.data;

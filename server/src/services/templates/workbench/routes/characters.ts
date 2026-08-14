@@ -40,7 +40,6 @@ import {
   fieldSpec,
   fileEntry,
   idOf,
-  isError,
   isRecord,
   parseFieldContent,
   parseJsonBody,
@@ -53,6 +52,7 @@ import {
   type ListEntry,
   type ProviderOutcome,
   type RouteCall,
+  type RouteError,
 } from '../router.js';
 
 /** [file name, camelCase card field] tables live in services/cardFormat/fields.ts (imported above). */
@@ -89,10 +89,10 @@ function greetingPreview(greeting: string): string | undefined {
 
 // ---------- ls ----------
 
-async function ls(call: RouteCall): Promise<ListEntry[] | string> {
+async function ls(call: RouteCall): Promise<ListEntry[] | RouteError> {
   const [id, sub, file] = call.segs;
-  if (id === undefined) return COLLECTION_REFUSAL;
-  if (isNewSegment(id)) return err(`no such file: ${call.path}`);
+  if (id === undefined) return { error: COLLECTION_REFUSAL };
+  if (isNewSegment(id)) return { error: err(`no such file: ${call.path}`) };
   if (sub === undefined) return lsCharacterDir(call, id);
   if (call.segs.length === 2 && sub === 'backend_logic') return lsBackendLogicDir(call, id);
   if (call.segs.length === 2 && SUBCOLLECTIONS.has(sub)) return lsSubCollection(call, id, sub);
@@ -105,15 +105,15 @@ async function ls(call: RouteCall): Promise<ListEntry[] | string> {
 }
 
 /** ls on a JSON-blob file that expands into per-field files: prove it exists via read, then list the fields. */
-async function lsFieldFiles(call: RouteCall, specs: readonly FieldSpec[]): Promise<ListEntry[] | string> {
+async function lsFieldFiles(call: RouteCall, specs: readonly FieldSpec[]): Promise<ListEntry[] | RouteError> {
   const content = await read(call);
-  if (isError(content)) return content;
+  if (typeof content !== 'string') return content;
   return fieldEntries(specs);
 }
 
-async function lsCharacterDir(call: RouteCall, id: string): Promise<ListEntry[] | string> {
+async function lsCharacterDir(call: RouteCall, id: string): Promise<ListEntry[] | RouteError> {
   const res = await getCharacter(call, id);
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   const c = res.character;
 
   // Empty fields and absent sub-collections are always hidden — there is no
@@ -154,7 +154,7 @@ async function lsCharacterDir(call: RouteCall, id: string): Promise<ListEntry[] 
 }
 
 /** ls /characters/<id>/backend_logic/ — main.lua plus every stored module. */
-async function lsBackendLogicDir(call: RouteCall, id: string): Promise<ListEntry[] | string> {
+async function lsBackendLogicDir(call: RouteCall, id: string): Promise<ListEntry[] | RouteError> {
   const res = await provider(call, 'backend_file_list', { characterId: id });
   // A failing provider call degrades to "no modules" rather than failing the
   // whole listing (same rule as the card dir).
@@ -162,11 +162,11 @@ async function lsBackendLogicDir(call: RouteCall, id: string): Promise<ListEntry
   return [{ name: 'main.lua', dir: false }, ...modules.map((f) => ({ name: f, dir: false }))];
 }
 
-async function lsSubCollection(call: RouteCall, id: string, sub: string): Promise<ListEntry[] | string> {
+async function lsSubCollection(call: RouteCall, id: string, sub: string): Promise<ListEntry[] | RouteError> {
   switch (sub) {
     case 'lorebook': {
       const res = await provider(call, 'lorebook_get', { characterId: id });
-      if (!res.ok) return res.error;
+      if (!res.ok) return { error: res.error };
       const entries = isRecord(res.value) ? asArray(res.value['entries']) : [];
       return entries.filter(isRecord).map((e) => {
         const comment = asString(e['comment']);
@@ -176,40 +176,40 @@ async function lsSubCollection(call: RouteCall, id: string, sub: string): Promis
     }
     case 'greetings': {
       const res = await getCharacter(call, id);
-      if (!res.ok) return res.error;
+      if (!res.ok) return { error: res.error };
       return asArray(res.character['alternateGreetings'])
         .filter((g): g is string => typeof g === 'string')
         .map((g, i) => ({ name: String(i), dir: false, annotation: greetingPreview(g) }));
     }
     case 'regex': {
       const res = await provider(call, 'regex_list', { characterId: id });
-      if (!res.ok) return res.error;
+      if (!res.ok) return { error: res.error };
       return asArray(res.value).filter(isRecord).map((r) => ({ name: `${idOf(r)}.json`, dir: false, annotation: asString(r['name']) }));
     }
     case 'assets': {
       const res = await provider(call, 'character_asset_list', { characterId: id });
-      if (!res.ok) return res.error;
+      if (!res.ok) return { error: res.error };
       const assets = isRecord(res.value) ? asArray(res.value['assets']) : [];
       return assets.filter(isRecord).map((a) => ({ name: `${idOf(a)}.json`, dir: false, annotation: asString(a['name']) }));
     }
     case 'modules': {
       const res = await provider(call, 'risu_module_list', { characterId: id });
-      if (!res.ok) return res.error;
+      if (!res.ok) return { error: res.error };
       const modules = isRecord(res.value) ? asArray(res.value['modules']) : [];
       return modules.filter(isRecord).map((m) => ({ name: `${idOf(m)}.json`, dir: false, annotation: asString(m['name']) }));
     }
     default:
-      return err(`no such file: ${call.path}`);
+      return { error: err(`no such file: ${call.path}`) };
   }
 }
 
 // ---------- read ----------
 
-async function read(call: RouteCall): Promise<string> {
+async function read(call: RouteCall): Promise<string | RouteError> {
   const [id, sub, file, ...rest] = call.segs;
-  if (id === undefined) return err(`is a directory (use ls): ${call.path}`);
-  if (isNewSegment(id)) return err(`no such file: ${call.path}`);
-  if (sub === undefined) return err(`is a directory (use ls): ${call.path}`);
+  if (id === undefined) return { error: err(`is a directory (use ls): ${call.path}`) };
+  if (isNewSegment(id)) return { error: err(`no such file: ${call.path}`) };
+  if (sub === undefined) return { error: err(`is a directory (use ls): ${call.path}`) };
 
   if (sub === 'meta.json') {
     if (file === undefined) return readMeta(call, id);
@@ -217,7 +217,7 @@ async function read(call: RouteCall): Promise<string> {
   }
   if (sub === 'backend_logic.lua' && file === undefined) return readBackendLogic(call, id);
   if (sub === 'backend_logic') {
-    if (file === undefined) return err(`is a directory (use ls): ${call.path}`);
+    if (file === undefined) return { error: err(`is a directory (use ls): ${call.path}`) };
     if (file === 'main.lua' && rest.length === 0) return readBackendLogic(call, id);
     return readBackendFile(call, id, [file, ...rest].join('/'));
   }
@@ -225,13 +225,13 @@ async function read(call: RouteCall): Promise<string> {
   const textField = TEXT_FIELDS.find(([name]) => name === sub);
   if (textField !== undefined && file === undefined) {
     const res = await getCharacter(call, id);
-    if (!res.ok) return res.error;
+    if (!res.ok) return { error: res.error };
     return asString(res.character[textField[1]]) ?? '';
   }
 
   if (SUBCOLLECTIONS.has(sub)) {
-    if (file === undefined) return err(`is a directory (use ls): ${call.path}`);
-    if (isNewSegment(file)) return err(`no such file: ${call.path}`);
+    if (file === undefined) return { error: err(`is a directory (use ls): ${call.path}`) };
+    if (isNewSegment(file)) return { error: err(`no such file: ${call.path}`) };
     switch (sub) {
       case 'lorebook':
         return readLorebookEntry(call, id, stripJsonExt(file), rest);
@@ -245,12 +245,12 @@ async function read(call: RouteCall): Promise<string> {
         return readModule(call, id, stripJsonExt(file), rest);
     }
   }
-  return err(`no such file: ${call.path}`);
+  return { error: err(`no such file: ${call.path}`) };
 }
 
-async function readMeta(call: RouteCall, id: string): Promise<string> {
+async function readMeta(call: RouteCall, id: string): Promise<string | RouteError> {
   const res = await getCharacter(call, id);
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   const c = res.character;
   return pretty({
     name: c['name'] ?? null,
@@ -262,81 +262,81 @@ async function readMeta(call: RouteCall, id: string): Promise<string> {
   });
 }
 
-async function readMetaField(call: RouteCall, id: string, file: string, rest: string[]): Promise<string> {
-  if (rest.length > 0) return err(`no such file: ${call.path}`);
+async function readMetaField(call: RouteCall, id: string, file: string, rest: string[]): Promise<string | RouteError> {
+  if (rest.length > 0) return { error: err(`no such file: ${call.path}`) };
   const spec = fieldSpec(META_FIELDS, file);
-  if (spec === undefined) return err(`no such file: ${call.path}`);
+  if (spec === undefined) return { error: err(`no such file: ${call.path}`) };
   const res = await getCharacter(call, id);
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   return readField(res.character, spec);
 }
 
-async function readBackendLogic(call: RouteCall, id: string): Promise<string> {
+async function readBackendLogic(call: RouteCall, id: string): Promise<string | RouteError> {
   // Always fetch the full source; offset/limit slicing is done uniformly by the vfs layer.
   const res = await provider(call, 'backend_logic_get', { characterId: id });
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   const rec = isRecord(res.value) ? res.value : {};
   const luaSource = asString(rec['luaSource']) ?? '';
   // Matches the ls rule: the file exists only when the script is enabled or non-empty.
-  if (rec['enabled'] !== true && luaSource.length === 0) return err(`no such file: ${call.path}`);
+  if (rec['enabled'] !== true && luaSource.length === 0) return { error: err(`no such file: ${call.path}`) };
   return luaSource;
 }
 
-async function readBackendFile(call: RouteCall, id: string, path: string): Promise<string> {
+async function readBackendFile(call: RouteCall, id: string, path: string): Promise<string | RouteError> {
   const res = await provider(call, 'backend_file_get', { characterId: id, path });
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   const rec = isRecord(res.value) ? res.value : {};
   const luaSource = asString(rec['luaSource']);
-  if (luaSource === undefined) return err(`no such file: ${call.path}`);
+  if (luaSource === undefined) return { error: err(`no such file: ${call.path}`) };
   return luaSource;
 }
 
-async function readLorebookEntry(call: RouteCall, id: string, entryId: string, rest: string[]): Promise<string> {
+async function readLorebookEntry(call: RouteCall, id: string, entryId: string, rest: string[]): Promise<string | RouteError> {
   const res = await provider(call, 'lorebook_get', { characterId: id });
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   const entries = isRecord(res.value) ? asArray(res.value['entries']) : [];
   const entry = entries.filter(isRecord).find((e) => e['id'] === entryId);
-  if (entry === undefined) return err(`no such file: ${call.path}`);
+  if (entry === undefined) return { error: err(`no such file: ${call.path}`) };
   if (rest.length === 0) return pretty(entry);
-  if (rest.length > 1) return err(`no such file: ${call.path}`);
+  if (rest.length > 1) return { error: err(`no such file: ${call.path}`) };
   const spec = fieldSpec(LOREBOOK_FIELDS, rest[0] ?? '');
-  if (spec === undefined) return err(`no such file: ${call.path}`);
+  if (spec === undefined) return { error: err(`no such file: ${call.path}`) };
   return readField(entry, spec);
 }
 
-async function readGreeting(call: RouteCall, id: string, seg: string, rest: string[]): Promise<string> {
-  if (rest.length > 0) return err(`no such file: ${call.path}`);
+async function readGreeting(call: RouteCall, id: string, seg: string, rest: string[]): Promise<string | RouteError> {
+  if (rest.length > 0) return { error: err(`no such file: ${call.path}`) };
   const res = await getCharacter(call, id);
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   const greetings = asArray(res.character['alternateGreetings']);
   const index = parseGreetingIndex(seg, greetings.length);
   const text = index === undefined ? undefined : greetings[index];
-  if (typeof text !== 'string') return err(`no such file: ${call.path}`);
+  if (typeof text !== 'string') return { error: err(`no such file: ${call.path}`) };
   return text;
 }
 
-async function readRegexRule(call: RouteCall, id: string, ruleId: string, rest: string[]): Promise<string> {
+async function readRegexRule(call: RouteCall, id: string, ruleId: string, rest: string[]): Promise<string | RouteError> {
   const res = await provider(call, 'regex_list', { characterId: id });
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   const rule = asArray(res.value).filter(isRecord).find((r) => r['id'] === ruleId);
-  if (rule === undefined) return err(`no such file: ${call.path}`);
+  if (rule === undefined) return { error: err(`no such file: ${call.path}`) };
   if (rest.length === 0) return pretty(rule);
-  if (rest.length > 1) return err(`no such file: ${call.path}`);
+  if (rest.length > 1) return { error: err(`no such file: ${call.path}`) };
   const spec = fieldSpec(REGEX_FIELDS, rest[0] ?? '');
-  if (spec === undefined) return err(`no such file: ${call.path}`);
+  if (spec === undefined) return { error: err(`no such file: ${call.path}`) };
   return readField(rule, spec);
 }
 
-async function readAsset(call: RouteCall, id: string, assetId: string): Promise<string> {
+async function readAsset(call: RouteCall, id: string, assetId: string): Promise<string | RouteError> {
   const res = await provider(call, 'character_asset_list', { characterId: id });
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   const assets = isRecord(res.value) ? asArray(res.value['assets']) : [];
   const asset = assets.filter(isRecord).find((a) => a['id'] === assetId);
-  if (asset === undefined) return err(`no such file: ${call.path}`);
+  if (asset === undefined) return { error: err(`no such file: ${call.path}`) };
   return pretty(asset);
 }
 
-async function readModule(call: RouteCall, id: string, moduleId: string, rest: string[]): Promise<string> {
+async function readModule(call: RouteCall, id: string, moduleId: string, rest: string[]): Promise<string | RouteError> {
   // Bare <moduleId>.json reads the info section; <moduleId>.json/<section> and
   // <moduleId>.json/trigger/<n> address the other risu_module_get sections.
   let section = 'info';
@@ -349,13 +349,13 @@ async function readModule(call: RouteCall, id: string, moduleId: string, rest: s
       section = 'trigger';
       index = parseInt(idx, 10);
     } else {
-      return err(`no such file: ${call.path}`);
+      return { error: err(`no such file: ${call.path}`) };
     }
   }
   const args: Record<string, unknown> = { characterId: id, moduleId, section };
   if (index !== undefined) args['index'] = index;
   const res = await provider(call, 'risu_module_get', args);
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   return resultToString(res);
 }
 

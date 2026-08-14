@@ -381,6 +381,18 @@ describe('grep', () => {
     );
   });
 
+  it('greps field content that starts with "Error:" instead of aborting the walk', async () => {
+    const { template } = setup({
+      character: { character_get: () => ({ ...CARD, description: 'Error: dragons are not real\nor are they' }) },
+    });
+    // The content is file data, not a route failure: read returns it verbatim...
+    expect(await exec(template, 'read', { path: '/characters/c1/description' })).toBe('Error: dragons are not real\nor are they');
+    // ...and grep finds matches inside it rather than returning it as the walk's error.
+    const content = await exec(template, 'grep', { pattern: 'dragon', path: '/characters/c1/' });
+    expect(content).toContain('/characters/c1/description:1:Error: dragons are not real');
+    expect(content).toContain('/characters/c1/scenario:1:A dragon appears');
+  });
+
   it('finds matches inside backend_logic modules (walk reads them)', async () => {
     const { template } = setup({
       character: {
@@ -939,7 +951,13 @@ describe('/generations debug-trace route (read-only)', () => {
     id: 'gen-2',
     status: 'complete' as const,
     errorMessage: null,
-    meta: { layer: 'trivial', depth: 0, rounds: 1, prompt: { messages: [{ role: 'user', content: 'hi' }], tokenUsage: { prompt: 1, completion: 1 } } },
+    meta: {
+      layer: 'trivial',
+      depth: 0,
+      rounds: 1,
+      prompt: { messages: [{ role: 'user', content: 'hi' }], tokenUsage: { prompt: 1, completion: 1 } },
+      prompts: [{ messages: [{ role: 'user', content: 'hi' }], tokenUsage: { prompt: 1, completion: 1 } }],
+    },
   };
 
   function setupGenerations(records: Record<string, unknown>) {
@@ -951,10 +969,10 @@ describe('/generations debug-trace route (read-only)', () => {
     expect(await exec(template, 'ls', { path: '/generations/' })).toBe(COLLECTION_REFUSAL);
   });
 
-  it('ls a generation dir lists meta.json + error.txt (prompt.json only when captured)', async () => {
+  it('ls a generation dir lists meta.json + error.txt (prompt files only when captured)', async () => {
     const { template } = setupGenerations({ 'gen-1': RECORD, 'gen-2': RECORD_WITH_PROMPT });
     expect(await exec(template, 'ls', { path: '/generations/gen-1/' })).toBe('meta.json\nerror.txt');
-    expect(await exec(template, 'ls', { path: '/generations/gen-2/' })).toBe('meta.json\nprompt.json');
+    expect(await exec(template, 'ls', { path: '/generations/gen-2/' })).toBe('meta.json\nprompt.json\nprompts.json');
   });
 
   it('read meta.json returns the full record', async () => {
@@ -980,6 +998,18 @@ describe('/generations debug-trace route (read-only)', () => {
     // Not captured on this record → no such file.
     expect(await exec(template, 'read', { path: '/generations/gen-1/prompt.json' })).toBe(
       'Error: no such file: /generations/gen-1/prompt.json',
+    );
+  });
+
+  it('read prompts.json returns every captured round prompt', async () => {
+    const { template } = setupGenerations({ 'gen-2': RECORD_WITH_PROMPT });
+    const content = await exec(template, 'read', { path: '/generations/gen-2/prompts.json' });
+    const parsed = JSON.parse(content) as unknown[];
+    expect(parsed).toHaveLength(1);
+    expect(content).toContain('"role": "user"');
+    // Not captured on this record → no such file.
+    expect(await exec(template, 'read', { path: '/generations/gen-1/prompts.json' })).toBe(
+      'Error: no such file: /generations/gen-1/prompts.json',
     );
   });
 

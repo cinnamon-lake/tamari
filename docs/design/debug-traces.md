@@ -55,15 +55,12 @@ One JSON column on the existing `generations` table — no per-round rows, no ne
   "depth": 2,
   "rounds": 3,
   "toolCalls": [{ "name": "map_set_tile", "isError": false }, …],
-  "delegateChain": ["custom-backend(research)", "openai(gpt-4o)"],
-  "luaEntry": "main.lua",
-  "luaModules": ["lib/roll.lua"],
   "traceError": { "code": "LUA_ERROR", "layer": "…", "message": "…", "cause": { … } }
 }
 ```
 
-- `delegateChain` accumulates across nested runs (parent's chain + own adapter id), so the record itself states its full ancestry beyond what `parent_id` links give structurally.
-- **Prompt snapshots are captured when `debugPrompts` is enabled** (the existing setting that already gates `prompt.announced` broadcasts): the round-1 prompt (messages, tools, params, responseFormat) is stored under `meta.prompt`. This is inevitable for real debugging — but it's chat content and it balloons rows, so it rides the existing opt-in rather than becoming always-on. No API keys ever appear (prompts carry content, not secrets).
+- Not yet implemented: `delegateChain`, `luaEntry`, and `luaModules` from the sketch above — `buildMeta` (GenerationRunner) currently writes only `layer`, `depth`, `rounds`, `toolCalls`, `traceError`, and the capture-gated `prompt`/`prompts`/`appendOnly`. When they land, `delegateChain` accumulates across nested runs (parent's chain + own adapter id), so the record itself states its full ancestry beyond what `parent_id` links give structurally.
+- **Prompt snapshots are captured when prompt capture is on** — the target-level `capturePrompts` flag (GenerationTarget) wins; otherwise the existing `debugPrompts` setting (which already gates `prompt.announced` broadcasts) decides: the round-1 prompt (messages, tools, params, responseFormat) is stored under `meta.prompt`, and every round's prompt under `meta.prompts` (in order, `prompts[0] === prompt`; rounds are bounded by `maxToolRounds`). This is inevitable for real debugging — but it's chat content and it balloons rows (multi-round tool loops store one full prompt per round), so it rides the opt-in rather than becoming always-on. No API keys ever appear (prompts carry content, not secrets).
 - `error_message` (existing column) keeps the rendered string; `meta.traceError` carries the structure.
 
 ## Piece 3: Surfacing
@@ -72,7 +69,7 @@ One JSON column on the existing `generations` table — no per-round rows, no ne
 
 **Dry-runs.** `backend_logic_test`'s outcome (which already returns `delegations[]`) gains `trace`: per-delegation layer, error chain if any, and the modules loaded. The recording delegate can be told to fail (`delegateResponse: { error }` already exists) so authors can test error paths explicitly.
 
-**Workbench VFS (read-only).** `/generations/<id>/` — `meta.json` (the full record), `error.txt` (rendered chain), `prompt.json` (when captured). Trace ids appear in `run_agent` results and in the chat UI's generation records, so the no-discovery rule holds: the id always comes from context, `ls /generations/` refuses like every other collection. No `/chats/<id>/generations` listing this round.
+**Workbench VFS (read-only).** `/generations/<id>/` — `meta.json` (the full record), `error.txt` (rendered chain), `prompt.json` (round-1 prompt, when captured), `prompts.json` (every round's prompt, when captured). Trace ids appear in `run_agent` results and in the chat UI's generation records, so the no-discovery rule holds: the id always comes from context, `ls /generations/` refuses like every other collection. No `/chats/<id>/generations` listing this round.
 
 **Human UI: deferred.** ~~The records are queryable; a viewer ships when we know what we actually look at.~~ ✅ **Shipped** — the chat header menu (⋮) has a **Generation traces** entry: a read-only, chat-scoped modal over `GET /api/chats/<id>/generations` (50 newest records) showing kind/backend/status/rounds/tool calls, sub-agent rows nested under their parent, expandable error chains (composed client-side from `meta.traceError`), and prompt snapshots when captured.
 
@@ -81,7 +78,7 @@ One JSON column on the existing `generations` table — no per-round rows, no ne
 - Per-round generation rows or a separate events table.
 - ~~A chat-UI trace viewer.~~ ✅ Shipped (chat-scoped read-only modal). Cross-chat/global views and live updates remain non-goals.
 - Workbench write access to traces (read-only, and traces are immutable anyway).
-- Prompt capture without `debugPrompts`.
+- Prompt capture without an explicit opt-in (the `debugPrompts` setting or a target-level `capturePrompts` flag).
 
 ## Migration order
 

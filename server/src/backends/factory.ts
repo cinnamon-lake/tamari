@@ -18,6 +18,7 @@ import { LlamaCppBackendAdapter } from './LlamaCppBackendAdapter.js';
 import { MoonshotBackendAdapter } from './MoonshotBackendAdapter.js';
 
 import { KoboldCppBackendAdapter } from './KoboldCppBackendAdapter.js';
+import { MockBackendAdapter } from './MockBackendAdapter.js';
 import type { BackendAdapter } from './BackendAdapter.js';
 import type { BackendConfig } from '@tamari/types';
 import { buildBackendSettings } from './buildBackendSettings.js';
@@ -102,6 +103,8 @@ export interface AdapterFactoryInput {
   claudeParams?: Record<string, unknown>;
   geminiParams?: Record<string, unknown>;
   koboldcppParams?: Record<string, unknown>;
+  /** Inline response script for the deterministic 'mock' provider. */
+  mockScript?: string;
   openrouter: OpenRouterFactoryOptions;
 }
 
@@ -135,6 +138,7 @@ export function buildAdapterFactoryInput(
     claudeParams: parseParams(settings['claude.params']),
     geminiParams: parseParams(settings['gemini.params']),
     koboldcppParams: parseParams(settings['koboldcpp.params']),
+    mockScript: parseOptionalString(settings['mockScript']),
     openrouter: {
       transforms: parseStringArray(settings['openrouter.transforms']),
       plugins: parsePlugins(settings['openrouter.plugins']),
@@ -173,8 +177,9 @@ export function createBackendAdapter(
   const effectiveUrl = input.baseUrl || canonicalUrls[input.provider] || '';
   const effectiveKey = input.apiKey;
 
-  // Providers that can work without an API key (local backends / custom proxies)
-  const localProviders = new Set(['llamacpp', 'tabbyapi', 'koboldcpp']);
+  // Providers that can work without an API key (local backends / custom
+  // proxies / the deterministic mock — no network at all)
+  const localProviders = new Set(['llamacpp', 'tabbyapi', 'koboldcpp', 'mock']);
   const needsKey = !localProviders.has(input.provider);
 
   // Only require a key when hitting a cloud provider. Local backends and
@@ -216,7 +221,7 @@ export function createBackendAdapter(
 }
 
 /** Providers whose adapter preempts text-completion mode (legacy order). */
-const DIRECT_PROVIDERS = new Set(['openrouter', 'claude', 'gemini', 'llamacpp', 'tabbyapi']);
+const DIRECT_PROVIDERS = new Set(['openrouter', 'claude', 'gemini', 'llamacpp', 'tabbyapi', 'mock']);
 
 // ── Built-in providers ───────────────────────────────────────────────────
 
@@ -294,6 +299,10 @@ registerBackendProvider('openai', (input, connection) =>
     params: input.openaiParams,
   }),
 );
+
+// Deterministic scripted backend for headless card testing (no network; the
+// canned responses live in the config's providerParams.mockScript).
+registerBackendProvider('mock', (input) => new MockBackendAdapter(input.mockScript ?? ''));
 
 function parseStringArray(value: unknown): string[] | undefined {
   if (Array.isArray(value)) return value.map(String);

@@ -12,6 +12,7 @@ import type { BackendAdapter, BackendStreamItem, GenerationResult } from '../bac
 import { TrivialBackendAdapter } from '../backends/TrivialBackendAdapter.js';
 import { ToolRegistry } from '../services/ToolRegistry.js';
 import { GenerationRepository } from '../repos/GenerationRepository.js';
+import { AssistantMessageTarget } from './AssistantMessageTarget.js';
 
 describe('GenerationRunner backend resolution', () => {
   let h: TestHarness | undefined;
@@ -250,6 +251,7 @@ describe('generation meta (debug traces)', () => {
     expect(record.meta).toMatchObject({ layer: 'trivial', depth: 0, rounds: 1 });
     expect(record.meta?.traceError).toBeUndefined();
     expect(record.meta?.prompt).toBeUndefined();
+    expect(record.meta?.prompts).toBeUndefined();
   });
 
   it('tool rounds accumulate rounds and toolCalls into meta', async () => {
@@ -291,6 +293,64 @@ describe('generation meta (debug traces)', () => {
     const record = await latestRecord(chatId);
     expect(record.meta?.prompt).toBeDefined();
     expect(JSON.stringify(record.meta?.prompt?.messages)).toContain('UNIQUE_MARKER');
+  });
+
+  it('debugPrompts on captures every round prompt in meta.prompts', async () => {
+    const toolRegistry = new ToolRegistry();
+    echoTool(toolRegistry);
+    const chatId = await setupChat(
+      new TrivialBackendAdapter([
+        [{ type: 'tool_use', id: 'c1', name: 'echo_marker', input: { value: 'x' } }],
+        [{ type: 'content', content: 'done' }],
+      ]),
+      toolRegistry,
+    );
+    await h!.send(client, {
+      type: 'toolset.create',
+      data: { templateId: 'echo', name: 'Echo', config: {}, toolOverrides: {}, enabled: true },
+    });
+    h!.expectBroadcast('toolset.created');
+    await h!.deps.settings.setValue('debugPrompts', true);
+
+    await h!.send(client, { type: 'action.sendAndGenerate', chatId, content: 'go UNIQUE_MARKER' });
+    h!.expectBroadcast('generation.done');
+
+    const record = await latestRecord(chatId);
+    expect(record.meta?.rounds).toBe(2);
+    expect(record.meta?.prompts).toHaveLength(2);
+    // prompts[0] is the round-1 prompt — the same object the back-compat
+    // prompt field carries.
+    expect(record.meta?.prompts?.[0]).toEqual(record.meta?.prompt);
+    expect(JSON.stringify(record.meta?.prompts?.[0]?.messages)).toContain('UNIQUE_MARKER');
+    // The round-2 prompt carries round 1's tool result.
+    expect(JSON.stringify(record.meta?.prompts?.[1]?.messages)).toContain('ECHO:x');
+  });
+
+  it('target.capturePrompts captures prompts with the global debugPrompts setting off', async () => {
+    const chatId = await setupChat(new TrivialBackendAdapter([[{ type: 'content', content: 'ok' }]]));
+    const chat = await h!.deps.chats.getChatById(chatId);
+    const character = chat?.characterId ? await h!.deps.characters.getById(chat.characterId) : null;
+
+    const target = AssistantMessageTarget.forNewMessage(
+      { chatId, character: character ?? null, capturePrompts: true },
+      {
+        chats: h!.deps.chats,
+        characters: h!.deps.characters,
+        chatMembers: h!.deps.chatMembers,
+        personas: h!.deps.personas,
+        settings: h!.deps.settings,
+        backendConfigs: h!.deps.backendConfigs,
+        chatBroadcast: h!.deps.chatBroadcast,
+        generationBroadcast: h!.generationBroadcast,
+        assembly: h!.chatPromptAssembly,
+      },
+    );
+    const outcome = await h!.generationRunner.run(target);
+    expect(outcome.error).toBeUndefined();
+
+    const record = await latestRecord(chatId);
+    expect(record.meta?.prompt).toBeDefined();
+    expect(record.meta?.prompts).toHaveLength(1);
   });
 
   it('a failed run writes the traceError into meta', async () => {

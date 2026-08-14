@@ -19,7 +19,6 @@ import {
   fieldSpec,
   fileEntry,
   idOf,
-  isError,
   isRecord,
   parseFieldContent,
   parseJsonObjectBody,
@@ -31,6 +30,7 @@ import {
   type ListEntry,
   type ProviderOutcome,
   type RouteCall,
+  type RouteError,
 } from '../router.js';
 
 function provider(call: RouteCall, tool: string, args: Record<string, unknown>): Promise<ProviderOutcome> {
@@ -43,13 +43,13 @@ const META_FIELDS: readonly FieldSpec[] = [
   { file: 'description', key: 'description', type: 'string' },
 ];
 
-async function ls(call: RouteCall): Promise<ListEntry[] | string> {
+async function ls(call: RouteCall): Promise<ListEntry[] | RouteError> {
   const [id, file] = call.segs;
-  if (id === undefined) return COLLECTION_REFUSAL;
-  if (isNewSegment(id)) return err(`no such file: ${call.path}`);
+  if (id === undefined) return { error: COLLECTION_REFUSAL };
+  if (isNewSegment(id)) return { error: err(`no such file: ${call.path}`) };
   if (file === undefined) {
     const res = await provider(call, 'custom_backend_get', { id });
-    if (!res.ok) return res.error;
+    if (!res.ok) return { error: res.error };
     return [
       { name: 'meta.json', dir: false },
       { name: 'source.lua', dir: false },
@@ -58,34 +58,34 @@ async function ls(call: RouteCall): Promise<ListEntry[] | string> {
   // meta.json expands into per-field files; field paths list themselves.
   if (file === 'meta.json' && call.segs.length === 2) {
     const content = await read(call);
-    if (isError(content)) return content;
+    if (typeof content !== 'string') return content;
     return fieldEntries(META_FIELDS);
   }
   return fileEntry(call, read);
 }
 
-async function read(call: RouteCall): Promise<string> {
+async function read(call: RouteCall): Promise<string | RouteError> {
   const [id, file, field, ...rest] = call.segs;
-  if (id === undefined || file === undefined) return err(`is a directory (use ls): ${call.path}`);
-  if (isNewSegment(id)) return err(`no such file: ${call.path}`);
-  if (rest.length > 0) return err(`no such file: ${call.path}`);
+  if (id === undefined || file === undefined) return { error: err(`is a directory (use ls): ${call.path}`) };
+  if (isNewSegment(id)) return { error: err(`no such file: ${call.path}`) };
+  if (rest.length > 0) return { error: err(`no such file: ${call.path}`) };
   const res = await provider(call, 'custom_backend_get', { id });
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   const item = isRecord(res.value) ? res.value : {};
   switch (file) {
     case 'meta.json': {
       if (field !== undefined) {
         const spec = fieldSpec(META_FIELDS, field);
-        if (spec === undefined) return err(`no such file: ${call.path}`);
+        if (spec === undefined) return { error: err(`no such file: ${call.path}`) };
         return readField(item, spec);
       }
       return pretty({ name: item['name'] ?? null, description: item['description'] ?? '', updatedAt: item['updatedAt'] ?? null });
     }
     case 'source.lua':
-      if (field !== undefined) return err(`no such file: ${call.path}`);
+      if (field !== undefined) return { error: err(`no such file: ${call.path}`) };
       return asString(item['luaSource']) ?? '';
     default:
-      return err(`no such file: ${call.path}`);
+      return { error: err(`no such file: ${call.path}`) };
   }
 }
 

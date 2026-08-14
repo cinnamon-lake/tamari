@@ -18,21 +18,22 @@ import {
   type DomainRoute,
   type ListEntry,
   type RouteCall,
+  type RouteError,
 } from '../router.js';
 
-async function ls(call: RouteCall): Promise<ListEntry[] | string> {
+async function ls(call: RouteCall): Promise<ListEntry[] | RouteError> {
   const [file] = call.segs;
-  if (file === undefined) return COLLECTION_REFUSAL;
-  if (isNewSegment(file) || !isJson(file)) return err(`no such file: ${call.path}`);
+  if (file === undefined) return { error: COLLECTION_REFUSAL };
+  if (isNewSegment(file) || !isJson(file)) return { error: err(`no such file: ${call.path}`) };
   return fileEntry(call, read);
 }
 
-async function read(call: RouteCall): Promise<string> {
+async function read(call: RouteCall): Promise<string | RouteError> {
   const [file] = call.segs;
-  if (file === undefined) return err(`is a directory (use ls): ${call.path}`);
-  if (isNewSegment(file) || !isJson(file)) return err(`no such file: ${call.path}`);
+  if (file === undefined) return { error: err(`is a directory (use ls): ${call.path}`) };
+  if (isNewSegment(file) || !isJson(file)) return { error: err(`no such file: ${call.path}`) };
   const res = await callProvider(call.providers.toolsetWorkbench, 'toolset_get', { id: stripJsonExt(file) }, call.context);
-  if (!res.ok) return res.error;
+  if (!res.ok) return { error: res.error };
   return resultToString(res);
 }
 

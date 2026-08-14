@@ -33,6 +33,7 @@ let cardsRoot: string;
 let client: Client;
 let innerCharacters: CharacterRepository;
 let bus: EventBus;
+let storage: FileStorage;
 let broadcast: MockInstance<EventBus['broadcast']>;
 let setAvatar: Mock<(character: Character, buffer: Buffer) => Promise<unknown>>;
 let service: UnpackedCardService;
@@ -135,11 +136,12 @@ beforeEach(async () => {
   broadcast = vi.spyOn(bus, 'broadcast');
   setAvatar = vi.fn<(character: Character, buffer: Buffer) => Promise<unknown>>().mockResolvedValue(undefined);
   enabled = true;
+  storage = new FileStorage(dataDir);
   service = new UnpackedCardService({
     characters: innerCharacters,
     characterAssets: new CharacterAssetRepository(client),
     quickReplies: new QuickReplyRepository(client),
-    storage: new FileStorage(dataDir),
+    storage,
     bus,
     settings: makeSettings(),
     dataDir,
@@ -257,6 +259,43 @@ describe('scan', () => {
     expect(await innerCharacters.getById('unpacked/orphan')).toBeUndefined();
     expect(broadcastsOf('character.deleted').length).toBeGreaterThan(0);
   });
+
+  it('keeps the incumbent folder when two folders share a meta.id', async () => {
+    await writeCardFolder('aaa', { 'meta.json': JSON.stringify({ id: 'dup', name: 'First' }) });
+    await writeCardFolder('bbb', { 'meta.json': JSON.stringify({ id: 'dup', name: 'Second' }) });
+    await service.start();
+
+    const entry = service.get('unpacked/dup');
+    expect(entry?.dir).toBe(join(cardsRoot, 'aaa'));
+    expect(entry?.parsed.name).toBe('First');
+    expect((await innerCharacters.getById('unpacked/dup'))?.name).toBe('First');
+    expect(entry?.parsed.errors.some((e) => e.includes('duplicate meta.id'))).toBe(true);
+
+    // Repeated scans: no flapping — the incumbent stays, the error stays.
+    await service.scanAll();
+    await service.scanAll();
+    expect(service.get('unpacked/dup')?.dir).toBe(join(cardsRoot, 'aaa'));
+    expect((await innerCharacters.getById('unpacked/dup'))?.name).toBe('First');
+
+    // The duplicate error surfaces on the character's extensions.
+    const characters = new ReadThroughCharacterRepository(innerCharacters, service);
+    const card = await characters.getById('unpacked/dup');
+    expect(card?.extensions['unpackedErrors']).toEqual([expect.stringContaining('duplicate meta.id')]);
+  });
+
+  it('syncs disk tags onto the handle row so SQL tag filtering matches', async () => {
+    const dir = await writeCardFolder('alice', { 'meta.json': JSON.stringify({ name: 'Alice', tags: ['a'] }) });
+    await service.start();
+
+    expect((await innerCharacters.list({ tag: 'a' })).items.map((c) => c.id)).toContain('unpacked/alice');
+    expect((await innerCharacters.list({ tag: 'zzz' })).items).toHaveLength(0);
+
+    // Tag edits on disk propagate to the row on rescan.
+    await fs.writeFile(join(dir, 'meta.json'), JSON.stringify({ name: 'Alice', tags: ['b'] }));
+    await service.scanFolder(dir);
+    expect((await innerCharacters.list({ tag: 'a' })).items).toHaveLength(0);
+    expect((await innerCharacters.list({ tag: 'b' })).items.map((c) => c.id)).toContain('unpacked/alice');
+  });
 });
 
 describe('folder removal', () => {
@@ -303,5 +342,30 @@ describe('avatar sync', () => {
     await writeCardFolder('alice', { 'meta.json': JSON.stringify({ name: 'Alice' }) });
     await service.start();
     expect(setAvatar).not.toHaveBeenCalled();
+  });
+
+  it('clears the synced avatar when avatar.png is removed', async () => {
+    const dir = await writeCardFolder('alice', {
+      'meta.json': JSON.stringify({ name: 'Alice' }),
+      'avatar.png': TINY_PNG,
+    });
+    await service.start();
+    expect(setAvatar).toHaveBeenCalledTimes(1);
+
+    // The stub pipeline doesn't write the row — simulate its effect.
+    await innerCharacters.update('unpacked/alice', {
+      avatarPath: 'avatars/a.png',
+      avatarThumbnailPath: 'avatars/thumbs/a.png',
+    });
+    const storageDelete = vi.spyOn(storage, 'delete');
+
+    await fs.rm(join(dir, 'avatar.png'));
+    await service.scanFolder(dir);
+
+    const row = await innerCharacters.getById('unpacked/alice');
+    expect(row?.avatarPath).toBeNull();
+    expect(row?.avatarThumbnailPath).toBeNull();
+    expect(storageDelete).toHaveBeenCalledWith('avatars/a.png');
+    expect(storageDelete).toHaveBeenCalledWith('avatars/thumbs/a.png');
   });
 });

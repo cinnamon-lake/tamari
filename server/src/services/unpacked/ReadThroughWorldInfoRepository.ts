@@ -4,8 +4,9 @@
  * generation pipeline (`worldInfo.getById(character.worldInfoId)` in
  * ChatPromptAssembly) reads disk-fresh entries with no row syncing.
  *
- * All other ids delegate to the inner repo. Writes to unpacked book ids throw —
- * lorebook edits happen in the folder, not the app.
+ * All other ids delegate to the inner repo. Writes to the book id of a card
+ * LIVE in the registry throw — lorebook edits happen in the folder, not the
+ * app. Book ids whose card is no longer loaded (orphans) pass through.
  */
 
 import type { WorldInfo, WorldInfoInsert, WorldInfoUpdate } from '@tamari/types';
@@ -50,8 +51,8 @@ export class ReadThroughWorldInfoRepository implements IWorldInfoRepository {
   }
 
   private rejectUnpackedWrite(id: string): void {
-    if (!isUnpackedWorldInfoId(id)) return;
-    const dir = this.registry.get(unpackedCardIdFromWorldInfoId(id))?.dir ?? 'unpacked-cards/ (under the server data dir)';
-    throw new Error(`Lorebook is unpacked (on-disk); edit the card folder instead: ${dir}/lorebook/`);
+    const entry = isUnpackedWorldInfoId(id) ? this.registry.get(unpackedCardIdFromWorldInfoId(id)) : undefined;
+    if (!entry) return;
+    throw new Error(`Lorebook is unpacked (on-disk); edit the card folder instead: ${entry.dir}/lorebook/`);
   }
 }

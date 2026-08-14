@@ -21,6 +21,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { LuaRuntime, LuaRuntimeOptions } from '../scripting/LuaRuntime.js';
+import { friendlyLuaError, MAX_EXECUTION_MS } from '../scripting/LuaRuntime.js';
 import { ScriptContext } from '../scripting/ScriptContext.js';
 import { createToolStApi, type StApiDeps } from '../scripting/StApi.js';
 import { str } from '../lib/coerce.js';
@@ -141,7 +142,7 @@ export class LuaToolExecutor {
       if (code.includes(':await(') || code.includes('.await(')) {
         const run = await this.runExecuteViaDoString(lua, args, luaContext, toolName);
         if (run.error) {
-          return { content: `Lua execution error: ${run.error}` };
+          return { content: `Lua execution error: ${friendlyLuaError(run.error, MAX_EXECUTION_MS)}` };
         }
         execResult = run.result;
       } else {
@@ -153,7 +154,7 @@ export class LuaToolExecutor {
           log.debug({ toolName }, 'Lua tool yielded across the proxy boundary; retrying via doString');
           const run = await this.runExecuteViaDoString(lua, args, luaContext, toolName);
           if (run.error) {
-            return { content: `Lua execution error: ${run.error}` };
+            return { content: `Lua execution error: ${friendlyLuaError(run.error, MAX_EXECUTION_MS)}` };
           }
           execResult = run.result;
         }
@@ -200,7 +201,7 @@ export class LuaToolExecutor {
         extra: { ...extra, ...stateExtra },
       };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = friendlyLuaError(err, MAX_EXECUTION_MS);
       return { content: `Lua execution error: ${msg}` };
     } finally {
       // Let fire-and-forget async st.* calls settle before tearing down the

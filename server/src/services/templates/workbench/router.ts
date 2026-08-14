@@ -6,9 +6,11 @@
  * translate fs ops into provider `execute` calls and map their JSON results
  * back to file content.
  *
- * Protocol: route functions never throw for expected failures — they return
- * `Error: ...` content strings, same as the providers. `ls` returns either
- * structured entries or an error string.
+ * Protocol: route functions never throw for expected failures. `write`/`rm`
+ * return `Error: ...` content strings, same as the providers. `ls`/`read`
+ * instead tag failures as `{ error }` objects — file content that happens to
+ * start with "Error:" must not be mistaken for a route failure (grep walks
+ * read real file bodies).
  */
 
 import type { ToolContext, ToolExecuteResult } from '../../ToolTemplate.js';
@@ -54,7 +56,7 @@ export interface WorkbenchProviders {
   luaToolWorkbench: LuaToolWorkbench;
   /** Generation records for the read-only /generations/ debug-trace route. */
   generations?: { getById(id: string): Promise<Generation | undefined> };
-  /** Headless card chat simulation backing the test_card run verb. */
+  /** Session-based card testing (TestSessionService) backing the test_card run verb. */
   cardTest?: { run(args: Record<string, unknown>): Promise<ToolExecuteResult> };
 }
 
@@ -75,9 +77,14 @@ export interface ListEntry {
   annotation?: string;
 }
 
+/** Tagged failure for the internal `ls`/`read` protocol — distinguishes a route error from content that starts with "Error:". */
+export interface RouteError {
+  error: string;
+}
+
 export interface DomainRoute {
-  ls(call: RouteCall): Promise<ListEntry[] | string>;
-  read(call: RouteCall): Promise<string>;
+  ls(call: RouteCall): Promise<ListEntry[] | RouteError>;
+  read(call: RouteCall): Promise<string | RouteError>;
   write(call: RouteCall, content: string): Promise<string>;
   rm(call: RouteCall): Promise<string>;
 }
@@ -135,9 +142,12 @@ export function createdResult(res: { value: unknown; raw: string }, path: string
 }
 
 /** `ls` on a file path lists the file itself (after proving it exists via read). */
-export async function fileEntry(call: RouteCall, read: (c: RouteCall) => Promise<string>): Promise<ListEntry[] | string> {
+export async function fileEntry(
+  call: RouteCall,
+  read: (c: RouteCall) => Promise<string | RouteError>,
+): Promise<ListEntry[] | RouteError> {
   const content = await read(call);
-  if (isError(content)) return content;
+  if (typeof content !== 'string') return content;
   return [{ name: call.segs[call.segs.length - 1] ?? '', dir: false }];
 }
 

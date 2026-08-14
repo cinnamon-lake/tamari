@@ -142,6 +142,8 @@ export function BackendConfigModal(props: { onClose: () => void }) {
   const [delegateConfigId, setDelegateConfigId] = createSignal(
     str(activeBackendConfig()?.providerParams?.['delegateConfigId']),
   );
+  // `mock` provider: the inline canned-response script (providerParams.mockScript).
+  const [mockScript, setMockScript] = createSignal(str(activeBackendConfig()?.providerParams?.['mockScript']));
   const [logitBias, setLogitBias] = createSignal(formatLogitBias(activeBackendConfig()?.logitBias));
   const [openrouterProvider, setOpenrouterProvider] = createSignal(activeBackendConfig()?.openrouterProvider ?? '');
   const [apiUrl, setApiUrl] = createSignal(activeBackendConfig()?.apiUrl ?? '');
@@ -291,12 +293,14 @@ export function BackendConfigModal(props: { onClose: () => void }) {
       { value: 'claude', label: 'Claude' },
       { value: 'gemini', label: 'Gemini' },
       { value: 'custom', label: 'Custom (Lua)' },
+      { value: 'mock', label: 'Mock (deterministic)' },
     ],
     text: [
       { value: 'openai', label: 'OpenAI' },
       { value: 'llamacpp', label: 'llama.cpp' },
       { value: 'tabbyapi', label: 'TabbyAPI' },
       { value: 'koboldcpp', label: 'KoboldCPP' },
+      { value: 'mock', label: 'Mock (deterministic)' },
     ],
   };
 
@@ -355,6 +359,7 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     );
     setCustomBackendId(str(config.providerParams?.['customBackendId']));
     setDelegateConfigId(str(config.providerParams?.['delegateConfigId']));
+    setMockScript(str(config.providerParams?.['mockScript']));
     setLogitBias(formatLogitBias(config.logitBias));
     setOpenrouterProvider(config.openrouterProvider ?? '');
     setApiUrl(config.apiUrl ?? '');
@@ -441,6 +446,10 @@ export function BackendConfigModal(props: { onClose: () => void }) {
       if (delegateConfigId()) params['delegateConfigId'] = delegateConfigId();
       else delete params['delegateConfigId'];
     }
+    if (backendProvider() === 'mock') {
+      if (mockScript()) params['mockScript'] = mockScript();
+      else delete params['mockScript'];
+    }
     return params;
   };
 
@@ -514,6 +523,7 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     requestScript();
     customBackendId();
     delegateConfigId();
+    mockScript();
     logitBias();
     openrouterProvider();
     apiUrl();
@@ -686,7 +696,7 @@ export function BackendConfigModal(props: { onClose: () => void }) {
               <For each={PROVIDERS_BY_MODE[generationMode()]}>{(p) => <option class="select-option" id={p.value} value={p.value}>{p.label}</option>}</For>
             </select>
           </label>
-          <Show when={backendProvider() !== 'custom'}>
+          <Show when={!['custom', 'mock'].includes(backendProvider())}>
           <label class="field-label">
             {t('backendConfig.apiUrl')}
             <input
@@ -715,6 +725,19 @@ export function BackendConfigModal(props: { onClose: () => void }) {
               <SecretPicker onPick={(ref) => { setApiKey(ref); setDirty(true); }} />
             </span>
           </label>
+          </Show>
+          <Show when={backendProvider() === 'mock'}>
+            <label class="field-label">
+              {t('backendConfig.mockScript')}
+              <textarea
+                value={mockScript()}
+                onInput={(e) => markDirty(setMockScript)(e.currentTarget.value)}
+                placeholder={'respond:Hello there.\nseq:2:A reply just for the second call.\ntool:get_weather:{"city":"Paris"}'}
+                rows={6}
+                class="font-mono text-sm resize-v"
+              />
+              <span class="hint-text">{t('backendConfig.mockScriptHint')}</span>
+            </label>
           </Show>
           <Show when={backendProvider() === 'custom'}>
             <label class="field-label">

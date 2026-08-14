@@ -23,6 +23,10 @@ export const PROVIDER_PARAMS_STRUCTURAL_KEYS: readonly string[] = [
   'samplerDisabled',
   'customBackendId',
   'delegateConfigId',
+  // Inline response script for the deterministic 'mock' provider
+  // (server/src/backends/MockBackendAdapter.ts) — consumed top-level by the
+  // adapter factory, never a sampler.
+  'mockScript',
 ];
 
 export const ADVANCED_SAMPLER_WIRE_NAMES: readonly string[] = [

@@ -39,6 +39,8 @@ const log = getLogger('unpacked-cards');
 
 export const UNPACKED_CARDS_DIRNAME = 'unpacked-cards';
 const WATCH_DEBOUNCE_MS = 300;
+const WATCH_RETRY_BASE_MS = 1000;
+const WATCH_RETRY_MAX_MS = 30_000;
 
 /** Public registry record: the last good parse of a folder plus where it lives. */
 export interface UnpackedCardEntry {
@@ -97,6 +99,8 @@ function contentSignature(parsed: ParsedCard): string {
 export class UnpackedCardService implements UnpackedCardRegistry {
   private registry = new Map<string, RegistryState>();
   private watcher: FSWatcher | null = null;
+  private watcherRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private watcherRetryDelayMs = WATCH_RETRY_BASE_MS;
   private debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** Serializes all scan work so watcher events and explicit rescans can't interleave. */
   private chain: Promise<void> = Promise.resolve();
@@ -136,6 +140,10 @@ export class UnpackedCardService implements UnpackedCardRegistry {
   stop(): void {
     this.watcher?.close();
     this.watcher = null;
+    if (this.watcherRetryTimer) {
+      clearTimeout(this.watcherRetryTimer);
+      this.watcherRetryTimer = null;
+    }
     for (const timer of this.debounceTimers.values()) clearTimeout(timer);
     this.debounceTimers.clear();
   }
@@ -208,6 +216,26 @@ export class UnpackedCardService implements UnpackedCardRegistry {
       return;
     }
 
+    // Duplicate meta.id across folders: the first folder loaded (incumbent)
+    // wins; the newcomer is ignored entirely. The error rides on the
+    // incumbent's parsed.errors so it surfaces via extensions.unpackedErrors
+    // and the content signature (one broadcast, no registry flapping).
+    const incumbent = this.registry.get(cardId);
+    if (incumbent && incumbent.dir !== dir) {
+      const message = `duplicate meta.id "${parsed.id}": also used by ${incumbent.dir} — this folder (${dir}) is ignored`;
+      if (!incumbent.parsed.errors.includes(message)) {
+        incumbent.parsed = { ...incumbent.parsed, errors: [...incumbent.parsed.errors, message] };
+      }
+      const signature = contentSignature(incumbent.parsed);
+      if (signature !== incumbent.signature) {
+        incumbent.signature = signature;
+        await this.broadcastSnapshot(cardId, incumbent.parsed);
+        await this.broadcastList();
+      }
+      log.warn({ dir, incumbentDir: incumbent.dir, cardId }, 'unpacked card: duplicate meta.id — keeping the first folder');
+      return;
+    }
+
     // Slug changed (meta.id edit): the old card id is a removal.
     const byDir = this.findByDir(dir);
     if (byDir && byDir.cardId !== cardId) await this.removeFolder(byDir.cardId);
@@ -219,14 +247,16 @@ export class UnpackedCardService implements UnpackedCardRegistry {
     state.dir = dir;
     this.registry.set(cardId, state);
 
-    // Upsert the thin handle row (id + name) via the INNER repo. Collision
+    // Upsert the thin handle row (id + name + tags) via the INNER repo. Collision
     // with a pre-existing row of the same id is accepted — the `unpacked/`
-    // prefix namespaces handle rows away from real (uuid) character ids.
+    // prefix namespaces handle rows away from real (uuid) character ids. Tags
+    // must live on the row too: SQL tag filtering (CharacterRepository.list)
+    // runs before the read-through overlay.
     const existing = await this.deps.characters.getById(cardId);
     if (!existing) {
-      await this.deps.characters.create(cardId, { name: parsed.name });
-    } else if (existing.name !== parsed.name) {
-      await this.deps.characters.update(cardId, { name: parsed.name });
+      await this.deps.characters.create(cardId, { name: parsed.name, tags: parsed.tags });
+    } else if (existing.name !== parsed.name || JSON.stringify(existing.tags) !== JSON.stringify(parsed.tags)) {
+      await this.deps.characters.update(cardId, { name: parsed.name, tags: parsed.tags });
     }
 
     await this.syncAvatar(cardId, parsed, state);
@@ -251,18 +281,30 @@ export class UnpackedCardService implements UnpackedCardRegistry {
   }
 
   private async syncAvatar(cardId: string, parsed: ParsedCard, state: RegistryState): Promise<void> {
-    if (!parsed.avatarFile) return;
-    let mtimeMs: number;
-    try {
-      mtimeMs = (await fs.stat(parsed.avatarFile)).mtimeMs;
-    } catch {
+    let mtimeMs: number | null = null;
+    if (parsed.avatarFile !== undefined) {
+      try {
+        mtimeMs = (await fs.stat(parsed.avatarFile)).mtimeMs;
+      } catch {
+        // Vanished between parse and sync — treated as removed below.
+      }
+    }
+    const avatarFile = mtimeMs === null ? undefined : parsed.avatarFile;
+    if (avatarFile === undefined || mtimeMs === null) {
+      // avatar.png removed from the folder: clear the synced avatar files too.
+      const character = await this.deps.characters.getById(cardId);
+      if (!character?.avatarPath) return;
+      this.deps.storage.delete(character.avatarPath);
+      if (character.avatarThumbnailPath) this.deps.storage.delete(character.avatarThumbnailPath);
+      await this.deps.characters.update(cardId, { avatarPath: null, avatarThumbnailPath: null });
+      state.avatarMtimeMs = null;
       return;
     }
     if (state.avatarMtimeMs === mtimeMs) return;
     const character = await this.deps.characters.getById(cardId);
     if (!character) return;
     try {
-      const buffer = await fs.readFile(parsed.avatarFile);
+      const buffer = await fs.readFile(avatarFile);
       const setAvatar =
         this.deps.setAvatar ??
         ((char: Character, buf: Buffer) =>
@@ -340,10 +382,28 @@ export class UnpackedCardService implements UnpackedCardRegistry {
     try {
       // Recursive watch is supported on Linux since Node 19.1 (engines: >=24).
       this.watcher = watch(this.rootDir, { recursive: true }, (_event, filename) => this.onWatchEvent(filename));
-      this.watcher.on('error', (err) => log.warn({ err }, 'unpacked-cards watcher error'));
+      this.watcherRetryDelayMs = WATCH_RETRY_BASE_MS;
+      this.watcher.on('error', (err) => {
+        // A dead watcher never recovers on its own — retry with capped
+        // exponential backoff instead of silently losing live-reload.
+        log.warn({ err, retryInMs: this.watcherRetryDelayMs }, 'unpacked-cards watcher error — will retry');
+        this.watcher?.close();
+        this.watcher = null;
+        this.scheduleWatcherRetry();
+      });
     } catch (err) {
       log.warn({ err }, 'fs.watch unavailable — unpacked cards will not live-reload');
     }
+  }
+
+  private scheduleWatcherRetry(): void {
+    if (this.watcherRetryTimer) return;
+    const delay = this.watcherRetryDelayMs;
+    this.watcherRetryDelayMs = Math.min(delay * 2, WATCH_RETRY_MAX_MS);
+    this.watcherRetryTimer = setTimeout(() => {
+      this.watcherRetryTimer = null;
+      this.startWatcher();
+    }, delay);
   }
 
   private onWatchEvent(filename: string | null): void {

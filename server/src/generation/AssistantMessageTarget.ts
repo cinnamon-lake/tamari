@@ -127,36 +127,86 @@ export class AssistantMessageTarget implements GenerationTarget {
     readonly character: Character | null,
     readonly kind: 'send' | 'regenerate' | 'continue',
     private anchorData: Anchor,
+    readonly backendOverride?: string,
+    readonly capturePrompts?: boolean,
   ) {}
 
   static forNewMessage(
-    identity: { chatId: string; clientId?: string; character: Character | null; parentId?: number | null },
+    identity: {
+      chatId: string;
+      clientId?: string;
+      character: Character | null;
+      parentId?: number | null;
+      backendOverride?: string;
+      capturePrompts?: boolean;
+    },
     deps: AssistantMessageTargetDeps,
   ): AssistantMessageTarget {
-    return new AssistantMessageTarget(deps, identity.chatId, identity.clientId, identity.character, 'send', {
-      anchor: 'fresh',
-      parentId: identity.parentId,
-    });
+    return new AssistantMessageTarget(
+      deps,
+      identity.chatId,
+      identity.clientId,
+      identity.character,
+      'send',
+      {
+        anchor: 'fresh',
+        parentId: identity.parentId,
+      },
+      identity.backendOverride,
+      identity.capturePrompts,
+    );
   }
 
   static continueFrom(
-    identity: { chatId: string; clientId?: string; character: Character | null; messageId: number },
+    identity: {
+      chatId: string;
+      clientId?: string;
+      character: Character | null;
+      messageId: number;
+      backendOverride?: string;
+      capturePrompts?: boolean;
+    },
     deps: AssistantMessageTargetDeps,
   ): AssistantMessageTarget {
-    return new AssistantMessageTarget(deps, identity.chatId, identity.clientId, identity.character, 'continue', {
-      anchor: 'continue',
-      messageId: identity.messageId,
-    });
+    return new AssistantMessageTarget(
+      deps,
+      identity.chatId,
+      identity.clientId,
+      identity.character,
+      'continue',
+      {
+        anchor: 'continue',
+        messageId: identity.messageId,
+      },
+      identity.backendOverride,
+      identity.capturePrompts,
+    );
   }
 
   static regenerateOf(
-    identity: { chatId: string; clientId?: string; character: Character | null; parentId: number | null },
+    identity: {
+      chatId: string;
+      clientId?: string;
+      character: Character | null;
+      parentId: number | null;
+      backendOverride?: string;
+      capturePrompts?: boolean;
+    },
     deps: AssistantMessageTargetDeps,
   ): AssistantMessageTarget {
-    return new AssistantMessageTarget(deps, identity.chatId, identity.clientId, identity.character, 'regenerate', {
-      anchor: 'fresh',
-      parentId: identity.parentId,
-    });
+    return new AssistantMessageTarget(
+      deps,
+      identity.chatId,
+      identity.clientId,
+      identity.character,
+      'regenerate',
+      {
+        anchor: 'fresh',
+        parentId: identity.parentId,
+      },
+      identity.backendOverride,
+      identity.capturePrompts,
+    );
   }
 
   get messageId(): number | null {

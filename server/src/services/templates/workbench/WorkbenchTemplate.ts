@@ -151,7 +151,7 @@ const RUN_VERBS: Record<string, RunVerb> = {
   },
   test_card: {
     summary:
-      '{characterId?|folderPath?, turns: string[], keepChat?, timeoutMs?} — headless chat simulation: scripted user turns against the ACTIVE backend config; returns transcript + generation ids (prompts at /generations/<id>/prompt.json)',
+      '{characterId?|folderPath?, turns: string[], keepChat?, backendConfigId?, timeoutMs?} — scripted multi-turn card test in an in-memory test session (no real chat, no DB writes): sends each scripted user turn against the active backend config (or backendConfigId, e.g. a mock config); returns transcript + generation ids. Session kept by default (sessionId returned, expires after 30 min idle) — pass keepChat: false to end it immediately',
     run: (p, a) =>
       p.cardTest !== undefined
         ? p.cardTest.run(a)
@@ -205,7 +205,7 @@ export class WorkbenchTemplate implements ToolTemplate {
           name: 'ls',
           description:
             `List a directory in the workbench virtual filesystem (one entry per line; directories end in "/", files may show a display name). ` +
-            `ls / shows the six domain names. ${NO_COLLECTIONS} Allowed: entity dirs (/characters/<id>/, /custom-backends/<id>/, /luatools/<id>/), ` +
+            `ls / shows the seven domain names. ${NO_COLLECTIONS} Allowed: entity dirs (/characters/<id>/, /custom-backends/<id>/, /luatools/<id>/), ` +
             `entity sub-collections (/characters/<id>/{lorebook,greetings,regex,assets,modules}/), and scoped /quickreplies/<scope>/<scopeId>/. ` +
             `A character dir lists only non-empty fields and present subdirs — empty fields are always hidden.`,
           parameters: z.toJSONSchema(LsArgs) as Record<string, unknown>,
@@ -323,7 +323,7 @@ export class WorkbenchTemplate implements ToolTemplate {
     if (!routed.ok) return { content: routed.error };
     if (routed.root) return { content: DOMAIN_NAMES.map((d) => `${d}/`).join('\n') };
     const entries = await routed.domain.ls(routed.call);
-    if (typeof entries === 'string') return { content: entries };
+    if (!Array.isArray(entries)) return { content: entries.error };
     return { content: formatLs(entries) };
   }
 
@@ -334,7 +334,7 @@ export class WorkbenchTemplate implements ToolTemplate {
     if (!routed.ok) return { content: routed.error };
     if (routed.root) return { content: err(`is a directory (use ls): /`) };
     const content = await routed.domain.read(routed.call);
-    if (isError(content)) return { content };
+    if (typeof content !== 'string') return { content: content.error };
     return { content: renderRange(content, routed.call.path, parsed.data.offset, parsed.data.limit) };
   }
 
@@ -369,10 +369,12 @@ export class WorkbenchTemplate implements ToolTemplate {
     const state = { truncated: false };
 
     // Recursive within-entity walk over the same ls/read route functions the
-    // fs tools use — collection refusals surface as the walk's error.
+    // fs tools use — collection refusals surface as the walk's error. Reads
+    // come back tagged, so file content starting with "Error:" is searched,
+    // not mistaken for a route failure.
     const walk = async (call: RouteCall): Promise<string | null> => {
       const content = await routed.domain.read(call);
-      if (!isError(content)) {
+      if (typeof content === 'string') {
         const lines = content.split('\n');
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i] ?? '';
@@ -386,9 +388,9 @@ export class WorkbenchTemplate implements ToolTemplate {
         }
         return null;
       }
-      if (!content.startsWith('Error: is a directory')) return content;
+      if (!content.error.startsWith('Error: is a directory')) return content.error;
       const entries = await routed.domain.ls(call);
-      if (typeof entries === 'string') return entries;
+      if (!Array.isArray(entries)) return entries.error;
       for (const entry of entries) {
         if (state.truncated) return null;
         const childPath = `${call.path}/${entry.name}`;
@@ -451,7 +453,7 @@ export class WorkbenchTemplate implements ToolTemplate {
     // .lua writes re-validate via the provider update path (which validates
     // before saving), so a rejected edit never reaches storage.
     const full = await routed.domain.read(call);
-    if (isError(full)) return { content: full };
+    if (typeof full !== 'string') return { content: full.error };
     const occurrences = full.split(oldString).length - 1;
     if (occurrences === 0) return { content: err(`oldString not found in ${call.path}`) };
     if (occurrences > 1 && !replaceAll) {

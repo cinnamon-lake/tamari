@@ -20,18 +20,20 @@ export async function validateLuaSource(
   needsGenerate: boolean,
 ): Promise<string | null> {
   const attempt = async (withMap: boolean, stubRequire: boolean): Promise<string | null> => {
-    const { lua, cleanup } = await luaRuntime.createState(withMap ? { vfsFiles: files } : {}, 10_000);
     try {
-      if (stubRequire) lua.global.set('require', () => ({}));
-      await lua.doString(source);
-      if (needsGenerate && typeof lua.global.get('generate') !== 'function') {
-        return 'script must define generate(prompt, ctx)';
+      const { lua, cleanup } = await luaRuntime.createState(withMap ? { vfsFiles: files } : {}, 10_000);
+      try {
+        if (stubRequire) lua.global.set('require', () => ({}));
+        await lua.doString(source);
+        if (needsGenerate && typeof lua.global.get('generate') !== 'function') {
+          return 'script must define generate(prompt, ctx)';
+        }
+        return null;
+      } finally {
+        cleanup();
       }
-      return null;
     } catch (err) {
       return err instanceof Error ? err.message : String(err);
-    } finally {
-      cleanup();
     }
   };
   const err = await attempt(true, false);

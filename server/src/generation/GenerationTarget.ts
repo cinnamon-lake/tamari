@@ -54,6 +54,9 @@ export interface GenerationTarget {
   readonly persistent: boolean;
   /** Backend config id override (sub-agents). Undefined = active config. */
   readonly backendOverride?: string;
+  /** Per-target prompt capture into meta.prompt/meta.prompts. Undefined =
+      the global debugPrompts setting decides. */
+  readonly capturePrompts?: boolean;
   /** Agent nesting depth (0 at top level). Constructor data, passed through
       to tool execution — the runner never branches on it. */
   readonly depth?: number;

@@ -20,12 +20,19 @@ function makeDeps(overrides?: { enabled?: boolean; workbenchExecute?: McpRouterD
       content: `workbench:${tool}:${JSON.stringify(args)}`,
     })) as unknown as McpRouterDeps['workbench']['execute']);
   const cardTestRun = vi.fn(async (args: Record<string, unknown>) => ({ content: JSON.stringify({ ok: true, args }) }));
+  const testSessions = {
+    start: vi.fn(async (args: Record<string, unknown>) => ({ sessionId: 'sess-1', ...args })),
+    message: vi.fn(async (args: Record<string, unknown>) => ({ reply: 'hi', generationId: 'gen-1', finishReason: 'stop', ...args })),
+    state: vi.fn(async (args: Record<string, unknown>) => ({ sessionId: args.sessionId, messages: [], generations: [] })),
+    end: vi.fn(async (_args: Record<string, unknown>) => ({ ended: true })),
+  };
   const deps: McpRouterDeps = {
     workbench: { execute: workbenchExecute } as unknown as McpRouterDeps['workbench'],
     cardTest: { run: cardTestRun } as unknown as McpRouterDeps['cardTest'],
+    testSessions: testSessions as unknown as McpRouterDeps['testSessions'],
     settings: { get: async (key?: string) => (key === 'mcp.enabled' ? (overrides?.enabled ?? true) : undefined) } as unknown as McpRouterDeps['settings'],
   };
-  return { deps, workbenchExecute, cardTestRun };
+  return { deps, workbenchExecute, cardTestRun, testSessions };
 }
 
 function createApp(deps: McpRouterDeps, opts?: { withAuth?: boolean }) {
@@ -85,7 +92,19 @@ describe('createMcpRouter', () => {
     const rpc = rpcResult(res);
     const tools = (rpc.result as { tools: { name: string }[] }).tools.map((t) => t.name).sort();
     expect(tools).toEqual(
-      ['read_generation', 'test_backend', 'test_backend_logic', 'test_card', 'test_custom_backend', 'test_luatool', 'test_regex'].sort(),
+      [
+        'read_generation',
+        'test_backend',
+        'test_backend_logic',
+        'test_card',
+        'test_custom_backend',
+        'test_luatool',
+        'test_regex',
+        'test_session_end',
+        'test_session_message',
+        'test_session_start',
+        'test_session_state',
+      ].sort(),
     );
   });
 
@@ -128,6 +147,130 @@ describe('createMcpRouter', () => {
       params: { name: 'read_generation', arguments: { generationId: 'g1', file: 'prompt.json' } },
     }).expect(200);
     expect(workbenchExecute).toHaveBeenCalledWith('read', { path: '/generations/g1/prompt.json' });
+    await post(app, {
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: { name: 'read_generation', arguments: { generationId: 'g1', file: 'prompts.json' } },
+    }).expect(200);
+    expect(workbenchExecute).toHaveBeenCalledWith('read', { path: '/generations/g1/prompts.json' });
+  });
+
+  it('flags Error results with isError and leaves successes unflagged', async () => {
+    const { deps, cardTestRun } = makeDeps();
+    const app = createApp(deps);
+
+    cardTestRun.mockResolvedValueOnce({ content: 'Error: character not found: nope' });
+    const errRes = await post(app, {
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: { name: 'test_card', arguments: { characterId: 'nope', turns: ['hi'] } },
+    }).expect(200);
+    expect((rpcResult(errRes).result as { isError?: boolean }).isError).toBe(true);
+
+    const okRes = await post(app, {
+      jsonrpc: '2.0',
+      id: 6,
+      method: 'tools/call',
+      params: { name: 'test_card', arguments: { characterId: 'unpacked/x', turns: ['hi'] } },
+    }).expect(200);
+    expect((rpcResult(okRes).result as { isError?: boolean }).isError).toBeUndefined();
+  });
+
+  it('validates test_card args against the shared schema (turns bound)', async () => {
+    const { deps, cardTestRun } = makeDeps();
+    const app = createApp(deps);
+    const res = await post(app, {
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'tools/call',
+      params: { name: 'test_card', arguments: { characterId: 'unpacked/x', turns: [] } },
+    }).expect(200);
+    expect(cardTestRun).not.toHaveBeenCalled();
+    const rpc = rpcResult(res);
+    expect(JSON.stringify(rpc.error ?? rpc.result)).toMatch(/turns|invalid/i);
+  });
+
+  it('routes the test_session_* tools to TestSessionService', async () => {
+    const { deps, testSessions } = makeDeps();
+    const app = createApp(deps);
+
+    await post(app, {
+      jsonrpc: '2.0',
+      id: 10,
+      method: 'tools/call',
+      params: { name: 'test_session_start', arguments: { characterId: 'unpacked/x', backendConfigId: 'cfg-1' } },
+    }).expect(200);
+    expect(testSessions.start).toHaveBeenCalledWith({ characterId: 'unpacked/x', backendConfigId: 'cfg-1' });
+
+    await post(app, {
+      jsonrpc: '2.0',
+      id: 11,
+      method: 'tools/call',
+      params: { name: 'test_session_message', arguments: { sessionId: 'sess-1', content: 'hello' } },
+    }).expect(200);
+    expect(testSessions.message).toHaveBeenCalledWith({ sessionId: 'sess-1', content: 'hello' });
+
+    await post(app, {
+      jsonrpc: '2.0',
+      id: 12,
+      method: 'tools/call',
+      params: { name: 'test_session_state', arguments: { sessionId: 'sess-1', generationId: 'gen-1' } },
+    }).expect(200);
+    expect(testSessions.state).toHaveBeenCalledWith({ sessionId: 'sess-1', generationId: 'gen-1' });
+
+    await post(app, {
+      jsonrpc: '2.0',
+      id: 13,
+      method: 'tools/call',
+      params: { name: 'test_session_end', arguments: { sessionId: 'sess-1' } },
+    }).expect(200);
+    expect(testSessions.end).toHaveBeenCalledWith({ sessionId: 'sess-1' });
+  });
+
+  it('validates test_session_* args (sessionId/content required)', async () => {
+    const { deps, testSessions } = makeDeps();
+    const app = createApp(deps);
+
+    // message without content — schema rejects before the service runs.
+    const res = await post(app, {
+      jsonrpc: '2.0',
+      id: 14,
+      method: 'tools/call',
+      params: { name: 'test_session_message', arguments: { sessionId: 'sess-1' } },
+    }).expect(200);
+    expect(testSessions.message).not.toHaveBeenCalled();
+    const rpc = rpcResult(res);
+    expect(JSON.stringify(rpc.error ?? rpc.result)).toMatch(/content|invalid/i);
+
+    // start without characterId/folderPath passes the MCP schema (both are
+    // optional) but the service-level refine rejects it as an Error result.
+    const startRes = await post(app, {
+      jsonrpc: '2.0',
+      id: 15,
+      method: 'tools/call',
+      params: { name: 'test_session_start', arguments: {} },
+    }).expect(200);
+    const startRpc = rpcResult(startRes);
+    // The fake start resolves — just assert the schema allowed the call shape.
+    expect(startRpc.error).toBeUndefined();
+  });
+
+  it('flags session-tool failures with isError', async () => {
+    const { deps, testSessions } = makeDeps();
+    testSessions.message.mockRejectedValueOnce(new Error('unknown session: nope'));
+    const app = createApp(deps);
+    const res = await post(app, {
+      jsonrpc: '2.0',
+      id: 16,
+      method: 'tools/call',
+      params: { name: 'test_session_message', arguments: { sessionId: 'nope', content: 'hi' } },
+    }).expect(200);
+    const rpc = rpcResult(res);
+    const result = rpc.result as { isError?: boolean; content: { text: string }[] };
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toContain('Error: unknown session: nope');
   });
 
   it('has no mutation tools — a write call is an unknown tool', async () => {

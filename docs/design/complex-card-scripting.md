@@ -1,7 +1,7 @@
 # Complex Card Scripting — Design Proposal
 
 **Status:** implemented on `main` (all three pillars: card VFS + sandboxed `require`, Workbench `backend_logic/` directory, `response_format` ergonomics + `json.parse_result`). The trace/debug surface has also landed since (structured error chains + generation records; Workbench `/generations/<id>/` read-only route).
-**Goal:** let models author cards with genuinely complicated scripting. Two pillars: multi-file `backend_logic`, and structured output (`response_format`) that scripts can actually use. Trace/debug surface is acknowledged but deferred.
+**Goal:** let models author cards with genuinely complicated scripting. Two pillars: multi-file `backend_logic`, and structured output (`response_format`) that scripts can actually use. (The trace/debug surface — originally deferred — has since landed; see debug-traces.md.)
 
 ## Background
 
@@ -53,7 +53,7 @@ Rust-style envelope: callers pattern-match on `res.error` / `res.value`; `json.p
 
 ## Explicit non-goals (this round)
 
-- Sub-agent trace/debug surface (deferred; generation records already form the tree).
+- Sub-agent trace/debug surface (originally deferred — since shipped; see debug-traces.md).
 - Multi-file for Lua tool templates / quick replies (the resolver is built to accept their scopes later, but no verbs/UI this round).
 - File-tab human editor for backend_logic.
 - Adapter-level schema validation or retry loops.

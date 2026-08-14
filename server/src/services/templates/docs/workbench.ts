@@ -7,12 +7,12 @@ The \`workbench\` template is ONE filesystem-style surface over characters, back
 
 **Collections cannot be listed.** \`ls\` on \`/characters/\`, \`/backends/\`, \`/toolsets/\`, \`/luatools/\`, \`/custom-backends/\`, \`/quickreplies/\` (or \`/quickreplies/<scope>/\`) is refused: \`Error: cannot list collections — ids come from the user or chat context\`. There is no list/find anywhere — **entity ids come from the user or chat context**, or from create results (creation returns the real assigned path). \`grep\` follows the same rule: it searches WITHIN one entity and refuses collection paths.
 
-What \`ls\` CAN list: \`/\` (the six domain names), a specific entity dir (\`/characters/<id>/\`, \`/custom-backends/<id>/\`, \`/luatools/<id>/\`), entity sub-collections (\`/characters/<id>/lorebook/\`, \`greetings/\`, \`regex/\`, \`assets/\`, \`modules/\`, \`backend_logic/\`), and a scoped quick-reply collection (\`/quickreplies/<scope>/<scopeId>/\` — scope + scopeId are context you supply).
+What \`ls\` CAN list: \`/\` (the seven domain names), a specific entity dir (\`/characters/<id>/\`, \`/custom-backends/<id>/\`, \`/luatools/<id>/\`), entity sub-collections (\`/characters/<id>/lorebook/\`, \`greetings/\`, \`regex/\`, \`assets/\`, \`modules/\`, \`backend_logic/\`), and a scoped quick-reply collection (\`/quickreplies/<scope>/<scopeId>/\` — scope + scopeId are context you supply).
 
 ## Layout
 
 \`\`\`
-/                                          ls / → the six domain names only
+/                                          ls / → the seven domain names only
 /characters/<id>/                          non-empty text fields + meta.json + present subdirs
 /characters/<id>/<field>                   description, personality, scenario, first_mes, mes_example,
                                            system_prompt, post_history_instructions, creator_notes, nickname
@@ -78,7 +78,7 @@ grep {"pattern": "generate", "path": "/characters/abc123/"}
 For both dry-run verbs: \`state\` takes a JSON string OR a plain object (serialized for you — e.g. paste a previous run's \`stateOut\` either way), and \`delegateResponse\` takes plain text, \`{"text": "..."}\`, or \`{"error": "..."}\` to rehearse delegation failures.
 | \`test_luatool\` | \`{id?|code?, sandbox?, toolName, args?, config?}\` — run a tool from a stored template or ad-hoc code |
 | \`test_regex\` | \`{characterId?, text, role?}\` — preview merged regex rules (global + character) against sample text |
-| \`test_card\` | \`{characterId?|folderPath?, turns: string[], keepChat?, timeoutMs?}\` — headless chat simulation: creates a temporary chat, sends each scripted user turn against the ACTIVE backend config, returns the transcript + generation ids (debugPrompts is enabled for the run, so full prompts land at \`/generations/<id>/prompt.json\`). The temp chat is deleted unless \`keepChat\`. Deterministic runs: point the active config at a mock LLM first |
+| \`test_card\` | \`{characterId?|folderPath?, turns: string[], keepChat?, backendConfigId?, timeoutMs?}\` — scripted multi-turn card test in an in-memory test session (no real chat created, no DB writes): sends each scripted user turn against the ACTIVE backend config (or \`backendConfigId\`, e.g. a deterministic \`mock\` config) and returns the transcript + generation ids. The session is kept by default (returns \`sessionId\`; captured prompts via \`test_session_state\`) — pass \`keepChat: false\` to end it immediately |
 | \`clone_character\` | \`{sourceCharacterId, name?}\` — deep-copy a card (fields, lorebook, regex, modules, assets, avatar) |
 | \`set_avatar\` | \`{characterId, attachmentId?|sourceCharacterId?}\` — avatar from an attachment image or another card |
 | \`copy_assets\` | \`{characterId, sourceCharacterId, assetId?}\` — omit assetId to copy all |

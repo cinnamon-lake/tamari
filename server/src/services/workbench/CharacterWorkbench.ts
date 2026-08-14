@@ -205,7 +205,7 @@ const RegexRemoveArgs = z.object({
 
 const RegexTestArgs = z.object({
   characterId: z.string().optional().describe('Character whose scoped rules to include (always merged after global rules). Omit to test global rules only.'),
-  text: z.string().describe('Sample text to run through the rules.'),
+  text: z.string().max(100_000).describe('Sample text to run through the rules.'),
   role: z.enum(['user', 'assistant']).optional().describe('Role to test as, for role-filtered rules. Default assistant.'),
 });
 

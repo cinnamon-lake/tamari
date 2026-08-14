@@ -11,7 +11,7 @@
  * a non-empty `errors` list alongside whatever partial data could be parsed.
  */
 
-import { promises as fs } from 'node:fs';
+import { promises as fs, type Dirent } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import type { RegexRule, WorldInfoEntry } from '@tamari/types';
@@ -21,6 +21,7 @@ import { parseJsonObjectBody, TEXT_FIELDS } from '../cardFormat/fields.js';
 import { validateVfsPath } from '../../scripting/LuaVfs.js';
 import { LuaRuntime } from '../../scripting/LuaRuntime.js';
 import { validateBackendLuaSource } from '../../scripting/validateLuaSource.js';
+import { parseRegexString } from '../RegexEngine.js';
 
 export interface ParsedCardBackendLogic {
   /** main.lua source (the entry point; must define generate). */
@@ -100,8 +101,14 @@ async function isDir(dirPath: string): Promise<boolean> {
 }
 
 /** Sorted *.json file basenames (without extension) directly inside `dir`. */
-async function listJsonFiles(dir: string): Promise<Array<{ base: string; file: string }>> {
-  const names = (await fs.readdir(dir)).filter((n) => n.endsWith('.json')).sort();
+async function listJsonFiles(dir: string, errors: string[]): Promise<Array<{ base: string; file: string }>> {
+  let names: string[];
+  try {
+    names = (await fs.readdir(dir)).filter((n) => n.endsWith('.json')).sort();
+  } catch (e) {
+    errors.push(`${path.basename(dir)}: unreadable — ${e instanceof Error ? e.message : String(e)}`);
+    return [];
+  }
   const out: Array<{ base: string; file: string }> = [];
   for (const name of names) {
     if (await isFile(path.join(dir, name))) out.push({ base: name.slice(0, -'.json'.length), file: name });
@@ -125,6 +132,20 @@ function parseRegexRule(base: string, content: string): { ok: true; rule: RegexR
   const parsed = RegexRuleFileSchema.safeParse({ id: base, ...body.value });
   if (!parsed.success) return { ok: false, error: formatZodIssues(parsed.error) };
   const r = parsed.data;
+  // findRegex must be the delimited /pattern/flags form and compile — a bare
+  // pattern silently never matches at runtime (RegexEngine.parseRegexString).
+  const parsedRegex = parseRegexString(r.findRegex);
+  if (!parsedRegex) {
+    return { ok: false, error: `invalid findRegex ${JSON.stringify(r.findRegex)}: not in /pattern/flags form` };
+  }
+  try {
+    new RegExp(parsedRegex.pattern, parsedRegex.flags);
+  } catch (e) {
+    return {
+      ok: false,
+      error: `invalid findRegex ${JSON.stringify(r.findRegex)}: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
   return {
     ok: true,
     rule: {
@@ -144,12 +165,19 @@ function parseRegexRule(base: string, content: string): { ok: true; rule: RegexR
 }
 
 /** Recursively collect *.lua files under `dir` as posix-style relative paths. */
-async function collectLuaFiles(dir: string, prefix = ''): Promise<string[]> {
-  const entries = await fs.readdir(dir, { withFileTypes: true });
+async function collectLuaFiles(dir: string, errors: string[], prefix = ''): Promise<string[]> {
+  let entries: Dirent[];
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch (e) {
+    const label = prefix === '' ? path.basename(dir) : `backend_logic/${prefix}`;
+    errors.push(`${label}: unreadable — ${e instanceof Error ? e.message : String(e)}`);
+    return [];
+  }
   const out: string[] = [];
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     const rel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
-    if (entry.isDirectory()) out.push(...(await collectLuaFiles(path.join(dir, entry.name), rel)));
+    if (entry.isDirectory()) out.push(...(await collectLuaFiles(path.join(dir, entry.name), errors, rel)));
     else if (entry.isFile() && entry.name.endsWith('.lua')) out.push(rel);
   }
   return out;
@@ -157,7 +185,13 @@ async function collectLuaFiles(dir: string, prefix = ''): Promise<string[]> {
 
 async function parseBackendLogic(dir: string, errors: string[]): Promise<ParsedCardBackendLogic | undefined> {
   const mainPath = path.join(dir, 'main.lua');
-  const luaSource = await readTextFile(mainPath);
+  let luaSource: string | undefined;
+  try {
+    luaSource = await readTextFile(mainPath);
+  } catch (e) {
+    errors.push(`backend_logic/main.lua: unreadable — ${e instanceof Error ? e.message : String(e)}`);
+    return undefined;
+  }
   if (luaSource === undefined) {
     if (await isFile(mainPath)) {
       errors.push('backend_logic/main.lua: unreadable');
@@ -168,7 +202,7 @@ async function parseBackendLogic(dir: string, errors: string[]): Promise<ParsedC
   }
 
   const files: Record<string, string> = {};
-  for (const rel of await collectLuaFiles(dir)) {
+  for (const rel of await collectLuaFiles(dir, errors)) {
     if (rel === 'main.lua') continue;
     const key = validateVfsPath(rel);
     if (key === null || key !== rel) {
@@ -217,8 +251,16 @@ export async function parseCardFolder(absPath: string): Promise<ParsedCard> {
   }
 
   // meta.json — the only required file.
-  const metaContent = await readTextFile(path.join(absPath, 'meta.json'));
-  if (metaContent === undefined) {
+  let metaContent: string | undefined;
+  let metaReadError: string | null = null;
+  try {
+    metaContent = await readTextFile(path.join(absPath, 'meta.json'));
+  } catch (e) {
+    metaReadError = `meta.json: unreadable — ${e instanceof Error ? e.message : String(e)}`;
+  }
+  if (metaReadError !== null) {
+    errors.push(metaReadError);
+  } else if (metaContent === undefined) {
     errors.push('meta.json: missing (required — { name, id?, tags?, alternateGreetings? })');
   } else {
     const body = parseJsonObjectBody(metaContent);
@@ -250,7 +292,7 @@ export async function parseCardFolder(absPath: string): Promise<ParsedCard> {
   // lorebook/<entryId>.json
   const lorebookDir = path.join(absPath, 'lorebook');
   if (await isDir(lorebookDir)) {
-    for (const { base, file } of await listJsonFiles(lorebookDir)) {
+    for (const { base, file } of await listJsonFiles(lorebookDir, errors)) {
       try {
         const parsed = parseLorebookEntry(base, await fs.readFile(path.join(lorebookDir, file), 'utf8'));
         if (parsed.ok) card.lorebookEntries.push(parsed.entry);
@@ -264,7 +306,7 @@ export async function parseCardFolder(absPath: string): Promise<ParsedCard> {
   // regex/<ruleId>.json
   const regexDir = path.join(absPath, 'regex');
   if (await isDir(regexDir)) {
-    for (const { base, file } of await listJsonFiles(regexDir)) {
+    for (const { base, file } of await listJsonFiles(regexDir, errors)) {
       try {
         const parsed = parseRegexRule(base, await fs.readFile(path.join(regexDir, file), 'utf8'));
         if (parsed.ok) card.regexRules.push(parsed.rule);

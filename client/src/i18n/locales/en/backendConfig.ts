@@ -45,6 +45,11 @@ export const backendConfig = {
   requestTransformer: 'Request Transformer (Lua)',
   requestScriptHint: 'Mutate the request table before it is sent',
 
+  // Mock provider
+  mockScript: 'Mock Response Script',
+  mockScriptHint:
+    'Deterministic canned responses, one directive per line: respond:<text> (default), seq:<n>:<text> (nth call), tool:<name>:<json> (tool call). For card-testing sessions — no network.',
+
   // Instruct template
   instructTemplate: 'Instruct Template',
   instructNone: 'None (plain)',

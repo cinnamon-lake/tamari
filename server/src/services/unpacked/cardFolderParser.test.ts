@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseCardFolder } from './cardFolderParser.js';
@@ -36,7 +36,7 @@ describe('parseCardFolder', () => {
       first_mes: 'Hello, traveler!',
       system_prompt: 'Be heroic.',
       'lorebook/town.json': JSON.stringify({ keys: ['town'], content: 'The town of Tamari.', comment: 'Town info', order: 5 }),
-      'regex/emote.json': JSON.stringify({ name: 'Emote', findRegex: '\\*\\*', replaceString: '*', userInput: true }),
+      'regex/emote.json': JSON.stringify({ name: 'Emote', findRegex: '/\\*\\*/g', replaceString: '*', userInput: true }),
       'backend_logic/main.lua': 'function generate(prompt, ctx) return "ok" end',
       'backend_logic/lib/util.lua': 'local M = {}\nreturn M',
       'avatar.png': 'fake-png-bytes',
@@ -70,7 +70,7 @@ describe('parseCardFolder', () => {
       {
         id: 'emote',
         name: 'Emote',
-        findRegex: '\\*\\*',
+        findRegex: '/\\*\\*/g',
         replaceString: '*',
         disabled: false,
         userInput: true,
@@ -206,15 +206,41 @@ describe('parseCardFolder', () => {
   it('skips malformed regex rules and keeps the valid ones', async () => {
     const dir = await makeCardFolder({
       'meta.json': JSON.stringify({ name: 'Rx' }),
-      'regex/good.json': JSON.stringify({ findRegex: 'a+', replaceString: 'b', replaceLua: 'return match' }),
+      'regex/good.json': JSON.stringify({ findRegex: '/a+/', replaceString: 'b', replaceLua: 'return match' }),
       'regex/bad.json': JSON.stringify({ name: 'no findRegex' }),
     });
 
     const card = await parseCardFolder(dir);
 
     expect(card.regexRules).toHaveLength(1);
-    expect(card.regexRules[0]).toMatchObject({ id: 'good', findRegex: 'a+', replaceString: 'b', replaceLua: 'return match' });
+    expect(card.regexRules[0]).toMatchObject({ id: 'good', findRegex: '/a+/', replaceString: 'b', replaceLua: 'return match' });
     expect(card.errors.some((e) => e.includes('regex/bad.json') && e.includes('findRegex'))).toBe(true);
+  });
+
+  it('rejects a findRegex that is not in /pattern/flags form', async () => {
+    const dir = await makeCardFolder({
+      'meta.json': JSON.stringify({ name: 'Rx' }),
+      'regex/bare.json': JSON.stringify({ findRegex: 'a+', replaceString: 'b' }),
+    });
+
+    const card = await parseCardFolder(dir);
+
+    expect(card.regexRules).toHaveLength(0);
+    expect(card.errors.some((e) => e.includes('regex/bare.json') && e.includes('invalid findRegex') && e.includes('/pattern/flags'))).toBe(true);
+  });
+
+  it('rejects a delimited findRegex with an invalid pattern or flags', async () => {
+    const dir = await makeCardFolder({
+      'meta.json': JSON.stringify({ name: 'Rx' }),
+      'regex/bad-pattern.json': JSON.stringify({ findRegex: '/[/', replaceString: 'b' }),
+      'regex/bad-flags.json': JSON.stringify({ findRegex: '/a/xyz', replaceString: 'b' }),
+    });
+
+    const card = await parseCardFolder(dir);
+
+    expect(card.regexRules).toHaveLength(0);
+    expect(card.errors.some((e) => e.includes('regex/bad-pattern.json') && e.includes('invalid findRegex'))).toBe(true);
+    expect(card.errors.some((e) => e.includes('regex/bad-flags.json') && e.includes('invalid findRegex') && e.includes('Invalid flags'))).toBe(true);
   });
 
   it('reports a non-directory path instead of throwing', async () => {
@@ -222,5 +248,77 @@ describe('parseCardFolder', () => {
 
     expect(card.errors.length).toBeGreaterThan(0);
     expect(card.errors[0]).toContain('not a directory');
+  });
+
+  // Unreadable fs objects (EACCES etc.) must land in errors, never throw —
+  // chmod 000 has no effect for root, so skip there.
+  const itUnlessRoot = process.getuid?.() === 0 ? it.skip : it;
+
+  itUnlessRoot('collects an error for an unreadable meta.json instead of throwing', async () => {
+    const dir = await makeCardFolder({
+      'meta.json': JSON.stringify({ name: 'Locked' }),
+      description: 'still parsed',
+    });
+    const metaPath = path.join(dir, 'meta.json');
+    await chmod(metaPath, 0o000);
+    try {
+      const card = await parseCardFolder(dir);
+      expect(card.errors.some((e) => e.includes('meta.json: unreadable'))).toBe(true);
+      expect(card.name).toBe(''); // fatal, like invalid meta.json
+      expect(card.textFields['description']).toBe('still parsed');
+    } finally {
+      await chmod(metaPath, 0o600);
+    }
+  });
+
+  itUnlessRoot('collects an error for an unreadable lorebook dir instead of throwing', async () => {
+    const dir = await makeCardFolder({
+      'meta.json': JSON.stringify({ name: 'Lore' }),
+      'lorebook/e1.json': JSON.stringify({ keys: ['a'], content: 'ok' }),
+    });
+    const lorebookDir = path.join(dir, 'lorebook');
+    await chmod(lorebookDir, 0o000);
+    try {
+      const card = await parseCardFolder(dir);
+      expect(card.errors.some((e) => e.includes('lorebook: unreadable'))).toBe(true);
+      expect(card.lorebookEntries).toEqual([]);
+      expect(card.name).toBe('Lore');
+    } finally {
+      await chmod(lorebookDir, 0o700);
+    }
+  });
+
+  itUnlessRoot('collects an error for an unreadable regex dir instead of throwing', async () => {
+    const dir = await makeCardFolder({
+      'meta.json': JSON.stringify({ name: 'Rx' }),
+      'regex/r1.json': JSON.stringify({ findRegex: '/a/' }),
+    });
+    const regexDir = path.join(dir, 'regex');
+    await chmod(regexDir, 0o000);
+    try {
+      const card = await parseCardFolder(dir);
+      expect(card.errors.some((e) => e.includes('regex: unreadable'))).toBe(true);
+      expect(card.regexRules).toEqual([]);
+      expect(card.name).toBe('Rx');
+    } finally {
+      await chmod(regexDir, 0o700);
+    }
+  });
+
+  itUnlessRoot('collects an error for an unreadable backend_logic subdir instead of throwing', async () => {
+    const dir = await makeCardFolder({
+      'meta.json': JSON.stringify({ name: 'Lua' }),
+      'backend_logic/main.lua': 'function generate(prompt, ctx) return "ok" end',
+      'backend_logic/lib/util.lua': 'return {}',
+    });
+    const subDir = path.join(dir, 'backend_logic', 'lib');
+    await chmod(subDir, 0o000);
+    try {
+      const card = await parseCardFolder(dir);
+      expect(card.errors.some((e) => e.includes('backend_logic/lib: unreadable'))).toBe(true);
+      expect(card.backendLogic?.luaSource).toContain('function generate');
+    } finally {
+      await chmod(subDir, 0o700);
+    }
   });
 });

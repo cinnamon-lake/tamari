@@ -112,11 +112,13 @@ export function buildBackendSettings(
 
   const advancedSamplers: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(backendConfig.providerParams)) {
-    // requestScript is consumed top-level by the factory; samplerDisabled is the
-    // disable record itself (metadata, never a sampler to send). Anything v2
-    // doesn't declare (e.g. the v1 settings dumps on migrated configs) is not
-    // a wire param — drop it (@tamari/types providerParams contract).
-    if (key === 'requestScript' || key === 'custom.requestScript' || key === 'samplerDisabled') continue;
+    // requestScript and mockScript are consumed top-level by the factory;
+    // samplerDisabled is the disable record itself (metadata, never a sampler
+    // to send). Anything v2 doesn't declare (e.g. the v1 settings dumps on
+    // migrated configs) is not a wire param — drop it (@tamari/types
+    // providerParams contract).
+    if (key === 'requestScript' || key === 'custom.requestScript' || key === 'samplerDisabled' || key === 'mockScript')
+      continue;
     if (!isDeclaredProviderParamKey(key)) continue;
     advancedSamplers[key] = value;
   }

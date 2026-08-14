@@ -8,10 +8,12 @@
  * content. Unknown `unpacked/`-prefixed ids (folder deleted but row lingering,
  * or the feature off) pass through the inner result unchanged.
  *
- * Writes: `create` rejects the reserved prefix, and `update`/`delete` of ANY
- * `unpacked/`-prefixed id throw — even when the folder is unknown — so orphan
- * handle rows can't be mutated through the app. Folder removal on disk is the
- * delete path (UnpackedCardService owns it via the INNER repo).
+ * Writes: `create` rejects the reserved prefix (reserving the namespace), and
+ * `update`/`delete` throw only for ids LIVE in the registry — orphan
+ * `unpacked/`-prefixed rows (folder deleted, or the feature since disabled)
+ * pass through to the inner repo so they can be cleaned up from the UI.
+ * Folder removal on disk is the delete path for live cards
+ * (UnpackedCardService owns it via the INNER repo).
  */
 
 import type { Character, CharacterInsert, CharacterUpdate } from '@tamari/types';
@@ -91,8 +93,8 @@ export class ReadThroughCharacterRepository implements ICharacterRepository {
   }
 
   private rejectUnpackedWrite(id: string): void {
-    if (!isUnpackedCardId(id)) return;
-    const dir = this.registry.get(id)?.dir ?? 'unpacked-cards/ (under the server data dir)';
-    throw new Error(`Card is unpacked (on-disk); edit the folder instead: ${dir}`);
+    const entry = isUnpackedCardId(id) ? this.registry.get(id) : undefined;
+    if (!entry) return;
+    throw new Error(`Card is unpacked (on-disk); edit the folder instead: ${entry.dir}`);
   }
 }

@@ -258,10 +258,12 @@ describe('ReadThroughCharacterRepository writes', () => {
     expect(await innerCharacters.getById('unpacked/disk-card')).toBeDefined();
   });
 
-  it('rejects update/delete of unknown unpacked ids too (orphan-row mutation guard)', async () => {
+  it('lets orphan unpacked rows through (folder gone or feature disabled)', async () => {
     await innerCharacters.create('unpacked/ghost', { name: 'Ghost' });
-    await expect(characters.update('unpacked/ghost', { name: 'X' })).rejects.toThrow(/Card is unpacked \(on-disk\)/);
-    await expect(characters.delete('unpacked/ghost')).rejects.toThrow(/Card is unpacked \(on-disk\)/);
+    const updated = await characters.update('unpacked/ghost', { name: 'Ghost v2' });
+    expect(updated.name).toBe('Ghost v2');
+    await characters.delete('unpacked/ghost');
+    expect(await innerCharacters.getById('unpacked/ghost')).toBeUndefined();
   });
 
   it('passes update/delete of normal ids through', async () => {
@@ -306,6 +308,14 @@ describe('ReadThroughWorldInfoRepository', () => {
       /Lorebook is unpacked \(on-disk\)/,
     );
     await expect(worldInfo.delete('unpacked/disk-card:book')).rejects.toThrow(/Lorebook is unpacked \(on-disk\)/);
+  });
+
+  it('passes writes through for orphan unpacked book ids (card not loaded)', async () => {
+    await innerWorldInfo.create('unpacked/ghost:book', { name: 'Orphan', entries: [] });
+    const updated = await worldInfo.update('unpacked/ghost:book', { name: 'Renamed' });
+    expect(updated.name).toBe('Renamed');
+    await worldInfo.delete('unpacked/ghost:book');
+    expect(await innerWorldInfo.getById('unpacked/ghost:book')).toBeUndefined();
   });
 
   it('passes writes for normal books through', async () => {
