@@ -373,10 +373,7 @@ export class AssistantMessageTarget implements GenerationTarget {
     const backendConfig = allSettings.activeBackendConfigId
       ? await this.deps.backendConfigs.getById(allSettings.activeBackendConfigId)
       : null;
-    let limit = backendConfig?.promptHistoryLimit ?? allSettings.promptHistoryLimit;
-    const chatTruncation = allSettings.chatTruncation;
-    if (chatTruncation > 0 && limit > chatTruncation) limit = chatTruncation;
-    return limit;
+    return backendConfig?.promptHistoryLimit ?? allSettings.promptHistoryLimit;
   }
 
   // ── Policy 2: persistence & broadcasting ───────────────────────────────

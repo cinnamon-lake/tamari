@@ -937,6 +937,22 @@ export function BackendConfigModal(props: { onClose: () => void }) {
               onInput={(e) => markDirty(setMaxTokens)(Number(e.currentTarget.value))}
             />
           </label>
+          {/* KoboldCpp is the only provider that consumes contextLength (its
+              max_context_length wire param); everyone else gets metadata only,
+              so the field stays hidden for them. */}
+          <Show when={backendProvider() === 'koboldcpp'}>
+            <label class="field-label">
+              {t('backendConfig.contextLength')}
+              <input
+                class="input"
+                type="number"
+                min={512}
+                max={128000}
+                value={contextLength()}
+                onInput={(e) => markDirty(setContextLength)(Number(e.currentTarget.value))}
+              />
+            </label>
+          </Show>
           <div class="sampler-field">
             <label class="field-label" for="sampler-topP">{t('backendConfig.topP')}</label>
             <div class="sampler-input-group">
@@ -1224,17 +1240,6 @@ export function BackendConfigModal(props: { onClose: () => void }) {
           </Show>
 
           <h4 class="text-sm text-muted mb-0 mt-md">{t('backendConfig.contextSection')}</h4>
-          <label class="field-label">
-            {t('backendConfig.contextLength')}
-            <input
-              class="input"
-              type="number"
-              min={512}
-              max={128000}
-              value={contextLength()}
-              onInput={(e) => markDirty(setContextLength)(Number(e.currentTarget.value))}
-            />
-          </label>
           <label class="field-label">
             {t('backendConfig.promptHistoryLimit')}
             <input

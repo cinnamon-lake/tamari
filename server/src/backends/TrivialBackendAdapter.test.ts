@@ -147,7 +147,6 @@ describe('TrivialBackendAdapter through bus mock', () => {
     await h.deps.settings.setValue('model', 'trivial-model');
     await h.deps.settings.setValue('apiKey', 'fake-key');
     await h.deps.settings.setValue('backendProvider', 'openai');
-    await h.deps.settings.setValue('contextLength', 4096);
     await h.deps.settings.setValue('maxResponseTokens', 100);
 
     // Create a chat
@@ -271,7 +270,6 @@ describe('TrivialBackendAdapter tool-use through bus mock', () => {
     await h.deps.settings.setValue('model', 'trivial-model');
     await h.deps.settings.setValue('apiKey', 'fake-key');
     await h.deps.settings.setValue('backendProvider', 'openai');
-    await h.deps.settings.setValue('contextLength', 4096);
     await h.deps.settings.setValue('maxResponseTokens', 100);
     // Create a toolset for the weather template
     await h.send(client, {
@@ -445,7 +443,6 @@ describe('endsTurn tool through bus mock', () => {
     await h.deps.settings.setValue('model', 'trivial-model');
     await h.deps.settings.setValue('apiKey', 'fake-key');
     await h.deps.settings.setValue('backendProvider', 'openai');
-    await h.deps.settings.setValue('contextLength', 4096);
     await h.deps.settings.setValue('maxResponseTokens', 100);
 
     await h.send(client, {

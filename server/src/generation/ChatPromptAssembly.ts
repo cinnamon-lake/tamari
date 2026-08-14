@@ -221,12 +221,8 @@ export class ChatPromptAssembly {
     const persona = chat?.personaId ? await personas.getById(chat.personaId) : null;
     const authorsNote = this.extractAuthorsNote(chat?.metadata);
 
-    let promptHistoryLimit = backendConfig?.promptHistoryLimit ?? allSettings.promptHistoryLimit;
-    const chatTruncation = allSettings.chatTruncation;
-    if (chatTruncation > 0 && promptHistoryLimit > chatTruncation) {
-      promptHistoryLimit = chatTruncation;
-    }
-    const contextLength = backendConfig?.contextLength ?? allSettings.contextLength ?? 4096;
+    const promptHistoryLimit = backendConfig?.promptHistoryLimit ?? allSettings.promptHistoryLimit;
+    const contextLength = backendConfig?.contextLength ?? 4096;
     const maxResponseTokens = args.maxResponseTokensOverride !== undefined
       ? Math.max(1, Math.floor(args.maxResponseTokensOverride))
       : Math.max(1, backendConfig?.maxTokens ?? allSettings.maxResponseTokens);

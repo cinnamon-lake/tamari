@@ -75,6 +75,9 @@ export function buildBackendSettings(
   backendSettings['instructTemplate'] = backendConfig.instructTemplate;
   if (backendConfig.apiUrl) backendSettings['apiUrl'] = backendConfig.apiUrl;
   if (backendConfig.apiKey) backendSettings['apiKey'] = backendConfig.apiKey;
+  // Context length lives only on the config (koboldcpp's max_context_length
+  // wire param + the {{maxContext}} macro); there is no global fallback.
+  if (backendConfig.contextLength != null) backendSettings['contextLength'] = backendConfig.contextLength;
 
   // requestScript (and any other top-level-consumed providerParams key) flows
   // top-level; factory.ts reads `requestScript` directly at the top of create().

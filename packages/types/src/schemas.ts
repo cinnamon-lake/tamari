@@ -254,7 +254,6 @@ const _AppSettingsSchema = z.object({
 
   // Generation
   generationMode: z.enum(['chat', 'text']).default('chat'),
-  contextLength: z.number().int().nullable().default(4096),
   maxResponseTokens: z.number().int().default(512),
   impersonationPrompt: z.string().default(''),
 
@@ -340,7 +339,6 @@ const _AppSettingsSchema = z.object({
   // Prompt / Context
   chatMessageLoadLimit: z.number().int().default(30),
   promptHistoryLimit: z.number().int().default(100),
-  chatTruncation: z.number().int().default(0),
   instructTemplates: z.array(z.unknown()).default([]),
   reasoningTemplate: z.string().default('none'),
   reasoningAddToPrompts: z.boolean().default(false),

@@ -13,9 +13,10 @@
  *      adds/removes empty rows) and prove the mock backend cuts the reply at
  *      it (the mock honors the OpenAI `stop` param).
  *   5. Generation knobs with wire assertions against the captured mock
- *      request: chatTruncation (GenerationService caps promptHistoryLimit),
- *      stripExamples (PromptBuilder drops mesExample), customStoppingStringsMacro
- *      (GenerationService.resolveStopStrings macro-resolves stop strings).
+ *      request: stripExamples (PromptBuilder drops mesExample),
+ *      customStoppingStringsMacro (GenerationService.resolveStopStrings
+ *      macro-resolves stop strings). Plus the chat-messages-per-page UI
+ *      round-trip (display-only render limit).
  *   6. Claude prompt caching selects/inputs — UI persistence only (functional
  *      wire assertions live in the claude/openrouter specs).
  *   7. Auto-continue toggle + target length — UI persistence only.
@@ -75,7 +76,7 @@ async function purgeSpecArtifacts(page: Page): Promise<void> {
             const keptTpls = tpls.filter((t) => !(t?.name ?? '').includes(mark));
             if (keptTpls.length !== tpls.length) sends.push(['instructTemplates', keptTpls]);
             const scalars: Array<[string, unknown]> = [
-              ['chatTruncation', 0],
+              ['chatMessageLoadLimit', 30],
               ['stripExamples', false],
               ['customStoppingStrings', []],
               ['customStoppingStringsMacro', false],
@@ -337,7 +338,7 @@ test.describe('Settings — Advanced', () => {
     await setSetting(page, 'customStoppingStrings', []);
   });
 
-  test('generation knobs: chatTruncation, stripExamples, stop-string macros on the wire', async ({ page }) => {
+  test('generation knobs: stripExamples, stop-string macros on the wire', async ({ page }) => {
     test.setTimeout(180000);
     const app = new App(page);
     const charName = uniqueName('Knob Char');
@@ -370,38 +371,12 @@ test.describe('Settings — Advanced', () => {
       { name: charName },
     );
 
-    // ── chatTruncation ────────────────────────────────────────────────────
-    // History so far: greeting. Two more turns => 5 messages.
-    await app.sendUserMessage('seq:alpha-one', { expectReply: true });
-    await app.sendUserMessage('seq:alpha-two', { expectReply: true });
-
-    // GenerationService caps promptHistoryLimit at chatTruncation.
-    let modal = await app.openSettings();
-    await modal.locator('h3:has-text("Generation")').scrollIntoViewIfNeeded();
-    const truncationInput = modal.locator('label.field-label:has-text("Chat truncation") input[type="number"]');
-    await truncationInput.fill('2');
-    await expect(truncationInput).toHaveValue('2');
-    await app.closeSettings();
-
-    let before = (await getLastLlmRequest()).count;
-    await app.sendUserMessage('seq:alpha-three', { expectReply: true });
-    let captured = await waitForNextLlmRequest(before);
-    let text = requestText(captured.body);
-    expect(text).toContain('alpha-three');
-    expect(text).not.toContain('alpha-two');
-    expect(text).not.toContain('alpha-one');
-
-    // Back to 0 (unlimited): the older turns reappear in the request.
-    await setSetting(page, 'chatTruncation', 0);
-    before = (await getLastLlmRequest()).count;
-    await app.sendUserMessage('seq:alpha-four', { expectReply: true });
-    captured = await waitForNextLlmRequest(before);
-    text = requestText(captured.body);
-    expect(text).toContain('alpha-two');
-    expect(text).toContain('alpha-one');
-
     // ── stripExamples ─────────────────────────────────────────────────────
     // PromptBuilder drops mesExample entirely when stripExamples is set.
+    await app.sendUserMessage('seq:alpha-one', { expectReply: true });
+    let before = (await getLastLlmRequest()).count;
+    await app.sendUserMessage('seq:alpha-two', { expectReply: true });
+    let captured = await waitForNextLlmRequest(before);
     expect(requestText(captured.body)).toContain('EXAMPLEDLG_SENTINEL');
     await app.ensureSetting('Strip dialogue examples from prompt', true);
     before = (await getLastLlmRequest()).count;
@@ -429,13 +404,17 @@ test.describe('Settings — Advanced', () => {
     await app.ensureSetting('Resolve macros in custom stopping strings', false);
     await setSetting(page, 'customStoppingStrings', []);
 
-    // Reopen the modal once to prove the truncation reset stuck.
-    modal = await app.openSettings();
+    // Reopen the modal once to prove the messages-per-page setting round-trips.
+    // (Display-only render limit — it never touches the prompt.)
+    await setSetting(page, 'chatMessageLoadLimit', 42);
+    const modal = await app.openSettings();
     await modal.locator('h3:has-text("Generation")').scrollIntoViewIfNeeded();
-    await expect(
-      modal.locator('label.field-label:has-text("Chat truncation") input[type="number"]'),
-    ).toHaveValue('0');
+    const loadLimitInput = modal.locator(
+      'label.field-label:has-text("Chat messages per page") input[type="number"]',
+    );
+    await expect(loadLimitInput).toHaveValue('42');
     await app.closeSettings();
+    await setSetting(page, 'chatMessageLoadLimit', 30);
   });
 
   test('claude cache mode, manual depth and TTL persist across reopen', async ({ page }) => {

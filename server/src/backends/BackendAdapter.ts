@@ -69,7 +69,7 @@ export interface BackendCallContext {
   scriptState?: string;
   /**
    * Lazy loader for the FULL branch history (unbounded by the
-   * promptHistoryLimit / chatTruncation message counts) — exposed to Lua
+   * promptHistoryLimit message count) — exposed to Lua
    * scripts as the `chat` global. Absent when there is no branch (dry-run
    * without canned history, non-chat targets). Supplied by GenerationRunner;
    * consumed only by LuaBackendAdapter; the loader runs at most once per call

@@ -55,7 +55,6 @@ describe('generation golden prompts', () => {
     await h.deps.settings.setValue('model', 'trivial-model');
     await h.deps.settings.setValue('apiKey', 'fake-key');
     await h.deps.settings.setValue('backendProvider', 'openai');
-    await h.deps.settings.setValue('contextLength', 4096);
     await h.deps.settings.setValue('maxResponseTokens', 100);
   });
 

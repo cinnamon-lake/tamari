@@ -15,7 +15,7 @@ A backend config is a named connection + generation preset. The **active** confi
 | \`apiKey\` | Raw key **or** a vault reference \`secret:<key>\`. Never validated; never exposed to tools/Lua. Local providers (\`llamacpp\`, \`tabbyapi\`, \`koboldcpp\`) need no key. |
 | Samplers | \`temperature\`, \`topP\`, \`topK\`, \`minP\`, \`topA\`, \`frequencyPenalty\`, \`presencePenalty\`, \`repetitionPenalty\` — all nullable (null = don't send). |
 | \`maxTokens\` | Response cap. |
-| \`contextLength\` | Declared context size (reporting/metadata only — prompt content is never truncated on a token budget; history length is bounded by \`promptHistoryLimit\`/\`chatTruncation\` message counts). |
+| \`contextLength\` | Declared context size. Sent to KoboldCpp as \`max_context_length\`; otherwise reporting/metadata only (the \`{{maxContext}}\` macro) — prompt content is never truncated on a token budget; history length is bounded by the \`promptHistoryLimit\` message count. |
 | \`stopStrings\` | Custom stop sequences (macro-resolved when \`customStoppingStringsMacro\` is set). |
 | \`instructTemplate\` | For text mode: how the adapter wraps messages into the flat prompt (system/instruction wrappers, BOS/EOS, reasoning prefix/suffix). |
 | \`providerParams\` | Advanced bag — see below. |

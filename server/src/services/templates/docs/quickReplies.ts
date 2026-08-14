@@ -19,7 +19,7 @@ Quick replies live in the \`workbench\` template's filesystem at \`/quickreplies
 
 **Characters & personas:** \`st.get_characters()\`, \`st.find_character(name)\`, \`st.get_character(id)\`, \`st.get_character_id()\`, \`st.create_character(data)\` / \`st.update_character(id, patch)\` (name-uniqueness enforced), \`st.set_character(id)\`, \`st.get_personas()\`, \`st.set_persona(id)\`, \`st.set_system_prompt(id, text)\` / \`st.get_system_prompt(id)\`, \`st.add_chat_member(id)\` / \`st.remove_chat_member(id)\`, tags: \`st.tag_add/remove/list(id, tag)\`
 
-**Settings & model:** \`st.get_setting(key)\` / \`st.set_setting(key, v)\`, \`st.get_model()\` / \`st.set_model(name)\`, \`st.get_temperature()\` / \`st.set_temperature(v)\` (active backend config), \`st.set_maxTokens(v)\`, \`st.set_contextLength(v)\`, \`st.get_apiUrl()\` / \`st.set_apiUrl(url)\`
+**Settings & model:** \`st.get_setting(key)\` / \`st.set_setting(key, v)\`, \`st.get_model()\` / \`st.set_model(name)\`, \`st.get_temperature()\` / \`st.set_temperature(v)\` (active backend config), \`st.set_maxTokens(v)\`, \`st.get_contextLength()\` / \`st.set_contextLength(v)\` (active backend config), \`st.get_apiUrl()\` / \`st.set_apiUrl(url)\`
 
 **Variables (chat-scoped, branch-forking):** \`st.setvar(name, v)\` / \`st.getvar(name)\`, \`st.get_variables()\`, \`st.clear_variables()\`
 

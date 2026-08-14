@@ -49,8 +49,9 @@ export const settings = {
     addStopString: 'Add stop string',
     resolveStoppingMacros: 'Resolve macros in custom stopping strings',
     stripExamples: 'Strip dialogue examples from prompt',
-    chatTruncation: 'Chat truncation',
-    chatTruncationHint: 'Max messages in prompt context (0 = unlimited)',
+    chatMessageLoadLimit: 'Chat messages per page',
+    chatMessageLoadLimitHint:
+      'How many messages are rendered when you open a chat, and how many more load each time you scroll up. Display only — never affects what the model sees.',
     autoContinue: 'Auto-continue short responses',
     autoContinueTargetLength: 'Auto-continue target length (tokens)',
     autoContinueTargetLengthHint: 'Continue generating if response is shorter than this',

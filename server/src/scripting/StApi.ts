@@ -901,16 +901,25 @@ export function createStApi(ctx: ScriptContext, deps: StApiDeps): StApi {
 
     get_contextLength: async () => {
       checkAbort();
-      const val = await settings.get('contextLength');
-      return val !== undefined ? Number(val) : 4096;
+      // Context length lives only on the BackendConfig (there is no global
+      // setting anymore); fall back to the macro/wire default without one.
+      const activeBackendConfigId = str(await settings.get('activeBackendConfigId'));
+      if (activeBackendConfigId) {
+        const p = await backendConfigs.getById(activeBackendConfigId);
+        if (p && p.contextLength !== null) return p.contextLength;
+      }
+      return 4096;
     },
 
     set_contextLength: async (value: number) => {
       checkAbort();
       const num = Math.max(1, Math.floor(Number(value)));
       if (isNaN(num)) throw new Error('set_contextLength: expected number');
-      await settings.setValue('contextLength', num);
-      bus.broadcast({ type: 'settings.changed', key: 'contextLength', value: num });
+      const activeBackendConfigId = str(await settings.get('activeBackendConfigId'));
+      const active = activeBackendConfigId ? await backendConfigs.getById(activeBackendConfigId) : null;
+      if (!active) throw new Error('set_contextLength: no active backend config');
+      const updated = await backendConfigs.update(active.id, { contextLength: num });
+      bus.broadcast({ type: 'backendConfig.updated', backendConfig: updated });
     },
 
     get_backend: async () => {
@@ -1706,6 +1715,8 @@ export function createStApi(ctx: ScriptContext, deps: StApiDeps): StApi {
       const msgs = await chats.getActiveBranch(chatId, { limit: 100 });
       const persona = chat?.personaId ? await personas.getById(chat.personaId) : undefined;
       const settingsUserName = (allSettings['userName'] as string | undefined) ?? '';
+      const activeBackendConfigId = str(allSettings['activeBackendConfigId']);
+      const activeConfig = activeBackendConfigId ? await backendConfigs.getById(activeBackendConfigId) : null;
       const resolver = MacroResolver.createPromptResolver();
       const macroCtx = {
         userName: persona?.name || settingsUserName || 'User',
@@ -1714,7 +1725,7 @@ export function createStApi(ctx: ScriptContext, deps: StApiDeps): StApi {
         personality: character?.personality,
         scenario: character?.scenario,
         model: String(allSettings['model']),
-        maxContext: Number(allSettings['contextLength'] ?? 4096),
+        maxContext: activeConfig?.contextLength ?? 4096,
         maxResponse: Number(allSettings['maxResponseTokens']),
         now: new Date(),
         messages: msgs.map((m) => ({ id: m.id, role: m.role, content: getMessageText(m.extra.parts) })),

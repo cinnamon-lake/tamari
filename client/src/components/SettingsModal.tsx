@@ -190,7 +190,7 @@ export function SettingsModal(props: { onClose: () => void }) {
     Boolean(s['customStoppingStringsMacro']),
   );
   const [stripExamples, setStripExamples] = createSignal(Boolean(s['stripExamples']));
-  const [chatTruncation, setChatTruncation] = createSignal(Number(s['chatTruncation'] ?? 0));
+  const [chatMessageLoadLimit, setChatMessageLoadLimit] = createSignal(Number(s['chatMessageLoadLimit'] ?? 30));
   const [claudeCacheMode, setClaudeCacheMode] = createSignal(
     (s['claudeCacheMode'] as 'off' | 'auto' | 'manual' | undefined) ?? 'off',
   );
@@ -774,19 +774,19 @@ export function SettingsModal(props: { onClose: () => void }) {
             {t('settings.generation.stripExamples')}
           </label>
           <label class="field-label">
-            {t('settings.generation.chatTruncation')}
+            {t('settings.generation.chatMessageLoadLimit')}
             <input
               type="number"
-              min={0}
+              min={1}
               max={10000}
-              value={chatTruncation()}
+              value={chatMessageLoadLimit()}
               onChange={(e) => {
-                setChatTruncation(Number(e.currentTarget.value));
-                sendSetting('chatTruncation', Number(e.currentTarget.value));
+                setChatMessageLoadLimit(Number(e.currentTarget.value));
+                sendSetting('chatMessageLoadLimit', Number(e.currentTarget.value));
               }}
               class="input"
             />
-            <span class="hint-text">{t('settings.generation.chatTruncationHint')}</span>
+            <span class="hint-text">{t('settings.generation.chatMessageLoadLimitHint')}</span>
           </label>
           <label class="checkbox-row">
             <input

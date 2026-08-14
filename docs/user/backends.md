@@ -60,7 +60,7 @@ Two rules govern what actually reaches the provider:
 
 ### Context & Limits
 
-- **Context Length** (`contextLength`) — the total prompt budget. Chat history is trimmed oldest-first to fit it; preset prompts and World Info entries always render in full (see [World Info](./world-info.md)).
+- **Context Length** (`contextLength`, KoboldCpp only) — sent to KoboldCpp as `max_context_length`. For every other provider it is metadata only: the prompt is never trimmed to a token budget, so there is nothing to configure (the model picker badge shows the provider-reported context size).
 - **Prompt History Limit** (`promptHistoryLimit`) — cap on messages pulled into context.
 - **Stop Strings** (`stopStrings`) — custom stop sequences, one per line. Macros inside them are resolved when **Settings → Generation → Resolve macros in custom stopping strings** is enabled.
 - **Logit Bias** (`logitBias`) — a `token: bias` map, one per line (e.g. `12345:5` or `word:-10`). Sent to OpenAI-family and text-completion providers.

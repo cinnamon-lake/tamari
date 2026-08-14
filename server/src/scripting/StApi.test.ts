@@ -402,9 +402,20 @@ describe('StApi', () => {
       expect(await st.get_maxTokens()).toBe(256);
     });
 
-    it('contextLength settings work', async () => {
+    it('contextLength operates on the active backend config', async () => {
+      await st.set_backend_config(backendConfigId);
+      // Reads the config's contextLength (4096 from setup).
+      expect(await st.get_contextLength()).toBe(4096);
       await st.set_contextLength(8192);
       expect(await st.get_contextLength()).toBe(8192);
+      const cfg = await h.deps.backendConfigs.getById(backendConfigId);
+      expect(cfg?.contextLength).toBe(8192);
+    });
+
+    it('set_contextLength throws without an active backend config', async () => {
+      await expect(st.set_contextLength(8192)).rejects.toThrow('no active backend config');
+      // No config active: get falls back to the default.
+      expect(await st.get_contextLength()).toBe(4096);
     });
 
     it('backend provider settings work', async () => {

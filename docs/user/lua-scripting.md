@@ -297,8 +297,8 @@ All Quick Reply scripts have access to the global `st` table. Functions are cate
 | `st.set_temperature(value)` ⏳ | Set temperature on the active backend config (writes the legacy `temperature` setting only when no config is active) |
 | `st.get_maxTokens()` ⏳ | Get max tokens |
 | `st.set_maxTokens(value)` ⏳ | Set max tokens |
-| `st.get_contextLength()` ⏳ | Get context length |
-| `st.set_contextLength(value)` ⏳ | Set context length |
+| `st.get_contextLength()` ⏳ | Get context length of the active backend config (4096 when unset) |
+| `st.set_contextLength(value)` ⏳ | Set context length on the active backend config (throws when no config is active) |
 | `st.get_backend()` ⏳ | Get backend provider ID |
 | `st.set_backend(provider)` ⏳ | Set backend provider |
 

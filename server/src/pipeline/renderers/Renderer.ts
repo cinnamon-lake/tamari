@@ -67,7 +67,7 @@ export interface ChatRenderResult {
  *
  * Nothing here is gated on a token budget: every preset prompt and the whole
  * chat history render in full. History length is bounded upstream by the
- * message-count limits (promptHistoryLimit / chatTruncation); token counts
+ * promptHistoryLimit message-count limit; token counts
  * are only REPORTED (tokenUsage), never enforced.
  */
 export interface PromptRenderer {

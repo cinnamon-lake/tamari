@@ -4,7 +4,7 @@
  * Takes a PromptCollection, resolves macros, and produces the full message
  * list. Nothing is gated on a token budget: every prompt and the whole chat
  * history render in full (history length is bounded upstream by the
- * message-count limits promptHistoryLimit/chatTruncation). Text-completion
+ * promptHistoryLimit message-count limit). Text-completion
  * adapters flatten the result themselves (backends/formatTextPrompt.ts).
  */
 
