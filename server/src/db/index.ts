@@ -8,6 +8,7 @@ import { getLogger } from '../lib/logger.js';
 import { DEFAULT_LEGACY_DATA_DIR, maybeImportLegacyData } from './import-legacy.js';
 import { applyMigrations } from './runMigrations.js';
 import { ProfiledClient, createProfilerConfig, isProfilingEnabled } from './profiler.js';
+import { WriteSerializingClient } from './WriteSerializingClient.js';
 
 const log = getLogger('db');
 
@@ -21,6 +22,9 @@ export interface DbConfig {
  */
 export async function initDatabase(config: DbConfig): Promise<Client> {
   let client: Client = createClient({ url: `file:${config.path}` });
+  // Serialize all writes (see WriteSerializingClient for why the driver
+  // needs this); the profiler sits outside so its timings include queue wait.
+  client = new WriteSerializingClient(client);
 
   if (isProfilingEnabled()) {
     client = new ProfiledClient(client, createProfilerConfig());
