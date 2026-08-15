@@ -30,7 +30,7 @@ The sub-agent work makes defect 2 untenable: a sub-agent *is* a quiet generation
 interface GenerationTarget {
   /** Identity — set at construction, never resolved lazily */
   readonly chatId: string;
-  readonly kind: 'send' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'subagent';
+  readonly kind: 'send' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw' | 'subagent';
   readonly persistent: boolean;
   readonly messageId: number | null;   // null for ephemeral targets; null until
                                        // prepare() for fresh messages (the target

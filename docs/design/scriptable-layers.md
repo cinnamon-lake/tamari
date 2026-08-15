@@ -74,8 +74,8 @@ The adapter factory (`factory.ts`) gains a `custom` adapter kind that instantiat
 -- Receives the fully-built prompt (mutable copy) and generation context.
 function generate(prompt, ctx)
   -- prompt.messages, prompt.tools — inspect, rewrite, rebuild arbitrarily
-  -- ctx: { chatId, characterId, generationType ('normal'|'regenerate'|'continue'|
-  --        'impersonate'|'quiet'|'genraw') }
+  -- ctx: { chatId, characterId, generationType ('send'|'regenerate'|'continue'|
+  --        'impersonate'|'quiet'|'genraw'|'subagent') }
   -- Delegation:
   local result = backends.generate(prompt):await()                      -- default delegate
   local aux    = backends.generate("<backendConfigId>", prompt):await() -- explicit target by id

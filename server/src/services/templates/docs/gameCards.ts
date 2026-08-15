@@ -174,7 +174,7 @@ end
 Continues and impersonates: **throw**. Throw before even calling \`ensureState\` — it's fine. A continue asks the script to resume mid-output, but the script emits each turn whole (there's no token streaming to resume), and the few cases where a continue could almost make sense don't justify the machinery. An impersonate asks the script to speak as the player, and making that coherent with card state takes per-card machinery far out of proportion to its value. One early guard covers both:
 
 \`\`\`lua
-if ctx.generationType ~= "normal" and ctx.generationType ~= "regenerate" then
+if ctx.generationType ~= "send" and ctx.generationType ~= "regenerate" then
   error("This card does not support " .. tostring(ctx.generationType) .. ".")
 end
 \`\`\`

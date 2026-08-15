@@ -30,7 +30,7 @@
 -- Failure UX: generate wraps the real body in pcall — a hard failure marks
 -- state.bricked and RETURNS the failure text (a mechanically successful turn,
 -- so the flag persists); a bricked branch refuses further input. Recovery is
--- a swipe or rewind. Generation types: only normal/regenerate — continue and
+-- a swipe or rewind. Generation types: only send/regenerate — continue and
 -- impersonate throw BEFORE the brick machinery.
 --
 -- Built on the game lib (docs/design/examples/game-lib/, vendored as
@@ -1319,7 +1319,7 @@ function generate(prompt, ctx)
   -- normal path (state rolls back; re-running is correct by construction).
   -- Continue/impersonate are a HARD error — thrown before the brick
   -- machinery, before even ensureState.
-  if ctx and ctx.generationType ~= "normal" and ctx.generationType ~= "regenerate" then
+  if ctx and ctx.generationType ~= "send" and ctx.generationType ~= "regenerate" then
     error("This card does not support " .. tostring(ctx.generationType) .. ".")
   end
   ensureState()

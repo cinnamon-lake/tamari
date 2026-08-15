@@ -132,7 +132,7 @@ async function runTurn(
     tokenUsage: { prompt: 0, completion: 0 },
   };
   const { items, result } = await consumeStream(
-    adapter.stream(prompt, new AbortController().signal, { chatId: 'spar-chat', generationType: 'normal' }),
+    adapter.stream(prompt, new AbortController().signal, { chatId: 'spar-chat', generationType: 'send' }),
   );
   expect(result.error).toBeUndefined();
   return items
@@ -277,7 +277,7 @@ describe('lib/loop round cap', () => {
       tokenUsage: { prompt: 0, completion: 0 },
     };
     const { result } = await consumeStream(
-      adapter.stream(prompt, new AbortController().signal, { chatId: 'spar-chat', generationType: 'normal' }),
+      adapter.stream(prompt, new AbortController().signal, { chatId: 'spar-chat', generationType: 'send' }),
     );
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('tool loop exceeded 2 rounds');
@@ -339,7 +339,7 @@ async function roll(
     tokenUsage: { prompt: 0, completion: 0 },
   };
   const { items, result } = await consumeStream(
-    adapter.stream(prompt, new AbortController().signal, { chatId: 'spar-chat', generationType: 'normal', scriptState }),
+    adapter.stream(prompt, new AbortController().signal, { chatId: 'spar-chat', generationType: 'send', scriptState }),
   );
   const text = items
     .filter((i): i is Extract<BackendStreamItem, { type: 'text' }> => i.type === 'text')

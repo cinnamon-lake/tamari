@@ -125,7 +125,7 @@ export async function dryRunBackendScript(runtime: LuaRuntime, opts: DryRunOptio
   const { items, result } = await consumeStream(
     adapter.stream(prompt, new AbortController().signal, {
       characterId: opts.character?.id,
-      generationType: 'normal',
+      generationType: 'send',
       scriptState: opts.state,
       ...(opts.history
         ? {

@@ -54,7 +54,7 @@ end
 ```
 
 - `prompt` — the fully-built prompt, as a **mutable copy**: `prompt.messages` (the current branch's history as assembled for the model), `prompt.tools`, and the other prompt fields. Changes you make affect what you delegate, never the stored chat.
-- `ctx` — `{ chatId, characterId, generationType }`, where `generationType` is one of `'normal'`, `'regenerate'`, `'continue'`, `'impersonate'`, `'quiet'`, `'genraw'`.
+- `ctx` — `{ chatId, characterId, generationType }`, where `generationType` is one of `'send'`, `'regenerate'`, `'continue'`, `'impersonate'`, `'quiet'`, `'genraw'`, `'subagent'`.
 
 Available globals: `backends` (delegation, below), `json`, `base64`, and `fetch` (the same SSRF-guarded async fetch Lua tool templates get — see [Lua Scripting](./lua-scripting.md)). The `st` API is **not** injected.
 

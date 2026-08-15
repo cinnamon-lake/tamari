@@ -105,7 +105,7 @@ async function runTurnRaw(
   userText: string,
   scriptState: string | undefined,
   history?: Array<{ role: string; content: string }>,
-  generationType: string = 'normal',
+  generationType: string = 'send',
   extraMessages?: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
 ) {
   const prompt: Prompt = {
@@ -134,7 +134,7 @@ async function runTurn(
   userText: string,
   scriptState: string | undefined,
   history?: Array<{ role: string; content: string }>,
-  generationType: string = 'normal',
+  generationType: string = 'send',
   extraMessages?: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
 ): Promise<{ text: string; state: MergeState; scriptState: string }> {
   const { items, result } = await runTurnRaw(adapter, userText, scriptState, history, generationType, extraMessages);

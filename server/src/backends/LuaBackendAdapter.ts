@@ -394,7 +394,7 @@ export class LuaBackendAdapter implements BackendAdapter {
         `__prompt = ${toLuaLiteral(prompt)}\n__ctx = ${toLuaLiteral({
           chatId: ctx?.chatId ?? null,
           characterId: ctx?.characterId ?? null,
-          generationType: ctx?.generationType ?? 'normal',
+          generationType: ctx?.generationType ?? 'send',
         })}`,
       );
 

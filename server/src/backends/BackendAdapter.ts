@@ -58,7 +58,7 @@ export interface BranchHistoryMessage {
 export interface BackendCallContext {
   chatId?: string;
   characterId?: string;
-  /** 'normal' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | … */
+  /** 'send' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw' | 'subagent' */
   generationType?: string;
   /**
    * Latest branch-aware script state snapshot (raw string, from

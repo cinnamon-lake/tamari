@@ -10,7 +10,7 @@ A custom backend is a Lua script that owns the prompt. It runs instead of a buil
 
 ## Script contract
 
-The script defines \`generate(prompt, ctx)\` and optionally \`list_models()\`. \`prompt\` is the fully-built prompt (a mutable copy: \`prompt.messages\`, \`prompt.tools\`, …); \`ctx\` is \`{ chatId, characterId, generationType }\` where generationType is \`'normal' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw'\`. Available globals: \`prompt\`, \`ctx\`, \`backends\`, \`chat\`, \`json\`, \`base64\`, \`fetch\`; Type B scripts also get a sandboxed \`require\` (see Modules). The \`st\` API is NOT injected. \`prompt.response_format\` carries the caller's structured-output request, if any (see Structured output).
+The script defines \`generate(prompt, ctx)\` and optionally \`list_models()\`. \`prompt\` is the fully-built prompt (a mutable copy: \`prompt.messages\`, \`prompt.tools\`, …); \`ctx\` is \`{ chatId, characterId, generationType }\` where generationType is \`'send' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw' | 'subagent'\`. Available globals: \`prompt\`, \`ctx\`, \`backends\`, \`chat\`, \`json\`, \`base64\`, \`fetch\`; Type B scripts also get a sandboxed \`require\` (see Modules). The \`st\` API is NOT injected. \`prompt.response_format\` carries the caller's structured-output request, if any (see Structured output).
 
 A complete example — a high-card table where **Lua owns the deck and the score** (hidden, branch-aware state) and the delegate model only writes table-talk flavored by how badly the player is losing:
 

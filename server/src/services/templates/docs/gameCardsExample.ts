@@ -14,7 +14,7 @@ A complete, TESTED game card: \`backend_logic/main.lua\` plus its vendored game 
 - **The STORY is a rolling channel, and every delegate can zoom into it.** Fight gists land in \`state.story\` (a \`lib/rolling\` channel — world facts like the registered player ride its kv half via \`rolling.set\`) with the fight's mechanical span as their content; both DM briefings AND the span's node-zero briefing carry the \`STORY SO FAR\` lines, and every delegate toolset exposes \`inspect_summary\` — the model tool-calls its way from a digest line down to the actual blows.
 - **Onboarding is a script-opened event, and the greeting has NO buttons on purpose.** The first turn opens a registration event in \`ensureState\` (no delegate needed); the scene-runner runs the receptionist, \`register_player\` files the name and rolls stats, \`close_event\` hands the player into the hall. While it runs, \`buttonsHtml\` returns "" — the menu can't serve anything before registration, so the greeting offers nothing to click (the receptionist asked a question; type, don't click). It is the ONLY script-opened event: with no history to contradict, a static context is safe — every other scene is DM-framed so its context carries the live situation.
 - **The card fields are minimal on purpose.** \`description\`/\`creatorNotes\` for the library, \`firstMes\` as the greeting — and personality/scenario/mesExample EMPTY, no lorebook. The script composes every delegate prompt by hand, so engine prompt-assembly fields never reach a delegate; the registries are the lore.
-- **\`continue\`/\`impersonate\` throw early; a hard failure BRICKS the branch.** The generation-type guard fires before \`ensureState\` — only \`normal\` and \`regenerate\` run, and regenerate IS the normal path. Delegate errors are caught (\`pcall\` around the turn body): the card marks \`state.bricked\` and returns the error as the reply — a raw throw would roll the flag back with the rest of state. Further turns on the branch refuse; recovery is a swipe or rewind.
+- **\`continue\`/\`impersonate\` throw early; a hard failure BRICKS the branch.** The generation-type guard fires before \`ensureState\` — only \`send\` and \`regenerate\` run, and regenerate IS the send path. Delegate errors are caught (\`pcall\` around the turn body): the card marks \`state.bricked\` and returns the error as the reply — a raw throw would roll the flag back with the rest of state. Further turns on the branch refuse; recovery is a swipe or rewind.
 
 Companion character-scoped regex rules (installed by the script): optional hide \`/^\\s*\\/\\w+.*$/s\` (userInput), a HUD panel for \`[HUD|name=..|where=..|gold=..]\` (hall) / \`[HUD|name=..|where=..|hp=..|atk=..|gold=..]\` (dungeon — the renderer parses by key, order-agnostic), a \`[MAP|..]\` floor-graph renderer. That's all — memoir lines and event closes are plain prose; there are no structural tags to hide.
 
@@ -53,7 +53,7 @@ The lib modules this card vendors (\`loop\`, \`sanitize\`, \`chrome\`, \`ledger\
 -- Failure UX: generate wraps the real body in pcall — a hard failure marks
 -- state.bricked and RETURNS the failure text (a mechanically successful turn,
 -- so the flag persists); a bricked branch refuses further input. Recovery is
--- a swipe or rewind. Generation types: only normal/regenerate — continue and
+-- a swipe or rewind. Generation types: only send/regenerate — continue and
 -- impersonate throw BEFORE the brick machinery.
 --
 -- Built on the game lib (docs/design/examples/game-lib/, vendored as
@@ -1342,7 +1342,7 @@ function generate(prompt, ctx)
   -- normal path (state rolls back; re-running is correct by construction).
   -- Continue/impersonate are a HARD error — thrown before the brick
   -- machinery, before even ensureState.
-  if ctx and ctx.generationType ~= "normal" and ctx.generationType ~= "regenerate" then
+  if ctx and ctx.generationType ~= "send" and ctx.generationType ~= "regenerate" then
     error("This card does not support " .. tostring(ctx.generationType) .. ".")
   end
   ensureState()

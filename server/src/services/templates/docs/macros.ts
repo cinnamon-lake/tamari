@@ -21,7 +21,7 @@ Macros are \`{{...}}\` placeholders resolved when text is processed. Arguments a
 
 **Chat inspection:** \`{{lastMessage}}\`, \`{{lastMessageId}}\`, \`{{lastUserMessage}}\`, \`{{lastCharMessage}}\`, \`{{firstIncludedMessageId}}\`, \`{{currentSwipeId}}\`
 
-**State:** \`{{lastGenerationType}}\` (\`generate\` | \`continue\` | \`impersonate\` | \`regenerate\`), \`{{hasExtension::name}}\`
+**State:** \`{{lastGenerationType}}\` (\`send\` | \`regenerate\` | \`continue\` | \`impersonate\` | \`quiet\`), \`{{hasExtension::name}}\`
 
 **Random (non-deterministic):** \`{{random}}\` (0–1 float), \`{{random::100}}\`, \`{{random::1::6}}\`, \`{{pick::A::B::C}}\`, \`{{roll}}\` (1d20), \`{{roll::2d6}}\`
 

@@ -141,7 +141,7 @@ These macros inspect the chat history that is currently being sent to the model:
 
 | Macro | Description |
 |-------|-------------|
-| `{{lastGenerationType}}` | Type of the last generation (`generate`, `continue`, `impersonate`, `regenerate`) |
+| `{{lastGenerationType}}` | Type of the last generation (`send`, `regenerate`, `continue`, `impersonate`, `quiet`) |
 | `{{hasExtension::name}}` | Returns `true` if the named extension is active, empty otherwise |
 
 ### Randomization

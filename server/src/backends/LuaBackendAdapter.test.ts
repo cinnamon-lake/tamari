@@ -42,7 +42,7 @@ function makeAdapter(luaSource: string, delegate = makeDelegate()): LuaBackendAd
 }
 
 async function run(adapter: LuaBackendAdapter) {
-  return consumeStream(adapter.stream(makePrompt(), new AbortController().signal, { chatId: 'chat1', generationType: 'normal' }));
+  return consumeStream(adapter.stream(makePrompt(), new AbortController().signal, { chatId: 'chat1', generationType: 'send' }));
 }
 
 describe('LuaBackendAdapter', () => {
@@ -210,7 +210,7 @@ describe('LuaBackendAdapter', () => {
       end
     `);
     const { items } = await run(adapter);
-    expect(items).toEqual([{ type: 'text', token: 'chat1|normal|user|Hello' }]);
+    expect(items).toEqual([{ type: 'text', token: 'chat1|send|user|Hello' }]);
   });
 
   it('delegates via backends.generate and aggregates usage', async () => {
@@ -321,7 +321,7 @@ describe('LuaBackendAdapter', () => {
       end
     `);
     const { items } = await consumeStream(
-      adapter.stream(makePrompt(), new AbortController().signal, { chatId: 'chat1', generationType: 'normal', branchHistory }),
+      adapter.stream(makePrompt(), new AbortController().signal, { chatId: 'chat1', generationType: 'send', branchHistory }),
     );
     expect(items).toEqual([{ type: 'text', token: '3|five goblins attack|nil|2|3|2' }]);
     expect(branchHistory).toHaveBeenCalledTimes(1);
@@ -541,7 +541,7 @@ describe('the store global', () => {
     const second = await consumeStream(
       adapter.stream(makePrompt(), new AbortController().signal, {
         chatId: 'chat1',
-        generationType: 'normal',
+        generationType: 'send',
         scriptState: first.result.scriptState,
       }),
     );
@@ -614,7 +614,7 @@ describe('store JSON + recursive-array primitives', () => {
   it('putJson/getJson round-trips a Lua table', async () => {
     const adapter = makeAdapter(PRIM_LUA);
     const { items } = await consumeStream(
-      adapter.stream({ messages: [{ role: 'user', content: 'json' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'normal' }),
+      adapter.stream({ messages: [{ role: 'user', content: 'json' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'send' }),
     );
     expect(items[0]).toEqual({ type: 'text', token: 'doc#1|x|3|b|true' });
   });
@@ -622,7 +622,7 @@ describe('store JSON + recursive-array primitives', () => {
   it('append/readArray: the chain walks oldest-first and flattens array items recursively', async () => {
     const adapter = makeAdapter(PRIM_LUA);
     const { items } = await consumeStream(
-      adapter.stream({ messages: [{ role: 'user', content: 'chain' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'normal' }),
+      adapter.stream({ messages: [{ role: 'user', content: 'chain' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'send' }),
     );
     expect(items[0]).toEqual({ type: 'text', token: 'a1,a2,b1,c1,d1,d2' });
   });
@@ -630,10 +630,10 @@ describe('store JSON + recursive-array primitives', () => {
   it('an old head still reads its own prefix (branch-correct persistence)', async () => {
     const adapter = makeAdapter(PRIM_LUA);
     const first = await consumeStream(
-      adapter.stream({ messages: [{ role: 'user', content: 'oldhead' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'normal' }),
+      adapter.stream({ messages: [{ role: 'user', content: 'oldhead' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'send' }),
     );
     const second = await consumeStream(
-      adapter.stream({ messages: [{ role: 'user', content: 'oldhead' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'normal', scriptState: first.result.scriptState }),
+      adapter.stream({ messages: [{ role: 'user', content: 'oldhead' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'send', scriptState: first.result.scriptState }),
     );
     expect(second.items[0]).toEqual({ type: 'text', token: 'first vs first,second' });
   });
@@ -641,12 +641,12 @@ describe('store JSON + recursive-array primitives', () => {
   it('append to a missing prev is loud; readArray(nil) is empty', async () => {
     const adapter = makeAdapter(PRIM_LUA);
     const bad = await consumeStream(
-      adapter.stream({ messages: [{ role: 'user', content: 'badprev' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'normal' }),
+      adapter.stream({ messages: [{ role: 'user', content: 'badprev' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'send' }),
     );
     expect(bad.result.finishReason).toBe('error');
     expect(bad.result.error).toContain('missing prev blob');
     const ok = await consumeStream(
-      adapter.stream({ messages: [{ role: 'user', content: 'nilread' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'normal' }),
+      adapter.stream({ messages: [{ role: 'user', content: 'nilread' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'send' }),
     );
     expect(ok.items[0]).toEqual({ type: 'text', token: 'len=0' });
   });
@@ -662,7 +662,7 @@ describe('store JSON + recursive-array primitives', () => {
       blobs,
     });
     const { result } = await consumeStream(
-      withBlobs.stream(makePrompt(), new AbortController().signal, { chatId: 'c', generationType: 'normal' }),
+      withBlobs.stream(makePrompt(), new AbortController().signal, { chatId: 'c', generationType: 'send' }),
     );
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('corrupted JSON blob');
