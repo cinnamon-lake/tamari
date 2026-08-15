@@ -81,6 +81,28 @@ export interface PipelineMessage {
 }
 
 /**
+ * The kind of generation a target runs. The vocabulary of
+ * `BackendCallContext.generationType` (custom-backend Lua `ctx`),
+ * `GenerationTarget.kind`, and generation records. Lives here so the
+ * Lua-facing docs and the server share one definition.
+ */
+export type GenerationType =
+  | 'send'
+  | 'regenerate'
+  | 'continue'
+  | 'impersonate'
+  | 'quiet'
+  | 'genraw'
+  | 'subagent';
+
+/**
+ * Generation kinds that reach the macro pipeline (`{{lastGenerationType}}`).
+ * genraw/subagent targets assemble from a bare seed (no pipeline), so their
+ * kinds never appear in macro context.
+ */
+export type MacroGenerationType = Exclude<GenerationType, 'genraw' | 'subagent'>;
+
+/**
  * Structured error for debug traces (docs/design/debug-traces.md). Boundaries
  * WRAP, never flatten: each layer that catches an error it didn't produce adds
  * its own node with the inner one as `cause`. Lives in the types package so

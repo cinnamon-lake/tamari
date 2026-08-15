@@ -19,6 +19,8 @@
 
 export type KnobType = 'number' | 'slider' | 'checkbox' | 'textarea' | 'list';
 export type ProfileName = 'llamacpp' | 'text' | 'koboldcpp' | 'chat';
+/** Visual knob groups — keys of `backendConfig.adv.group.*` in the i18n dictionary. */
+export type SamplerGroup = 'mirostat' | 'samplers' | 'dry' | 'xtc' | 'smoothing' | 'dynatemp' | 'decoding' | 'grammar';
 
 export interface SamplerKnob {
   /** Canonical id, stable across profiles. */
@@ -29,7 +31,7 @@ export interface SamplerKnob {
   labelKey: string;
   type: KnobType;
   /** i18n key suffix for the visual sub-heading (`backendConfig.adv.group.`). */
-  group: string;
+  group: SamplerGroup;
   min?: number;
   max?: number;
   step?: number;
@@ -48,7 +50,7 @@ interface KnobDef {
   id: string;
   labelKey: string;
   type: KnobType;
-  group: string;
+  group: SamplerGroup;
   min?: number;
   max?: number;
   step?: number;

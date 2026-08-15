@@ -4,7 +4,10 @@ import type { ToolResultProps } from './index.js';
 import { useI18n } from '../../i18n/index.js';
 import './MapResult.css';
 
-const TERRAIN_GLYPHS: Record<string, string> = {
+/** Palette terrains a map tile may use (keys of TERRAIN_GLYPHS). */
+type Terrain = 'grass' | 'forest' | 'water' | 'mountain' | 'wall' | 'road' | 'door' | 'town' | 'dungeon' | 'void';
+
+const TERRAIN_GLYPHS: Record<Terrain, string> = {
   grass: '🌿',
   forest: '🌲',
   water: '🌊',
@@ -17,10 +20,14 @@ const TERRAIN_GLYPHS: Record<string, string> = {
   void: '⬛',
 };
 
+function isTerrain(value: string): value is Terrain {
+  return value in TERRAIN_GLYPHS;
+}
+
 const PLAYER_GLYPH = '📍';
 
 interface MapTile {
-  t: string;
+  t: Terrain;
   l?: string;
 }
 
@@ -55,7 +62,7 @@ function parseMap(raw: unknown): ParsedMap | null {
     for (const cell of row) {
       if (!cell || typeof cell !== 'object' || Array.isArray(cell)) return null;
       const c = cell as Record<string, unknown>;
-      if (typeof c.t !== 'string' || !(c.t in TERRAIN_GLYPHS)) return null;
+      if (typeof c.t !== 'string' || !isTerrain(c.t)) return null;
       const tile: MapTile = { t: c.t };
       if (c.l !== undefined) {
         if (typeof c.l !== 'string') return null;

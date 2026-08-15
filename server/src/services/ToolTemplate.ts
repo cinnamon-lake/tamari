@@ -1,5 +1,5 @@
 import type { InlineContentPart } from '../backends/BackendAdapter.js';
-import type { MessageExtra } from '@tamari/types';
+import type { MessageExtra, MessageRole } from '@tamari/types';
 import type { ChatLock } from '../generation/AsyncMutex.js';
 
 export interface ToolExecuteResult {
@@ -10,7 +10,7 @@ export interface ToolExecuteResult {
 /** A branch-history message as seen by tools (shape used by the tool state protocol). */
 export interface ToolContextMessage {
   id: string;
-  role: string;
+  role: MessageRole;
   content: string;
   extra?: MessageExtra;
 }

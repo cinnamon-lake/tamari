@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildBackendSettings, paramsKeyForProvider } from '../backends/buildBackendSettings.js';
-import type { BackendConfig } from '@tamari/types';
+import type { BackendConfig, GenerationMode } from '@tamari/types';
 
 function makeConfig(overrides: Partial<BackendConfig> = {}): BackendConfig {
   return {
@@ -38,7 +38,7 @@ function makeConfig(overrides: Partial<BackendConfig> = {}): BackendConfig {
 }
 
 describe('paramsKeyForProvider', () => {
-  it.each<[string, string, string]>([
+  it.each<[string, GenerationMode, string]>([
     ['openai', 'chat', 'openai.params'],
     ['openrouter', 'chat', 'openai.params'],
     ['claude', 'chat', 'claude.params'],

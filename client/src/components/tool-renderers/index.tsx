@@ -27,7 +27,11 @@ const DefaultToolResult: Component<ToolResultProps> = (props) => {
   );
 };
 
-export const toolRenderers: Record<string, Component<ToolResultProps>> = {
+/** Built-in widget renderers. Lua tool templates may set arbitrary extra
+    `renderType`s — those fall through to DefaultToolResult (see getToolRenderer). */
+export type BuiltinRenderType = 'dice' | 'choices' | 'npc_roster' | 'scene' | 'map';
+
+const toolRenderers: Record<BuiltinRenderType, Component<ToolResultProps>> = {
   dice: DiceResult,
   choices: ChoicesResult,
   npc_roster: NpcRosterResult,
@@ -36,8 +40,8 @@ export const toolRenderers: Record<string, Component<ToolResultProps>> = {
 };
 
 export function getToolRenderer(type?: string) {
-  if (type && toolRenderers[type]) {
-    return toolRenderers[type];
+  if (type && type in toolRenderers) {
+    return toolRenderers[type as BuiltinRenderType];
   }
   return DefaultToolResult;
 }

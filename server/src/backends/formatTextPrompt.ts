@@ -12,7 +12,7 @@
  * the template separator, add BOS/EOS, and handle the assistant prefill.
  */
 
-import type { PipelineMessage, ContentPart } from './BackendAdapter.js';
+import type { PipelineMessage, ContentPart, MessageRole } from './BackendAdapter.js';
 import type { InstructTemplate } from './InstructTemplate.js';
 import { reconstructWithReasoning } from '../services/ReasoningEngine.js';
 
@@ -100,7 +100,7 @@ export function formatTextPrompt(
   return parts.join(template.separator ?? '\n\n');
 }
 
-function wrap(content: string, role: string, template: InstructTemplate): string {
+function wrap(content: string, role: MessageRole, template: InstructTemplate): string {
   let prefix = '';
   let suffix = '';
 

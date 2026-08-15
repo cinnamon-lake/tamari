@@ -1,7 +1,7 @@
 import { bus } from '../bus/WebSocketBus.js';
 import { state } from '../stores/serverStore.js';
 import { addToast } from '../stores/toastStore.js';
-import { buildClientMessage, THEME_PRESETS } from './slashCommands.js';
+import { buildClientMessage, THEME_PRESETS, type ThemePreset } from './slashCommands.js';
 import type { ParsedCommand } from './slashCommands.js';
 
 export interface CommandDeps {
@@ -70,8 +70,8 @@ export function executeSlashCommand(
     case 'theme': {
       const preset = parsed.args[0]?.toLowerCase();
       const css =
-        preset && THEME_PRESETS[preset] !== undefined
-          ? THEME_PRESETS[preset]
+        preset !== undefined && preset in THEME_PRESETS
+          ? THEME_PRESETS[preset as ThemePreset]
           : parsed.args.join(' ');
       bus.send({ type: 'settings.set', key: 'themeCustomCss', value: css });
       clearInput(deps);

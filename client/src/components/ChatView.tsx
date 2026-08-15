@@ -14,7 +14,7 @@ import {
 } from '../stores/uiStore.js';
 import { bus } from '../bus/WebSocketBus.js';
 import { confirmPopup } from '../stores/popupStore.js';
-import type { Message } from '@tamari/types';
+import type { Message, MessageRole } from '@tamari/types';
 import { getMessageText } from '@tamari/types';
 import { GroupChatPanel } from './GroupChatPanel.js';
 
@@ -375,7 +375,7 @@ export function ChatView() {
 
 interface MessageBubbleShellProps {
   id?: string;
-  role: string;
+  role: MessageRole;
   avatarUrl?: string;
   name: string;
   /** Per-part content view (MessagePartsView), rendered as the bubble body. */

@@ -27,7 +27,7 @@ import { MacroResolver } from '../pipeline/MacroResolver.js';
 import { createCharacter, updateCharacter } from '../services/characterMutations.js';
 import { materializeGreetings } from '../lib/greetings.js';
 import { addChatMember, removeChatMember } from '../services/chatMembership.js';
-import type { ContentPart, Message, MessageRole } from '@tamari/types';
+import type { ContentPart, GenerationMode, Message, MessageRole } from '@tamari/types';
 
 export interface StApiDeps {
   generationService: ScriptGenerationApi;
@@ -126,7 +126,7 @@ export interface LuaBackendConfigSummary {
 
 /** Full backend-config shape marshalled to Lua by `get_backend_config`. */
 export interface LuaBackendConfig extends LuaBackendConfigSummary {
-  generationMode: string;
+  generationMode: GenerationMode;
   apiUrl: string | null;
   temperature: number | null;
   maxTokens: number | null;
@@ -1043,10 +1043,13 @@ export function createStApi(ctx: ScriptContext, deps: StApiDeps): StApi {
     // --- UI ---
 
     toast: (message: string, level?: string) => {
+      // Lua input is arbitrary — clamp to the wire enum before broadcasting.
+      const l = String(level);
+      const clamped = l === 'success' || l === 'error' || l === 'warning' ? l : 'info';
       bus.sendTo(clientId, {
         type: 'script.toast',
         message: String(message),
-        level: ['info', 'success', 'error', 'warning'].includes(String(level)) ? String(level) : 'info',
+        level: clamped,
       });
     },
 

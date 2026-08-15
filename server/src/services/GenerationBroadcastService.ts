@@ -1,5 +1,5 @@
 import type { EventBus } from '../bus/EventBus.js';
-import type { Prompt } from '../backends/BackendAdapter.js';
+import type { FinishReason, Prompt } from '../backends/BackendAdapter.js';
 
 export interface GenerationBroadcastServiceDeps {
   bus: EventBus;
@@ -87,7 +87,7 @@ export class GenerationBroadcastService {
   broadcastGenerationDone(
     _chatId: string,
     generationId: string,
-    finishReason: string,
+    finishReason: FinishReason,
     excludeClientId?: string,
   ): void {
     this.deps.bus.broadcast(

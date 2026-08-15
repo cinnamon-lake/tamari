@@ -12,7 +12,7 @@
 // dependency cycle. Re-exported here so adapters and pipeline code can keep
 // importing them alongside the BackendAdapter interface.
 
-import type { Prompt } from '@tamari/types';
+import type { FinishReason, GenerationType, MessageRole, Prompt } from '@tamari/types';
 
 export type {
   TextPart,
@@ -44,7 +44,7 @@ export interface ToolCall {
 /** One message of the full (unbudgeted) branch history, for Lua backend scripts. */
 export interface BranchHistoryMessage {
   id: string;
-  role: string;
+  role: MessageRole;
   content: string;
   characterId?: string;
   personaId?: string;
@@ -58,8 +58,7 @@ export interface BranchHistoryMessage {
 export interface BackendCallContext {
   chatId?: string;
   characterId?: string;
-  /** 'send' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw' | 'subagent' */
-  generationType?: string;
+  generationType?: GenerationType;
   /**
    * Latest branch-aware script state snapshot (raw string, from
    * `message.extra._toolState[backend.id]`) for stateful custom backends.
@@ -129,11 +128,11 @@ export async function consumeStream<T, R>(gen: AsyncGenerator<T, R>): Promise<{ 
 
 // ---------- Result ----------
 
-export type { TraceError, TraceErrorCode } from '@tamari/types';
+export type { TraceError, TraceErrorCode, FinishReason, GenerationType, MessageRole } from '@tamari/types';
 import type { TraceError } from '@tamari/types';
 
 export interface GenerationResult {
-  finishReason: 'stop' | 'length' | 'content_filter' | 'error';
+  finishReason: FinishReason;
   usage: { promptTokens: number; completionTokens: number };
   error?: string;
   /** Structured form of `error` for debug traces. Absent on success and from

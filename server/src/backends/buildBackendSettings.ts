@@ -7,7 +7,7 @@
  * without importing the full generation service.
  */
 
-import type { BackendConfig } from '@tamari/types';
+import type { BackendConfig, GenerationMode } from '@tamari/types';
 import { isDeclaredProviderParamKey } from '@tamari/types';
 
 /**
@@ -15,7 +15,7 @@ import { isDeclaredProviderParamKey } from '@tamari/types';
  * blob the adapter factory reads (`factory.ts`). Sampler values are merged into
  * this blob so they reach `config.params` and flow into the request body.
  */
-export function paramsKeyForProvider(provider: string, generationMode: string): string {
+export function paramsKeyForProvider(provider: string, generationMode: GenerationMode): string {
   switch (provider) {
     case 'claude':
       return 'claude.params';

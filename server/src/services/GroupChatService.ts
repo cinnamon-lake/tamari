@@ -1,14 +1,13 @@
 import type { IChatMemberRepository } from '../repos/ChatMemberRepository.js';
 import type { IChatRepository } from '../repos/ChatRepository.js';
 import { getLogger } from '../lib/logger.js';
+import type { ActivationStrategy } from '@tamari/types';
 
 const log = getLogger('GroupChatService');
 
-/**
- * How group members are activated when the user sends a message
- * or auto-mode triggers a round.
- */
-export type ActivationStrategy = 'NATURAL' | 'LIST' | 'MANUAL' | 'POOLED';
+// Re-exported for existing server-side importers; the union itself is shared
+// with the client via @tamari/types (chat metadata vocabulary).
+export type { ActivationStrategy };
 
 export interface GroupChatSettings {
   activationStrategy: ActivationStrategy;

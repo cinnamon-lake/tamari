@@ -14,6 +14,7 @@ import {
   forgeImageTemplate,
 } from './toolTemplateSeeds.js';
 import { LuaToolExecutor } from '../../services/LuaToolExecutor.js';
+import type { ToolContextMessage } from '../../services/ToolTemplate.js';
 import { LuaRuntime } from '../../scripting/LuaRuntime.js';
 
 const EXPECTED_NAMES = [
@@ -139,7 +140,7 @@ describe('lua_npc_registry template', () => {
 
   // The executor is stateless between calls — state travels via the
   // `_toolState` snapshot in each result, mirroring the production flow.
-  function stateMessages(raw: string) {
+  function stateMessages(raw: string): ToolContextMessage[] {
     return [
       {
         id: '1',
@@ -344,7 +345,7 @@ describe('lua_map template', () => {
 
   // The executor is stateless between calls — state travels via the
   // `_toolState` snapshot in each result, mirroring the production flow.
-  function stateMessages(raw: string) {
+  function stateMessages(raw: string): ToolContextMessage[] {
     return [
       {
         id: '1',

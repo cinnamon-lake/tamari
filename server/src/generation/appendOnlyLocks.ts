@@ -13,14 +13,14 @@
  * site.
  */
 
-import type { SettingsMap } from '@tamari/types';
+import type { AppSettings, SettingsMap } from '@tamari/types';
 
 export interface EffectiveGenerationSettings {
   /** The raw flag, for prompt-stage plumbing (`caching.appendOnly`). */
   appendOnly: boolean;
   /** Whitespace normalization rewrites bytes — locked to 'none' (covers both
       the input pass in GenerationService and the output pass at stream settle). */
-  whitespaceMode: string;
+  whitespaceMode: AppSettings['whitespaceMode'];
   removeXML: boolean;
   singleLine: boolean;
   trimSentences: boolean;

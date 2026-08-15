@@ -27,7 +27,7 @@ import type { IGenerationRepository } from '../repos/GenerationRepository.js';
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
 import type { IBackendConfigRepository } from '../repos/BackendConfigRepository.js';
 import type { IPromptListRepository } from '../repos/PromptListRepository.js';
-import type { BackendAdapter, GenerationResult, Prompt, TraceError } from '../backends/BackendAdapter.js';
+import type { BackendAdapter, FinishReason, GenerationResult, Prompt, TraceError } from '../backends/BackendAdapter.js';
 import type { GenerationMeta } from '@tamari/types';
 import { buildBackendSettings } from '../backends/buildBackendSettings.js';
 import type { BackendAdapterFactory } from '../backends/factory.js';
@@ -74,7 +74,7 @@ export interface GenerationOutcome {
   messageId: number | null;
   /** Concatenated text of the target's accumulated content. */
   text: string;
-  finishReason: string;
+  finishReason: FinishReason;
   error?: string;
   /** Structured error chain for traces (docs/design/debug-traces.md). */
   traceError?: TraceError;

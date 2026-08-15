@@ -36,6 +36,7 @@ import type {
   Chat,
   Attachment,
   ContentPart,
+  MacroGenerationType,
   MessageAttachment,
   RegexRule,
 } from '@tamari/types';
@@ -71,7 +72,7 @@ export interface ChatPromptBuildArgs {
   anchorMessageId?: number;
   /** quietGenerate's per-call maxTokens override. */
   maxResponseTokensOverride?: number;
-  lastGenerationType?: string;
+  lastGenerationType?: MacroGenerationType;
   /** Synthetic trailing messages appended at the end of the resolved history
       (impersonate instruction; quiet-gen seed + accumulated transcript). */
   trailingMessages?: Array<{ role: 'system' | 'user' | 'assistant'; parts: ContentPart[] }>;

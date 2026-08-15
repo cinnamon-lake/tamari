@@ -16,6 +16,8 @@ import {
   type DelegatedGenerateResult,
 } from './LuaBackendAdapter.js';
 import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
+import type { GenerationType } from './BackendAdapter.js';
+import type { MessageRole } from '@tamari/types';
 import { consumeStream, type BackendStreamItem, type Prompt } from './BackendAdapter.js';
 
 const luaSource = readFileSync(new URL('../../../docs/design/examples/guildhall/main.lua', import.meta.url), 'utf8');
@@ -104,15 +106,15 @@ async function runTurnRaw(
   adapter: LuaBackendAdapter,
   userText: string,
   scriptState: string | undefined,
-  history?: Array<{ role: string; content: string }>,
-  generationType: string = 'send',
+  history?: Array<{ role: MessageRole; content: string }>,
+  generationType: GenerationType = 'send',
   extraMessages?: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
 ) {
   const prompt: Prompt = {
     messages: [
       { role: 'system', content: 'Base system prompt.' },
       ...(extraMessages ?? []),
-      ...(history ?? []).map((h) => ({ role: h.role as 'user' | 'assistant', content: h.content })),
+      ...(history ?? []).map((h) => ({ role: h.role, content: h.content })),
       { role: 'user', content: userText },
     ],
     tokenUsage: { prompt: 0, completion: 0 },
@@ -133,8 +135,8 @@ async function runTurn(
   adapter: LuaBackendAdapter,
   userText: string,
   scriptState: string | undefined,
-  history?: Array<{ role: string; content: string }>,
-  generationType: string = 'send',
+  history?: Array<{ role: MessageRole; content: string }>,
+  generationType: GenerationType = 'send',
   extraMessages?: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
 ): Promise<{ text: string; state: MergeState; scriptState: string }> {
   const { items, result } = await runTurnRaw(adapter, userText, scriptState, history, generationType, extraMessages);
@@ -872,7 +874,7 @@ describe('The Guildhall (merged card)', () => {
           { role: 'user', content: 'attack' },
           { role: 'assistant', content: 'The rat bites. You hit for 4; it answers for 1.' },
         ] } });
-      const fightHistory = [
+      const fightHistory: Array<{ role: MessageRole; content: string }> = [
         { role: 'assistant', content: 'It lunges.\n[fight Crypt Rat]' },
         { role: 'user', content: 'attack' },
         { role: 'assistant', content: 'The rat bites. You hit for 4; it answers for 1.' },

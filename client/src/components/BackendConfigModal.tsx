@@ -10,7 +10,7 @@ import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import { getSamplerProfile, type SamplerKnob } from './samplerProfiles.js';
-import { isDeclaredProviderParamKey } from '@tamari/types';
+import { isDeclaredProviderParamKey, type AppSettings } from '@tamari/types';
 import { SecretPicker } from './SecretPicker.js';
 import './BackendConfigModal.css';
 
@@ -121,10 +121,10 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     Boolean(state.settings['reasoningAddToPrompts']),
   );
   const [openrouterReasoningEffort, setOpenrouterReasoningEffort] = createSignal(
-    String(state.settings['openrouter.reasoningEffort'] ?? ''),
+    state.settings['openrouter.reasoningEffort'] ?? '',
   );
   const [openrouterReasoningSummary, setOpenrouterReasoningSummary] = createSignal(
-    String(state.settings['openrouter.reasoningSummary'] ?? ''),
+    state.settings['openrouter.reasoningSummary'] ?? '',
   );
   const [requestScript, setRequestScript] = createSignal(
     str(
@@ -1352,7 +1352,7 @@ export function BackendConfigModal(props: { onClose: () => void }) {
                 <select
                   class="select"
                   value={openrouterReasoningEffort()}
-                  onChange={(e) => setOpenrouterReasoningEffort(e.currentTarget.value)}
+                  onChange={(e) => setOpenrouterReasoningEffort(e.currentTarget.value as AppSettings['openrouter.reasoningEffort'])}
                 >
                   <option class="select-option" value="">{t('backendConfig.optionDefault')}</option>
                   <option class="select-option" value="xhigh">{t('backendConfig.effortExtremeHigh')}</option>
@@ -1368,7 +1368,7 @@ export function BackendConfigModal(props: { onClose: () => void }) {
                 <select
                   class="select"
                   value={openrouterReasoningSummary()}
-                  onChange={(e) => setOpenrouterReasoningSummary(e.currentTarget.value)}
+                  onChange={(e) => setOpenrouterReasoningSummary(e.currentTarget.value as AppSettings['openrouter.reasoningSummary'])}
                 >
                   <option class="select-option" value="">{t('backendConfig.optionDefault')}</option>
                   <option class="select-option" value="auto">{t('backendConfig.summaryAuto')}</option>

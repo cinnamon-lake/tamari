@@ -7,6 +7,7 @@
  */
 
 import tiktoken from 'tiktoken';
+import type { MessageRole } from '@tamari/types';
 
 const BYTES_PER_TOKEN = 3.35;
 
@@ -31,7 +32,7 @@ function getTokenizer(model: string): tiktoken.Tiktoken | undefined {
 
 export interface ITokenCounter {
   count(text: string): number;
-  countMessages(messages: Array<{ role: string; content: string; name?: string | null }>): number;
+  countMessages(messages: Array<{ role: MessageRole; content: string; name?: string | null }>): number;
 }
 
 export class TokenCounter implements ITokenCounter {
@@ -55,7 +56,7 @@ export class TokenCounter implements ITokenCounter {
    * Count tokens in an array of chat messages (approximate).
    * This is a rough approximation; real APIs may count differently.
    */
-  countMessages(messages: Array<{ role: string; content: string }>): number {
+  countMessages(messages: Array<{ role: MessageRole; content: string }>): number {
     if (!this.tokenizer) {
       const joined = messages.map((m) => `${m.role}\n\n${m.content}`).join('\n\n');
       return guesstimate(joined);

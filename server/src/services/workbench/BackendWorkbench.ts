@@ -135,7 +135,7 @@ const CustomBackendTestArgs = z.object({
     .transform((v) => (typeof v === 'object' && 'text' in v ? v.text : v))
     .describe('Canned answer for every delegated backends.generate() call — text, { "text": "..." }, or { "error": "..." } to test delegation failures. Defaults to a placeholder.'),
   history: z
-    .array(z.object({ role: z.string(), content: z.string() }))
+    .array(z.object({ role: z.enum(['system', 'user', 'assistant', 'tool']), content: z.string() }))
     .optional()
     .describe('Canned full branch history (oldest first) backing the `chat` global. Omit → `chat` is nil in the dry-run.'),
 });

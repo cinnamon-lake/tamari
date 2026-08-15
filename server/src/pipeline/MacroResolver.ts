@@ -1,4 +1,6 @@
 
+import type { MacroGenerationType, MessageRole } from '@tamari/types';
+
 /**
  * Evaluate a simple boolean expression string after all macros have been resolved.
  * Supports: && (AND), || (OR), and truthy/falsy values.
@@ -48,7 +50,7 @@ function isTruthy(value: string): boolean {
 
 export interface MacroMessage {
   id: number | string;
-  role: string;
+  role: MessageRole;
   content: string;
 }
 
@@ -64,7 +66,7 @@ export interface MacroContext {
   maxResponse?: number;
   now?: Date;
   messages?: MacroMessage[];
-  lastGenerationType?: string;
+  lastGenerationType?: MacroGenerationType;
   extensions?: string[];
   macroVars?: Record<string, string>;
   globalVars?: Record<string, string>;

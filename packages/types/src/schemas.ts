@@ -24,6 +24,12 @@ function makeUpdateSchema<T extends z.ZodRawShape>(shape: T) {
 
 export const MessageRoleSchema = z.enum(['system', 'user', 'assistant', 'tool']);
 
+/** Canonical reason a generation ended (`GenerationResult.finishReason`,
+    `generation.done`). Provider-specific values (e.g. OpenAI's 'tool_calls')
+    are normalized to this set at the adapter boundary. */
+export const FinishReasonSchema = z.enum(['stop', 'length', 'content_filter', 'error']);
+export type FinishReason = z.infer<typeof FinishReasonSchema>;
+
 export const AttachmentRefSchema = z.object({
   id: z.string().uuid(),
   mimeType: z.string(),
@@ -265,8 +271,10 @@ const _AppSettingsSchema = z.object({
   'openrouter.allowFallbacks': z.boolean().default(true),
   'openrouter.transforms': z.array(z.unknown()).default([]),
   'openrouter.plugins': z.array(z.unknown()).default([]),
-  'openrouter.reasoningEffort': z.string().default(''),
-  'openrouter.reasoningSummary': z.string().default(''),
+  // '' = provider default (no effort/summary hint sent). Values mirror the
+  // server's REASONING_EFFORTS/REASONING_SUMMARIES sets (backends/factory.ts).
+  'openrouter.reasoningEffort': z.enum(['', 'xhigh', 'high', 'medium', 'low', 'minimal', 'none']).default(''),
+  'openrouter.reasoningSummary': z.enum(['', 'auto', 'concise', 'detailed']).default(''),
 
   // Provider params (opaque JSON blobs)
   'openai.params': z.record(z.string(), z.unknown()).default({}),
@@ -304,7 +312,7 @@ const _AppSettingsSchema = z.object({
   appendOnlyPromptLayout: z.boolean().default(false),
 
   // Post-processing
-  whitespaceMode: z.string().default('none'),
+  whitespaceMode: z.enum(['none', 'essential', 'full']).default('none'),
   removeXML: z.boolean().default(false),
   singleLine: z.boolean().default(false),
   trimSentences: z.boolean().default(false),
@@ -331,11 +339,12 @@ const _AppSettingsSchema = z.object({
   timerEnabled: z.boolean().default(false),
   timestampModelIcon: z.boolean().default(false),
   clickToEdit: z.boolean().default(false),
-  mediaDisplayMode: z.string().default('list'),
+  mediaDisplayMode: z.enum(['list', 'grid']).default('list'),
   fontScale: z.number().default(1),
   chatWidth: z.number().default(50),
-  avatarStyle: z.string().default('round'),
-  chatStyle: z.string().default('default'),
+  // 'circle' is the legacy value (pre-rename of "round"); normalized at display time.
+  avatarStyle: z.enum(['round', 'rectangular', 'square', 'rounded', 'circle']).default('round'),
+  chatStyle: z.enum(['default', 'bubbles', 'document']).default('default'),
   noShadows: z.boolean().default(false),
   shadowWidth: z.number().default(1),
   compactInputArea: z.boolean().default(false),
@@ -1220,7 +1229,7 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('generation.done'),
     generationId: z.string(),
-    finishReason: z.string(),
+    finishReason: FinishReasonSchema,
     clientId: z.string().optional(),
   }),
   z.object({
@@ -1390,7 +1399,7 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('script.toast'),
     message: z.string(),
-    level: z.string(),
+    level: z.enum(['info', 'success', 'error', 'warning']),
     clientId: z.string().optional(),
   }),
   z.object({

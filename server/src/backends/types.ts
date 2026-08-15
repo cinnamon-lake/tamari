@@ -7,6 +7,7 @@
  */
 
 import { z } from 'zod';
+import type { MessageRole } from '@tamari/types';
 
 /** Narrow an unknown value to a mutable object record (e.g. a provider content part). */
 export function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -18,7 +19,7 @@ export function isObjectRecord(value: unknown): value is Record<string, unknown>
 // ===========================================================================
 
 export interface OpenAIChatMessage {
-  role: string;
+  role: MessageRole;
   content?: string | unknown[] | null;
   tool_calls?: unknown[];
   tool_call_id?: string;
@@ -117,7 +118,7 @@ export type OpenAIModelList = z.infer<typeof OpenAIModelListSchema>;
 // ===========================================================================
 
 export interface ClaudeMessage {
-  role: string;
+  role: 'user' | 'assistant';
   content: string | unknown[];
 }
 
@@ -219,7 +220,7 @@ export type ClaudeModelList = z.infer<typeof ClaudeModelListSchema>;
 // ===========================================================================
 
 export interface GeminiContent {
-  role?: string;
+  role?: 'user' | 'model';
   parts: unknown[];
 }
 

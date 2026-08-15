@@ -19,7 +19,7 @@
  */
 
 import type { BackendAdapter, BackendStreamItem, ContentPart, GenerationResult, Prompt, ToolCall } from '../backends/BackendAdapter.js';
-import type { Character, SettingsMap, BackendConfig, PromptList } from '@tamari/types';
+import type { Character, GenerationType, SettingsMap, BackendConfig, PromptList } from '@tamari/types';
 import type { ToolResult } from '../services/ToolRegistry.js';
 import type { ToolContextMessage } from '../services/ToolTemplate.js';
 
@@ -41,7 +41,7 @@ export type { ToolContextMessage };
 
 export interface GenerationTarget {
   /** Read-only metadata. NEVER branched on. */
-  readonly kind: 'send' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw' | 'subagent';
+  readonly kind: GenerationType;
   readonly chatId: string;
   readonly clientId?: string;
   /** Constructor data: the character this generation speaks as (group-chat

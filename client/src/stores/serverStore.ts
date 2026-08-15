@@ -694,13 +694,8 @@ bus.on('toolTemplate.deleted', (msg) => {
 });
 
 bus.on('script.toast', (msg) => {
-  const level = typeof msg.level === 'string' ? msg.level : 'info';
-  const type =
-    level === 'error' ? 'error' :
-    level === 'success' ? 'success' :
-    level === 'warning' ? 'warning' :
-    'info';
-  addToast(msg.message, type);
+  // The wire schema is a closed enum; the server (StApi) clamps Lua input to it.
+  addToast(msg.message, msg.level);
 });
 
 bus.on('script.error', (msg) => {

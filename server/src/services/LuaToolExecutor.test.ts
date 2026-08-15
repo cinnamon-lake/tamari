@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { LuaToolExecutor } from './LuaToolExecutor.js';
+import type { ToolContextMessage } from './ToolTemplate.js';
 import { LuaRuntime } from '../scripting/LuaRuntime.js';
 
 describe('LuaToolExecutor', () => {
@@ -135,7 +136,7 @@ return Tool
 
   describe('serialize / deserialize', () => {
     it('restores state from message history', async () => {
-      const messages = [
+      const messages: ToolContextMessage[] = [
         {
           id: '1',
           role: 'assistant',
@@ -159,7 +160,7 @@ return Tool
     });
 
     it('scans backwards through messages for latest state', async () => {
-      const messages = [
+      const messages: ToolContextMessage[] = [
         {
           id: '1',
           role: 'assistant',
@@ -186,7 +187,7 @@ return Tool
     });
 
     it('ignores state from other tools', async () => {
-      const messages = [
+      const messages: ToolContextMessage[] = [
         {
           id: '1',
           role: 'assistant',
@@ -233,7 +234,7 @@ function Tool.deserialize(raw)
 end
 return Tool
 `;
-      const messages = [
+      const messages: ToolContextMessage[] = [
         {
           id: '1',
           role: 'assistant',

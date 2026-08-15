@@ -4,7 +4,7 @@ import { bus } from '../bus/WebSocketBus.js';
 import { useI18n, type Locale } from '../i18n/index.js';
 
 
-import type { MemorySettings } from '@tamari/types';
+import type { AppSettings, MemorySettings } from '@tamari/types';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
 import './SettingsModal.css';
 
@@ -22,15 +22,15 @@ export function SettingsModal(props: { onClose: () => void }) {
   const [themeCustomCss, setThemeCustomCss] = createSignal(String(s['themeCustomCss'] ?? ''));
   const [backgroundImageUrl, setBackgroundImageUrl] = createSignal(String(s['backgroundImageUrl'] ?? ''));
   const [backgroundBlur, setBackgroundBlur] = createSignal(Number(s['backgroundBlur'] ?? 0));
-  const [sendOnEnter, setSendOnEnter] = createSignal(String(s['sendOnEnter'] ?? 'auto'));
+  const [sendOnEnter, setSendOnEnter] = createSignal(s['sendOnEnter'] ?? 'auto');
   const [messageTokenCountEnabled, setMessageTokenCountEnabled] = createSignal(Boolean(s['messageTokenCountEnabled']));
   const [quickContinue, setQuickContinue] = createSignal(Boolean(s['quickContinue']));
   const [quickImpersonate, setQuickImpersonate] = createSignal(Boolean(s['quickImpersonate']));
   const [hideQuickReplies, setHideQuickReplies] = createSignal(Boolean(s['hideQuickReplies']));
 
   // Display settings
-  const [chatStyle, setChatStyle] = createSignal(String(s['chatStyle'] ?? 'default'));
-  const [avatarStyle, setAvatarStyle] = createSignal(String(s['avatarStyle'] ?? 'round'));
+  const [chatStyle, setChatStyle] = createSignal(s['chatStyle'] ?? 'default');
+  const [avatarStyle, setAvatarStyle] = createSignal(s['avatarStyle'] ?? 'round');
   const [fontScale, setFontScale] = createSignal(Number(s['fontScale'] ?? 1));
   const [chatWidth, setChatWidth] = createSignal(Number(s['chatWidth'] ?? 50));
   // Legacy `noShadows: true` maps to shadow width 0; moving the slider clears it.
@@ -46,9 +46,7 @@ export function SettingsModal(props: { onClose: () => void }) {
   const [encodeTags, setEncodeTags] = createSignal(Boolean(s['encodeTags']));
 
   // Post-processing settings
-  const [whitespaceMode, setWhitespaceMode] = createSignal(
-    (s['whitespaceMode'] as 'none' | 'essential' | 'full') ?? 'none',
-  );
+  const [whitespaceMode, setWhitespaceMode] = createSignal(s['whitespaceMode'] ?? 'none');
   const [autoFixGeneratedMarkdown, setAutoFixGeneratedMarkdown] = createSignal(Boolean(s['autoFixGeneratedMarkdown']));
   const [removeXML, setRemoveXML] = createSignal(Boolean(s['removeXML']));
   const [singleLine, setSingleLine] = createSignal(Boolean(s['singleLine']));
@@ -83,7 +81,7 @@ export function SettingsModal(props: { onClose: () => void }) {
   const [autoContinueTargetLength, setAutoContinueTargetLength] = createSignal(
     Number(s['autoContinueTargetLength'] ?? 100),
   );
-  const [mediaDisplayMode, setMediaDisplayMode] = createSignal(String(s['mediaDisplayMode'] ?? 'list'));
+  const [mediaDisplayMode, setMediaDisplayMode] = createSignal(s['mediaDisplayMode'] ?? 'list');
   const [mediaVerboseMode, setMediaVerboseMode] = createSignal(Boolean(s['mediaVerboseMode']));
   const [strictHtmlSanitization, setStrictHtmlSanitization] = createSignal(Boolean(s['strictHtmlSanitization']));
   const [allowExternalMedia, setAllowExternalMedia] = createSignal(Boolean(s['allowExternalMedia']));
@@ -164,7 +162,7 @@ export function SettingsModal(props: { onClose: () => void }) {
               class="select"
               value={chatStyle()}
               onChange={(e) => {
-                setChatStyle(e.currentTarget.value);
+                setChatStyle(e.currentTarget.value as AppSettings['chatStyle']);
                 sendSetting('chatStyle', e.currentTarget.value);
               }}
             >
@@ -180,7 +178,7 @@ export function SettingsModal(props: { onClose: () => void }) {
               value={avatarStyle()}
               disabled={hideChatAvatars()}
               onChange={(e) => {
-                setAvatarStyle(e.currentTarget.value);
+                setAvatarStyle(e.currentTarget.value as AppSettings['avatarStyle']);
                 sendSetting('avatarStyle', e.currentTarget.value);
               }}
             >
@@ -380,7 +378,7 @@ export function SettingsModal(props: { onClose: () => void }) {
               class="select"
               value={mediaDisplayMode()}
               onChange={(e) => {
-                setMediaDisplayMode(e.currentTarget.value);
+                setMediaDisplayMode(e.currentTarget.value as AppSettings['mediaDisplayMode']);
                 sendSetting('mediaDisplayMode', e.currentTarget.value);
               }}
             >
@@ -528,7 +526,7 @@ export function SettingsModal(props: { onClose: () => void }) {
               class="select"
               value={sendOnEnter()}
               onChange={(e) => {
-                setSendOnEnter(e.currentTarget.value);
+                setSendOnEnter(e.currentTarget.value as AppSettings['sendOnEnter']);
                 sendSetting('sendOnEnter', e.currentTarget.value);
               }}
             >

@@ -11,6 +11,7 @@
 
 import { LuaBackendAdapter, type CustomBackendDelegate, type DelegatedGenerateResult } from './LuaBackendAdapter.js';
 import { consumeStream, type BackendStreamItem, type Prompt } from './BackendAdapter.js';
+import type { MessageRole } from '@tamari/types';
 import type { LuaRuntime } from '../scripting/LuaRuntime.js';
 
 export interface DryRunCharacterContext {
@@ -28,7 +29,7 @@ export interface DryRunOptions {
   state?: string;
   /** Canned full branch history backing the `chat` global (oldest first).
       Omit → `chat` is nil in the dry-run, exactly like a branchless generation. */
-  history?: Array<{ role: string; content: string }>;
+  history?: Array<{ role: MessageRole; content: string }>;
   /** Canned answer for every delegated backends.generate() call — text, or
       `{ error }` to test delegation-failure paths (the bridge throws into Lua,
       exactly like a real failed delegation). */

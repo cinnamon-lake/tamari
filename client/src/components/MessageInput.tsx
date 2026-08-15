@@ -28,7 +28,7 @@ function isMobileDevice(): boolean {
 }
 
 function shouldSendOnEnter(): boolean {
-  const mode = String(state.settings['sendOnEnter'] ?? 'auto');
+  const mode = state.settings['sendOnEnter'] ?? 'auto';
   if (mode === 'enabled') return true;
   if (mode === 'disabled') return false;
   // auto

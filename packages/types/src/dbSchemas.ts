@@ -125,7 +125,7 @@ export const BackendConfigRowSchema = z.object({
   name: z.string(),
   description: z.string(),
   backend_provider: z.string(),
-  generation_mode: z.string(),
+  generation_mode: z.enum(['chat', 'text']),
   model: z.string(),
   temperature: z.number().nullable(),
   max_tokens: z.number().nullable(),

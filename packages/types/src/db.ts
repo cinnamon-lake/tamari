@@ -136,6 +136,12 @@ export interface Chat {
   txtExportUrl?: string | null;
 }
 
+/**
+ * Group-chat reply ordering, stored in `Chat.metadata.groupChatSettings`.
+ * Shared by the server (GroupChatService) and the client panel.
+ */
+export type ActivationStrategy = 'NATURAL' | 'LIST' | 'MANUAL' | 'POOLED';
+
 /** Lightweight chat fields for sidebar list views. */
 export interface ChatSummary {
   id: string;
@@ -445,12 +451,15 @@ export interface PresetPromptOrderEntry {
 
 // ---------- Backend Configs ----------
 
+/** How a backend talks to its provider: chat completions vs. raw text completion. */
+export type GenerationMode = 'chat' | 'text';
+
 export interface BackendConfig {
   id: string;
   name: string;
   description: string;
   backendProvider: string;
-  generationMode: 'chat' | 'text';
+  generationMode: GenerationMode;
   model: string;
   apiUrl: string | null;
   apiKey: string | null;

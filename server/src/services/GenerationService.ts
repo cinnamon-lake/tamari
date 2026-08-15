@@ -28,7 +28,7 @@ import type { IBackendConfigRepository } from '../repos/BackendConfigRepository.
 import type { IPromptListRepository } from '../repos/PromptListRepository.js';
 import type { IChatMemberRepository } from '../repos/ChatMemberRepository.js';
 import type { IAttachmentRepository } from '../repos/AttachmentRepository.js';
-import type { Message, AttachmentRef, MessageExtra } from '@tamari/types';
+import type { AppSettings, Message, AttachmentRef, MessageExtra } from '@tamari/types';
 import { getMessageText } from '@tamari/types';
 import type { GroupChatService } from './GroupChatService.js';
 import type { ChatBroadcastService } from './ChatBroadcastService.js';
@@ -44,7 +44,7 @@ import { DraftTarget, type DraftTargetDeps } from '../generation/DraftTarget.js'
 import { TranscriptTarget, type TranscriptTargetDeps } from '../generation/TranscriptTarget.js';
 import { resolveEffectiveSettings } from '../generation/appendOnlyLocks.js';
 
-function applyInputWhitespace(content: string, mode: string): string {
+function applyInputWhitespace(content: string, mode: AppSettings['whitespaceMode']): string {
   if (mode === 'none') return content;
   let result = content.trim();
   if (mode === 'full') {

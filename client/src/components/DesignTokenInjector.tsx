@@ -1,5 +1,6 @@
 import { createEffect } from 'solid-js';
 import { state } from '../stores/serverStore.js';
+import type { AppSettings } from '@tamari/types';
 import './DesignTokenInjector.css';
 
 export function DesignTokenInjector() {
@@ -23,16 +24,16 @@ export function DesignTokenInjector() {
       root.style.setProperty('--chat-max-width', '');
     }
 
-    // Avatar border radius ('circle' is a legacy value, treated as 'round')
-    const rawAvatarStyle = String(state.settings['avatarStyle'] ?? 'round');
-    const avatarStyle = rawAvatarStyle === 'circle' ? 'round' : rawAvatarStyle;
-    const avatarRadiusMap: Record<string, string> = {
+    // Avatar border radius ('circle' is a legacy value, same shape as 'round')
+    const avatarStyle = state.settings['avatarStyle'] ?? 'round';
+    const avatarRadiusMap: Record<AppSettings['avatarStyle'], string> = {
       round: '50%',
+      circle: '50%',
       rectangular: '0',
       square: '0',
       rounded: 'var(--radius-md)',
     };
-    root.style.setProperty('--avatar-border-radius', avatarRadiusMap[avatarStyle] ?? '50%');
+    root.style.setProperty('--avatar-border-radius', avatarRadiusMap[avatarStyle]);
 
     // Shadow intensity
     const noShadows = Boolean(state.settings['noShadows']);
@@ -51,7 +52,7 @@ export function DesignTokenInjector() {
     }
 
     // Chat display style
-    const chatStyle = String(state.settings['chatStyle'] ?? 'default');
+    const chatStyle = state.settings['chatStyle'] ?? 'default';
     const messagesEl = document.querySelector('.messages');
     if (messagesEl) {
       messagesEl.classList.remove('chat-style-default', 'chat-style-bubbles', 'chat-style-document');

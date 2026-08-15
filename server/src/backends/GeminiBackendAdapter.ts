@@ -28,6 +28,7 @@ import {
   GeminiModelListSchema,
   type GeminiStreamChunk,
   type GeminiGenerateContentRequest,
+  type GeminiContent,
 } from './types.js';
 import { resolveLocalAttachmentUrl } from './resolveLocalAttachment.js';
 
@@ -251,7 +252,7 @@ export class GeminiBackendAdapter implements BackendAdapter {
     return texts.join('\n\n') || undefined;
   }
 
-  private convertMessages(messages: PipelineMessage[]): Array<{ role: string; parts: unknown[] }> {
+  private convertMessages(messages: PipelineMessage[]): GeminiContent[] {
     // Strip trailing empty assistant message (created as a stream target).
     const lastMsg = messages[messages.length - 1];
     if (
@@ -264,7 +265,7 @@ export class GeminiBackendAdapter implements BackendAdapter {
       messages = messages.slice(0, -1);
     }
 
-    const out: Array<{ role: string; parts: unknown[] }> = [];
+    const out: GeminiContent[] = [];
 
     for (const m of messages) {
       if (m.role === 'system') continue;

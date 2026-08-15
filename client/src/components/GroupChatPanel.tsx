@@ -6,6 +6,7 @@ import { bus } from '../bus/WebSocketBus.js';
 import { confirmPopup } from '../stores/popupStore.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import type { ActivationStrategy } from '@tamari/types';
 import './GroupChatPanel.css';
 
 export interface GroupChatPanelProps {
@@ -33,8 +34,7 @@ export function GroupChatPanel(props: GroupChatPanelProps) {
     return (meta.groupChatSettings ?? {}) as Record<string, unknown>;
   });
 
-  const activationStrategy = () =>
-    str(groupSettings().activationStrategy, 'NATURAL') as 'NATURAL' | 'LIST' | 'MANUAL' | 'POOLED';
+  const activationStrategy = () => str(groupSettings().activationStrategy, 'NATURAL') as ActivationStrategy;
 
   const availableCharacters = () => {
     const memberIds = new Set(members().map((m) => m.characterId));
@@ -70,7 +70,7 @@ export function GroupChatPanel(props: GroupChatPanelProps) {
     });
   };
 
-  const updateStrategy = (strategy: string) => {
+  const updateStrategy = (strategy: ActivationStrategy) => {
     const chat = activeChat();
     if (!chat) return;
     const meta = (chat.metadata ?? {});
@@ -101,7 +101,7 @@ export function GroupChatPanel(props: GroupChatPanelProps) {
           {/* Activation Strategy */}
           <div class="group-setting">
             <label class="field-label">{t('groupChat.activationStrategy')}</label>
-            <select class="select" value={activationStrategy()} onChange={(e) => updateStrategy(e.currentTarget.value)}>
+            <select class="select" value={activationStrategy()} onChange={(e) => updateStrategy(e.currentTarget.value as ActivationStrategy)}>
               <option class="select-option" value="NATURAL">{t('groupChat.strategyNatural')}</option>
               <option class="select-option" value="LIST">{t('groupChat.strategyList')}</option>
               <option class="select-option" value="MANUAL">{t('groupChat.strategyManual')}</option>

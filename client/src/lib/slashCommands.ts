@@ -154,8 +154,11 @@ export function parseMacroAtCursor(text: string, cursorPos: number): { prefix: s
   return { prefix: match[1]!, start: match.index ?? 0 };
 }
 
+/** Built-in theme preset names (the /theme command's closed vocabulary). */
+export type ThemePreset = 'dark' | 'light' | 'high-contrast' | 'none';
+
 /** Built-in theme presets mapped to CSS snippets. */
-export const THEME_PRESETS: Record<string, string> = {
+export const THEME_PRESETS: Record<ThemePreset, string> = {
   dark: '',
   light: `:root {
   --color-bg-primary:   #fafafa;

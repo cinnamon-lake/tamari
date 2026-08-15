@@ -11,7 +11,7 @@
  */
 
 import { getMessageText } from '@tamari/types';
-import type { Message, Character, WorldInfoEntry, MemorySummary } from '@tamari/types';
+import type { Message, Character, WorldInfoEntry, MemorySummary, MacroGenerationType } from '@tamari/types';
 import type { Prompt } from '../backends/BackendAdapter.js';
 import type { WorldInfoInjector } from './WorldInfoInjector.js';
 import { MacroResolver, type MacroContext } from './MacroResolver.js';
@@ -88,7 +88,7 @@ export interface BuildOptions {
     /** Active extension names for hasExtension macro */
     extensions?: string[];
     /** Generation type for state macros */
-    lastGenerationType?: string;
+    lastGenerationType?: MacroGenerationType;
   };
 
   /** Media types supported by the active backend. */

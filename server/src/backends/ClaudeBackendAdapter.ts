@@ -29,6 +29,7 @@ import {
   ClaudeModelListSchema,
   type ClaudeStreamEvent,
   type ClaudeMessageRequest,
+  type ClaudeMessage,
   type ClaudeTool,
 } from './types.js';
 import { resolveLocalAttachmentUrl } from './resolveLocalAttachment.js';
@@ -306,7 +307,7 @@ export class ClaudeBackendAdapter implements BackendAdapter {
     return texts.join('\n\n') || undefined;
   }
 
-  private convertMessages(messages: PipelineMessage[]): Array<{ role: string; content: string | unknown[] }> {
+  private convertMessages(messages: PipelineMessage[]): ClaudeMessage[] {
     // Strip trailing empty assistant message (created as a stream target).
     const lastMsg = messages[messages.length - 1];
     if (
@@ -319,7 +320,7 @@ export class ClaudeBackendAdapter implements BackendAdapter {
       messages = messages.slice(0, -1);
     }
 
-    const out: Array<{ role: string; content: string | unknown[] }> = [];
+    const out: ClaudeMessage[] = [];
 
     for (const m of messages) {
       if (m.role === 'system') continue;
@@ -355,7 +356,9 @@ export class ClaudeBackendAdapter implements BackendAdapter {
         continue;
       }
 
-      // Fallback: use pre-formatted reasoning + content for adapters without native block support
+      // Fallback: use pre-formatted reasoning + content for adapters without native block support.
+      // Claude only accepts user/assistant roles — legacy 'tool'-role messages
+      // render as user text (tool results otherwise travel as tool_result blocks above).
       const textContent = m.reasoningFormatted
         ? m.reasoningFormatted
         : typeof m.content === 'string'
@@ -363,7 +366,7 @@ export class ClaudeBackendAdapter implements BackendAdapter {
           : this.convertParts(m.content);
 
       out.push({
-        role: m.role,
+        role: m.role === 'tool' ? 'user' : m.role,
         content: textContent,
       });
     }
@@ -464,11 +467,7 @@ export class ClaudeBackendAdapter implements BackendAdapter {
    * and adds `cache_control` to the last content part at the target depth
    * and at `depth + 2` (second breakpoint).
    */
-  private injectCacheControls(
-    messages: Array<{ role: string; content: string | unknown[]; name?: string }>,
-    cachingAtDepth: number,
-    ttl?: string,
-  ): void {
+  private injectCacheControls(messages: ClaudeMessage[], cachingAtDepth: number, ttl?: string): void {
     let passedThePrefill = false;
     let depth = 0;
     let previousRoleName = '';

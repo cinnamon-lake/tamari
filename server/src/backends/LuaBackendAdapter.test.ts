@@ -6,7 +6,7 @@ import {
   type CustomBackendDelegate,
   type DelegatedGenerateResult,
 } from './LuaBackendAdapter.js';
-import type { BackendAdapter, BackendStreamItem, GenerationResult, Prompt } from './BackendAdapter.js';
+import type { BackendAdapter, BackendStreamItem, BranchHistoryMessage, GenerationResult, Prompt } from './BackendAdapter.js';
 import { consumeStream } from './BackendAdapter.js';
 import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
 
@@ -305,7 +305,7 @@ describe('LuaBackendAdapter', () => {
   });
 
   it('exposes full branch history via the chat global (lazy, memoized)', async () => {
-    const branch = [
+    const branch: BranchHistoryMessage[] = [
       { id: '1', role: 'user', content: 'hello there' },
       { id: '2', role: 'assistant', content: 'five goblins attack' },
       { id: '3', role: 'user', content: 'I fight the goblins' },

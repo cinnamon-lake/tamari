@@ -28,6 +28,7 @@ import {
   OpenAIModelListSchema,
   type OpenAIStreamChunk,
   type OpenAIChatCompletionRequest,
+  type OpenAIChatMessage,
 } from './types.js';
 import { resolveLocalAttachmentUrl } from './resolveLocalAttachment.js';
 
@@ -289,9 +290,7 @@ export class OpenAIBackendAdapter implements BackendAdapter {
     return /^o\d/.test(model) || model.startsWith('gpt-5.1') || model.includes('reasoning');
   }
 
-  protected convertMessages(
-    messages: PipelineMessage[],
-  ): Array<{ role: string; content?: string | unknown[] | null; tool_calls?: unknown[]; tool_call_id?: string }> {
+  protected convertMessages(messages: PipelineMessage[]): OpenAIChatMessage[] {
     // Strip trailing empty assistant message (created as a stream target).
     // It is the adapter's responsibility to drop it before sending to the API.
     const lastMsg = messages[messages.length - 1];
@@ -305,13 +304,7 @@ export class OpenAIBackendAdapter implements BackendAdapter {
       messages = messages.slice(0, -1);
     }
 
-    const out: Array<{
-      role: string;
-      content?: string | unknown[] | null;
-      reasoning_content?: string;
-      tool_calls?: unknown[];
-      tool_call_id?: string;
-    }> = [];
+    const out: OpenAIChatMessage[] = [];
 
     function flushAssistant(buffer: ContentPart[]) {
       if (buffer.length === 0) return;
@@ -319,12 +312,7 @@ export class OpenAIBackendAdapter implements BackendAdapter {
       const reasoningParts = buffer.filter((p): p is ReasoningPart => p.type === 'reasoning');
       const toolUseParts = buffer.filter((p): p is ToolUsePart => p.type === 'tool_use');
 
-      const assistantMsg: {
-        role: string;
-        content?: string | unknown[] | null;
-        reasoning_content?: string;
-        tool_calls?: unknown[];
-      } = { role: 'assistant' };
+      const assistantMsg: OpenAIChatMessage = { role: 'assistant' };
 
       if (textParts.length > 0) {
         assistantMsg.content = textParts.map((p) => p.text).join('');
@@ -384,7 +372,7 @@ export class OpenAIBackendAdapter implements BackendAdapter {
         const toolResultParts = parts.filter((p): p is ToolResultPart => p.type === 'tool_result');
         const textParts = parts.filter((p): p is TextPart => p.type === 'text');
 
-        const msg: { role: string; content: string | unknown[]; tool_call_id?: string } = { role: 'tool', content: '' };
+        const msg: OpenAIChatMessage = { role: 'tool', content: '' };
 
         const firstToolResult = toolResultParts[0];
         if (firstToolResult) {

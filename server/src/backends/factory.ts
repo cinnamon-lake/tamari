@@ -20,7 +20,7 @@ import { MoonshotBackendAdapter } from './MoonshotBackendAdapter.js';
 import { KoboldCppBackendAdapter } from './KoboldCppBackendAdapter.js';
 import { MockBackendAdapter } from './MockBackendAdapter.js';
 import type { BackendAdapter } from './BackendAdapter.js';
-import type { BackendConfig } from '@tamari/types';
+import type { BackendConfig, GenerationMode } from '@tamari/types';
 import { buildBackendSettings } from './buildBackendSettings.js';
 import { getInstructTemplate, parseCustomInstructTemplates, type InstructTemplate } from './InstructTemplate.js';
 import { str } from '../lib/coerce.js';
@@ -87,7 +87,7 @@ export interface AdapterFactoryInput {
   apiKey: string;
   baseUrl: string;
   model: string;
-  generationMode: string;
+  generationMode: GenerationMode;
   requestScript?: string;
   contextLength?: number;
   /** Instruct template name for text-completion adapters. */
@@ -123,7 +123,8 @@ export function buildAdapterFactoryInput(
     apiKey: str(settings['apiKey']),
     baseUrl: str(settings['apiUrl']),
     model: str(settings['model']),
-    generationMode: str(settings['generationMode']),
+    // Raw settings can hold anything; anything but 'text' is chat (the schema default).
+    generationMode: settings['generationMode'] === 'text' ? 'text' : 'chat',
     requestScript:
       parseOptionalString(settings['requestScript']) ?? parseOptionalString(settings['custom.requestScript']),
     contextLength: parseNumber(settings['contextLength']),
