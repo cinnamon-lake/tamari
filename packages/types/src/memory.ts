@@ -2,6 +2,14 @@
  * Memory / summarization types for tamari.
  */
 
+/**
+ * Default system prompt for the summarization LLM call. Lives in the active
+ * prompt list as the builtin `memorySummary` utility prompt (editable per
+ * list); this is the fallback when the list or prompt is missing.
+ */
+export const DEFAULT_MEMORY_SUMMARY_PROMPT =
+  'Summarize the most important facts and events in the story so far. For each event, include a citation to the message ID(s) it came from using [msg:ID] format. Be concise.';
+
 export interface MemorySummary {
   /** The rolling summary text, containing inline [msg:ID] citations. */
   summaryText: string;
@@ -27,8 +35,6 @@ export interface MemorySettings {
   depth: number;
   /** Optional backend config ID to use for summarization. Empty = active chat backend. */
   backendConfigId: string;
-  /** System prompt for the summarization LLM call. */
-  systemPrompt: string;
   /** Target maximum tokens for the summary output. */
   maxSummaryTokens: number;
 }

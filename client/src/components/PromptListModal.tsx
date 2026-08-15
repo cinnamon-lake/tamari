@@ -119,6 +119,30 @@ const DEFAULT_PROMPTS: PresetPromptDef[] = [
     systemPrompt: true,
     marker: true,
   },
+  // Utility prompts: in every list's `prompts` array (editable per list) but
+  // deliberately absent from DEFAULT_ORDER — never injected into chat
+  // assembly, only read by their consumers (impersonate drafts, memory
+  // summarization). Mirrors server/src/pipeline/PromptManager.ts.
+  {
+    identifier: 'impersonation',
+    name: 'Impersonation Prompt',
+    content:
+      "[Write your next reply from the point of view of {{user}}, using the chat history so far as a guideline for the writing style of {{user}}. Don't write as {{char}} or system. Don't describe actions of {{char}}.]",
+    role: 'system',
+    enabled: true,
+    systemPrompt: true,
+    marker: false,
+  },
+  {
+    identifier: 'memorySummary',
+    name: 'Memory Summary Prompt',
+    content:
+      'Summarize the most important facts and events in the story so far. For each event, include a citation to the message ID(s) it came from using [msg:ID] format. Be concise.',
+    role: 'system',
+    enabled: true,
+    systemPrompt: true,
+    marker: false,
+  },
 ];
 
 const DEFAULT_ORDER: PresetPromptOrderEntry[] = [
@@ -138,6 +162,17 @@ const DEFAULT_ORDER: PresetPromptOrderEntry[] = [
 
 const BUILTIN_IDENTIFIERS = new Set(DEFAULT_PROMPTS.map((p) => p.identifier));
 
+/** Builtin utility prompts: live in `prompts`, never in `promptOrder`. */
+const UTILITY_PROMPT_IDENTIFIERS = new Set(['impersonation', 'memorySummary']);
+
+/** Append builtin utility prompts a stored list predates (mirrors the server's
+ *  ensureUtilityPrompts / migration 016). */
+const withUtilityPrompts = (defs: PresetPromptDef[]): PresetPromptDef[] => {
+  const present = new Set(defs.map((p) => p.identifier));
+  const missing = DEFAULT_PROMPTS.filter((p) => UTILITY_PROMPT_IDENTIFIERS.has(p.identifier) && !present.has(p.identifier));
+  return missing.length === 0 ? defs : [...defs, ...missing.map((p) => ({ ...p }))];
+};
+
 export function PromptListModal(props: { onClose: () => void }) {
   const { t } = useI18n();
   const activePromptList = () => state.activePromptList;
@@ -151,7 +186,7 @@ export function PromptListModal(props: { onClose: () => void }) {
   // Prompt list editor signals
   const [listName, setListName] = createSignal(activePromptList()?.name ?? t('promptList.defaultName'));
   const [prompts, setPrompts] = createSignal<PresetPromptDef[]>(
-    activePromptList()?.prompts ?? DEFAULT_PROMPTS.map((p) => ({ ...p })),
+    activePromptList() ? withUtilityPrompts(activePromptList()!.prompts.map((p) => ({ ...p }))) : DEFAULT_PROMPTS.map((p) => ({ ...p })),
   );
   const [promptOrder, setPromptOrder] = createSignal<PresetPromptOrderEntry[]>(
     activePromptList()?.promptOrder ?? DEFAULT_ORDER.map((o) => ({ ...o })),
@@ -178,7 +213,11 @@ export function PromptListModal(props: { onClose: () => void }) {
 
   const loadListData = (list: NonNullable<typeof state.activePromptList>) => {
     setListName(list.name);
-    setPrompts(list.prompts?.length ? list.prompts.map((p) => ({ ...p })) : DEFAULT_PROMPTS.map((p) => ({ ...p })));
+    setPrompts(
+      list.prompts?.length
+        ? withUtilityPrompts(list.prompts.map((p) => ({ ...p })))
+        : DEFAULT_PROMPTS.map((p) => ({ ...p })),
+    );
     setPromptOrder(
       list.promptOrder?.length ? list.promptOrder.map((o) => ({ ...o })) : DEFAULT_ORDER.map((o) => ({ ...o })),
     );
@@ -331,6 +370,25 @@ export function PromptListModal(props: { onClose: () => void }) {
   const markDirty = (setter: (v: unknown) => void) => (value: unknown) => {
     setter(value);
     setDirty(true);
+  };
+
+  // Utility prompts: builtin prompts present in `prompts` but not in
+  // `promptOrder` — editable here, but never reorderable/deletable and never
+  // injected into chat assembly.
+  const utilityPrompts = () => {
+    const ordered = new Set(promptOrder().map((o) => o.identifier));
+    return prompts().filter((p) => UTILITY_PROMPT_IDENTIFIERS.has(p.identifier) && !ordered.has(p.identifier));
+  };
+
+  const utilityPromptName = (def: PresetPromptDef): string => {
+    switch (def.identifier) {
+      case 'impersonation':
+        return t('promptList.utilityImpersonation');
+      case 'memorySummary':
+        return t('promptList.utilityMemorySummary');
+      default:
+        return def.name;
+    }
   };
 
   return (
@@ -509,6 +567,36 @@ export function PromptListModal(props: { onClose: () => void }) {
                   </div>
                 );
               }}
+            </For>
+          </div>
+        </section>
+
+        {/* Utility Prompts — builtin, per-list editable, never in the order */}
+        <section class="settings-section">
+          <h3 class="section-heading">{t('promptList.utilityPromptsHeading')}</h3>
+          <p class="text-sm text-muted">{t('promptList.utilityPromptsHint')}</p>
+          <div class="prompt-list">
+            <For each={utilityPrompts()}>
+              {(def) => (
+                <div class="prompt-item" id={`utility-prompt-${def.identifier}`}>
+                  <div class="prompt-item-header">
+                    <span class="prompt-name" title={utilityPromptName(def)}>
+                      {utilityPromptName(def)}
+                    </span>
+                  </div>
+                  <div class="prompt-item-body">
+                    <textarea
+                      class="textarea"
+                      rows={3}
+                      value={def.content}
+                      onInput={(e) => updatePrompt(def.identifier, { content: e.currentTarget.value })}
+                      placeholder={t('promptList.contentPlaceholder')}
+                      aria-label={utilityPromptName(def)}
+                      classList={{ 'resize-v': true }}
+                    />
+                  </div>
+                </div>
+              )}
             </For>
           </div>
         </section>

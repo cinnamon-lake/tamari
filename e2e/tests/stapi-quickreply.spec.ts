@@ -12,6 +12,9 @@
  * character/persona queries, settings/backend round-trips (including real
  * sampler wiring into the mock LLM request), variables/meta state, world
  * info, reasoning/generation info, message extras, and error paths.
+ *
+ * NOTE: quick replies are created from the chat view's quick reply bar
+ * (helpers/quickReplies.ts), so each test opens its character/chat FIRST.
  */
 import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
@@ -73,6 +76,7 @@ test.describe('StApi quick-reply coverage', () => {
     const charName = uniqueName('QR Utils Char');
     const label = uniqueName('QR Utils');
 
+    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
     await createLuaQuickReply(
       page,
       label,
@@ -114,7 +118,6 @@ local sub = st.substitute_macros('{{user}}/{{char}}'):await()
 check('substitute_macros', sub:sub(-#'${charName}') == '${charName}')
 ${LUA_NARRATE}`,
     );
-    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
 
     await clickQuickReply(page, label);
     const bubble = await expectNarratorChecks(page);
@@ -128,6 +131,8 @@ ${LUA_NARRATE}`,
     const label = uniqueName('QR Msgs');
     const marker = `MARKER${Date.now()}`;
 
+    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
+    await app.sendUserMessage(`respond: ${marker}`, { expectReply: true });
     await createLuaQuickReply(
       page,
       label,
@@ -179,8 +184,6 @@ local personaId = st.get_persona_id():await()
 check('get_persona_id', personaId == nil or type(personaId) == 'string')
 ${LUA_NARRATE}`,
     );
-    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
-    await app.sendUserMessage(`respond: ${marker}`, { expectReply: true });
 
     await clickQuickReply(page, label);
     const bubble = await expectNarratorChecks(page);
@@ -208,6 +211,7 @@ ${LUA_NARRATE}`,
     await page.locator('.modal-overlay:has(.persona-modal)').click({ position: { x: 0, y: 0 } });
     await expect(manager).not.toBeVisible();
 
+    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
     await createLuaQuickReply(
       page,
       label,
@@ -241,7 +245,6 @@ else
 end
 ${LUA_NARRATE}`,
     );
-    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
 
     await clickQuickReply(page, label);
     const bubble = await expectNarratorChecks(page);
@@ -254,6 +257,7 @@ ${LUA_NARRATE}`,
     const charName = uniqueName('QR Settings Char');
     const label = uniqueName('QR Settings');
 
+    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
     await createLuaQuickReply(
       page,
       label,
@@ -290,7 +294,6 @@ st.set_system_prompt(charId, 'E2E system prompt xyz'):await()
 check('system_prompt', st.get_system_prompt(charId):await() == 'E2E system prompt xyz')
 ${LUA_NARRATE}`,
     );
-    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
 
     await clickQuickReply(page, label);
     const bubble = await expectNarratorChecks(page);
@@ -304,6 +307,7 @@ ${LUA_NARRATE}`,
     const setLabel = uniqueName('QR Sampler Set');
     const restoreLabel = uniqueName('QR Sampler Restore');
 
+    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
     await createLuaQuickReply(
       page,
       setLabel,
@@ -322,7 +326,6 @@ local m = st.getvar('origMax'):await()
 if m ~= nil then st.set_maxTokens(m):await() end
 st.toast('samplers-restored-e2e')`,
     );
-    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
 
     await clickQuickReply(page, setLabel);
     await expect(page.locator('.toast-container')).toContainText('samplers-set-e2e', {
@@ -347,6 +350,7 @@ st.toast('samplers-restored-e2e')`,
     const charName = uniqueName('QR Vars Char');
     const label = uniqueName('QR Vars');
 
+    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
     await createLuaQuickReply(
       page,
       label,
@@ -374,7 +378,6 @@ check('delete_state', isnull(st.get_state('e2e.qr.ns'):await()))
 check('global_state_survives', st.get_global_state('e2e.qr.gns'):await() ~= nil)
 ${LUA_NARRATE}`,
     );
-    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
 
     await clickQuickReply(page, label);
     const bubble = await expectNarratorChecks(page);
@@ -389,6 +392,11 @@ ${LUA_NARRATE}`,
     const label = uniqueName('QR WI');
 
     const bookLabel = await app.createLorebook(bookName, 'greeting', 'WI_SETUP_TOKEN');
+    await app.createCharacterAndChat({
+      name: charName,
+      firstMes: `Hello! I am ${charName}.`,
+      lorebookBookLabel: bookLabel,
+    });
     await createLuaQuickReply(
       page,
       label,
@@ -403,11 +411,6 @@ check('wi_remove', st.wi_remove('dragon'):await() == true)
 check('wi_gone', isnull(st.wi_get('dragon'):await()))
 ${LUA_NARRATE}`,
     );
-    await app.createCharacterAndChat({
-      name: charName,
-      firstMes: `Hello! I am ${charName}.`,
-      lorebookBookLabel: bookLabel,
-    });
 
     await clickQuickReply(page, label);
     const bubble = await expectNarratorChecks(page);
@@ -420,6 +423,8 @@ ${LUA_NARRATE}`,
     const charName = uniqueName('QR Reasoning Char');
     const label = uniqueName('QR Reasoning');
 
+    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
+    await app.sendUserMessage('think: please reason', { expectReply: true });
     await createLuaQuickReply(
       page,
       label,
@@ -444,8 +449,6 @@ local info = st.get_generation_info(last.id):await()
 check('get_generation_info', info ~= nil and info.model == 'mock-model')
 ${LUA_NARRATE}`,
     );
-    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
-    await app.sendUserMessage('think: please reason', { expectReply: true });
 
     await clickQuickReply(page, label);
     const bubble = await expectNarratorChecks(page);
@@ -459,6 +462,8 @@ ${LUA_NARRATE}`,
     const label = uniqueName('QR Extra');
     const marker = `EXTRA${Date.now()}`;
 
+    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
+    await app.sendUserMessage(`respond: ${marker}`, { expectReply: true });
     await createLuaQuickReply(
       page,
       label,
@@ -472,8 +477,6 @@ check('set_message_extra', st.get_message_extra(last.id, 'e2eKey'):await() == 'e
 check('get_message_extra_missing', isnull(st.get_message_extra(last.id, 'noSuchKey'):await()))
 ${LUA_NARRATE}`,
     );
-    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
-    await app.sendUserMessage(`respond: ${marker}`, { expectReply: true });
 
     await clickQuickReply(page, label);
     const bubble = await expectNarratorChecks(page);
@@ -486,11 +489,11 @@ ${LUA_NARRATE}`,
     const stateLabel = uniqueName('QR Err State');
     const wiLabel = uniqueName('QR Err WI');
 
+    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
     // set_state with an empty namespace must fail namespace validation.
     await createLuaQuickReply(page, stateLabel, `st.set_state('', {}):await()`);
     // wi_add without a lorebook linked to the chat character must fail.
     await createLuaQuickReply(page, wiLabel, `st.wi_add('dragon', 'x'):await()`);
-    await app.createCharacterAndChat({ name: charName, firstMes: `Hello! I am ${charName}.` });
 
     await clickQuickReply(page, stateLabel);
     await expect(page.locator('.toast-container')).toContainText('namespace', { timeout: 5000 });

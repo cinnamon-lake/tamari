@@ -37,8 +37,6 @@ export interface ClaudeAdapterConfig extends BaseAdapterConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
-  /** Cache TTL for prompt caching, e.g. '5m' or '1h'. */
-  cacheTTL?: string;
 }
 
 
@@ -204,7 +202,9 @@ export class ClaudeBackendAdapter implements BackendAdapter {
     const messages = this.convertMessages(prompt.messages);
 
     const cachingEnabled = typeof prompt.cacheDepth === 'number' && prompt.cacheDepth >= 0;
-    const cacheTTL = (this.config.cacheTTL || (this.config.params?.cacheTTL as string | undefined));
+    // Per-config TTL (providerParams.cacheTTL, merged into the params blob by
+    // buildBackendSettings) — there is no global fallback.
+    const cacheTTL = this.config.params?.cacheTTL as string | undefined;
 
     if (typeof prompt.cacheDepth === 'number' && prompt.cacheDepth >= 0) {
       this.injectCacheControls(messages, prompt.cacheDepth, cacheTTL);

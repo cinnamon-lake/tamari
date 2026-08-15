@@ -144,6 +144,16 @@ export function BackendConfigModal(props: { onClose: () => void }) {
   );
   // `mock` provider: the inline canned-response script (providerParams.mockScript).
   const [mockScript, setMockScript] = createSignal(str(activeBackendConfig()?.providerParams?.['mockScript']));
+  // Prompt caching for the claude/openrouter providers: providerParams.cacheMode
+  // ('off' | 'auto' | 'manual'), cacheDepth (manual mode only) and cacheTTL —
+  // consumed server-side by ChatPromptAssembly and the adapters, never sent as
+  // sampler params (cacheMode/cacheDepth are structural providerParams keys).
+  const initialCacheMode = activeBackendConfig()?.providerParams?.['cacheMode'];
+  const [cacheMode, setCacheMode] = createSignal<'off' | 'auto' | 'manual'>(
+    initialCacheMode === 'auto' || initialCacheMode === 'manual' ? initialCacheMode : 'off',
+  );
+  const [cacheDepth, setCacheDepth] = createSignal(Number(activeBackendConfig()?.providerParams?.['cacheDepth'] ?? 0));
+  const [cacheTTL, setCacheTTL] = createSignal(str(activeBackendConfig()?.providerParams?.['cacheTTL']));
   const [logitBias, setLogitBias] = createSignal(formatLogitBias(activeBackendConfig()?.logitBias));
   const [openrouterProvider, setOpenrouterProvider] = createSignal(activeBackendConfig()?.openrouterProvider ?? '');
   const [apiUrl, setApiUrl] = createSignal(activeBackendConfig()?.apiUrl ?? '');
@@ -360,6 +370,10 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     setCustomBackendId(str(config.providerParams?.['customBackendId']));
     setDelegateConfigId(str(config.providerParams?.['delegateConfigId']));
     setMockScript(str(config.providerParams?.['mockScript']));
+    const configCacheMode = config.providerParams?.['cacheMode'];
+    setCacheMode(configCacheMode === 'auto' || configCacheMode === 'manual' ? configCacheMode : 'off');
+    setCacheDepth(Number(config.providerParams?.['cacheDepth'] ?? 0));
+    setCacheTTL(str(config.providerParams?.['cacheTTL']));
     setLogitBias(formatLogitBias(config.logitBias));
     setOpenrouterProvider(config.openrouterProvider ?? '');
     setApiUrl(config.apiUrl ?? '');
@@ -450,6 +464,16 @@ export function BackendConfigModal(props: { onClose: () => void }) {
       if (mockScript()) params['mockScript'] = mockScript();
       else delete params['mockScript'];
     }
+    if (backendProvider() === 'claude' || backendProvider() === 'openrouter') {
+      // Off mode drops the keys entirely; an absent cacheMode reads as 'off'
+      // server-side. cacheDepth is only meaningful in manual mode.
+      if (cacheMode() !== 'off') params['cacheMode'] = cacheMode();
+      else delete params['cacheMode'];
+      if (cacheMode() === 'manual' && cacheDepth() > 0) params['cacheDepth'] = cacheDepth();
+      else delete params['cacheDepth'];
+      if (cacheTTL().trim()) params['cacheTTL'] = cacheTTL().trim();
+      else delete params['cacheTTL'];
+    }
     return params;
   };
 
@@ -524,6 +548,9 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     customBackendId();
     delegateConfigId();
     mockScript();
+    cacheMode();
+    cacheDepth();
+    cacheTTL();
     logitBias();
     openrouterProvider();
     apiUrl();
@@ -1348,6 +1375,51 @@ export function BackendConfigModal(props: { onClose: () => void }) {
                   <option class="select-option" value="concise">{t('backendConfig.summaryConcise')}</option>
                   <option class="select-option" value="detailed">{t('backendConfig.summaryDetailed')}</option>
                 </select>
+              </label>
+            </div>
+          </Show>
+
+          <Show when={backendProvider() === 'claude' || backendProvider() === 'openrouter'}>
+            <div class="mt-md flex-col-sm">
+              <h4 class="text-sm text-muted mb-0">{t('backendConfig.promptCaching')}</h4>
+              <label class="field-label">
+                {t('backendConfig.cacheMode')}
+                <select
+                  class="select"
+                  value={cacheMode()}
+                  onChange={(e) => markDirty(setCacheMode)(e.currentTarget.value)}
+                >
+                  <option class="select-option" value="off">{t('backendConfig.cacheModeOff')}</option>
+                  <option class="select-option" value="auto">{t('backendConfig.cacheModeAuto')}</option>
+                  <option class="select-option" value="manual">{t('backendConfig.cacheModeManual')}</option>
+                </select>
+                <span class="hint-text">{t('backendConfig.cacheModeHint')}</span>
+              </label>
+              <Show when={cacheMode() === 'manual'}>
+                <label class="field-label">
+                  {t('backendConfig.cacheDepth')}
+                  <input
+                    class="input"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={cacheDepth()}
+                    onInput={(e) => markDirty(setCacheDepth)(Number(e.currentTarget.value))}
+                  />
+                  <span class="hint-text">{t('backendConfig.cacheDepthHint')}</span>
+                </label>
+              </Show>
+              <label class="field-label">
+                {t('backendConfig.cacheTtl')}
+                <input
+                  class="input"
+                  type="text"
+                  value={cacheTTL()}
+                  disabled={cacheMode() === 'off'}
+                  onInput={(e) => markDirty(setCacheTTL)(e.currentTarget.value)}
+                  placeholder={t('backendConfig.cacheTtlPlaceholder')}
+                />
+                <span class="hint-text">{t('backendConfig.cacheTtlHint')}</span>
               </label>
             </div>
           </Show>

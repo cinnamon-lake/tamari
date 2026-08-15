@@ -1,11 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
 import { AssistantMessageTarget, type AssistantMessageTargetDeps } from '../generation/AssistantMessageTarget.js';
 import type { ChatPromptAssembly } from '../generation/ChatPromptAssembly.js';
-import type { Message } from '@tamari/types';
+import type { Chat, Message, PromptList } from '@tamari/types';
 import { getMessageText } from '@tamari/types';
 import type { IChatRepository } from '../repos/ChatRepository.js';
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
+import type { IPromptListRepository } from '../repos/PromptListRepository.js';
 import type { GenerationResult } from '../backends/BackendAdapter.js';
+import type { GenerationRunner, GenerationOutcome } from '../generation/GenerationRunner.js';
+import { GenerationService, type GenerationServiceDeps } from './GenerationService.js';
+import { DEFAULT_IMPERSONATION_PROMPT } from '../pipeline/PromptManager.js';
+import type { DraftTarget } from '../generation/DraftTarget.js';
 
 /**
  * macroVars storage-macro resolution through a generation round — the legacy
@@ -166,5 +171,116 @@ describe('AssistantMessageTarget macroVars', () => {
       greeting_type: 'casual',
       tone: 'relaxed',
     });
+  });
+});
+
+/**
+ * handleImpersonate — the impersonation instruction is no longer a global
+ * setting: it comes from the active prompt list's builtin `impersonation`
+ * utility prompt, falling back to DEFAULT_IMPERSONATION_PROMPT.
+ */
+describe('GenerationService.handleImpersonate', () => {
+  function makeService(promptList: PromptList | undefined): {
+    service: GenerationService;
+    captured: { target?: DraftTarget };
+  } {
+    const captured: { target?: DraftTarget } = {};
+
+    const chat: Chat = {
+      id: 'chat-1',
+      name: 'Test Chat',
+      characterId: 'char-1',
+      personaId: null,
+      headMessageId: 1,
+      activeChildId: 1,
+      materialized: false,
+      metadata: {},
+      createdAt: 0,
+      updatedAt: 0,
+      forkedFromChatId: null,
+      forkedAtMessageId: null,
+    };
+
+    const chats = {
+      getChatById: vi.fn(async () => chat),
+      getMessageById: vi.fn(async () => undefined),
+    } as unknown as IChatRepository;
+
+    const settings = {
+      list: vi.fn(async () => ({ activePromptListId: 'list-1' })),
+    } as unknown as ISettingsRepository;
+
+    const promptLists = {
+      getById: vi.fn(async () => promptList),
+    } as unknown as IPromptListRepository;
+
+    const runner = {
+      acquireChat: vi.fn(async () => ({ chatId: 'chat-1' })),
+      unlockChat: vi.fn(),
+      run: vi.fn(async (target: DraftTarget) => {
+        captured.target = target;
+        return {} as GenerationOutcome;
+      }),
+    } as unknown as GenerationRunner;
+
+    const deps = {
+      bus: {},
+      chats,
+      characters: { getById: vi.fn(async () => null) },
+      settings,
+      personas: {},
+      backendConfigs: {},
+      promptLists,
+      chatMembers: {},
+      attachments: {},
+      groupChatService: {},
+      chatBroadcast: {},
+      generationBroadcast: {},
+      assembly: {},
+      runner,
+    } as unknown as GenerationServiceDeps;
+
+    return { service: new GenerationService(deps), captured };
+  }
+
+  function promptListWith(content: string): PromptList {
+    return {
+      id: 'list-1',
+      name: 'Test List',
+      description: '',
+      prompts: [
+        { identifier: 'impersonation', name: 'Impersonation Prompt', content, role: 'system', enabled: true },
+      ],
+      promptOrder: [],
+      createdAt: 0,
+      updatedAt: 0,
+    };
+  }
+
+  /** DraftTarget stores the resolved text in a private constructor field. */
+  function impersonationTextOf(target: DraftTarget): string {
+    return (target as unknown as { impersonationPrompt: string }).impersonationPrompt;
+  }
+
+  it('resolves the impersonation prompt from the active prompt list', async () => {
+    const { service, captured } = makeService(promptListWith('Write as the user, custom.'));
+    await service.handleImpersonate('chat-1');
+
+    expect(captured.target).toBeDefined();
+    expect(impersonationTextOf(captured.target!)).toBe('Write as the user, custom.');
+  });
+
+  it('falls back to the default when the prompt list is missing', async () => {
+    const { service, captured } = makeService(undefined);
+    await service.handleImpersonate('chat-1');
+
+    expect(impersonationTextOf(captured.target!)).toBe(DEFAULT_IMPERSONATION_PROMPT);
+  });
+
+  it('falls back to the default when the utility prompt content is empty', async () => {
+    const { service, captured } = makeService(promptListWith(''));
+    await service.handleImpersonate('chat-1');
+
+    expect(impersonationTextOf(captured.target!)).toBe(DEFAULT_IMPERSONATION_PROMPT);
   });
 });

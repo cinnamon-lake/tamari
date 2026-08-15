@@ -29,6 +29,11 @@ export const promptList = {
   moveUp: 'Move up',
   moveDown: 'Move down',
   contentAutoInjected: 'Content is injected automatically by the server',
+  utilityPromptsHeading: 'Utility Prompts',
+  utilityPromptsHint:
+    'Built-in prompts used by generation features outside the chat prompt (impersonate drafts, memory summaries). Editable per list; never part of the prompt order.',
+  utilityImpersonation: 'Impersonation Prompt',
+  utilityMemorySummary: 'Memory Summary Prompt',
   defaultName: 'Default',
   duplicateName: '{{name}} (Copy)',
 };

@@ -7,10 +7,11 @@
  */
 
 import type { MemorySettings, MemorySummary, MemoryCitation, Message } from '@tamari/types';
-import { getMessageText } from '@tamari/types';
+import { getMessageText, DEFAULT_MEMORY_SUMMARY_PROMPT } from '@tamari/types';
 import type { IChatRepository } from '../repos/ChatRepository.js';
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
 import type { IBackendConfigRepository } from '../repos/BackendConfigRepository.js';
+import type { IPromptListRepository } from '../repos/PromptListRepository.js';
 import type { BackendAdapter, Prompt } from '../backends/BackendAdapter.js';
 import type { BackendAdapterFactory } from '../backends/factory.js';
 import { buildBackendSettings } from '../backends/buildBackendSettings.js';
@@ -28,6 +29,7 @@ export interface MemoryServiceDeps {
   chats: IChatRepository;
   settings: ISettingsRepository;
   backendConfigs: IBackendConfigRepository;
+  promptLists: IPromptListRepository;
   backendFactory: BackendAdapterFactory;
 }
 
@@ -56,6 +58,21 @@ export class MemoryService {
     // applied — no need to re-merge defaults here. Single source of truth for
     // defaults: packages/types/src/schemas.ts (MemorySettingsSchema).
     return (await this.deps.settings.getTyped()).memory;
+  }
+
+  /**
+   * The summarization system prompt lives in the active prompt list as the
+   * builtin `memorySummary` utility prompt (same lookup as
+   * GenerationRunner.resolveBackend). Falls back to the default text when the
+   * list or prompt is missing or its content was cleared.
+   */
+  private async loadSummaryPrompt(): Promise<string> {
+    const allSettings = await this.deps.settings.list();
+    const promptList = allSettings.activePromptListId
+      ? await this.deps.promptLists.getById(allSettings.activePromptListId)
+      : undefined;
+    const content = promptList?.prompts.find((p) => p.identifier === 'memorySummary')?.content;
+    return content && content.trim().length > 0 ? content : DEFAULT_MEMORY_SUMMARY_PROMPT;
   }
 
   /**
@@ -171,7 +188,8 @@ export class MemoryService {
     if (range.length === 0) return 'No messages in range.';
 
     const settings = await this.loadSettings();
-    const prompt = this.buildRangePrompt(range, args.focus, settings);
+    const systemPrompt = await this.loadSummaryPrompt();
+    const prompt = this.buildRangePrompt(range, args.focus, settings, systemPrompt);
     return this.runSummarizationBackend(prompt, settings);
   }
 
@@ -249,11 +267,12 @@ export class MemoryService {
   }
 
   private async summarizeMessages(messages: Message[], settings: MemorySettings): Promise<string> {
-    const prompt = this.buildSummaryPrompt(messages, settings);
+    const systemPrompt = await this.loadSummaryPrompt();
+    const prompt = this.buildSummaryPrompt(messages, settings, systemPrompt);
     return this.runSummarizationBackend(prompt, settings);
   }
 
-  private buildSummaryPrompt(messages: Message[], settings: MemorySettings): Prompt {
+  private buildSummaryPrompt(messages: Message[], settings: MemorySettings, systemPrompt: string): Prompt {
     const lines = messages.map((m) => {
       const text = getMessageText(m.extra.parts).trim();
       const roleLabel = m.role === 'user' ? 'You' : m.role === 'assistant' ? 'Assistant' : m.role;
@@ -266,7 +285,7 @@ export class MemoryService {
 
     return {
       messages: [
-        { role: 'system', content: settings.systemPrompt },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
       ],
       tokenUsage: { prompt: 0, completion: settings.maxSummaryTokens },
@@ -277,7 +296,7 @@ export class MemoryService {
     };
   }
 
-  private buildRangePrompt(messages: Message[], focus: string | undefined, settings: MemorySettings): Prompt {
+  private buildRangePrompt(messages: Message[], focus: string | undefined, settings: MemorySettings, systemPrompt: string): Prompt {
     const lines = messages.map((m) => {
       const text = getMessageText(m.extra.parts).trim();
       const roleLabel = m.role === 'user' ? 'You' : m.role === 'assistant' ? 'Assistant' : m.role;
@@ -291,7 +310,7 @@ export class MemoryService {
 
     return {
       messages: [
-        { role: 'system', content: settings.systemPrompt },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
       ],
       tokenUsage: { prompt: 0, completion: settings.maxSummaryTokens },

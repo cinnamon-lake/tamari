@@ -6,7 +6,14 @@
  * The order determines how prompts are stacked into the final context.
  */
 
+import { DEFAULT_MEMORY_SUMMARY_PROMPT } from '@tamari/types';
+
 export type PromptRole = 'system' | 'user' | 'assistant';
+
+/** Fallback impersonation instruction — the builtin `impersonation` utility
+ *  prompt's default content (moved here from GenerationService). */
+export const DEFAULT_IMPERSONATION_PROMPT =
+  "[Write your next reply from the point of view of {{user}}, using the chat history so far as a guideline for the writing style of {{user}}. Don't write as {{char}} or system. Don't describe actions of {{char}}.]";
 
 export interface PromptDef {
   identifier: string;
@@ -137,7 +144,40 @@ export const DEFAULT_PROMPTS: PromptDef[] = [
     systemPrompt: true,
     marker: true,
   },
+  // Utility prompts: present in every list's `prompts` array (editable per
+  // list) but deliberately absent from DEFAULT_ORDER — they are never
+  // injected into chat assembly, only read directly by their consumers
+  // (impersonate drafts, memory summarization).
+  {
+    identifier: 'impersonation',
+    name: 'Impersonation Prompt',
+    content: DEFAULT_IMPERSONATION_PROMPT,
+    role: 'system',
+    enabled: true,
+    systemPrompt: true,
+    marker: false,
+  },
+  {
+    identifier: 'memorySummary',
+    name: 'Memory Summary Prompt',
+    content: DEFAULT_MEMORY_SUMMARY_PROMPT,
+    role: 'system',
+    enabled: true,
+    systemPrompt: true,
+    marker: false,
+  },
 ];
+
+/** Identifiers of the builtin utility prompts (in `prompts`, never in `promptOrder`). */
+export const UTILITY_PROMPT_IDENTIFIERS = new Set(['impersonation', 'memorySummary']);
+
+/** Append any missing builtin utility prompts to a prompt list's prompt defs.
+ *  Used when seeding/migrating lists so every stored list carries them. */
+export function ensureUtilityPrompts(prompts: PromptDef[]): PromptDef[] {
+  const present = new Set(prompts.map((p) => p.identifier));
+  const missing = DEFAULT_PROMPTS.filter((p) => UTILITY_PROMPT_IDENTIFIERS.has(p.identifier) && !present.has(p.identifier));
+  return missing.length === 0 ? prompts : [...prompts, ...missing.map((p) => ({ ...p }))];
+}
 
 export const DEFAULT_ORDER: PromptOrderEntry[] = [
   { identifier: 'main', enabled: true },

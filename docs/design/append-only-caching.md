@@ -1,6 +1,6 @@
 # Append-Only Prompt Layout — Design Proposal
 
-**Status:** implemented (global setting `appendOnlyPromptLayout`, default off; Settings → Generation next to Claude Prompt Caching).
+**Status:** implemented (global setting `appendOnlyPromptLayout`, default off; Settings → Generation).
 **Motivation:** coding-plan APIs with automatic prompt caching (discounted input tokens on cache hits) are becoming a primary backend for power users. Their caching is only profitable when the rendered request grows strictly by appends — and several Tamari prompt features violate that every single turn.
 
 ## Provider cache models
@@ -19,13 +19,15 @@ The purist append-only layout is optimal under both families, so it is the targe
 
 ## Config (decided: global)
 
-One new global setting in the existing cache cluster (Settings → Behavior, next to the Claude cache mode radios):
+One new global setting (Settings → Generation):
 
 ```
 appendOnlyPromptLayout: boolean   // default off
 ```
 
-Global, not per-backend (decided) — mixing providers with different cache leniency is accepted collateral; the user picks the mode for the strictest backend they care about. Orthogonal to `claudeCacheMode`: layout shaping benefits explicit-breakpoint users too (breakpoints stop needing the floating-injection margin).
+(The Claude cache mode/depth/TTL controls it originally sat next to have since moved to the Backend Config modal as per-config `providerParams` — migration 017.)
+
+Global, not per-backend (decided) — mixing providers with different cache leniency is accepted collateral; the user picks the mode for the strictest backend they care about. Orthogonal to the explicit-breakpoint caching controls (`providerParams.cacheMode`/`cacheDepth`/`cacheTTL`, per-backend config since migration 017 — they moved out of global settings because cache leniency is a provider property): layout shaping benefits explicit-breakpoint users too (breakpoints stop needing the floating-injection margin).
 
 All overrides below are applied **at assembly time** — stored user settings are never rewritten. The Settings modal greys out the overridden controls with a "disabled by append-only layout" note while the mode is on, and every suppression is recorded in the generation's debug trace (`generations.meta`).
 
@@ -45,7 +47,7 @@ All overrides below are applied **at assembly time** — stored user settings ar
 
 ## Existing machinery (do not duplicate)
 
-- `claudeCacheMode` (`packages/types/src/schemas.ts:348`) → `BuildOptions.caching` → `computeCacheDepth` (`PromptBuilder.ts:334`) → explicit `cache_control` breakpoints in the Claude/OpenRouter adapters. That machinery places breakpoints; it does not shape the request. With nothing floating, its `maxInjectionDepth + 2` margin is simply conservative — no change needed.
+- `providerParams.cacheMode`/`cacheDepth` on the backend config → `BuildOptions.caching` (read in `ChatPromptAssembly`) → `computeCacheDepth` (`PromptBuilder.ts:334`) → explicit `cache_control` breakpoints in the Claude/OpenRouter adapters. That machinery places breakpoints; it does not shape the request. With nothing floating, its `maxInjectionDepth + 2` margin is simply conservative — no change needed.
 - Regex execution points: prompt rules run as the first splice stage; output rules run in the generation pipeline — both gain an early return when the mode is on.
 
 ## Accepted losses (documented, not fixed here)
@@ -60,7 +62,7 @@ All overrides below are applied **at assembly time** — stored user settings ar
 - `PromptStages`: `historyRegex`, `authorsNoteSplice`, `worldInfoAtDepth` early-return or collect into `ctx.volatileBlock` when the flag is on; macro resolution in the renderer is skipped. Stage list unchanged — stages branch on the flag.
 - The renderer (`ChatCompletionRenderer`) and the text-completion formatter (`backends/formatTextPrompt.ts`): emit `volatileBlock` at the pinned position, deterministic order; history messages pass through without macro/regex transforms.
 - Generation pipeline: `trimSentences` / `removeXML` / `singleLine` / `whitespaceMode='none'` / output-regex forced off, `reasoningAddToPrompts` forced on, memory summaries skipped, input whitespace pinned — all resolved once per build via `appendOnlyLocks.ts` (`resolveEffectiveSettings`).
-- `packages/types/src/schemas.ts`: the setting next to `claudeCacheMode`; `SettingsModal.tsx`: checkbox + greyed overridden controls.
+- `packages/types/src/schemas.ts`: the setting on its own (the neighbouring `claudeCache*` globals are gone — per-backend now); `SettingsModal.tsx`: checkbox + greyed overridden controls.
 - `generations.meta`: suppressions and hoists recorded per generation.
 
 ## Testing

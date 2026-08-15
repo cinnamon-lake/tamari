@@ -25,6 +25,7 @@ import type { ICharacterRepository } from '../repos/CharacterRepository.js';
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
 import type { IPersonaRepository } from '../repos/PersonaRepository.js';
 import type { IBackendConfigRepository } from '../repos/BackendConfigRepository.js';
+import type { IPromptListRepository } from '../repos/PromptListRepository.js';
 import type { IChatMemberRepository } from '../repos/ChatMemberRepository.js';
 import type { IAttachmentRepository } from '../repos/AttachmentRepository.js';
 import type { Message, AttachmentRef, MessageExtra } from '@tamari/types';
@@ -34,6 +35,7 @@ import type { ChatBroadcastService } from './ChatBroadcastService.js';
 import type { GenerationBroadcastService } from './GenerationBroadcastService.js';
 import { tokenCounterProvider } from '../tokenizers/TokenCounter.js';
 import { MacroResolver } from '../pipeline/MacroResolver.js';
+import { DEFAULT_IMPERSONATION_PROMPT } from '../pipeline/PromptManager.js';
 import { getChatSnapshotMessages } from '../lib/swipeInfo.js';
 import type { GenerationRunner, ChatLock } from '../generation/GenerationRunner.js';
 import type { ChatPromptAssembly } from '../generation/ChatPromptAssembly.js';
@@ -63,6 +65,7 @@ export interface GenerationServiceDeps {
   settings: ISettingsRepository;
   personas: IPersonaRepository;
   backendConfigs: IBackendConfigRepository;
+  promptLists: IPromptListRepository;
   chatMembers: IChatMemberRepository;
   attachments: IAttachmentRepository;
   groupChatService: GroupChatService;
@@ -71,9 +74,6 @@ export interface GenerationServiceDeps {
   assembly: ChatPromptAssembly;
   runner: GenerationRunner;
 }
-
-const DEFAULT_IMPERSONATION_PROMPT =
-  "[Write your next reply from the point of view of {{user}}, using the chat history so far as a guideline for the writing style of {{user}}. Don't write as {{char}} or system. Don't describe actions of {{char}}.]";
 
 export class GenerationService {
   private lifecycleCallbacks?: GenerationLifecycleCallbacks;
@@ -400,8 +400,15 @@ export class GenerationService {
       }
     }
 
+    // The impersonation instruction lives in the active prompt list as the
+    // builtin `impersonation` utility prompt; fall back to the default text
+    // when the list or prompt is missing (or its content was cleared).
     const allSettings = await this.deps.settings.list();
-    const impersonationPrompt = allSettings.impersonationPrompt || DEFAULT_IMPERSONATION_PROMPT;
+    const promptList = allSettings.activePromptListId
+      ? await this.deps.promptLists.getById(allSettings.activePromptListId)
+      : undefined;
+    const impersonationPrompt =
+      promptList?.prompts.find((p) => p.identifier === 'impersonation')?.content || DEFAULT_IMPERSONATION_PROMPT;
 
     await this.runNested(
       new DraftTarget(this.draftTargetDeps(), chatId, clientId, character ?? null, impersonationPrompt),

@@ -3,10 +3,11 @@ import { MemoryService, parseCitations } from './MemoryService.js';
 import type { IChatRepository } from '../repos/ChatRepository.js';
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
 import type { IBackendConfigRepository } from '../repos/BackendConfigRepository.js';
+import type { IPromptListRepository } from '../repos/PromptListRepository.js';
 import type { BackendAdapterFactory } from '../backends/factory.js';
 import type { BackendAdapter, GenerationResult } from '../backends/BackendAdapter.js';
-import type { MemorySettings, Message } from '@tamari/types';
-import { textToParts } from '@tamari/types';
+import type { MemorySettings, Message, PromptList } from '@tamari/types';
+import { textToParts, DEFAULT_MEMORY_SUMMARY_PROMPT } from '@tamari/types';
 
 function makeMessage(id: number, role: Message['role'], text: string, parentId: number | null = null, extra?: Record<string, unknown>): Message {
   return {
@@ -21,6 +22,8 @@ function makeMessage(id: number, role: Message['role'], text: string, parentId: 
 
 function makeMockDeps(overrides: {
   settings?: Partial<MemorySettings>;
+  /** Content of the list's memorySummary utility prompt; null = no prompt list. */
+  summaryPrompt?: string | null;
   backendText?: string;
   backendError?: string;
 } = {}) {
@@ -29,7 +32,6 @@ function makeMockDeps(overrides: {
     updateInterval: 2,
     depth: 2,
     backendConfigId: '',
-    systemPrompt: 'Summarize.',
     maxSummaryTokens: 512,
     ...overrides.settings,
   };
@@ -39,8 +41,35 @@ function makeMockDeps(overrides: {
   const settingsRepo = {
     get: vi.fn(async (key: string) => (key === 'memory' ? settings : undefined)),
     getTyped: vi.fn(async () => ({ memory: settings })),
-    list: vi.fn(async () => ({ memory: settings })),
+    list: vi.fn(async () => ({ memory: settings, activePromptListId: 'list-1' })),
   } as unknown as ISettingsRepository;
+
+  const summaryPrompt = overrides.summaryPrompt === undefined ? 'Summarize.' : overrides.summaryPrompt;
+  const promptList: PromptList | null =
+    summaryPrompt === null
+      ? null
+      : {
+          id: 'list-1',
+          name: 'Test List',
+          description: '',
+          prompts: [
+            {
+              identifier: 'memorySummary',
+              name: 'Memory Summary Prompt',
+              content: summaryPrompt,
+              role: 'system',
+              enabled: true,
+              systemPrompt: true,
+              marker: false,
+            },
+          ],
+          promptOrder: [],
+          createdAt: 0,
+          updatedAt: 0,
+        };
+  const promptLists = {
+    getById: vi.fn(async () => promptList ?? undefined),
+  } as unknown as IPromptListRepository;
 
   const backendConfigs = {
     getById: vi.fn(async () => undefined),
@@ -80,7 +109,7 @@ function makeMockDeps(overrides: {
     }),
   } as unknown as IChatRepository;
 
-  return { settingsRepo, backendConfigs, backendFactory, backend, chats, messages };
+  return { settingsRepo, promptLists, backendConfigs, backendFactory, backend, chats, messages };
 }
 
 describe('parseCitations', () => {
@@ -112,6 +141,7 @@ describe('MemoryService', () => {
       chats: deps.chats,
       settings: deps.settingsRepo,
       backendConfigs: deps.backendConfigs,
+      promptLists: deps.promptLists,
       backendFactory: deps.backendFactory,
     });
   });
@@ -122,6 +152,7 @@ describe('MemoryService', () => {
       chats: deps.chats,
       settings: deps.settingsRepo,
       backendConfigs: deps.backendConfigs,
+      promptLists: deps.promptLists,
       backendFactory: deps.backendFactory,
     });
     const result = await service.ensureSummaryUpdated('chat1');
@@ -158,6 +189,48 @@ describe('MemoryService', () => {
       citations: [{ event: 'Summary .', messageIds: [1] }],
       anchoredAt: 3,
     });
+  });
+
+  function pushSummarizableChain(): void {
+    deps.messages.push(makeMessage(1, 'user', 'Hello', null));
+    deps.messages.push(makeMessage(2, 'assistant', 'Hi', 1));
+    deps.messages.push(makeMessage(3, 'user', 'How are you?', 2));
+    deps.messages.push(makeMessage(4, 'assistant', 'Good', 3));
+    deps.messages.push(makeMessage(5, 'user', 'Tell me more', 4));
+  }
+
+  it('uses the memorySummary utility prompt from the active prompt list', async () => {
+    pushSummarizableChain();
+    await service.ensureSummaryUpdated('chat1');
+
+    const prompt = vi.mocked(deps.backend.stream).mock.calls[0]![0];
+    expect(prompt.messages[0]).toEqual({ role: 'system', content: 'Summarize.' });
+  });
+
+  it('falls back to the default summary prompt when the prompt list is missing', async () => {
+    deps = makeMockDeps({ backendText: 'Summary [msg:1].', summaryPrompt: null });
+    service = new MemoryService({
+      chats: deps.chats,
+      settings: deps.settingsRepo,
+      backendConfigs: deps.backendConfigs,
+      promptLists: deps.promptLists,
+      backendFactory: deps.backendFactory,
+    });
+    pushSummarizableChain();
+    await service.ensureSummaryUpdated('chat1');
+
+    const prompt = vi.mocked(deps.backend.stream).mock.calls[0]![0];
+    expect(prompt.messages[0]).toEqual({ role: 'system', content: DEFAULT_MEMORY_SUMMARY_PROMPT });
+  });
+
+  it('summarizeRange also uses the memorySummary utility prompt', async () => {
+    deps.messages.push(makeMessage(1, 'user', 'Hello', null));
+    deps.messages.push(makeMessage(2, 'assistant', 'Hi', 1));
+
+    await service.summarizeRange('chat1', { startMessageId: 1, endMessageId: 2 });
+
+    const prompt = vi.mocked(deps.backend.stream).mock.calls[0]![0];
+    expect(prompt.messages[0]).toEqual({ role: 'system', content: 'Summarize.' });
   });
 
   it('returns existing summary without calling backend when not enough new messages', async () => {

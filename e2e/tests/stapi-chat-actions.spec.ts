@@ -2,28 +2,13 @@ import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
 import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
 import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
+// Global quick replies are created from the chat view's quick reply bar
+// (`+` button → QuickReplyEditor, scope defaults to global) — the bar only
+// exists with a chat open, so each test creates its character/chat FIRST.
+import { createLuaQuickReply as createGlobalQuickReply } from '../helpers/quickReplies.js';
 
 function uniqueName(base: string): string {
   return `${base} ${Date.now()}`;
-}
-
-async function createGlobalQuickReply(page: any, label: string, script: string) {
-  await page.locator('button.settings-btn:has-text("Settings")').click();
-  const settings = page.locator('.settings-modal');
-  await expect(settings).toBeVisible();
-
-  await settings.locator('h3:has-text("Quick Replies")').scrollIntoViewIfNeeded();
-  await settings.locator('button:has-text("Add Quick Reply")').click();
-
-  const editor = page.locator('.qr-modal');
-  await expect(editor).toBeVisible();
-  await editor.locator('label:has-text("Label") + input').fill(label);
-  await editor.locator('label:has-text("Script (Lua)") + textarea').fill(script);
-  await editor.locator('button:has-text("Save")').click();
-  await expect(editor).not.toBeVisible();
-
-  await settings.locator('button.btn:has-text("Close")').click();
-  await expect(settings).not.toBeVisible();
 }
 
 async function createCharacter(page: any, charName: string) {
@@ -101,8 +86,8 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Continue');
     const charName = uniqueName('StApi Continue Character');
 
-    await createGlobalQuickReply(page, label, 'st.continue()');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.continue()');
 
     const reply = await sendAndWaitReply(page, 'seq:', /Turn \d+/);
     // Compare message CONTENT only: the bubble header renders a token-count
@@ -130,8 +115,8 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Impersonate');
     const charName = uniqueName('StApi Impersonate Character');
 
-    await createGlobalQuickReply(page, label, 'st.impersonate()');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.impersonate()');
 
     // The mock resolves its reply from the last user message in the request; the
     // impersonation instruction is injected as a system prompt, so the seeded
@@ -152,12 +137,12 @@ test.describe('StApi Chat Actions', () => {
     const swipeBadLabel = uniqueName('StApi Swipe Bad');
     const charName = uniqueName('StApi Swipe Character');
 
+    await createCharacterAndChat(page, charName);
     await createGlobalQuickReply(page, regenLabel, 'st.regenerate()');
     await createGlobalQuickReply(page, swipeLeftLabel, 'st.swipe("left")');
     // :await() so the validation error propagates into Lua and surfaces as a
     // script.error toast — fire-and-forget rejections are only logged server-side.
     await createGlobalQuickReply(page, swipeBadLabel, 'st.swipe("up"):await()');
-    await createCharacterAndChat(page, charName);
 
     const reply = await sendAndWaitReply(page, 'seq:', /Turn \d+/);
     const firstTurn = ((await reply.textContent()) ?? '').match(/Turn \d+/)?.[0] ?? '';
@@ -192,6 +177,7 @@ test.describe('StApi Chat Actions', () => {
     const restoreLabel = uniqueName('StApi Set Active Child');
     const charName = uniqueName('StApi Swipe Tree Character');
 
+    await createCharacterAndChat(page, charName);
     await createGlobalQuickReply(
       page,
       addLabel,
@@ -211,7 +197,6 @@ test.describe('StApi Chat Actions', () => {
       restoreLabel,
       'local id = st.getvar("orig_id"):await() st.set_active_child(id)',
     );
-    await createCharacterAndChat(page, charName);
 
     await sendAndWaitReply(page, 'respond: original swipe text', 'original swipe text');
 
@@ -242,10 +227,10 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi AddSwipe Error');
     const charName = uniqueName('StApi AddSwipe Error Character');
 
+    await createCharacterAndChat(page, charName);
     // :await() so the validation error propagates into Lua and surfaces as a
     // script.error toast — fire-and-forget rejections are only logged server-side.
     await createGlobalQuickReply(page, label, 'st.add_swipe("no target", true):await()');
-    await createCharacterAndChat(page, charName);
 
     // Fresh chat: the greeting is client-rendered, there is no assistant message.
     await clickQuickReply(page, label);
@@ -259,6 +244,7 @@ test.describe('StApi Chat Actions', () => {
     const unhideLabel = uniqueName('StApi Unhide');
     const charName = uniqueName('StApi Hide Character');
 
+    await createCharacterAndChat(page, charName);
     // Hide the USER message, not the assistant reply: the reply renders through
     // the active-child/swipe path, which bypasses the hidden filter applied to
     // the bulk message list (getVisibleMessages), so hiding it changes nothing
@@ -269,7 +255,6 @@ test.describe('StApi Chat Actions', () => {
       unhideLabel,
       'local msgs = st.get_messages(10):await() st.unhide(msgs[#msgs - 1].id)',
     );
-    await createCharacterAndChat(page, charName);
 
     await sendAndWaitReply(page, 'respond: hide me reply', 'hide me reply');
     // Greeting + user message + reply.
@@ -291,8 +276,8 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi New Chat');
     const charName = uniqueName('StApi New Chat Character');
 
-    await createGlobalQuickReply(page, label, 'st.new_chat()');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.new_chat()');
 
     const chatItems = page.locator('.chat-item').filter({ hasText: new RegExp(charName) });
     await expect(chatItems).toHaveCount(1);
@@ -305,8 +290,8 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Temp Chat');
     const charName = uniqueName('StApi Temp Chat Character');
 
-    await createGlobalQuickReply(page, label, 'st.temp_chat()');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.temp_chat()');
 
     await clickQuickReply(page, label);
     // The sidebar chat list is scoped to the selected character; a characterless
@@ -320,8 +305,8 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Reset Chat');
     const charName = uniqueName('StApi Reset Chat Character');
 
-    await createGlobalQuickReply(page, label, 'st.reset_chat()');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.reset_chat()');
 
     await sendAndWaitReply(page, 'respond: resettable reply', 'resettable reply');
     await expect(page.locator('.message-bubble')).toHaveCount(3);
@@ -337,12 +322,12 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Branch');
     const charName = uniqueName('StApi Branch Character');
 
+    await createCharacterAndChat(page, charName);
     await createGlobalQuickReply(
       page,
       label,
       'local msgs = st.get_messages(10):await() st.branch(msgs[#msgs].id)',
     );
-    await createCharacterAndChat(page, charName);
 
     await sendAndWaitReply(page, 'respond: branchable reply', 'branchable reply');
 
@@ -354,8 +339,8 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Checkpoint');
     const charName = uniqueName('StApi Checkpoint Character');
 
-    await createGlobalQuickReply(page, label, 'st.checkpoint()');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.checkpoint()');
 
     await sendAndWaitReply(page, 'respond: checkpoint reply', 'checkpoint reply');
 
@@ -367,12 +352,12 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Hard Fork');
     const charName = uniqueName('StApi Hard Fork Character');
 
+    await createCharacterAndChat(page, charName);
     await createGlobalQuickReply(
       page,
       label,
       'local msgs = st.get_messages(10):await() st.hard_fork(msgs[#msgs].id)',
     );
-    await createCharacterAndChat(page, charName);
 
     await sendAndWaitReply(page, 'respond: forkable reply', 'forkable reply');
 
@@ -384,8 +369,8 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Delete Chat');
     const charName = uniqueName('StApi Delete Chat Character');
 
-    await createGlobalQuickReply(page, label, 'st.delete_chat()');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.delete_chat()');
 
     const chatItems = page.locator('.chat-item').filter({ hasText: new RegExp(charName) });
     await expect(chatItems).toHaveCount(1);
@@ -400,6 +385,7 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Generate');
     const charName = uniqueName('StApi Generate Character');
 
+    await createCharacterAndChat(page, charName);
     // NOTE: the quick-reply runtime wraps st.generate to await internally —
     // appending :await() here would index the resolved string and crash the script.
     await createGlobalQuickReply(
@@ -407,7 +393,6 @@ test.describe('StApi Chat Actions', () => {
       label,
       'local text = st.generate("respond: quiet reply") st.send_narrator(text):await()',
     );
-    await createCharacterAndChat(page, charName);
 
     await clickQuickReply(page, label);
     await expect(page.locator('.message-bubble.system').last()).toContainText('quiet reply', {
@@ -419,8 +404,8 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Genraw');
     const charName = uniqueName('StApi Genraw Character');
 
-    await createGlobalQuickReply(page, label, 'st.genraw("respond: raw reply")');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.genraw("respond: raw reply")');
 
     // genraw appends its result as a system message; on an unmaterialized chat
     // (no messages yet) such a message never lands on the visible branch, so
@@ -450,10 +435,10 @@ test.describe('StApi Chat Actions', () => {
     const charName = uniqueName('StApi Ask Character');
     const otherName = uniqueName('StApi Ask Other');
 
-    await createGlobalQuickReply(page, label, `st.ask("${otherName}", "respond: asked reply")`);
     await createCharacterAndChat(page, charName);
     // A second character that handleAsk resolves by name.
     await createCharacter(page, otherName);
+    await createGlobalQuickReply(page, label, `st.ask("${otherName}", "respond: asked reply")`);
 
     await clickQuickReply(page, label);
     // handleAsk now forwards the script's lock holder through handleSend and
@@ -470,8 +455,8 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Sysgen');
     const charName = uniqueName('StApi Sysgen Character');
 
-    await createGlobalQuickReply(page, label, 'st.sysgen("respond: sysgen reply")');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.sysgen("respond: sysgen reply")');
 
     // sysgen appends its result as a system message; on an unmaterialized chat
     // (no messages yet) such a message never lands on the visible branch, so
@@ -490,8 +475,8 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Send As');
     const charName = uniqueName('StApi Send As Character');
 
-    await createGlobalQuickReply(page, label, `st.send_as("${charName}", "sent as text")`);
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, `st.send_as("${charName}", "sent as text")`);
 
     await clickQuickReply(page, label);
     await expect(page.locator('.message-bubble.assistant').last()).toContainText('sent as text', {
@@ -503,9 +488,9 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Comment');
     const charName = uniqueName('StApi Comment Character');
 
+    await createCharacterAndChat(page, charName);
     // The trailing narrator message proves the script completed without error.
     await createGlobalQuickReply(page, label, 'st.comment("side note"):await() st.send_narrator("comment done"):await()');
-    await createCharacterAndChat(page, charName);
 
     await clickQuickReply(page, label);
     await expect(page.locator('.message-bubble.system').last()).toContainText('comment done', {
@@ -520,8 +505,8 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Trigger');
     const charName = uniqueName('StApi Trigger Character');
 
-    await createGlobalQuickReply(page, label, 'st.trigger()');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.trigger()');
 
     await sendAndWaitReply(page, 'respond: triggered reply', 'triggered reply');
     // Greeting + user message + reply.
@@ -540,11 +525,11 @@ test.describe('StApi Chat Actions', () => {
     const label = uniqueName('StApi Sleep');
     const charName = uniqueName('StApi Sleep Character');
 
+    await createCharacterAndChat(page, charName);
     // The trailing narrator message proves the script ran to completion.
     // NOTE: the quick-reply runtime wraps st.sleep to await internally —
     // st.sleep(0.1):await() would index nil and crash the script.
     await createGlobalQuickReply(page, label, 'st.sleep(0.1) st.delay(50):await() st.send_narrator("slept"):await()');
-    await createCharacterAndChat(page, charName);
 
     await clickQuickReply(page, label);
     await expect(page.locator('.message-bubble.system').last()).toContainText('slept', { timeout: 5000 });

@@ -9,7 +9,8 @@
  *
  * Three kinds of keys are declared:
  *  1. STRUCTURAL — consumed by server machinery, never sent as samplers
- *     (requestScript, the custom-backend wiring, the samplerDisabled record).
+ *     (requestScript, the custom-backend wiring, the samplerDisabled record,
+ *     the prompt-caching mode/depth read by ChatPromptAssembly).
  *  2. ADVANCED SAMPLER WIRE NAMES — the provider-native keys of the knobs in
  *     `client/src/components/samplerProfiles.ts` (KNOBS). Adding a UI knob
  *     means adding its wire names here too — a client test enforces the sync.
@@ -27,6 +28,11 @@ export const PROVIDER_PARAMS_STRUCTURAL_KEYS: readonly string[] = [
   // (server/src/backends/MockBackendAdapter.ts) — consumed top-level by the
   // adapter factory, never a sampler.
   'mockScript',
+  // Prompt caching mode/depth — consumed by ChatPromptAssembly when building
+  // BuildOptions.caching, never a wire param (cacheTTL is the adapter-side
+  // sibling, declared in ADAPTER_PARAM_KEYS below).
+  'cacheMode',
+  'cacheDepth',
 ];
 
 export const ADVANCED_SAMPLER_WIRE_NAMES: readonly string[] = [

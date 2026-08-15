@@ -40,7 +40,7 @@ function makeConfig(overrides: Partial<BackendConfig> = {}): BackendConfig {
   };
 }
 
-function valueNumberInput(labelText: string): HTMLInputElement {
+function valueNumberInput(labelText: string | RegExp): HTMLInputElement {
   return screen.getByLabelText(labelText) as unknown as HTMLInputElement;
 }
 function enableCheckbox(labelText: string): HTMLInputElement {
@@ -154,6 +154,113 @@ describe('BackendConfigModal advanced sampling', () => {
     // samplerDisabled includes topK (user-disabled) + any auto-disabled advanced knobs (e.g. seed).
     expect(patch.providerParams.samplerDisabled).toMatchObject({ topK: true });
     expect((patch.providerParams.samplerDisabled as Record<string, unknown>).temperature).toBeUndefined();
+  });
+});
+
+describe('BackendConfigModal prompt caching', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }),
+    );
+    setState('settings', {});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('renders the caching controls for the claude provider, seeded from providerParams', () => {
+    setState(
+      'activeBackendConfig',
+      makeConfig({
+        backendProvider: 'claude',
+        model: 'claude-sonnet-4-20250514',
+        providerParams: { cacheMode: 'manual', cacheDepth: 3, cacheTTL: '1h' },
+      }),
+    );
+    render(() => <BackendConfigModal onClose={() => {}} />);
+    expect(screen.getByText('Prompt Caching')).toBeInTheDocument();
+    expect(screen.getByLabelText<HTMLSelectElement>(/^Cache Mode/).value).toBe('manual');
+    expect(valueNumberInput(/Manual Cache Depth/)).toHaveValue(3);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Cache TTL/).value).toBe('1h');
+  });
+
+  it('renders the caching controls for the openrouter provider', () => {
+    setState(
+      'activeBackendConfig',
+      makeConfig({ backendProvider: 'openrouter', model: 'anthropic/claude-3.5-sonnet' }),
+    );
+    render(() => <BackendConfigModal onClose={() => {}} />);
+    expect(screen.getByText('Prompt Caching')).toBeInTheDocument();
+    // Depth input only shows in manual mode; TTL is disabled while off.
+    expect(screen.queryByText('Manual Cache Depth')).not.toBeInTheDocument();
+    expect(screen.getByLabelText<HTMLInputElement>(/^Cache TTL/)).toBeDisabled();
+  });
+
+  it('hides the caching controls for other providers', () => {
+    setState('activeBackendConfig', makeConfig({ backendProvider: 'openai' }));
+    render(() => <BackendConfigModal onClose={() => {}} />);
+    expect(screen.queryByText('Prompt Caching')).not.toBeInTheDocument();
+  });
+
+  it('writes cacheMode/cacheDepth/cacheTTL into providerParams on save and keeps existing keys', () => {
+    setState(
+      'activeBackendConfig',
+      makeConfig({
+        id: 'cfg-cache',
+        backendProvider: 'claude',
+        model: 'claude-sonnet-4-20250514',
+        providerParams: { seed: 7 },
+      }),
+    );
+    const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
+    render(() => <BackendConfigModal onClose={() => {}} />);
+
+    fireEvent.change(screen.getByLabelText(/^Cache Mode/), { target: { value: 'manual' } });
+    fireEvent.input(valueNumberInput(/Manual Cache Depth/), { target: { value: '2' } });
+    fireEvent.input(screen.getByLabelText(/^Cache TTL/), { target: { value: '1h' } });
+    vi.advanceTimersByTime(600);
+
+    const update = sendSpy.mock.calls
+      .map((c) => c[0])
+      .find((m) => m.type === 'backendConfig.update');
+    expect(update).toBeDefined();
+    const patch = (update as { patch: { providerParams: Record<string, unknown> } }).patch;
+    expect(patch.providerParams.cacheMode).toBe('manual');
+    expect(patch.providerParams.cacheDepth).toBe(2);
+    expect(patch.providerParams.cacheTTL).toBe('1h');
+    // Existing declared keys carry over.
+    expect(patch.providerParams.seed).toBe(7);
+  });
+
+  it('drops mode/depth when the mode is off but keeps the TTL (input disabled, value preserved)', () => {
+    setState(
+      'activeBackendConfig',
+      makeConfig({
+        id: 'cfg-cache-off',
+        backendProvider: 'claude',
+        model: 'claude-sonnet-4-20250514',
+        providerParams: { cacheMode: 'manual', cacheDepth: 3, cacheTTL: '1h' },
+      }),
+    );
+    const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
+    render(() => <BackendConfigModal onClose={() => {}} />);
+
+    fireEvent.change(screen.getByLabelText(/^Cache Mode/), { target: { value: 'off' } });
+    vi.advanceTimersByTime(600);
+
+    const update = sendSpy.mock.calls
+      .map((c) => c[0])
+      .find((m) => m.type === 'backendConfig.update');
+    expect(update).toBeDefined();
+    const patch = (update as { patch: { providerParams: Record<string, unknown> } }).patch;
+    expect(patch.providerParams.cacheMode).toBeUndefined();
+    expect(patch.providerParams.cacheDepth).toBeUndefined();
+    expect(patch.providerParams.cacheTTL).toBe('1h');
   });
 });
 

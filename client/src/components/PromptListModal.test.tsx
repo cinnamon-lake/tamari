@@ -96,4 +96,54 @@ describe('PromptListModal', () => {
       vi.useRealTimers();
     }
   });
+
+  it('renders builtin utility prompts missing from the stored list', () => {
+    // sampleList predates the utility prompts — the modal merges them in.
+    render(() => <PromptListModal onClose={() => {}} />);
+
+    expect(screen.getByText('Utility Prompts')).toBeInTheDocument();
+    const impersonation = screen.getByLabelText<HTMLTextAreaElement>('Impersonation Prompt');
+    expect(impersonation.value).toContain('{{user}}');
+    const memorySummary = screen.getByLabelText<HTMLTextAreaElement>('Memory Summary Prompt');
+    expect(memorySummary.value).toContain('[msg:ID]');
+  });
+
+  it('utility prompts have no reorder, enable, or delete controls', () => {
+    render(() => <PromptListModal onClose={() => {}} />);
+
+    const item = document.getElementById('utility-prompt-impersonation')!;
+    expect(item).not.toBeNull();
+    expect(item.querySelector('button')).toBeNull();
+    expect(item.querySelector('input[type="checkbox"]')).toBeNull();
+  });
+
+  it('edits a utility prompt and autosaves it in the prompts array', async () => {
+    const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
+    render(() => <PromptListModal onClose={() => {}} />);
+
+    const textarea = screen.getByLabelText<HTMLTextAreaElement>('Memory Summary Prompt');
+    fireEvent.input(textarea, { target: { value: 'Custom summary prompt.' } });
+
+    await waitFor(() =>
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'promptList.update',
+          promptListId: 'list-1',
+          patch: expect.objectContaining({
+            prompts: expect.arrayContaining([
+              expect.objectContaining({ identifier: 'memorySummary', content: 'Custom summary prompt.' }),
+            ]),
+          }),
+        }),
+      ),
+    );
+
+    // The utility prompts stay out of the order.
+    const update = sendSpy.mock.calls
+      .map((c) => c[0] as { type: string; patch?: { promptOrder?: Array<{ identifier: string }> } })
+      .find((c) => c.type === 'promptList.update');
+    const orderIdentifiers = update?.patch?.promptOrder?.map((o) => o.identifier) ?? [];
+    expect(orderIdentifiers).not.toContain('memorySummary');
+    expect(orderIdentifiers).not.toContain('impersonation');
+  });
 });

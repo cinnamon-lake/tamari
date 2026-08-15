@@ -14,8 +14,8 @@ import { applyRequestScript, RequestScriptError } from './RequestScript.js';
 
 /**
  * Config fields shared by every backend adapter. Provider adapters extend
- * this with their own knobs (e.g. Claude `cacheTTL`, KoboldCpp
- * `contextLength`, OpenRouter routing options).
+ * this with their own knobs (e.g. KoboldCpp `contextLength`, OpenRouter
+ * routing options).
  */
 export interface BaseAdapterConfig {
   baseUrl: string;

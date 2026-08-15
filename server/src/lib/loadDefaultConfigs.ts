@@ -5,7 +5,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BackendConfigInsert, PromptListInsert, PresetPromptDef, PresetPromptOrderEntry } from '@tamari/types';
-import { DEFAULT_PROMPTS, DEFAULT_ORDER } from '../pipeline/PromptManager.js';
+import { DEFAULT_PROMPTS, DEFAULT_ORDER, ensureUtilityPrompts } from '../pipeline/PromptManager.js';
 
 const PRESETS_DIR = join(process.cwd(), 'default', 'presets');
 
@@ -105,7 +105,9 @@ function mapPrompts(data: OldPreset): {
         enabled: o.enabled ?? true,
       })) ?? DEFAULT_ORDER.map((o) => ({ ...o }));
 
-  return { prompts, order };
+  // Utility prompts live in `prompts` but never in the order — merge any the
+  // seed file lacks so every seeded list carries the builtins.
+  return { prompts: ensureUtilityPrompts(prompts), order };
 }
 
 export interface DefaultConfigs {

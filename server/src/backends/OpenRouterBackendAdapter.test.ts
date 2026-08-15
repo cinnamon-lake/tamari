@@ -253,7 +253,9 @@ describe('OpenRouterBackendAdapter', () => {
       baseUrl: 'https://openrouter.ai/api/v1',
       apiKey: 'test-key',
       model: 'anthropic/claude-3.5-sonnet',
-      cacheTTL: '1h',
+      // TTL is a per-config providerParams key; it reaches the adapter via the
+      // params blob (buildBackendSettings).
+      params: { cacheTTL: '1h' },
     });
 
     fetchMock.mockResolvedValueOnce({
@@ -337,7 +339,7 @@ describe('OpenRouterBackendAdapter', () => {
       baseUrl: 'https://openrouter.ai/api/v1',
       apiKey: 'test-key',
       model: 'gpt-4o',
-      cacheTTL: '1h',
+      params: { cacheTTL: '1h' },
     });
 
     fetchMock.mockResolvedValueOnce({

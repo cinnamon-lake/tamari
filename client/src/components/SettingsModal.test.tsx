@@ -186,6 +186,12 @@ describe('SettingsModal', () => {
       key: 'memory',
       value: expect.objectContaining({ enabled: true }),
     });
+    // The summarization prompt moved to the prompt list — no longer in memory settings.
+    expect(sendSpy).toHaveBeenCalledWith({
+      type: 'settings.set',
+      key: 'memory',
+      value: expect.not.objectContaining({ systemPrompt: expect.anything() }),
+    });
   });
 
   it('changes memory backend config and sends the update', () => {
@@ -215,13 +221,6 @@ describe('SettingsModal', () => {
     });
   });
 
-  it('renders memory system prompt textarea', () => {
-    render(() => <SettingsModal onClose={() => {}} />);
-    const textarea = screen.getByLabelText<HTMLInputElement>(/Summarization system prompt/i);
-    expect(textarea).toBeInTheDocument();
-    expect(textarea.value).toContain('[msg:ID]');
-  });
-
   it('adds and removes custom stopping strings', () => {
     const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
     render(() => <SettingsModal onClose={() => {}} />);
@@ -242,7 +241,6 @@ describe('SettingsModal', () => {
 
     expect(screen.getByLabelText<HTMLInputElement>(/Update interval/i).disabled).toBe(true);
     expect(screen.getByLabelText<HTMLInputElement>(/Summarization backend/i).disabled).toBe(true);
-    expect(screen.getByLabelText<HTMLInputElement>(/Summarization system prompt/i).disabled).toBe(true);
   });
 
   it('enables memory sub-fields when memory is enabled', () => {
@@ -269,17 +267,6 @@ describe('SettingsModal', () => {
     expect(screen.getByLabelText<HTMLSelectElement>(/Avatar Style/i).disabled).toBe(true);
   });
 
-  it('disables cache TTL while Claude caching is off', () => {
-    render(() => <SettingsModal onClose={() => {}} />);
-    expect(screen.getByLabelText<HTMLInputElement>(/Cache TTL/i).disabled).toBe(true);
-  });
-
-  it('enables cache TTL when Claude caching is manual', () => {
-    setState('settings', 'claudeCacheMode', 'manual');
-    render(() => <SettingsModal onClose={() => {}} />);
-    expect(screen.getByLabelText<HTMLInputElement>(/Cache TTL/i).disabled).toBe(false);
-  });
-
   it('locks the full post-processing/macro set when append-only layout is on', () => {
     setState('settings', 'appendOnlyPromptLayout', true);
     render(() => <SettingsModal onClose={() => {}} />);
@@ -287,19 +274,6 @@ describe('SettingsModal', () => {
     expect(screen.getByLabelText<HTMLInputElement>(/Auto-fix generated markdown/i).disabled).toBe(true);
     expect(screen.getByLabelText<HTMLInputElement>(/Resolve macros in custom stopping strings/i).disabled).toBe(true);
     expect(screen.getByLabelText<HTMLInputElement>(/Remove XML tags/i).disabled).toBe(true);
-  });
-
-  it('edits impersonation prompt and sends the update', () => {
-    const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
-    render(() => <SettingsModal onClose={() => {}} />);
-
-    const textarea = screen.getByLabelText<HTMLTextAreaElement>(/Impersonation prompt/i);
-    fireEvent.change(textarea, { target: { value: 'Write as the user.' } });
-    expect(sendSpy).toHaveBeenCalledWith({
-      type: 'settings.set',
-      key: 'impersonationPrompt',
-      value: 'Write as the user.',
-    });
   });
 
   it('renders sections in the expected order with no duplicate headings', () => {
@@ -318,25 +292,8 @@ describe('SettingsModal', () => {
       'Memory',
       'Security & content',
       'Theme',
-      'Custom Instruct Templates',
-      'Regex Rules',
-      'Quick Replies',
       'Developer',
     ]);
     expect(new Set(headings).size).toBe(headings.length);
-  });
-
-  it('renders regex replace type as a radio group', () => {
-    render(() => <SettingsModal onClose={() => {}} />);
-
-    screen.getByText('New Regex Rule').click();
-    const radios = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="radio"][name="regexReplaceType"]'));
-    expect(radios.length).toBe(2);
-    const [textRadio, luaRadio] = radios as [HTMLInputElement, HTMLInputElement];
-    expect(textRadio.checked).toBe(true);
-
-    fireEvent.click(luaRadio);
-    expect(luaRadio.checked).toBe(true);
-    expect(textRadio.checked).toBe(false);
   });
 });

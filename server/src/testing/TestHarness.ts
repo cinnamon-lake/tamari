@@ -213,6 +213,7 @@ export class TestHarness {
       settings,
       personas,
       backendConfigs,
+      promptLists,
       chatMembers,
       attachments,
       groupChatService,

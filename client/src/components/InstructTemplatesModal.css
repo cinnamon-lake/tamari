@@ -1,0 +1,41 @@
+/* Instruct Templates modal — list/editor layout mirrors the styles the markup
+   was written against in WorldInfoEditor.css / ChatView.css; duplicated here so
+   this modal is self-contained. */
+
+.modal.instruct-templates-modal {
+  max-width: var(--modal-max-width);
+}
+
+@media (max-width: 768px) {
+  .modal.instruct-templates-modal {
+    padding-top: var(--space-md);
+    padding-bottom: var(--space-md);
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
+}
+
+.worldinfo-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.worldinfo-item {
+  justify-content: space-between;
+}
+
+.worldinfo-item:hover {
+  transform: translateX(2px);
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.edit-actions > span:first-child {
+  margin-right: auto;
+}

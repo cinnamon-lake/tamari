@@ -27,8 +27,8 @@ A backend config is a named connection + generation preset. The **active** confi
 
 Only declared keys survive; anything else is **silently dropped** on write. Declared keys include:
 
-- **Structural:** \`requestScript\` (Lua request transformer — topic \`request_scripts\`), \`samplerDisabled\` (sparse per-knob kill switch: keeps the value on the config but omits it from the wire), \`customBackendId\` + \`delegateConfigId\` (for provider \`custom\` — topic \`custom_backends\`).
-- **Adapter escape hatches:** \`cacheTTL\`, \`strictTools\`.
+- **Structural:** \`requestScript\` (Lua request transformer — topic \`request_scripts\`), \`samplerDisabled\` (sparse per-knob kill switch: keeps the value on the config but omits it from the wire), \`customBackendId\` + \`delegateConfigId\` (for provider \`custom\` — topic \`custom_backends\`), \`cacheMode\`/\`cacheDepth\` (prompt caching for \`claude\`/\`openrouter\`: \`off\`/\`auto\`/\`manual\` plus the manual breakpoint depth — read at prompt-assembly time, never sent as wire params).
+- **Adapter escape hatches:** \`cacheTTL\` (prompt-cache TTL, e.g. \`5m\`/\`1h\` — claude/openrouter), \`strictTools\`.
 - **Advanced samplers** under their wire names (mirostat, DRY, XTC, dynatemp, …).
 
 ## Secrets

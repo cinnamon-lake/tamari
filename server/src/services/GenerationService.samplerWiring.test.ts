@@ -239,4 +239,22 @@ describe('buildBackendSettings sampler wiring', () => {
       expect(params[junk], `${junk} must not reach the request body`).toBeUndefined();
     }
   });
+
+  it('keeps cacheMode/cacheDepth out of the params blob (assembly-level, never wire params)', () => {
+    const cfg = makeConfig({
+      backendProvider: 'claude',
+      generationMode: 'chat',
+      providerParams: {
+        cacheMode: 'manual',
+        cacheDepth: 2,
+        // The adapter-side sibling DOES ride in the params blob.
+        cacheTTL: '1h',
+      },
+    });
+    const out = buildBackendSettings({}, cfg);
+    const params = out['claude.params'] as Record<string, unknown>;
+    expect(params.cacheTTL).toBe('1h');
+    expect(params.cacheMode, 'cacheMode must not reach the request body').toBeUndefined();
+    expect(params.cacheDepth, 'cacheDepth must not reach the request body').toBeUndefined();
+  });
 });

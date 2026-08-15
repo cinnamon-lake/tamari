@@ -231,11 +231,6 @@ const MemorySettingsSchema = z.object({
   updateInterval: z.number().int().min(1).default(5),
   depth: z.number().int().min(0).default(10),
   backendConfigId: z.string().default(''),
-  systemPrompt: z
-    .string()
-    .default(
-      'Summarize the most important facts and events in the story so far. For each event, include a citation to the message ID(s) it came from using [msg:ID] format. Be concise.',
-    ),
   maxSummaryTokens: z.number().int().min(1).default(512),
 });
 
@@ -255,7 +250,6 @@ const _AppSettingsSchema = z.object({
   // Generation
   generationMode: z.enum(['chat', 'text']).default('chat'),
   maxResponseTokens: z.number().int().default(512),
-  impersonationPrompt: z.string().default(''),
 
   // Memory
   memory: MemorySettingsSchema.default({
@@ -263,8 +257,6 @@ const _AppSettingsSchema = z.object({
     updateInterval: 5,
     depth: 10,
     backendConfigId: '',
-    systemPrompt:
-      'Summarize the most important facts and events in the story so far. For each event, include a citation to the message ID(s) it came from using [msg:ID] format. Be concise.',
     maxSummaryTokens: 512,
   }),
 
@@ -303,10 +295,9 @@ const _AppSettingsSchema = z.object({
   autoContinueEnabled: z.boolean().default(false),
   autoContinueTargetLength: z.number().int().default(100),
 
-  // Claude prompt caching
-  claudeCacheMode: z.enum(['off', 'auto', 'manual']).default('off'),
-  claudeCacheDepth: z.number().int().default(0),
-  claudeCacheTTL: z.string().nullable().default(null),
+  // Claude prompt caching is per-backend config (providerParams.cacheMode /
+  // cacheDepth / cacheTTL, edited in the Backend Config modal) — migration 017
+  // moved the former global claudeCache* settings there.
   // Append-only prompt layout: render turns as strict byte-prefixes of each
   // other (snapshot-cache friendly) by disabling depth injections, non-constant
   // WI, macros, prompt/output regex, and output post-processing.

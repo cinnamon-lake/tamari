@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { PromptManager, DEFAULT_PROMPTS, DEFAULT_ORDER } from './PromptManager.js';
+import {
+  PromptManager,
+  DEFAULT_PROMPTS,
+  DEFAULT_ORDER,
+  DEFAULT_IMPERSONATION_PROMPT,
+  ensureUtilityPrompts,
+} from './PromptManager.js';
+import { DEFAULT_MEMORY_SUMMARY_PROMPT } from '@tamari/types';
 
 describe('PromptManager', () => {
   it('initializes with default prompts', () => {
@@ -8,6 +15,36 @@ describe('PromptManager', () => {
     expect(pm.getPrompt('main')?.content).toContain('{{char}}');
     expect(pm.getPrompt('jailbreak')).toBeDefined();
     expect(pm.getPrompt('nsfw')).toBeDefined();
+  });
+
+  it('includes builtin utility prompts in the defaults but never in the order', () => {
+    const impersonation = DEFAULT_PROMPTS.find((p) => p.identifier === 'impersonation');
+    const memorySummary = DEFAULT_PROMPTS.find((p) => p.identifier === 'memorySummary');
+    expect(impersonation?.content).toBe(DEFAULT_IMPERSONATION_PROMPT);
+    expect(memorySummary?.content).toBe(DEFAULT_MEMORY_SUMMARY_PROMPT);
+    expect(DEFAULT_ORDER.some((o) => o.identifier === 'impersonation')).toBe(false);
+    expect(DEFAULT_ORDER.some((o) => o.identifier === 'memorySummary')).toBe(false);
+
+    // In the map (addressable by consumers) but never injected into assembly.
+    const pm = new PromptManager();
+    expect(pm.getPrompt('impersonation')).toBeDefined();
+    expect(pm.getPrompt('memorySummary')).toBeDefined();
+    const ordered = pm.getOrderedPrompts();
+    expect(ordered.find((p) => p.identifier === 'impersonation')).toBeUndefined();
+    expect(ordered.find((p) => p.identifier === 'memorySummary')).toBeUndefined();
+  });
+
+  it('ensureUtilityPrompts appends only the missing utility prompts', () => {
+    const merged = ensureUtilityPrompts([{ identifier: 'main', name: 'Main', content: '', role: 'system', enabled: true }]);
+    expect(merged.map((p) => p.identifier)).toEqual(['main', 'impersonation', 'memorySummary']);
+
+    // Already present (possibly customized) — left untouched.
+    const customized = ensureUtilityPrompts([
+      { identifier: 'impersonation', name: 'Mine', content: 'custom', role: 'system', enabled: true },
+      { identifier: 'memorySummary', name: 'Mine', content: 'custom', role: 'system', enabled: true },
+    ]);
+    expect(customized).toHaveLength(2);
+    expect(customized[0]!.content).toBe('custom');
   });
 
   it('returns ordered prompts', () => {

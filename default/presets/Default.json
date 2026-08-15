@@ -123,6 +123,22 @@
             "name": "Persona Description",
             "system_prompt": true,
             "marker": true
+        },
+        {
+            "identifier": "impersonation",
+            "name": "Impersonation Prompt",
+            "system_prompt": true,
+            "marker": false,
+            "role": "system",
+            "content": "[Write your next reply from the point of view of {{user}}, using the chat history so far as a guideline for the writing style of {{user}}. Don't write as {{char}} or system. Don't describe actions of {{char}}.]"
+        },
+        {
+            "identifier": "memorySummary",
+            "name": "Memory Summary Prompt",
+            "system_prompt": true,
+            "marker": false,
+            "role": "system",
+            "content": "Summarize the most important facts and events in the story so far. For each event, include a citation to the message ID(s) it came from using [msg:ID] format. Be concise."
         }
     ],
     "prompt_order": [

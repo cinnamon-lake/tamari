@@ -1,103 +1,12 @@
 import { createSignal, Show, For } from 'solid-js';
 import { state } from '../stores/serverStore.js';
 import { bus } from '../bus/WebSocketBus.js';
-import { confirmPopup, alertPopup } from '../stores/popupStore.js';
 import { useI18n, type Locale } from '../i18n/index.js';
 
 
-import type { RegexRule } from '@tamari/types';
 import type { MemorySettings } from '@tamari/types';
-import { QuickReplySettings } from './settings/QuickReplySettings.js';
-import { applyDisplayRules, parseRegexString } from '../lib/regexDisplay.js';
-import { str } from '../lib/coerce.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
 import './SettingsModal.css';
-
-interface InstructTemplateDef {
-  id: string;
-  name: string;
-  bos?: string;
-  eos?: string;
-  separator?: string;
-  systemPrefix?: string;
-  systemSuffix?: string;
-  userPrefix?: string;
-  userSuffix?: string;
-  assistantPrefix?: string;
-  assistantSuffix?: string;
-  responsePrefix?: string;
-}
-
-const BUILTIN_TEMPLATE_IDS = new Set(['none', 'alpaca', 'chatml', 'llama2', 'llama3', 'mistral']);
-
-function emptyTemplate(): InstructTemplateDef {
-  return {
-    id: '',
-    name: '',
-    separator: '\n\n',
-    systemPrefix: '',
-    systemSuffix: '',
-    userPrefix: '',
-    userSuffix: '',
-    assistantPrefix: '',
-    assistantSuffix: '',
-    responsePrefix: '',
-  };
-}
-
-function parseRegexRules(raw: unknown): RegexRule[] {
-  if (!Array.isArray(raw)) return [];
-  return (raw as unknown[])
-    .filter((r): r is Record<string, unknown> => !!r && typeof r === 'object')
-    .map((r) => ({
-      id: str(r['id']),
-      name: str(r['name']),
-      findRegex: str(r['findRegex']),
-      replaceString: str(r['replaceString']),
-      ...(typeof r['replaceLua'] === 'string' && r['replaceLua'].length > 0 ? { replaceLua: r['replaceLua'] } : {}),
-      disabled: Boolean(r['disabled']),
-      userInput: Boolean(r['userInput']),
-      aiOutput: Boolean(r['aiOutput']),
-      prompt: Boolean(r['prompt']),
-      display: Boolean(r['display']),
-    }))
-    .filter((r) => r.id && r.findRegex);
-}
-
-function emptyRegexRule(): RegexRule {
-  return {
-    id: '',
-    name: '',
-    findRegex: '',
-    replaceString: '',
-    disabled: false,
-    userInput: false,
-    aiOutput: true,
-    prompt: false,
-    display: false,
-  };
-}
-
-function parseTemplates(raw: unknown): InstructTemplateDef[] {
-  if (!Array.isArray(raw)) return [];
-  return (raw as unknown[])
-    .filter((t): t is Record<string, unknown> => !!t && typeof t === 'object')
-    .map((t) => ({
-      id: str(t['id']),
-      name: str(t['name']),
-      bos: t['bos'] !== undefined ? str(t['bos']) : undefined,
-      eos: t['eos'] !== undefined ? str(t['eos']) : undefined,
-      separator: t['separator'] !== undefined ? str(t['separator']) : undefined,
-      systemPrefix: t['systemPrefix'] !== undefined ? str(t['systemPrefix']) : undefined,
-      systemSuffix: t['systemSuffix'] !== undefined ? str(t['systemSuffix']) : undefined,
-      userPrefix: t['userPrefix'] !== undefined ? str(t['userPrefix']) : undefined,
-      userSuffix: t['userSuffix'] !== undefined ? str(t['userSuffix']) : undefined,
-      assistantPrefix: t['assistantPrefix'] !== undefined ? str(t['assistantPrefix']) : undefined,
-      assistantSuffix: t['assistantSuffix'] !== undefined ? str(t['assistantSuffix']) : undefined,
-      responsePrefix: t['responsePrefix'] !== undefined ? str(t['responsePrefix']) : undefined,
-    }))
-    .filter((t) => t.id && !BUILTIN_TEMPLATE_IDS.has(t.id));
-}
 
 export function SettingsModal(props: { onClose: () => void }) {
   const s = state.settings;
@@ -180,7 +89,6 @@ export function SettingsModal(props: { onClose: () => void }) {
   const [allowExternalMedia, setAllowExternalMedia] = createSignal(Boolean(s['allowExternalMedia']));
   const [fuzzySearch, setFuzzySearch] = createSignal(Boolean(s['fuzzySearch']));
   const [showHotswapBar, setShowHotswapBar] = createSignal(s['showHotswapBar'] !== false);
-  const [impersonationPrompt, setImpersonationPrompt] = createSignal(String(s['impersonationPrompt'] ?? ''));
 
   // Generation settings
   const [customStoppingStrings, setCustomStoppingStrings] = createSignal<string[]>(
@@ -191,16 +99,7 @@ export function SettingsModal(props: { onClose: () => void }) {
   );
   const [stripExamples, setStripExamples] = createSignal(Boolean(s['stripExamples']));
   const [chatMessageLoadLimit, setChatMessageLoadLimit] = createSignal(Number(s['chatMessageLoadLimit'] ?? 30));
-  const [claudeCacheMode, setClaudeCacheMode] = createSignal(
-    (s['claudeCacheMode'] as 'off' | 'auto' | 'manual' | undefined) ?? 'off',
-  );
   const [appendOnlyLayout, setAppendOnlyLayout] = createSignal(Boolean(s['appendOnlyPromptLayout']));
-  const [claudeCacheDepth, setClaudeCacheDepth] = createSignal(
-    Number(s['claudeCacheDepth'] ?? 0),
-  );
-  const [claudeCacheTTL, setClaudeCacheTTL] = createSignal(
-    String(s['claudeCacheTTL'] ?? ''),
-  );
 
   // Developer settings
   const [mcpEnabled, setMcpEnabled] = createSignal(Boolean(s['mcp.enabled']));
@@ -214,7 +113,6 @@ export function SettingsModal(props: { onClose: () => void }) {
   const [memoryDepth, setMemoryDepth] = createSignal(Number(memory().depth ?? 10));
   const [memoryBackendConfigId, setMemoryBackendConfigId] = createSignal(String(memory().backendConfigId ?? ''));
   const [memoryMaxSummaryTokens, setMemoryMaxSummaryTokens] = createSignal(Number(memory().maxSummaryTokens ?? 512));
-  const [memorySystemPrompt, setMemorySystemPrompt] = createSignal(String(memory().systemPrompt ?? ''));
 
   const sendSetting = (key: string, value: unknown) => {
     bus.send({ type: 'settings.set', key, value });
@@ -227,142 +125,8 @@ export function SettingsModal(props: { onClose: () => void }) {
       depth: memoryDepth(),
       backendConfigId: memoryBackendConfigId(),
       maxSummaryTokens: memoryMaxSummaryTokens(),
-      systemPrompt: memorySystemPrompt(),
       ...patch,
     });
-  };
-
-  const [templates, setTemplates] = createSignal<InstructTemplateDef[]>(parseTemplates(s['instructTemplates']));
-  const [editingTemplate, setEditingTemplate] = createSignal<InstructTemplateDef | null>(null);
-
-  // Regex rules CRUD
-  const [regexRules, setRegexRules] = createSignal<RegexRule[]>(parseRegexRules(s['regexRules']));
-  const [editingRegex, setEditingRegex] = createSignal<RegexRule | null>(null);
-  const [regexTestInput, setRegexTestInput] = createSignal('');
-
-  const startNewTemplate = () => {
-    setEditingTemplate(emptyTemplate());
-  };
-
-  const startEditTemplate = (t: InstructTemplateDef) => {
-    setEditingTemplate({ ...t });
-  };
-
-  const deleteTemplate = async (id: string) => {
-    if (!(await confirmPopup(t('settings.templates.deleteConfirm')))) return;
-    const next = templates().filter((t) => t.id !== id);
-    setTemplates(next);
-    sendSetting('instructTemplates', next);
-  };
-
-  const saveTemplateEdit = async () => {
-    const tpl = editingTemplate();
-    if (!tpl) return;
-    const id = tpl.id.trim();
-    const name = tpl.name.trim();
-    if (!id) {
-      await alertPopup(t('settings.templates.idRequired'));
-      return;
-    }
-    if (!name) {
-      await alertPopup(t('settings.templates.nameRequired'));
-      return;
-    }
-    if (BUILTIN_TEMPLATE_IDS.has(id)) {
-      await alertPopup(t('settings.templates.reservedId', { id }));
-      return;
-    }
-
-    const next = (() => {
-      const prev = templates();
-      const existing = prev.findIndex((x) => x.id === id);
-      if (existing >= 0) {
-        const arr = [...prev];
-        arr[existing] = { ...tpl, id, name };
-        return arr;
-      }
-      return [...prev, { ...tpl, id, name }];
-    })();
-    setTemplates(next);
-    setEditingTemplate(null);
-    sendSetting('instructTemplates', next);
-  };
-
-  const startNewRegex = () => {
-    setEditingRegex({ ...emptyRegexRule(), id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}` });
-    setRegexTestInput('');
-  };
-
-  const startEditRegex = (r: RegexRule) => {
-    setEditingRegex({ ...r });
-    setRegexTestInput('');
-  };
-
-  const deleteRegex = async (id: string) => {
-    if (!(await confirmPopup(t('settings.regex.deleteConfirm')))) return;
-    const next = regexRules().filter((r) => r.id !== id);
-    setRegexRules(next);
-    sendSetting('regexRules', next);
-  };
-
-  const saveRegexEdit = async () => {
-    const r = editingRegex();
-    if (!r) return;
-    const name = r.name.trim();
-    const findRegex = r.findRegex.trim();
-    if (!name) {
-      await alertPopup(t('settings.regex.nameRequired'));
-      return;
-    }
-    if (!findRegex) {
-      await alertPopup(t('settings.regex.findRequired'));
-      return;
-    }
-    const parsed = parseRegexString(findRegex);
-    if (!parsed) {
-      await alertPopup(t('settings.regex.invalidFormat'));
-      return;
-    }
-    try {
-      new RegExp(parsed.pattern, parsed.flags);
-    } catch {
-      await alertPopup(t('settings.regex.invalidPattern'));
-      return;
-    }
-
-    const next = (() => {
-      const prev = regexRules();
-      const existing = prev.findIndex((x) => x.id === r.id);
-      if (existing >= 0) {
-        const arr = [...prev];
-        arr[existing] = { ...r };
-        return arr;
-      }
-      return [...prev, { ...r }];
-    })();
-    setRegexRules(next);
-    setEditingRegex(null);
-    sendSetting('regexRules', next);
-  };
-
-  const updateRegexField = (field: keyof RegexRule, value: string | boolean | undefined) => {
-    setEditingRegex((prev) => (prev ? { ...prev, [field]: value } : null));
-  };
-
-  const regexTestOutput = () => {
-    const r = editingRegex();
-    if (!r || !r.findRegex) return '';
-    // Lua replacements run server-side only — no client preview.
-    if (r.replaceLua?.trim()) return t('settings.regex.luaNoPreview');
-    try {
-      return applyDisplayRules(regexTestInput(), [r]);
-    } catch {
-      return regexTestInput();
-    }
-  };
-
-  const updateEditingField = (field: keyof InstructTemplateDef, value: string) => {
-    setEditingTemplate((prev) => (prev ? { ...prev, [field]: value } : null));
   };
 
   return (
@@ -738,6 +502,21 @@ export function SettingsModal(props: { onClose: () => void }) {
             />
             {t('settings.behavior.disableGroupTrimming')}
           </label>
+          <label class="field-label">
+            {t('settings.generation.chatMessageLoadLimit')}
+            <input
+              type="number"
+              min={1}
+              max={10000}
+              value={chatMessageLoadLimit()}
+              onChange={(e) => {
+                setChatMessageLoadLimit(Number(e.currentTarget.value));
+                sendSetting('chatMessageLoadLimit', Number(e.currentTarget.value));
+              }}
+              class="input"
+            />
+            <span class="hint-text">{t('settings.generation.chatMessageLoadLimitHint')}</span>
+          </label>
         </section>
 
         {/* Input & Interaction Settings */}
@@ -918,32 +697,6 @@ export function SettingsModal(props: { onClose: () => void }) {
             />
             {t('settings.generation.stripExamples')}
           </label>
-          <label class="field-label">
-            {t('settings.generation.impersonationPrompt')}
-            <textarea
-              rows={3}
-              value={impersonationPrompt()}
-              onInput={(e) => setImpersonationPrompt(e.currentTarget.value)}
-              onChange={(e) => sendSetting('impersonationPrompt', e.currentTarget.value)}
-              class="textarea"
-            />
-            <span class="hint-text">{t('settings.generation.impersonationPromptHint')}</span>
-          </label>
-          <label class="field-label">
-            {t('settings.generation.chatMessageLoadLimit')}
-            <input
-              type="number"
-              min={1}
-              max={10000}
-              value={chatMessageLoadLimit()}
-              onChange={(e) => {
-                setChatMessageLoadLimit(Number(e.currentTarget.value));
-                sendSetting('chatMessageLoadLimit', Number(e.currentTarget.value));
-              }}
-              class="input"
-            />
-            <span class="hint-text">{t('settings.generation.chatMessageLoadLimitHint')}</span>
-          </label>
           <label class="checkbox-row">
             <input
               type="checkbox"
@@ -988,26 +741,6 @@ export function SettingsModal(props: { onClose: () => void }) {
             <span class="hint-text">{t('settings.generation.mediaVerboseHint')}</span>
           </label>
 
-          <label class="field-label">
-            {t('settings.generation.claudeCaching')}
-            <select
-              class="select"
-              value={claudeCacheMode()}
-              onChange={(e) => {
-                const mode = e.currentTarget.value as 'off' | 'auto' | 'manual';
-                setClaudeCacheMode(mode);
-                sendSetting('claudeCacheMode', mode);
-              }}
-            >
-              <option value="off" class="select-option">{t('settings.generation.claudeCachingOff')}</option>
-              <option value="auto" class="select-option">{t('settings.generation.claudeCachingAuto')}</option>
-              <option value="manual" class="select-option">{t('settings.generation.claudeCachingManual')}</option>
-            </select>
-            <span class="hint-text">
-              {t('settings.generation.claudeCachingHint')}
-            </span>
-          </label>
-
           <label class="checkbox-row">
             <input
               type="checkbox"
@@ -1021,42 +754,6 @@ export function SettingsModal(props: { onClose: () => void }) {
             {t('settings.generation.appendOnlyLayout')}
           </label>
           <span class="hint-text">{t('settings.generation.appendOnlyLayoutHint')}</span>
-
-          <Show when={claudeCacheMode() === 'manual'}>
-            <label class="field-label">
-              {t('settings.generation.manualCacheDepth')}
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={claudeCacheDepth()}
-                onChange={(e) => {
-                  const val = Number(e.currentTarget.value);
-                  setClaudeCacheDepth(val);
-                  sendSetting('claudeCacheDepth', val);
-                }}
-                class="input"
-              />
-              <span class="hint-text">{t('settings.generation.manualCacheDepthHint')}</span>
-            </label>
-          </Show>
-
-          <label class="field-label">
-            {t('settings.generation.cacheTtl')}
-            <input
-              type="text"
-              value={claudeCacheTTL()}
-              disabled={claudeCacheMode() === 'off'}
-              onChange={(e) => {
-                const val = e.currentTarget.value;
-                setClaudeCacheTTL(val);
-                sendSetting('claudeCacheTTL', val || null);
-              }}
-              placeholder={t('settings.generation.cacheTtlPlaceholder')}
-              class="input"
-            />
-            <span class="hint-text">{t('settings.generation.cacheTtlHint')}</span>
-          </label>
         </section>
 
         {/* Post-processing Settings */}
@@ -1349,18 +1046,6 @@ export function SettingsModal(props: { onClose: () => void }) {
             </select>
             <span class="hint-text">{t('settings.memory.backendHint')}</span>
           </label>
-
-          <label class="field-label">
-            {t('settings.memory.systemPrompt')}
-            <textarea
-              rows={6}
-              value={memorySystemPrompt()}
-              disabled={!memoryEnabled()}
-              onInput={(e) => setMemorySystemPrompt(e.currentTarget.value)}
-              onChange={(e) => sendMemorySetting({ systemPrompt: e.currentTarget.value })}
-              class="textarea"
-            />
-          </label>
         </section>
 
         {/* Security & Content Settings */}
@@ -1430,388 +1115,6 @@ export function SettingsModal(props: { onClose: () => void }) {
               class="input"
             />
           </label>
-        </section>
-
-        {/* Instruct Template CRUD */}
-        <section class="settings-section">
-          <h3 class="section-heading">{t('settings.templates.heading')}</h3>
-          <p class="text-sm text-muted">
-            {t('settings.templates.description')}
-          </p>
-
-          <div class="worldinfo-list">
-            <For each={templates()}>
-              {(tpl) => (
-                <div class="selectable-item worldinfo-item" id={tpl.id}>
-                  <div class="block">
-                    <div class="worldinfo-name">{tpl.name}</div>
-                    <div class="worldinfo-meta">{t('settings.templates.idLabel', { id: tpl.id })}</div>
-                  </div>
-                  <div class="section-actions">
-                    <button class="icon-btn small" onClick={() => startEditTemplate(tpl)} title={t('common.edit')} aria-label={t('common.edit')} type="button">
-                      <i class="bi bi-pencil" />
-                    </button>
-                    <button
-                      class="icon-btn small danger"
-                      onClick={() => deleteTemplate(tpl.id)}
-                      title={t('common.delete')} aria-label={t('common.delete')}
-                      type="button"
-                    >
-                      <i class="bi bi-trash" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </For>
-          </div>
-
-          <button class="btn btn-primary primary-btn" onClick={startNewTemplate} type="button">
-            <i class="bi bi-plus-lg" /> {t('settings.templates.new')}
-          </button>
-
-          <Show when={editingTemplate()}>
-            {(tpl) => (
-              <div class="flex-col-sm mt-md">
-                <h4 class="text-base">{templates().some((x) => x.id === tpl().id) ? t('settings.templates.editTitle') : t('settings.templates.new')}</h4>
-                <div class="row-equal">
-                  <label class="field-label">
-                    {t('settings.templates.idField')}
-                    <input
-                      value={tpl().id}
-                      onInput={(e) => updateEditingField('id', e.currentTarget.value)}
-                      placeholder={t('settings.templates.idPlaceholder')}
-                      class="input"
-                    />
-                  </label>
-                  <label class="field-label">
-                    {t('settings.templates.nameField')}
-                    <input
-                      value={tpl().name}
-                      onInput={(e) => updateEditingField('name', e.currentTarget.value)}
-                      placeholder={t('settings.templates.namePlaceholder')}
-                      class="input"
-                    />
-                  </label>
-                </div>
-                <div class="row-equal">
-                  <label class="field-label">
-                    {t('settings.templates.bosField')}
-                    <input
-                      value={tpl().bos ?? ''}
-                      onInput={(e) => updateEditingField('bos', e.currentTarget.value)}
-                      placeholder="&lt;s&gt;"
-                      class="input"
-                    />
-                  </label>
-                  <label class="field-label">
-                    {t('settings.templates.eosField')}
-                    <input
-                      value={tpl().eos ?? ''}
-                      onInput={(e) => updateEditingField('eos', e.currentTarget.value)}
-                      placeholder="&lt;/s&gt;"
-                      class="input"
-                    />
-                  </label>
-                </div>
-                <label class="field-label">
-                  {t('settings.templates.separatorField')}
-                  <input
-                    value={tpl().separator ?? ''}
-                    onInput={(e) => updateEditingField('separator', e.currentTarget.value)}
-                    placeholder="\\n\\n"
-                    class="input"
-                  />
-                </label>
-                <div class="row-equal">
-                  <label class="field-label">
-                    {t('settings.templates.systemPrefixField')}
-                    <input
-                      value={tpl().systemPrefix ?? ''}
-                      onInput={(e) => updateEditingField('systemPrefix', e.currentTarget.value)}
-                      class="input"
-                    />
-                  </label>
-                  <label class="field-label">
-                    {t('settings.templates.systemSuffixField')}
-                    <input
-                      value={tpl().systemSuffix ?? ''}
-                      onInput={(e) => updateEditingField('systemSuffix', e.currentTarget.value)}
-                      class="input"
-                    />
-                  </label>
-                </div>
-                <div class="row-equal">
-                  <label class="field-label">
-                    {t('settings.templates.userPrefixField')}
-                    <input
-                      value={tpl().userPrefix ?? ''}
-                      onInput={(e) => updateEditingField('userPrefix', e.currentTarget.value)}
-                      class="input"
-                    />
-                  </label>
-                  <label class="field-label">
-                    {t('settings.templates.userSuffixField')}
-                    <input
-                      value={tpl().userSuffix ?? ''}
-                      onInput={(e) => updateEditingField('userSuffix', e.currentTarget.value)}
-                      class="input"
-                    />
-                  </label>
-                </div>
-                <div class="row-equal">
-                  <label class="field-label">
-                    {t('settings.templates.assistantPrefixField')}
-                    <input
-                      value={tpl().assistantPrefix ?? ''}
-                      onInput={(e) => updateEditingField('assistantPrefix', e.currentTarget.value)}
-                      class="input"
-                    />
-                  </label>
-                  <label class="field-label">
-                    {t('settings.templates.assistantSuffixField')}
-                    <input
-                      value={tpl().assistantSuffix ?? ''}
-                      onInput={(e) => updateEditingField('assistantSuffix', e.currentTarget.value)}
-                      class="input"
-                    />
-                  </label>
-                </div>
-                <label class="field-label">
-                  {t('settings.templates.responsePrefixField')}
-                  <input
-                    value={tpl().responsePrefix ?? ''}
-                    onInput={(e) => updateEditingField('responsePrefix', e.currentTarget.value)}
-                    class="input"
-                  />
-                </label>
-                <div class="edit-actions">
-                  <button type="button" onClick={() => setEditingTemplate(null)} class="btn">
-                    {t('common.cancel')}
-                  </button>
-                  <button class="btn" type="button" onClick={saveTemplateEdit}>
-                    {t('settings.templates.saveTemplate')}
-                  </button>
-                </div>
-              </div>
-            )}
-          </Show>
-        </section>
-
-        {/* Regex Rules CRUD */}
-        <section class="settings-section">
-          <h3 class="section-heading">{t('settings.regex.heading')}</h3>
-          <p class="text-sm text-muted">
-            {t('settings.regex.description')}
-          </p>
-
-          <div class="worldinfo-list">
-            <For each={regexRules()}>
-              {(r) => (
-                <div class="selectable-item worldinfo-item" id={r.id}>
-                  <div class="block">
-                    <div class="worldinfo-name">
-                      {r.name} {r.disabled && <span class="text-danger">{t('settings.regex.disabledLabel')}</span>}
-                    </div>
-                    <div class="worldinfo-meta">
-                      {r.findRegex} → {r.replaceLua?.trim() ? t('settings.regex.luaBadge') : r.replaceString || t('settings.regex.emptyLabel')}
-                    </div>
-                    <div class="worldinfo-meta">
-                      {[
-                        r.userInput && t('settings.regex.placementUserInput'),
-                        r.aiOutput && t('settings.regex.placementAiOutput'),
-                        r.prompt && t('settings.regex.placementPrompt'),
-                        r.display && t('settings.regex.placementDisplay'),
-                      ]
-                        .filter(Boolean)
-                        .join(' • ') || t('settings.regex.noPlacement')}
-                    </div>
-                  </div>
-                  <div class="section-actions">
-                    <button class="icon-btn small" onClick={() => startEditRegex(r)} title={t('common.edit')} aria-label={t('common.edit')} type="button">
-                      <i class="bi bi-pencil" />
-                    </button>
-                    <button
-                      class="icon-btn small danger"
-                      onClick={() => deleteRegex(r.id)}
-                      title={t('common.delete')} aria-label={t('common.delete')}
-                      type="button"
-                    >
-                      <i class="bi bi-trash" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </For>
-          </div>
-
-          <button class="btn btn-primary primary-btn" onClick={startNewRegex} type="button">
-            <i class="bi bi-plus-lg" /> {t('settings.regex.new')}
-          </button>
-
-          <Show when={editingRegex()}>
-            {(r) => (
-              <div class="flex-col-sm mt-md">
-                <h4 class="text-base">
-                  {regexRules().some((x) => x.id === r().id) ? t('settings.regex.editTitle') : t('settings.regex.new')}
-                </h4>
-                <label class="field-label">
-                  {t('common.name')}
-                  <input
-                    value={r().name}
-                    onInput={(e) => updateRegexField('name', e.currentTarget.value)}
-                    placeholder={t('settings.regex.namePlaceholder')}
-                    class="input"
-                  />
-                </label>
-                <label class="field-label">
-                  {t('settings.regex.findField')}
-                  <input
-                    value={r().findRegex}
-                    onInput={(e) => updateRegexField('findRegex', e.currentTarget.value)}
-                    placeholder={t('settings.regex.findPlaceholder')}
-                    class="input"
-                  />
-                </label>
-                <fieldset class="settings-radio-group">
-                  <legend class="settings-radio-label">{t('settings.regex.replaceTypeLegend')}</legend>
-                  <label class="radio-row">
-                    <input
-                      type="radio"
-                      name="regexReplaceType"
-                      checked={!r().replaceLua?.trim()}
-                      onChange={() => updateRegexField('replaceLua', undefined)}
-                      class="radio"
-                    />
-                    {t('settings.regex.replaceTypeText')}
-                  </label>
-                  <label class="radio-row">
-                    <input
-                      type="radio"
-                      name="regexReplaceType"
-                      checked={Boolean(r().replaceLua?.trim())}
-                      onChange={() => {
-                        if (!r().replaceLua?.trim()) {
-                          updateRegexField('replaceLua', 'function replace(match, captures)\n  return match\nend');
-                        }
-                      }}
-                      class="radio"
-                    />
-                    {t('settings.regex.replaceTypeLua')}
-                  </label>
-                </fieldset>
-                <Show
-                  when={r().replaceLua?.trim()}
-                  fallback={
-                    <label class="field-label">
-                      {t('settings.regex.replaceField')}
-                      <textarea
-                        rows={2}
-                        value={r().replaceString}
-                        onInput={(e) => updateRegexField('replaceString', e.currentTarget.value)}
-                        placeholder={t('settings.regex.replacePlaceholder')}
-                        class="textarea"
-                      />
-                    </label>
-                  }
-                >
-                  <label class="field-label">
-                    {t('settings.regex.luaReplaceField')}
-                    <textarea
-                      rows={6}
-                      value={r().replaceLua}
-                      onInput={(e) => updateRegexField('replaceLua', e.currentTarget.value)}
-                      placeholder={t('settings.regex.luaReplacePlaceholder')}
-                      class="textarea font-mono"
-                    />
-                    <span class="hint-text">{t('settings.regex.luaReplaceHint')}</span>
-                  </label>
-                </Show>
-                <div class="flex-between">
-                  <label class="checkbox-row">
-                    <input
-                      type="checkbox"
-                      checked={r().prompt}
-                      onChange={(e) => updateRegexField('prompt', e.currentTarget.checked)}
-                      class="checkbox"
-                    />
-                    {t('settings.regex.placementPrompt')}
-                  </label>
-                  <label class="checkbox-row">
-                    <input
-                      type="checkbox"
-                      checked={r().display}
-                      onChange={(e) => updateRegexField('display', e.currentTarget.checked)}
-                      class="checkbox"
-                    />
-                    {t('settings.regex.placementDisplay')}
-                  </label>
-                  <label class="checkbox-row">
-                    <input
-                      type="checkbox"
-                      checked={r().disabled}
-                      onChange={(e) => updateRegexField('disabled', e.currentTarget.checked)}
-                      class="checkbox"
-                    />
-                    {t('settings.regex.disabledCheckbox')}
-                  </label>
-                </div>
-                <Show when={appendOnlyLayout() && r().prompt}>
-                  <span class="hint-text">{t('settings.regex.appendOnlyPromptNote')}</span>
-                </Show>
-                <div class="flex-between">
-                  <label class="checkbox-row">
-                    <input
-                      type="checkbox"
-                      checked={r().userInput}
-                      onChange={(e) => updateRegexField('userInput', e.currentTarget.checked)}
-                      class="checkbox"
-                    />
-                    {t('settings.regex.placementUserInput')}
-                  </label>
-                  <label class="checkbox-row">
-                    <input
-                      type="checkbox"
-                      checked={r().aiOutput}
-                      onChange={(e) => updateRegexField('aiOutput', e.currentTarget.checked)}
-                      class="checkbox"
-                    />
-                    {t('settings.regex.placementAiOutput')}
-                  </label>
-                </div>
-
-                {/* Test area */}
-                <label class="field-label mt-sm">
-                  {t('settings.regex.testInput')}
-                  <textarea
-                    rows={3}
-                    value={regexTestInput()}
-                    onInput={(e) => setRegexTestInput(e.currentTarget.value)}
-                    placeholder={t('settings.regex.testInputPlaceholder')}
-                    class="textarea"
-                  />
-                </label>
-                <label class="field-label">
-                  {t('settings.regex.testOutput')}
-                  <textarea rows={3} value={regexTestOutput()} readOnly class="bg-secondary" />
-                </label>
-
-                <div class="edit-actions">
-                  <button type="button" onClick={() => setEditingRegex(null)} class="btn">
-                    {t('common.cancel')}
-                  </button>
-                  <button class="btn" type="button" onClick={saveRegexEdit}>
-                    {t('settings.regex.saveRule')}
-                  </button>
-                </div>
-              </div>
-            )}
-          </Show>
-        </section>
-
-        {/* Quick Replies */}
-        <section class="settings-section">
-          <h3 class="section-heading">{t('settings.quickReplies.heading')}</h3>
-          <QuickReplySettings />
         </section>
 
         {/* Developer Settings */}

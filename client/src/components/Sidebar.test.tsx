@@ -196,6 +196,18 @@ describe('Sidebar', () => {
     expect(document.querySelector('.settings-modal')).toBeInTheDocument();
   });
 
+  it('opens instruct templates modal', () => {
+    render(() => <Sidebar />);
+    screen.getByText('Instruct Templates').click();
+    expect(document.querySelector('.instruct-templates-modal')).toBeInTheDocument();
+  });
+
+  it('opens regex rules modal', () => {
+    render(() => <Sidebar />);
+    screen.getByText('Regex Rules').click();
+    expect(document.querySelector('.regex-rules-modal')).toBeInTheDocument();
+  });
+
   it('opens settings modal', () => {
     render(() => <Sidebar />);
     screen.getByText('Settings').click();

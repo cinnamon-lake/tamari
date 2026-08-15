@@ -3,9 +3,9 @@
  *
  * Exercises a built-in toolset end-to-end (invoke a tool, render the call +
  * result blocks, keep talking) and the quick-reply system end-to-end (create a
- * global QR from Settings, fire it from the bar, then create a character-scoped
- * QR from inside a chat and prove it only appears for that character while
- * globals still appear everywhere).
+ * global QR from the bar's `+` button, fire it from the bar, then create a
+ * character-scoped QR from inside a chat and prove it only appears for that
+ * character while globals still appear everywhere).
  */
 import { journeyTest as test, expect } from '../../fixtures/journey.js';
 import { enableBuiltinToolset, deleteToolset } from '../../helpers/tools.js';
@@ -13,19 +13,18 @@ import { getLastLlmRequest, waitForNextLlmRequest } from '../../helpers/llm.js';
 import type { Page } from '@playwright/test';
 
 async function createGlobalQuickReply(page: Page, label: string, script: string): Promise<void> {
-  await page.locator('button.settings-btn:has-text("Settings")').click();
-  const settings = page.locator('.settings-modal');
-  await expect(settings).toBeVisible();
-  await settings.locator('h3:has-text("Quick Replies")').scrollIntoViewIfNeeded();
-  await settings.locator('button:has-text("Add Quick Reply")').click();
+  // Global QRs are created from the chat view's quick reply bar: the `+`
+  // button opens the QuickReplyEditor with the scope select defaulting to
+  // 'global'. Requires an open chat (step 1 leaves one open).
+  await page.locator('.quick-reply-bar .quick-reply-add').click();
   const editor = page.locator('.qr-modal');
   await expect(editor).toBeVisible();
-  await editor.locator('label:has-text("Label") + input').fill(label);
-  await editor.locator('label:has-text("Script (Lua)") + textarea').fill(script);
-  await editor.locator('button:has-text("Save")').click();
+  await editor.locator('#qr-label').fill(label);
+  await editor.locator('#qr-script').fill(script);
+  await editor.locator('button.btn-primary:has-text("Save")').click();
   await expect(editor).not.toBeVisible();
-  await settings.locator('button.btn:has-text("Close")').click();
-  await expect(settings).not.toBeVisible();
+  // Sync point: the quickreply.created broadcast renders the bar button.
+  await expect(page.locator('.quick-reply-bar .quick-reply-btn', { hasText: label })).toBeVisible();
 }
 
 async function clickQuickReply(page: Page, label: string): Promise<void> {

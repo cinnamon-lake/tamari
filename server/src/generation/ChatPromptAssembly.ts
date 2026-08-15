@@ -367,12 +367,24 @@ export class ChatPromptAssembly {
         verboseMode: allSettings.mediaVerboseMode,
       },
       caching: {
-        mode: allSettings.claudeCacheMode,
-        manualDepth: allSettings.claudeCacheDepth,
+        // Per-backend config (providerParams.cacheMode/cacheDepth), migrated
+        // from the old global claudeCache* settings by migration 017. Unknown
+        // values degrade to 'off'/0.
+        mode: readCacheMode(backendConfig?.providerParams['cacheMode']),
+        manualDepth: readCacheDepth(backendConfig?.providerParams['cacheDepth']),
         appendOnly,
       },
     });
 
     return { prompt, chatHistory, promptHistoryLimit };
   }
+}
+
+function readCacheMode(value: unknown): 'off' | 'auto' | 'manual' {
+  return value === 'auto' || value === 'manual' ? value : 'off';
+}
+
+function readCacheDepth(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(str(value));
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
 }

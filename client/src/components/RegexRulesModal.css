@@ -1,0 +1,59 @@
+/* Regex Rules modal — list/editor layout mirrors the styles the markup was
+   written against in WorldInfoEditor.css / ChatView.css / SettingsModal.css;
+   duplicated here so this modal is self-contained. */
+
+.modal.regex-rules-modal {
+  max-width: var(--modal-max-width);
+}
+
+@media (max-width: 768px) {
+  .modal.regex-rules-modal {
+    padding-top: var(--space-md);
+    padding-bottom: var(--space-md);
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
+}
+
+.worldinfo-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.worldinfo-item {
+  justify-content: space-between;
+}
+
+.worldinfo-item:hover {
+  transform: translateX(2px);
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.edit-actions > span:first-child {
+  margin-right: auto;
+}
+
+.settings-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+fieldset.settings-radio-group {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.settings-radio-label {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}

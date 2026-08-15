@@ -571,7 +571,9 @@ describe('ClaudeBackendAdapter', () => {
       baseUrl: 'https://api.anthropic.com/v1',
       apiKey: 'sk-ant-test',
       model: 'claude-sonnet-4-20250514',
-      cacheTTL: '1h',
+      // TTL is a per-config providerParams key; it reaches the adapter via the
+      // params blob (buildBackendSettings).
+      params: { cacheTTL: '1h' },
     });
 
     fetchMock.mockResolvedValueOnce({

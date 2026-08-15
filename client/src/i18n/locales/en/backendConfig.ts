@@ -94,6 +94,20 @@ export const backendConfig = {
   summaryDetailed: 'Detailed',
   optionDefault: 'Default',
 
+  // Prompt caching (claude/openrouter providers; stored in providerParams)
+  promptCaching: 'Prompt Caching',
+  cacheMode: 'Cache Mode',
+  cacheModeOff: 'Off',
+  cacheModeAuto: 'Auto',
+  cacheModeManual: 'Manual',
+  cacheModeHint: 'Auto computes optimal cache depth from injections. Manual uses the depth below.',
+  cacheDepth: 'Manual Cache Depth',
+  cacheDepthHint: 'Role-transition count at which to place the cache breakpoint',
+  cacheTtl: 'Cache TTL',
+  cacheTtlPlaceholder: 'e.g. 5m, 1h',
+  cacheTtlHint:
+    'TTL for prompt caching, e.g. 5m, 1h. Leave blank for provider default. Applies only while caching is on (OpenRouter: anthropic/claude* models only).',
+
   // Media support
   mediaSupport: 'Media Support',
   mediaImages: 'Images',

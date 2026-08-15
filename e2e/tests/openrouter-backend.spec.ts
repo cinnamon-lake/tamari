@@ -44,9 +44,6 @@ const TOUCHED_SETTINGS: Array<[string, unknown]> = [
   ['openrouter.allowFallbacks', true],
   ['openrouter.transforms', []],
   ['openrouter.plugins', []],
-  ['claudeCacheMode', 'off'],
-  ['claudeCacheDepth', 0],
-  ['claudeCacheTTL', null],
 ];
 
 test.describe('OpenRouter backend adapter', () => {
@@ -139,9 +136,10 @@ test.describe('OpenRouter backend adapter', () => {
   });
 
   test('injects Claude cache_control breakpoints for anthropic/claude* models', async ({ page }) => {
-    await setSetting(page, 'claudeCacheMode', 'manual');
-    await setSetting(page, 'claudeCacheDepth', 0);
-    await setSetting(page, 'claudeCacheTTL', '1h');
+    // Prompt caching is per-backend config (providerParams.cacheMode/cacheDepth/cacheTTL).
+    await patchActiveBackendConfig(page, {
+      providerParams: { cacheMode: 'manual', cacheDepth: 0, cacheTTL: '1h' },
+    });
 
     const app = new App(page);
     const charName = `OR Cache ${Date.now()}`;

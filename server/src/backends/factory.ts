@@ -89,8 +89,6 @@ export interface AdapterFactoryInput {
   model: string;
   generationMode: string;
   requestScript?: string;
-  /** Cache TTL for Claude prompt caching (direct or via OpenRouter). */
-  cacheTTL?: string;
   contextLength?: number;
   /** Instruct template name for text-completion adapters. */
   instructTemplate?: string;
@@ -128,7 +126,6 @@ export function buildAdapterFactoryInput(
     generationMode: str(settings['generationMode']),
     requestScript:
       parseOptionalString(settings['requestScript']) ?? parseOptionalString(settings['custom.requestScript']),
-    cacheTTL: parseOptionalString(settings['claudeCacheTTL']),
     contextLength: parseNumber(settings['contextLength']),
     instructTemplate: parseOptionalString(settings['instructTemplate']),
     customInstructTemplates: parseCustomInstructTemplates(settings['instructTemplates']),
@@ -238,7 +235,6 @@ registerBackendProvider('openrouter', (input, connection) =>
     allowFallbacks: input.openrouter.allowFallbacks,
     reasoningEffort: input.openrouter.reasoningEffort,
     reasoningSummary: input.openrouter.reasoningSummary,
-    cacheTTL: input.cacheTTL,
   }),
 );
 
@@ -246,7 +242,6 @@ registerBackendProvider('claude', (input, connection) =>
   new ClaudeBackendAdapter({
     ...connection,
     params: input.claudeParams,
-    cacheTTL: input.cacheTTL,
   }),
 );
 

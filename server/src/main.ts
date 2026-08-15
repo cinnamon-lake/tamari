@@ -243,6 +243,7 @@ const memoryService = new MemoryService({
   chats,
   settings,
   backendConfigs,
+  promptLists,
   backendFactory: { create: createBackendAdapterResolved },
 });
 
@@ -348,6 +349,7 @@ const generationService = new GenerationService({
   settings,
   personas,
   backendConfigs,
+  promptLists,
   chatMembers,
   attachments,
   groupChatService,

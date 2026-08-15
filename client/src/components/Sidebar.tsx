@@ -22,6 +22,8 @@ import { BackendConfigModal } from './BackendConfigModal.js';
 import { SecretsModal } from './SecretsModal.js';
 import { CustomBackendsModal } from './CustomBackendsModal.js';
 import { PromptListModal } from './PromptListModal.js';
+import { InstructTemplatesModal } from './InstructTemplatesModal.js';
+import { RegexRulesModal } from './RegexRulesModal.js';
 import { WorldInfoEditor } from './WorldInfoEditor.js';
 import { PersonaManager } from './PersonaManager.js';
 import { ToolsModal } from './ToolsModal.js';
@@ -44,6 +46,8 @@ export function Sidebar() {
   const [showSecrets, setShowSecrets] = createSignal(false);
   const [showCustomBackends, setShowCustomBackends] = createSignal(false);
   const [showPromptLists, setShowPromptLists] = createSignal(false);
+  const [showInstructTemplates, setShowInstructTemplates] = createSignal(false);
+  const [showRegexRules, setShowRegexRules] = createSignal(false);
   const [showWorldInfo, setShowWorldInfo] = createSignal(false);
   const [showPersonas, setShowPersonas] = createSignal(false);
   const [showTools, setShowTools] = createSignal(false);
@@ -720,6 +724,12 @@ export function Sidebar() {
           <button class="settings-btn" onClick={() => { setShowPromptLists(true); setMobileOpen(false); }} type="button">
             <i class="bi bi-list-check" /> {t('sidebar.promptList')}
           </button>
+          <button class="settings-btn" onClick={() => { setShowInstructTemplates(true); setMobileOpen(false); }} type="button">
+            <i class="bi bi-layout-text-window-reverse" /> {t('sidebar.instructTemplates')}
+          </button>
+          <button class="settings-btn" onClick={() => { setShowRegexRules(true); setMobileOpen(false); }} type="button">
+            <i class="bi bi-regex" /> {t('sidebar.regexRules')}
+          </button>
           <button class="settings-btn" onClick={() => { setShowTools(true); setMobileOpen(false); }} type="button">
             <i class="bi bi-tools" /> {t('sidebar.tools')}
           </button>
@@ -753,6 +763,14 @@ export function Sidebar() {
 
       <Show when={showPromptLists()}>
         <PromptListModal onClose={() => setShowPromptLists(false)} />
+      </Show>
+
+      <Show when={showInstructTemplates()}>
+        <InstructTemplatesModal onClose={() => setShowInstructTemplates(false)} />
+      </Show>
+
+      <Show when={showRegexRules()}>
+        <RegexRulesModal onClose={() => setShowRegexRules(false)} />
       </Show>
 
       <Show when={showWorldInfo()}>

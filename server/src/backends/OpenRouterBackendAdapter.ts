@@ -36,8 +36,6 @@ export interface OpenRouterAdapterConfig extends OpenAIAdapterConfig {
   reasoningEffort?: 'xhigh' | 'high' | 'medium' | 'low' | 'minimal' | 'none';
   /** Reasoning summary verbosity: auto, concise, or detailed */
   reasoningSummary?: 'auto' | 'concise' | 'detailed';
-  /** Cache TTL for Claude prompt caching via OpenRouter, e.g. '5m' or '1h'. */
-  cacheTTL?: string;
 }
 
 
@@ -75,8 +73,9 @@ export class OpenRouterBackendAdapter extends OpenAIBackendAdapter {
       };
     }
 
-    // Prompt caching for Claude models via OpenRouter
-    const cacheTTL = this.openRouterConfig.cacheTTL;
+    // Prompt caching for Claude models via OpenRouter. The TTL rides in the
+    // params blob (providerParams.cacheTTL, merged by buildBackendSettings).
+    const cacheTTL = this.openRouterConfig.params?.cacheTTL as string | undefined;
 
     if (
       typeof prompt.cacheDepth === 'number' &&

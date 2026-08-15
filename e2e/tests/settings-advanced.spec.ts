@@ -2,10 +2,12 @@
  * Settings — Advanced: the sections of the Settings modal not covered by
  * settings.spec.ts / settings-display.spec.ts / settings-behavior.spec.ts:
  *
- *   1. Custom instruct template CRUD (list, edit form, save, delete confirm).
+ *   1. Custom instruct template CRUD (list, edit form, save, delete confirm) —
+ *      in the sidebar's Instruct Templates modal (.instruct-templates-modal).
  *   2. Global regex rules CRUD + the Test input/output area — the ONLY client
  *      code path over client/src/lib/regexDisplay.ts (applyDisplayRules /
- *      parseRegexString). Bonus: a Display rule transforms the rendered
+ *      parseRegexString), in the sidebar's Regex Rules modal
+ *      (.regex-rules-modal). Bonus: a Display rule transforms the rendered
  *      assistant bubble (server DisplayRenderer applies the global rule).
  *   3. Regex rule validation alerts (alertPopup for empty name / bad format /
  *      uncompilable pattern).
@@ -17,8 +19,10 @@
  *      customStoppingStringsMacro (GenerationService.resolveStopStrings
  *      macro-resolves stop strings). Plus the chat-messages-per-page UI
  *      round-trip (display-only render limit).
- *   6. Claude prompt caching selects/inputs — UI persistence only (functional
- *      wire assertions live in the claude/openrouter specs).
+ *   6. Claude prompt caching selects/inputs — per-backend-config
+ *      providerParams (cacheMode/cacheDepth/cacheTTL) in the Backend Config
+ *      modal; UI persistence only (functional wire assertions live in the
+ *      claude/openrouter specs).
  *   7. Auto-continue toggle + target length — UI persistence only.
  *
  * Everything created here is cleaned up: templates/rules are deleted through
@@ -80,9 +84,6 @@ async function purgeSpecArtifacts(page: Page): Promise<void> {
               ['stripExamples', false],
               ['customStoppingStrings', []],
               ['customStoppingStringsMacro', false],
-              ['claudeCacheMode', 'off'],
-              ['claudeCacheDepth', 0],
-              ['claudeCacheTTL', null],
               ['autoContinueEnabled', false],
               ['autoContinueTargetLength', 100],
             ];
@@ -142,6 +143,54 @@ function requestStop(body: unknown): string[] {
   return Array.isArray(stop) ? stop.map(String) : [];
 }
 
+/** Sidebar "Instruct Templates" button → .instruct-templates-modal. */
+async function openInstructTemplates(page: Page): Promise<Locator> {
+  await page.locator('button.settings-btn:has-text("Instruct Templates")').click();
+  const modal = page.locator('.instruct-templates-modal');
+  await expect(modal).toBeVisible();
+  return modal;
+}
+
+async function closeInstructTemplates(page: Page): Promise<void> {
+  const modal = page.locator('.instruct-templates-modal');
+  await page.locator('.modal-overlay:has(.instruct-templates-modal)').click({ position: { x: 0, y: 0 } });
+  await expect(modal).not.toBeVisible();
+}
+
+/** Sidebar "Regex Rules" button → .regex-rules-modal. */
+async function openRegexRules(page: Page): Promise<Locator> {
+  await page.locator('button.settings-btn:has-text("Regex Rules")').click();
+  const modal = page.locator('.regex-rules-modal');
+  await expect(modal).toBeVisible();
+  return modal;
+}
+
+async function closeRegexRules(page: Page): Promise<void> {
+  const modal = page.locator('.regex-rules-modal');
+  await page.locator('.modal-overlay:has(.regex-rules-modal)').click({ position: { x: 0, y: 0 } });
+  await expect(modal).not.toBeVisible();
+}
+
+/**
+ * Sidebar "Backend Config" button → the Backend Config modal. Its root shares
+ * the `.settings-modal` class with the Settings modal, so filter by title
+ * (same pattern as backend-config-modal.spec.ts).
+ */
+async function openBackendConfig(page: Page): Promise<Locator> {
+  const btn = page.locator('button.settings-btn:has-text("Backend Config")');
+  await btn.scrollIntoViewIfNeeded();
+  await btn.click();
+  const modal = page.locator('.modal.settings-modal').filter({ hasText: 'Backend Config' });
+  await expect(modal).toBeVisible();
+  return modal;
+}
+
+async function closeBackendConfig(modal: Locator): Promise<void> {
+  // The Close button runs the modal's close(): a dirty form is saved first.
+  await modal.locator('.modal-actions button:has-text("Close")').click();
+  await expect(modal).not.toBeVisible();
+}
+
 test.describe('Settings — Advanced', () => {
   test.describe.configure({ mode: 'serial' });
 
@@ -157,15 +206,13 @@ test.describe('Settings — Advanced', () => {
 
   test('instruct template CRUD: create, edit, persist across reopen, delete', async ({ page }) => {
     test.setTimeout(90000);
-    const app = new App(page);
     const stamp = Date.now();
     const tplId = `${MARK.toLowerCase()}-tpl-${stamp}`;
     const tplName = uniqueName('Tpl');
     const sysPrefix = `SYSMARK-${stamp}`;
     const userPrefix = `USERMARK-${stamp}`;
 
-    const modal = await app.openSettings();
-    await modal.locator('h3:has-text("Custom Instruct Templates")').scrollIntoViewIfNeeded();
+    const modal = await openInstructTemplates(page);
 
     // New Template → fill the form with distinctive markers → save.
     await modal.locator('button:has-text("New Template")').click();
@@ -189,9 +236,8 @@ test.describe('Settings — Advanced', () => {
     await expect(row).toBeVisible();
 
     // Persists after modal close/reopen (round-tripped to the server).
-    await app.closeSettings();
-    const modal2 = await app.openSettings();
-    await modal2.locator('h3:has-text("Custom Instruct Templates")').scrollIntoViewIfNeeded();
+    await closeInstructTemplates(page);
+    const modal2 = await openInstructTemplates(page);
     const row2 = modal2.locator(`.worldinfo-item[id="${tplId}"]`);
     await expect(row2).toBeVisible();
     await row2.locator('button[title="Edit"]').click();
@@ -208,7 +254,7 @@ test.describe('Settings — Advanced', () => {
     await expect(popup).not.toBeVisible();
     await expect(modal2.locator(`.worldinfo-item[id="${tplId}"]`)).toHaveCount(0);
 
-    await app.closeSettings();
+    await closeInstructTemplates(page);
   });
 
   test('global regex rule CRUD, Test area transform, and display-rule bubble transform', async ({ page }) => {
@@ -218,8 +264,7 @@ test.describe('Settings — Advanced', () => {
     await app.createCharacterAndChat({ name: charName, firstMes: `Hello from ${charName}.` });
 
     const ruleName = uniqueName('Rule');
-    const modal = await app.openSettings();
-    await modal.locator('h3:has-text("Regex Rules")').scrollIntoViewIfNeeded();
+    const modal = await openRegexRules(page);
 
     // New Regex Rule → fill name/find/replace → tick Display placement.
     // ('Display' needs an exact match — 'Show recently-used character bar'
@@ -253,13 +298,12 @@ test.describe('Settings — Advanced', () => {
 
     // Bonus: with the Display rule active, a generated reply renders
     // transformed in the assistant bubble (server DisplayRenderer).
-    await app.closeSettings();
+    await closeRegexRules(page);
     await app.sendUserMessage('respond:this is deterministic text', { expectReply: true });
     await app.waitForAssistantText('this is DETERMINISTIC! text');
 
     // Cleanup: delete the rule through the UI.
-    const modal2 = await app.openSettings();
-    await modal2.locator('h3:has-text("Regex Rules")').scrollIntoViewIfNeeded();
+    const modal2 = await openRegexRules(page);
     const row2 = modal2.locator('.worldinfo-item', { hasText: ruleName });
     await expect(row2).toBeVisible();
     await row2.locator('button[title="Delete"]').click();
@@ -269,14 +313,12 @@ test.describe('Settings — Advanced', () => {
     await expect(popup).not.toBeVisible();
     await expect(modal2.locator('.worldinfo-item', { hasText: ruleName })).toHaveCount(0);
 
-    await app.closeSettings();
+    await closeRegexRules(page);
   });
 
   test('regex rule validation alerts on empty name and bad find regex', async ({ page }) => {
     test.setTimeout(60000);
-    const app = new App(page);
-    const modal = await app.openSettings();
-    await modal.locator('h3:has-text("Regex Rules")').scrollIntoViewIfNeeded();
+    const modal = await openRegexRules(page);
 
     await modal.locator('button:has-text("New Regex Rule")').click();
     const popup = page.locator('.popup-modal');
@@ -306,7 +348,7 @@ test.describe('Settings — Advanced', () => {
     await modal.locator('.edit-actions button:has-text("Cancel")').click();
     await expect(modal.locator('.worldinfo-item', { hasText: MARK })).toHaveCount(0);
 
-    await app.closeSettings();
+    await closeRegexRules(page);
   });
 
   test('stop-string row editing cuts the reply at the typed stop string', async ({ page }) => {
@@ -419,14 +461,17 @@ test.describe('Settings — Advanced', () => {
 
   test('claude cache mode, manual depth and TTL persist across reopen', async ({ page }) => {
     test.setTimeout(60000);
-    const app = new App(page);
 
-    const modal = await app.openSettings();
-    await modal.locator('h3:has-text("Generation")').scrollIntoViewIfNeeded();
+    // The caching controls live in the Backend Config modal (per-config
+    // providerParams) and only render for claude/openrouter providers —
+    // switch the provider first so the section appears.
+    const modal = await openBackendConfig(page);
+    const providerSelect = modal.locator('select:has(option[value="openrouter"])');
+    await providerSelect.selectOption('claude');
 
     // Functional wire assertions for Claude caching live in the claude /
     // openrouter specs — here we only verify the UI round-trips.
-    const modeSelect = modal.locator('label.field-label:has-text("Claude Prompt Caching") select');
+    const modeSelect = modal.locator('label.field-label:has-text("Cache Mode") select');
     await modeSelect.selectOption('manual');
     await expect(modeSelect).toHaveValue('manual');
 
@@ -441,19 +486,20 @@ test.describe('Settings — Advanced', () => {
     await ttlInput.fill('1h');
     await expect(ttlInput).toHaveValue('1h');
 
-    await app.closeSettings();
+    // Close runs the modal's close(): the dirty form is saved first.
+    await closeBackendConfig(modal);
 
-    const modal2 = await app.openSettings();
-    await modal2.locator('h3:has-text("Generation")').scrollIntoViewIfNeeded();
-    await expect(modal2.locator('label.field-label:has-text("Claude Prompt Caching") select')).toHaveValue('manual');
+    const modal2 = await openBackendConfig(page);
+    await expect(modal2.locator('label.field-label:has-text("Cache Mode") select')).toHaveValue('manual');
     await expect(modal2.locator('label.field-label:has-text("Manual Cache Depth") input[type="number"]')).toHaveValue('3');
     await expect(modal2.locator('label.field-label:has-text("Cache TTL") input')).toHaveValue('1h');
 
-    // Restore defaults (off hides the depth input; TTL blank => null).
+    // Restore defaults (off hides the depth input; TTL blank => null). The
+    // provider itself is reset by the afterEach resetBackendConfig.
     await modal2.locator('label.field-label:has-text("Cache TTL") input').fill('');
-    await modal2.locator('label.field-label:has-text("Claude Prompt Caching") select').selectOption('off');
+    await modal2.locator('label.field-label:has-text("Cache Mode") select').selectOption('off');
     await expect(modal2.locator('label.field-label:has-text("Manual Cache Depth")')).toHaveCount(0);
-    await app.closeSettings();
+    await closeBackendConfig(modal2);
   });
 
   test('auto-continue toggle and target length persist across reopen', async ({ page }) => {

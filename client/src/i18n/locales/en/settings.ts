@@ -1,5 +1,5 @@
 /**
- * Settings domain — strings for SettingsModal.tsx + settings/QuickReplySettings.tsx.
+ * Settings domain — strings for SettingsModal.tsx.
  * `title` and `language.*` were wired first; the rest of the modal is grouped by
  * section below. Generic actions reuse `common.*` (save, cancel, close, delete,
  * edit, name) at the call site rather than being duplicated here.
@@ -50,29 +50,15 @@ export const settings = {
     addStopString: 'Add stop string',
     resolveStoppingMacros: 'Resolve macros in custom stopping strings',
     stripExamples: 'Strip dialogue examples from prompt',
-    impersonationPrompt: 'Impersonation prompt',
-    impersonationPromptHint:
-      'System instruction used when generating a draft message as you (the Impersonate button). Leave blank for the built-in default.',
     chatMessageLoadLimit: 'Chat messages per page',
     chatMessageLoadLimitHint:
       'How many messages are rendered when you open a chat, and how many more load each time you scroll up. Display only — never affects what the model sees.',
     autoContinue: 'Auto-continue short responses',
     autoContinueTargetLength: 'Auto-continue target length (tokens)',
     autoContinueTargetLengthHint: 'Continue generating if response is shorter than this',
-    claudeCaching: 'Claude Prompt Caching',
-    claudeCachingOff: 'Off',
-    claudeCachingAuto: 'Auto',
-    claudeCachingManual: 'Manual',
-    claudeCachingHint:
-      'Auto computes optimal cache depth from injections. Manual uses the depth below.',
     appendOnlyLayout: 'Append-only prompt layout',
     appendOnlyLayoutHint:
       'Snapshot-cache friendly: every turn is a strict byte-prefix of the next. Locks: whitespace handling, output post-processing, storage/prompt macros, stop-string macros, prompt/output regex, depth injections, non-constant World Info, and memory summaries; reasoning is always re-sent verbatim.',
-    manualCacheDepth: 'Manual Cache Depth',
-    manualCacheDepthHint: 'Role-transition count at which to place the cache breakpoint',
-    cacheTtl: 'Cache TTL',
-    cacheTtlPlaceholder: 'e.g. 5m, 1h',
-    cacheTtlHint: 'TTL for Claude prompt caching, e.g. 5m, 1h. Leave blank for provider default. Only applies to Claude/OpenRouter backends while caching is on.',
     mediaVerbose: 'Verbose media mode',
     mediaVerboseHint:
       'Replace media attachments with text placeholders when sending to the LLM',
@@ -99,7 +85,6 @@ export const settings = {
     backend: 'Summarization backend',
     activeBackend: 'Active chat backend',
     backendHint: 'Optional dedicated backend for summary generation.',
-    systemPrompt: 'Summarization system prompt',
   },
   display: {
     heading: 'Display',
@@ -215,11 +200,6 @@ export const settings = {
     findRequired: 'Find regex is required',
     invalidFormat: 'Regex must be in /pattern/flags format',
     invalidPattern: 'Invalid regex pattern',
-  },
-  quickReplies: {
-    heading: 'Quick Replies',
-    emptyHint: 'No global quick replies yet. Click Add to create one.',
-    add: 'Add Quick Reply',
   },
   soundStreaming: {
     heading: 'Sound & Streaming',

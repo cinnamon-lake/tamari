@@ -40,7 +40,7 @@
 import { test, expect } from '../fixtures/base.js';
 import type { Page } from '@playwright/test';
 import { login } from '../helpers/auth.js';
-import { createLuaQuickReply, clickQuickReply } from '../helpers/quickReplies.js';
+import { createLuaQuickReply, deleteLuaQuickReply, clickQuickReply } from '../helpers/quickReplies.js';
 import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
 import { App } from '../helpers/app.js';
 
@@ -55,27 +55,24 @@ async function createLuaQuickReplyWithTrigger(
   script: string,
   triggerLabel: string,
 ): Promise<void> {
-  await page.locator('button.settings-btn:has-text("Settings")').click();
-  const settings = page.locator('.settings-modal');
-  await expect(settings).toBeVisible();
-
-  await settings.locator('h3:has-text("Quick Replies")').scrollIntoViewIfNeeded();
-  await settings.locator('button:has-text("Add Quick Reply")').click();
+  await page.locator('.quick-reply-bar .quick-reply-add').click();
 
   const editor = page.locator('.qr-modal');
   await expect(editor).toBeVisible();
-  await editor.locator('label:has-text("Label") + input').fill(label);
-  await editor.locator('label:has-text("Script (Lua)") + textarea').fill(script);
+  await editor.locator('#qr-label').fill(label);
+  await editor.locator('#qr-script').fill(script);
   const triggerBox = editor
     .locator('label.qr-checkbox', { hasText: triggerLabel })
     .locator('input[type="checkbox"]');
   await triggerBox.check();
   await expect(triggerBox).toBeChecked();
-  await editor.locator('button:has-text("Save")').click();
+  await editor.locator('button.btn-primary:has-text("Save")').click();
   await expect(editor).not.toBeVisible();
 
-  await settings.locator('button.btn:has-text("Close")').click();
-  await expect(settings).not.toBeVisible();
+  // Sync point: the quickreply.created broadcast renders the bar button.
+  await expect(
+    page.locator('.quick-reply-bar .quick-reply-btn').filter({ hasText: label }),
+  ).toBeVisible();
 }
 
 /**
@@ -94,17 +91,9 @@ async function createEmptyGroupChat(page: Page, groupName: string): Promise<void
 }
 
 async function deleteQuickReply(page: Page, label: string): Promise<void> {
-  await page.locator('button.settings-btn:has-text("Settings")').click();
-  const settings = page.locator('.settings-modal');
-  await expect(settings).toBeVisible();
-  await settings.locator('h3:has-text("Quick Replies")').scrollIntoViewIfNeeded();
-  const row = settings.locator('.qr-settings-row').filter({ hasText: label });
-  if ((await row.count()) > 0) {
-    await row.locator('button.btn-danger:has-text("Delete")').click();
-    await expect(settings.locator('.qr-settings-list')).not.toContainText(label);
-  }
-  await settings.locator('button.btn:has-text("Close")').click();
-  await expect(settings).not.toBeVisible();
+  // Right-click the bar button → editor opens in edit mode → Delete. No-op
+  // when the label isn't in the current bar (cleanup after a failed test).
+  await deleteLuaQuickReply(page, label);
 }
 
 test.describe('Quick Reply auto-execute triggers', () => {

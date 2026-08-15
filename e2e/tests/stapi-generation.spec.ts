@@ -2,28 +2,13 @@ import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
 import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
+// Global quick replies are created from the chat view's quick reply bar
+// (`+` button → QuickReplyEditor, scope defaults to global) — the bar only
+// exists with a chat open, so the test creates its character/chat FIRST.
+import { createLuaQuickReply as createGlobalQuickReply } from '../helpers/quickReplies.js';
 
 function uniqueName(base: string): string {
   return `${base} ${Date.now()}`;
-}
-
-async function createGlobalQuickReply(page: any, label: string, script: string) {
-  await page.locator('button.settings-btn:has-text("Settings")').click();
-  const settings = page.locator('.settings-modal');
-  await expect(settings).toBeVisible();
-
-  await settings.locator('h3:has-text("Quick Replies")').scrollIntoViewIfNeeded();
-  await settings.locator('button:has-text("Add Quick Reply")').click();
-
-  const editor = page.locator('.qr-modal');
-  await expect(editor).toBeVisible();
-  await editor.locator('label:has-text("Label") + input').fill(label);
-  await editor.locator('label:has-text("Script (Lua)") + textarea').fill(script);
-  await editor.locator('button:has-text("Save")').click();
-  await expect(editor).not.toBeVisible();
-
-  await settings.locator('button.btn:has-text("Close")').click();
-  await expect(settings).not.toBeVisible();
 }
 
 async function createCharacterAndChat(page: any, charName: string) {
@@ -87,8 +72,8 @@ test.describe('StApi Generation Integration', () => {
     const label = uniqueName('StApi Add Swipe');
     const charName = uniqueName('StApi Add Swipe Character');
 
-    await createGlobalQuickReply(page, label, 'st.add_swipe("Swiped via StApi", true)');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.add_swipe("Swiped via StApi", true)');
 
     // Use the mock server's respond-prefix so the initial swipe text is predictable.
     await sendUserMessage(page, 'respond: First assistant response');

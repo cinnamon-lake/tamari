@@ -97,6 +97,8 @@ export const core = {
     stats: 'Stats',
     backendConfig: 'Backend Config',
     promptList: 'Prompt List',
+    instructTemplates: 'Instruct Templates',
+    regexRules: 'Regex Rules',
     tools: 'Tools',
   },
 };

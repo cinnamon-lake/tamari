@@ -81,9 +81,6 @@ function collectParts(messages: CapturedMessage[], type: string): Array<{ role: 
 /** Settings this spec mutates, with their schema defaults — restored in afterEach. */
 const TOUCHED_SETTINGS: Array<[string, unknown]> = [
   ['customStoppingStrings', []],
-  ['claudeCacheMode', 'off'],
-  ['claudeCacheDepth', 0],
-  ['claudeCacheTTL', null],
   ['reasoningAddToPrompts', false],
 ];
 
@@ -111,6 +108,9 @@ test.describe('Claude backend adapter', () => {
       await deleteToolset(page, toolsetId);
       toolsetId = undefined;
     }
+    // Caching knobs are per-config (providerParams) — clear the blob so they
+    // don't leak into other specs.
+    await patchActiveBackendConfig(page, { providerParams: {} });
     await resetBackendConfig(page);
   });
 
@@ -233,9 +233,10 @@ test.describe('Claude backend adapter', () => {
   });
 
   test('injects cache_control breakpoints and prompt-caching beta headers', async ({ page }) => {
-    await setSetting(page, 'claudeCacheMode', 'manual');
-    await setSetting(page, 'claudeCacheDepth', 1);
-    await setSetting(page, 'claudeCacheTTL', '1h');
+    // Prompt caching is per-backend config (providerParams.cacheMode/cacheDepth/cacheTTL).
+    await patchActiveBackendConfig(page, {
+      providerParams: { cacheMode: 'manual', cacheDepth: 1, cacheTTL: '1h' },
+    });
 
     const app = new App(page);
     const charName = `Claude Cache ${Date.now()}`;

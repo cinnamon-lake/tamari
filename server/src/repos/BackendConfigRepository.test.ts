@@ -42,6 +42,8 @@ describe('BackendConfigRepository providerParams contract', () => {
         samplerDisabled: { topK: true },
         customBackendId: 'cb-1',
         cacheTTL: '5m',
+        cacheMode: 'manual',
+        cacheDepth: 3,
         // Undeclared legacy junk:
         groq_model: 'llama-3.3-70b-versatile',
         proxy_password: 'super-secret',
@@ -57,6 +59,8 @@ describe('BackendConfigRepository providerParams contract', () => {
       samplerDisabled: { topK: true },
       customBackendId: 'cb-1',
       cacheTTL: '5m',
+      cacheMode: 'manual',
+      cacheDepth: 3,
     });
 
     // …and it is the stored row that is clean, not just the return value.

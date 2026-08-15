@@ -1,28 +1,13 @@
 import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
+// Global quick replies are created from the chat view's quick reply bar
+// (`+` button → QuickReplyEditor, scope defaults to global) — the bar only
+// exists with a chat open, so each test creates its character/chat FIRST.
+import { createLuaQuickReply as createGlobalQuickReply } from '../helpers/quickReplies.js';
 
 function uniqueName(base: string): string {
   return `${base} ${Date.now()}`;
-}
-
-async function createGlobalQuickReply(page: any, label: string, script: string) {
-  await page.locator('button.settings-btn:has-text("Settings")').click();
-  const settings = page.locator('.settings-modal');
-  await expect(settings).toBeVisible();
-
-  await settings.locator('h3:has-text("Quick Replies")').scrollIntoViewIfNeeded();
-  await settings.locator('button:has-text("Add Quick Reply")').click();
-
-  const editor = page.locator('.qr-modal');
-  await expect(editor).toBeVisible();
-  await editor.locator('label:has-text("Label") + input').fill(label);
-  await editor.locator('label:has-text("Script (Lua)") + textarea').fill(script);
-  await editor.locator('button:has-text("Save")').click();
-  await expect(editor).not.toBeVisible();
-
-  await settings.locator('button.btn:has-text("Close")').click();
-  await expect(settings).not.toBeVisible();
 }
 
 async function createCharacterAndChat(page: any, charName: string) {
@@ -78,8 +63,8 @@ test.describe('StApi Integration', () => {
     const charName = uniqueName('StApi Character');
     const messageText = 'Hello from StApi integration test!';
 
-    await createGlobalQuickReply(page, label, `st.send("${messageText}")`);
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, `st.send("${messageText}")`);
 
     await clickQuickReply(page, label);
     const userBubble = page.locator('.message-bubble.user').last();
@@ -92,8 +77,8 @@ test.describe('StApi Integration', () => {
     const label = uniqueName('StApi Cut');
     const charName = uniqueName('StApi Cut Character');
 
-    await createGlobalQuickReply(page, label, 'st.cut(1)');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.cut(1)');
 
     // Send a user message so there is something to cut.
     const input = page.locator('.message-textarea');
@@ -114,12 +99,12 @@ test.describe('StApi Integration', () => {
     const label = uniqueName('StApi Edit');
     const charName = uniqueName('StApi Edit Character');
 
+    await createCharacterAndChat(page, charName);
     await createGlobalQuickReply(
       page,
       label,
       'local msgs = st.get_messages(10):await() st.edit(msgs[#msgs].id, "Edited by StApi")',
     );
-    await createCharacterAndChat(page, charName);
 
     const input = page.locator('.message-textarea');
     await input.fill('Edit me');
@@ -139,12 +124,12 @@ test.describe('StApi Integration', () => {
     const label = uniqueName('StApi Delete');
     const charName = uniqueName('StApi Delete Character');
 
+    await createCharacterAndChat(page, charName);
     await createGlobalQuickReply(
       page,
       label,
       'local msgs = st.get_messages(10):await() st.delete(msgs[#msgs].id)',
     );
-    await createCharacterAndChat(page, charName);
 
     const input = page.locator('.message-textarea');
     await input.fill('Delete me');
@@ -163,8 +148,8 @@ test.describe('StApi Integration', () => {
     const charName = uniqueName('StApi Rename Character');
     const newName = uniqueName('Renamed by StApi');
 
-    await createGlobalQuickReply(page, label, `st.rename_chat("${newName}")`);
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, `st.rename_chat("${newName}")`);
 
     await clickQuickReply(page, label);
     await expect(page.locator('.chat-list')).toContainText(newName, { timeout: 5000 });
@@ -176,8 +161,8 @@ test.describe('StApi Integration', () => {
     const label = uniqueName('StApi Metadata');
     const charName = uniqueName('StApi Metadata Character');
 
-    await createGlobalQuickReply(page, label, 'st.set_chat_metadata("scenario", "space station")');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.set_chat_metadata("scenario", "space station")');
 
     await clickQuickReply(page, label);
     // There is no visible indicator for metadata; verify the quick reply executes without errors
@@ -191,12 +176,12 @@ test.describe('StApi Integration', () => {
     const label = uniqueName('StApi AuthorNote');
     const charName = uniqueName('StApi AuthorNote Character');
 
+    await createCharacterAndChat(page, charName);
     await createGlobalQuickReply(
       page,
       label,
       'st.set_author_note("Think carefully", { depth = 3, position = "before_prompt" })',
     );
-    await createCharacterAndChat(page, charName);
 
     await clickQuickReply(page, label);
     await expect(page.locator('.toast-container')).not.toContainText('error', { timeout: 2000 });
@@ -208,8 +193,8 @@ test.describe('StApi Integration', () => {
     const label = uniqueName('StApi SetVar');
     const charName = uniqueName('StApi SetVar Character');
 
-    await createGlobalQuickReply(page, label, 'st.setvar("mood", "happy")');
     await createCharacterAndChat(page, charName);
+    await createGlobalQuickReply(page, label, 'st.setvar("mood", "happy")');
 
     await clickQuickReply(page, label);
     await expect(page.locator('.toast-container')).not.toContainText('error', { timeout: 2000 });
