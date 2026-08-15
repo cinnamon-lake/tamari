@@ -742,6 +742,23 @@ describe('serverStore', () => {
       expect(parts[1]).toEqual({ type: 'reasoning', text: 'late thought' });
     });
 
+    it('part.snapshot skips an index that would splice a hole into the parts array', () => {
+      const before = state.messages['chat-1']![0]!;
+      mockWs.simulateMessage({
+        type: 'part.snapshot',
+        chatId: 'chat-1',
+        messageId: 1,
+        // Server skipped ahead (e.g. reasoning landed but only the later
+        // text part was broadcast) — applying this would leave parts[1]
+        // undefined and crash part rendering.
+        partIndex: 2,
+        part: { type: 'text', text: 'skipped ahead' },
+        renderedHtml: '<p>skipped ahead</p>',
+      });
+      // Message is left untouched; a full message.snapshot reconciles later.
+      expect(state.messages['chat-1']![0]).toBe(before);
+    });
+
     it('message.deleted removes from messages and swipes', () => {
       setState('swipes', 'chat-1', [makeMessage({ id: 1 })]);
       mockWs.simulateMessage({

@@ -317,6 +317,11 @@ bus.on('part.snapshot', (msg) => {
   const updater = (m: (typeof state.messages)[string][0]) => {
     if (m.id !== msg.messageId) return m;
     const parts = [...(m.extra.parts ?? [])];
+    // An index past the client's array (server skipped ahead between
+    // broadcasts) would splice a hole — undefined entry — that crashes part
+    // rendering. Skip it; the next full message.snapshot reconciles, and the
+    // live text still streams in via generation.token.
+    if (msg.partIndex > parts.length) return m;
     parts[msg.partIndex] = msg.part;
     const html = [...(m.renderedHtml ?? [])];
     html[msg.partIndex] = msg.renderedHtml;

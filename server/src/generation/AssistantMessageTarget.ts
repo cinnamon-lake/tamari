@@ -116,6 +116,11 @@ export class AssistantMessageTarget implements GenerationTarget {
   /** Index of the part currently being streamed into (set by write()); the
       throttled flush broadcasts a part.snapshot for just this part. */
   private dirtyPartIndex: number | null = null;
+  /** Lowest part index dirtied since the last broadcast. When it differs from
+      dirtyPartIndex, more than one part changed and clients need a full
+      message.snapshot — a lone part.snapshot for the higher index would
+      splice holes into their parts array. */
+  private minDirtyPartIndex: number | null = null;
   /** Serializes fire-and-forget persists (round-end, timer flush) against the
       runner-awaited ones (tool outcomes, finalize) so DB writes land in
       logical order. */
@@ -284,6 +289,7 @@ export class AssistantMessageTarget implements GenerationTarget {
     this.streamingReasoningSignature = '';
     this.streamedSinceLastSettle = false;
     this.dirtyPartIndex = null;
+    this.minDirtyPartIndex = null;
     this.roundToolCalls = [];
     this.generationStartTime = Date.now();
   }
@@ -389,7 +395,7 @@ export class AssistantMessageTarget implements GenerationTarget {
         } else {
           this.streamingParts.push({ type: 'text', text: item.token });
         }
-        this.dirtyPartIndex = this.streamingParts.length - 1;
+        this.markPartDirty(this.streamingParts.length - 1);
         this.deps.generationBroadcast.broadcastGenerationToken(this.chatId, this.generationId, item.token);
         this.scheduleFlush();
         break;
@@ -402,7 +408,7 @@ export class AssistantMessageTarget implements GenerationTarget {
         } else {
           this.streamingParts.push({ type: 'reasoning', text: item.token });
         }
-        this.dirtyPartIndex = this.streamingParts.length - 1;
+        this.markPartDirty(this.streamingParts.length - 1);
         this.deps.generationBroadcast.broadcastGenerationReasoningToken(this.chatId, this.generationId, item.token);
         this.scheduleFlush();
         break;
@@ -417,7 +423,7 @@ export class AssistantMessageTarget implements GenerationTarget {
         } else {
           this.streamingParts.push({ type: 'backend_debug', text: item.token });
         }
-        this.dirtyPartIndex = this.streamingParts.length - 1;
+        this.markPartDirty(this.streamingParts.length - 1);
         this.deps.generationBroadcast.broadcastGenerationDebugToken(this.chatId, this.generationId, item.token);
         this.scheduleFlush();
         break;
@@ -449,6 +455,11 @@ export class AssistantMessageTarget implements GenerationTarget {
     this.streamedSinceLastSettle = true;
   }
 
+  private markPartDirty(index: number): void {
+    this.dirtyPartIndex = index;
+    this.minDirtyPartIndex = this.minDirtyPartIndex === null ? index : Math.min(this.minDirtyPartIndex, index);
+  }
+
   async writeToolOutcome(call: ToolCall, outcome: ToolResult): Promise<void> {
     this.streamingParts.push({
       type: 'tool_result',
@@ -468,6 +479,10 @@ export class AssistantMessageTarget implements GenerationTarget {
     await this.deps.chats.updateMessage(this.message!.id, { extra: newExtra });
     this.baseExtra = newExtra;
     await this.deps.chatBroadcast.broadcastMessageSnapshot(this.chatId, this.message!.id);
+    // The full snapshot reconciled every part — clear the dirty range so the
+    // next throttled flush doesn't re-broadcast (or misclassify) old dirt.
+    this.dirtyPartIndex = null;
+    this.minDirtyPartIndex = null;
   }
 
   /** Run fn after any in-flight fire-and-forget persist, keeping the chain
@@ -639,12 +654,17 @@ export class AssistantMessageTarget implements GenerationTarget {
         this.baseExtra = flushExtra;
         // Per-part streaming: only the dirty part changed since the last
         // broadcast — send a part.snapshot so clients re-render just that
-        // part instead of the whole message.
-        if (this.dirtyPartIndex !== null) {
+        // part instead of the whole message. When several parts changed
+        // (e.g. reasoning and text both started inside one throttle window),
+        // a lone part.snapshot for the highest index would splice holes into
+        // the clients' parts arrays — fall back to a full message.snapshot.
+        if (this.dirtyPartIndex !== null && this.minDirtyPartIndex === this.dirtyPartIndex) {
           await this.deps.chatBroadcast.broadcastPartSnapshot(this.chatId, this.message!.id, this.dirtyPartIndex);
         } else {
           await this.deps.chatBroadcast.broadcastMessageSnapshot(this.chatId, this.message!.id);
         }
+        this.dirtyPartIndex = null;
+        this.minDirtyPartIndex = null;
       } catch (err) {
         log.error({ err, chatId: this.chatId, targetMessageId: this.message!.id }, 'streaming flush failed');
       }
