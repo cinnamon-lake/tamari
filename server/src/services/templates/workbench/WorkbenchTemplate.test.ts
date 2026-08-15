@@ -96,6 +96,8 @@ function setup(
     quickReply?: Record<string, Handler>;
     luaTool?: Record<string, Handler>;
     generations?: { getById(id: string): Promise<unknown> };
+    cardTest?: { run(args: Record<string, unknown>): Promise<ToolExecuteResult> };
+    testSessions?: WorkbenchProviders['testSessions'];
   } = {},
 ) {
   const fakes = {
@@ -112,6 +114,8 @@ function setup(
     quickReplyWorkbench: fakes.quickReply as unknown as WorkbenchProviders['quickReplyWorkbench'],
     luaToolWorkbench: fakes.luaTool as unknown as WorkbenchProviders['luaToolWorkbench'],
     generations: (overrides.generations ?? { getById: async () => undefined }) as WorkbenchProviders['generations'],
+    ...(overrides.cardTest !== undefined ? { cardTest: overrides.cardTest } : {}),
+    ...(overrides.testSessions !== undefined ? { testSessions: overrides.testSessions } : {}),
   };
   return { template: new WorkbenchTemplate(providers), providers, fakes };
 }
@@ -860,6 +864,10 @@ describe('run', () => {
     'test_luatool',
     'test_regex',
     'test_card',
+    'test_session_start',
+    'test_session_message',
+    'test_session_state',
+    'test_session_end',
     'clone_character',
     'set_avatar',
     'copy_assets',
@@ -868,7 +876,7 @@ describe('run', () => {
     'add_game_lib',
   ];
 
-  it('returns the verb menu listing all 11 verbs when the verb is omitted', async () => {
+  it(`returns the verb menu listing all ${VERBS.length} verbs when the verb is omitted`, async () => {
     const { template } = setup();
     const content = await exec(template, 'run', {});
     expect(content.startsWith('run verbs (usage: run {"verb": "<name>", "args": {...}}):')).toBe(true);
@@ -914,6 +922,67 @@ describe('run', () => {
     const context: ToolContext = { chatId: 'chat1', clientId: 'client1' };
     await exec(template, 'run', { verb: 'test_luatool', args: { toolName: 't' } }, context);
     expect(fakes.luaTool.calls[0]?.context).toBe(context);
+  });
+
+  describe('test_session verbs', () => {
+    const SESSION_RESULTS = {
+      start: { sessionId: 's1', characterId: 'c1', characterName: 'Cat', greeting: 'hi' },
+      message: { reply: 'yo', generationId: 'g1', finishReason: 'stop' },
+      state: { sessionId: 's1', messages: [], generations: [] },
+      end: { ended: true },
+    };
+    const SESSION_ARGS = {
+      start: { characterId: 'c1' },
+      message: { sessionId: 's1', content: 'hello' },
+      state: { sessionId: 's1' },
+      end: { sessionId: 's1' },
+    };
+
+    it('dispatches each verb to the testSessions provider and JSON-stringifies the result', async () => {
+      const calls: Array<[string, Record<string, unknown>]> = [];
+      const testSessions = {
+        start: async (a: Record<string, unknown>) => (calls.push(['start', a]), SESSION_RESULTS.start),
+        message: async (a: Record<string, unknown>) => (calls.push(['message', a]), SESSION_RESULTS.message),
+        state: async (a: Record<string, unknown>) => (calls.push(['state', a]), SESSION_RESULTS.state),
+        end: async (a: Record<string, unknown>) => (calls.push(['end', a]), SESSION_RESULTS.end),
+      };
+      const { template } = setup({ testSessions });
+      for (const op of ['start', 'message', 'state', 'end'] as const) {
+        expect(await exec(template, 'run', { verb: `test_session_${op}`, args: SESSION_ARGS[op] })).toBe(
+          JSON.stringify(SESSION_RESULTS[op], null, 2),
+        );
+      }
+      expect(calls).toEqual([
+        ['start', SESSION_ARGS.start],
+        ['message', SESSION_ARGS.message],
+        ['state', SESSION_ARGS.state],
+        ['end', SESSION_ARGS.end],
+      ]);
+    });
+
+    it('returns Error-prefixed content when the provider throws', async () => {
+      const testSessions = {
+        start: async () => {
+          throw new Error('character not found: nope');
+        },
+        message: async () => SESSION_RESULTS.message,
+        state: async () => SESSION_RESULTS.state,
+        end: async () => SESSION_RESULTS.end,
+      };
+      const { template } = setup({ testSessions });
+      expect(await exec(template, 'run', { verb: 'test_session_start', args: { characterId: 'nope' } })).toBe(
+        'Error: character not found: nope',
+      );
+    });
+
+    it('reports the verbs as unavailable without a testSessions provider', async () => {
+      const { template } = setup();
+      for (const op of ['start', 'message', 'state', 'end'] as const) {
+        expect(await exec(template, 'run', { verb: `test_session_${op}`, args: {} })).toBe(
+          `Error: test_session_${op} is not available in this context`,
+        );
+      }
+    });
   });
 });
 

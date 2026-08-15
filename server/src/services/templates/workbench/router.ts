@@ -56,8 +56,15 @@ export interface WorkbenchProviders {
   luaToolWorkbench: LuaToolWorkbench;
   /** Generation records for the read-only /generations/ debug-trace route. */
   generations?: { getById(id: string): Promise<Generation | undefined> };
-  /** Session-based card testing (TestSessionService) backing the test_card run verb. */
+  /** Session-based card testing (CardTestService) backing the test_card run verb. */
   cardTest?: { run(args: Record<string, unknown>): Promise<ToolExecuteResult> };
+  /** Interactive card-testing sessions (TestSessionService) backing the test_session_* run verbs. */
+  testSessions?: {
+    start(args: Record<string, unknown>): Promise<unknown>;
+    message(args: Record<string, unknown>): Promise<unknown>;
+    state(args: Record<string, unknown>): Promise<unknown>;
+    end(args: Record<string, unknown>): Promise<unknown>;
+  };
 }
 
 export interface RouteCall {

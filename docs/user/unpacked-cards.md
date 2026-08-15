@@ -81,6 +81,8 @@ The MCP surface is deliberately **read/test-only** — no tool on it can mutate 
 
 A typical session flow: `test_session_start` → read the greeting → `test_session_message` per turn → `test_session_state` to inspect the chain, script state, or captured prompts → `test_session_end` (or let it expire).
 
+The same `test_card` and `test_session_*` operations are also available to in-chat LLM tools as workbench `run` verbs (see [the workbench run-verb table](./workbench.md#run-verbs)) — same arguments, same sessions, same semantics.
+
 `test_card` and the session tools use whatever backend config is active unless `backendConfigId` is passed. For **deterministic runs**, create a backend config with provider **`mock`** once (in the UI: no API key needed) and put a canned-response script in its `mockScript` provider param — one directive per line: `respond:<text>` (default reply), `seq:<n>:<text>` (reply for the nth call), `tool:<name>:<json>` (emit a tool call; a sequence of `tool:` lines is walked as tool results accumulate). Then pass that config's id as `backendConfigId` to `test_session_start` or `test_card`. The active config is never touched.
 
 An even more self-contained option: give the unpacked card its own [`backend_logic/main.lua`](./custom-backends.md) that implements `generate` without delegating to a real backend. The card then replies deterministically in any test session, no mock config or `backendConfigId` needed — and the script ships inside the card folder itself.

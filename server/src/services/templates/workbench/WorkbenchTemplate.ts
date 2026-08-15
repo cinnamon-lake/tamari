@@ -39,6 +39,7 @@
 
 import { z } from 'zod';
 import { formatZodIssues, type ToolContext, type ToolExecuteResult, type ToolTemplate } from '../../ToolTemplate.js';
+import { toToolResult } from '../../TestSessionService.js';
 import { isJson, normalizePath, splitPath } from './pathUtils.js';
 import {
   COLLECTION_REFUSAL,
@@ -156,6 +157,38 @@ const RUN_VERBS: Record<string, RunVerb> = {
       p.cardTest !== undefined
         ? p.cardTest.run(a)
         : Promise.resolve({ content: 'Error: test_card is not available in this context' }),
+  },
+  test_session_start: {
+    summary:
+      '{characterId?|folderPath?, personaId?, greetingIndex?, backendConfigId?} — open an interactive card-testing session (real generation path, in-memory state, no DB writes) and return its materialized greeting. Sessions expire after 30 min idle; continue with test_session_message, inspect with test_session_state, close with test_session_end',
+    run: (p, a) =>
+      p.testSessions !== undefined
+        ? toToolResult(p.testSessions.start(a))
+        : Promise.resolve({ content: 'Error: test_session_start is not available in this context' }),
+  },
+  test_session_message: {
+    summary:
+      '{sessionId, content, timeoutMs?} — send a user message in a test session and run one generation turn; returns reply, generationId, finishReason, the card\'s Lua scriptState, and any backend print() output (debug)',
+    run: (p, a) =>
+      p.testSessions !== undefined
+        ? toToolResult(p.testSessions.message(a))
+        : Promise.resolve({ content: 'Error: test_session_message is not available in this context' }),
+  },
+  test_session_state: {
+    summary:
+      '{sessionId, generationId?} — inspect a test session: message chain (role + text), generations (id/status/meta without prompts), and the card\'s latest Lua script state. Pass generationId for that generation\'s full record including every captured round prompt (big — hence opt-in)',
+    run: (p, a) =>
+      p.testSessions !== undefined
+        ? toToolResult(p.testSessions.state(a))
+        : Promise.resolve({ content: 'Error: test_session_state is not available in this context' }),
+  },
+  test_session_end: {
+    summary:
+      '{sessionId} — end a test session early: aborts any in-flight generation and drops all in-memory state (sessions also expire after 30 min idle)',
+    run: (p, a) =>
+      p.testSessions !== undefined
+        ? toToolResult(p.testSessions.end(a))
+        : Promise.resolve({ content: 'Error: test_session_end is not available in this context' }),
   },
   clone_character: {
     summary: '{sourceCharacterId, name?} — deep-copy a character card (fields, lorebook, regex, modules, assets, avatar)',

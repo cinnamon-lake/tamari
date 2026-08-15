@@ -298,7 +298,7 @@ const testSessions = new TestSessionService({
   maxToolRounds: config.maxToolRounds,
 });
 const cardTest = new CardTestService({ testSessions });
-const workbenchTemplate = registerWorkbenchTemplate(toolRegistry, { characterWorkbench, backendWorkbench, toolsetWorkbench, quickReplyWorkbench, luaToolWorkbench, generations, cardTest });
+const workbenchTemplate = registerWorkbenchTemplate(toolRegistry, { characterWorkbench, backendWorkbench, toolsetWorkbench, quickReplyWorkbench, luaToolWorkbench, generations, cardTest, testSessions });
 
 
 await seedToolTemplates(toolTemplates);
