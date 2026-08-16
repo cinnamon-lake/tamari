@@ -36,6 +36,7 @@ function M.gist(prompt, opts)
     table.insert(lines, 1, line)
     budget = budget - #line
   end
+  if #lines == 0 then return nil end -- no line fit the budget: caller's fallback, not an empty-span sub-gen
 
   local sub = {}
   for k, v in pairs(prompt) do sub[k] = v end

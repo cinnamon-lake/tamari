@@ -286,6 +286,80 @@ describe('lib/loop round cap', () => {
   });
 });
 
+describe('lib/loop thinking round-trip', () => {
+  it("sends the delegate's thinking (with signature) and narration back in the next round's assistant message", async () => {
+    const prompts: Prompt[] = [];
+    let round = 0;
+    const thinking: CustomBackendDelegate = {
+      generate: vi.fn(async (_cfg: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
+        prompts.push(JSON.parse(JSON.stringify(prompt)) as Prompt);
+        round += 1;
+        if (round === 1) {
+          return {
+            text: 'Let me check the roster.',
+            reasoning: 'the roster first, then cast',
+            reasoningSignature: 'sig-1',
+            finishReason: 'stop',
+            usage: USAGE,
+            toolCalls: [{ id: 't1', name: 'ping', arguments: { x: 1 } }],
+          };
+        }
+        return { text: 'All set.', finishReason: 'stop', usage: USAGE };
+      }),
+      resolveAdapter: vi.fn(async () => {
+        throw new Error('passthrough not expected');
+      }),
+    };
+    const adapter = makeAdapter(thinking, LOOP_LUA);
+    const text = await runTurn(adapter, 'go', []);
+    expect(text).toBe('All set.');
+    expect(prompts).toHaveLength(2);
+    // The second round's request ends with the assistant message the delegate
+    // actually produced: thinking → narration → tool_use → tool_result.
+    const last = prompts[1]!.messages.at(-1)!;
+    expect(last.role).toBe('assistant');
+    expect(Array.isArray(last.content)).toBe(true);
+    const parts = last.content as unknown as Array<Record<string, unknown>>;
+    expect(parts[0]).toEqual({ type: 'reasoning', text: 'the roster first, then cast', signature: 'sig-1' });
+    expect(parts[1]).toEqual({ type: 'text', text: 'Let me check the roster.' });
+    expect(parts[2]).toEqual({ type: 'tool_use', id: 't1', name: 'ping', input: { x: 1 } });
+    expect(parts[3]!['type']).toBe('tool_result');
+    expect(parts[3]!['toolUseId']).toBe('t1');
+  });
+
+  it('omits the reasoning part when the delegate reports no thinking, and the signature key when there is none', async () => {
+    const prompts: Prompt[] = [];
+    let round = 0;
+    const plain: CustomBackendDelegate = {
+      generate: vi.fn(async (_cfg: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
+        prompts.push(JSON.parse(JSON.stringify(prompt)) as Prompt);
+        round += 1;
+        if (round === 1) {
+          return {
+            text: '',
+            reasoning: 'unsigned thought',
+            finishReason: 'stop',
+            usage: USAGE,
+            toolCalls: [{ id: 't1', name: 'ping', arguments: {} }],
+          };
+        }
+        return { text: 'done', finishReason: 'stop', usage: USAGE };
+      }),
+      resolveAdapter: vi.fn(async () => {
+        throw new Error('passthrough not expected');
+      }),
+    };
+    const text = await runTurn(makeAdapter(plain, LOOP_LUA), 'go', []);
+    expect(text).toBe('done');
+    const parts = prompts[1]!.messages.at(-1)!.content as unknown as Array<Record<string, unknown>>;
+    // Unsigned thinking still rides (adapters inline it as text); no empty
+    // text part is injected when the delegate said nothing.
+    expect(parts[0]).toEqual({ type: 'reasoning', text: 'unsigned thought' });
+    expect(parts[1]!['type']).toBe('tool_use');
+    expect(parts.some((p) => p['type'] === 'text')).toBe(false);
+  });
+});
+
 // A rolling-summary probe card: push/briefing/inspect over state.story.
 const ROLLING_LUA = `
 local rolling = require("lib/rolling")

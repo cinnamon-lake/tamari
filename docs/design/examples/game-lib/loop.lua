@@ -5,6 +5,14 @@
 -- callback (name, args) -> string answers each call; loop.run knows nothing
 -- about which tools exist.
 --
+-- Each round's assistant message is REBUILT as what the model actually
+-- produced: its thinking block first (with the signature when the delegate
+-- reports one), then any narration text, then the tool calls. Sending the
+-- thinking back is not cosmetic — Claude with extended thinking REJECTS a
+-- tool_use turn whose thinking block is missing (HTTP 400), and everywhere
+-- else the replayed prefix matches the model's own output, so provider
+-- prefix caches keep hitting.
+--
 -- Default cap is 16, not 8: a delegate with set_todo spends rounds planning
 -- (set list → work → mark done → work…) on top of its real tool calls.
 -- maxRounds overrides per call. If the cap is hit with tool calls still
@@ -20,6 +28,16 @@ function M.run(sub, res, exec, maxRounds)
   while res.toolCalls and #res.toolCalls > 0 and rounds < cap do
     rounds = rounds + 1
     local content = {}
+    if type(res.reasoning) == "string" and res.reasoning ~= "" then
+      local thought = { type = "reasoning", text = res.reasoning }
+      if type(res.reasoningSignature) == "string" and res.reasoningSignature ~= "" then
+        thought.signature = res.reasoningSignature
+      end
+      content[#content + 1] = thought
+    end
+    if type(res.text) == "string" and res.text ~= "" then
+      content[#content + 1] = { type = "text", text = res.text }
+    end
     for _, call in ipairs(res.toolCalls) do
       content[#content + 1] = { type = "tool_use", id = call.id, name = call.name, input = call.arguments }
       content[#content + 1] = { type = "tool_result", toolUseId = call.id, name = call.name, content = exec(call.name, call.arguments) }

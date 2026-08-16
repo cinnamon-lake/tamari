@@ -238,6 +238,7 @@ return "You rolled " .. parsed.value.total
 - Custom → custom chains are depth-capped at 4.
 - A failed delegation with no usable text **throws into Lua** — wrap in \`pcall\` to recover.
 - Delegate results carry \`toolCalls\` when the delegate wants to call tools (\`res.toolCalls\`, \`{ id, name, arguments }\`) — see Giving the delegate tools.
+- Delegate results also carry \`res.reasoning\` (the model's thinking text) and \`res.reasoningSignature\` (Claude thinking-block signatures) when the delegate produced them. Send both back in the next round's assistant message — see Giving the delegate tools.
 - Always END delegate sub-prompts with a \`user\` message (the \`Narrate: …\` pattern). Some providers reject prompts with no user message or an assistant-final sequence — Zhipu GLM answers HTTP 400 (code 1214, "messages parameter is illegal"); OpenAI tolerates both, so cards that skip this break only when they change hands.
 - Exportable cards should delegate by default (\`backends.generate(prompt)\`); explicit ids are local-install only.
 - **You own the delegate's prompt — card definition fields do NOT auto-appear.** A card-coupled backend builds each delegate sub-prompt itself (\`sub.messages = { … }\`). The character's \`description\`, \`personality\`, \`persona\`, and other card-definition fields are NOT injected into those sub-prompts — only what you put in \`sub.messages\` reaches the model. (They ARE in the script's *incoming* \`prompt\` if you want to pull them out, but the delegates see only what you forward.) So put worldbuilding, tone, and persona into your prompt constants or the event context — not into the card fields expecting the delegate to read them. This is the single most common surprise for cards that drive their own sub-generations.
@@ -248,7 +249,7 @@ No tool schemas are advertised while a custom backend is active (the script deci
 
 ## Giving the delegate tools (script-owned tool loop)
 
-A sub-prompt can carry tool schemas the SCRIPT defined — set \`sub.tools\` and the delegate adapter sends them (OpenAI/Claude/Gemini honor them; the rest ignore them). When the delegate answers with tool calls instead of text, they arrive as \`res.toolCalls\` (\`{ id, name, arguments }\`) alongside \`res.text\`: execute them in Lua and continue the loop yourself by appending ONE assistant message whose content is an array of parts — the \`tool_use\` part(s), then the matching \`tool_result\` part(s) — and calling \`backends.generate\` again. Part keys are camelCase (\`toolUseId\`, \`isError\`), and \`function\` is a Lua keyword, so tool definitions need bracket indexing:
+A sub-prompt can carry tool schemas the SCRIPT defined — set \`sub.tools\` and the delegate adapter sends them (OpenAI/Claude/Gemini honor them; the rest ignore them). When the delegate answers with tool calls instead of text, they arrive as \`res.toolCalls\` (\`{ id, name, arguments }\`) alongside \`res.text\`: execute them in Lua and continue the loop yourself by appending ONE assistant message whose content is an array of parts — the delegate's thinking (\`reasoning\` part, with \`signature\` when \`res.reasoningSignature\` is set) and narration (\`text\` part) first, then the \`tool_use\` part(s), then the matching \`tool_result\` part(s) — and calling \`backends.generate\` again. Sending the thinking back keeps the prefix consistent: Claude with extended thinking rejects a \`tool_use\` turn whose thinking block is missing, and on every provider the replayed turn matches what the model actually wrote. Part keys are camelCase (\`toolUseId\`, \`isError\`), and \`function\` is a Lua keyword, so tool definitions need bracket indexing:
 
 \`\`\`lua
 local sub = {}
@@ -272,6 +273,12 @@ local rounds = 0
 while res.toolCalls and #res.toolCalls > 0 and rounds < 8 do
   rounds = rounds + 1
   local content = {}
+  if type(res.reasoning) == "string" and res.reasoning ~= "" then
+    content[#content + 1] = { type = "reasoning", text = res.reasoning, signature = res.reasoningSignature }
+  end
+  if type(res.text) == "string" and res.text ~= "" then
+    content[#content + 1] = { type = "text", text = res.text }
+  end
   for _, call in ipairs(res.toolCalls) do
     content[#content + 1] = { type = "tool_use", id = call.id, name = call.name, input = call.arguments }
     local total = 0

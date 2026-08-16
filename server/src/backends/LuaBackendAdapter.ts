@@ -72,6 +72,9 @@ const PRINT_DRAIN_INTERVAL_MS = 50;
 export interface DelegatedGenerateResult {
   text: string;
   reasoning?: string;
+  /** Provider reasoning signature (Claude thinking blocks) — send it back as
+      the reasoning part's `signature` to keep tool-loop prefixes valid. */
+  reasoningSignature?: string;
   finishReason: GenerationResult['finishReason'];
   error?: string;
   usage: { promptTokens: number; completionTokens: number };
@@ -615,6 +618,7 @@ export async function runAdapterBlocking(
   return {
     text: result.error ? '' : text,
     reasoning: result.reasoningText,
+    reasoningSignature: result.reasoningSignature,
     finishReason: result.finishReason,
     error: result.error,
     usage: result.usage,

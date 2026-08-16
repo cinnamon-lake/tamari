@@ -499,7 +499,7 @@ describe('LuaBackendAdapter', () => {
 });
 
 describe('runAdapterBlocking', () => {
-  it('collects text and usage from an adapter stream', async () => {
+  it('collects text, reasoning, and the reasoning signature from an adapter stream', async () => {
     const adapter: BackendAdapter = {
       id: 'mock',
       supportsStreaming: true,
@@ -508,7 +508,12 @@ describe('runAdapterBlocking', () => {
         yield { type: 'reasoning', token: 'r' };
         yield { type: 'text', token: 'a' };
         yield { type: 'text', token: 'b' };
-        return { finishReason: 'stop', usage: { promptTokens: 4, completionTokens: 2 }, reasoningText: 'r' };
+        return {
+          finishReason: 'stop',
+          usage: { promptTokens: 4, completionTokens: 2 },
+          reasoningText: 'r',
+          reasoningSignature: 'sig-1',
+        };
       },
       listModels: async () => [],
     };
@@ -516,6 +521,7 @@ describe('runAdapterBlocking', () => {
     expect(result).toEqual({
       text: 'ab',
       reasoning: 'r',
+      reasoningSignature: 'sig-1',
       finishReason: 'stop',
       error: undefined,
       usage: { promptTokens: 4, completionTokens: 2 },
