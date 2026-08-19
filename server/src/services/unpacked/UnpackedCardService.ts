@@ -9,6 +9,11 @@
  * bypass the write-rejecting wrappers. Everything else in the server gets the
  * wrappers (wired in main.ts).
  *
+ * This is a debug feature: correctness over performance. Reads (`get()`)
+ * re-parse the folder from disk EVERY time — the registry's cached parse only
+ * backs handle-row sync, broadcasts, avatar/RAG sync, and the fallback when
+ * the folder currently fails to parse.
+ *
  * Feature-gated on the `unpackedCards.enabled` setting: when false, start() is
  * a no-op — no scan, no watcher. The gate is applied at start() only; there is
  * no server-side settings-changed hook (settings.changed is a client-bound bus
@@ -42,7 +47,7 @@ const WATCH_DEBOUNCE_MS = 300;
 const WATCH_RETRY_BASE_MS = 1000;
 const WATCH_RETRY_MAX_MS = 30_000;
 
-/** Public registry record: the last good parse of a folder plus where it lives. */
+/** Public registry record: a parsed folder plus where it lives. */
 export interface UnpackedCardEntry {
   parsed: ParsedCard;
   /** Absolute folder path. */
@@ -51,10 +56,17 @@ export interface UnpackedCardEntry {
 
 /** The slice of the service the read-through wrappers depend on. */
 export interface UnpackedCardRegistry {
-  get(cardId: string): UnpackedCardEntry | undefined;
+  /**
+   * Re-parses the folder from disk on every call (debug feature: correctness
+   * over performance). Falls back to the last good parse when the folder
+   * currently fails to parse. Undefined when the card is not loaded.
+   */
+  get(cardId: string): Promise<UnpackedCardEntry | undefined>;
   has(cardId: string): boolean;
   /** Known card ids (registry keys). */
   list(): string[];
+  /** Folder path of a loaded card (write-reject messages). */
+  dirOf(cardId: string): string | undefined;
 }
 
 export interface UnpackedCardServiceDeps {
@@ -74,9 +86,11 @@ export interface UnpackedCardServiceDeps {
 }
 
 interface RegistryState {
-  /** Last good parse; `errors` reflects the latest parse attempt. */
+  /** Last good parse (pure parser output); `errors` reflects the latest parse attempt. */
   parsed: ParsedCard;
   dir: string;
+  /** Service-generated errors (e.g. duplicate meta.id) merged onto every read/broadcast. */
+  notices: string[];
   /** mtime of the avatar.png we last pushed through the avatar pipeline. */
   avatarMtimeMs: number | null;
   lorebookSignature: string;
@@ -111,9 +125,18 @@ export class UnpackedCardService implements UnpackedCardRegistry {
     return path.join(this.deps.dataDir, UNPACKED_CARDS_DIRNAME);
   }
 
-  get(cardId: string): UnpackedCardEntry | undefined {
+  async get(cardId: string): Promise<UnpackedCardEntry | undefined> {
     const state = this.registry.get(cardId);
-    return state ? { parsed: state.parsed, dir: state.dir } : undefined;
+    if (!state) return undefined;
+    // Debug feature: re-parse the folder on EVERY read so disk edits are
+    // visible immediately, without waiting for the watcher. Never throws.
+    const fresh = await parseCardFolder(state.dir);
+    if (fresh.name.length > 0) {
+      return { parsed: this.withNotices(state, fresh), dir: state.dir };
+    }
+    // Folder currently broken (or deleted between scans): last good parse
+    // with the fresh errors attached, mirroring syncFolder's fatal branch.
+    return { parsed: this.withNotices(state, { ...state.parsed, errors: fresh.errors }), dir: state.dir };
   }
 
   has(cardId: string): boolean {
@@ -122,6 +145,15 @@ export class UnpackedCardService implements UnpackedCardRegistry {
 
   list(): string[] {
     return [...this.registry.keys()];
+  }
+
+  dirOf(cardId: string): string | undefined {
+    return this.registry.get(cardId)?.dir;
+  }
+
+  /** Parser output plus service-generated notices (e.g. duplicate meta.id). */
+  private withNotices(state: RegistryState, parsed: ParsedCard = state.parsed): ParsedCard {
+    return state.notices.length > 0 ? { ...parsed, errors: [...parsed.errors, ...state.notices] } : parsed;
   }
 
   /** Apply the settings gate; when enabled, create the dir, scan once, and start watching. */
@@ -218,18 +250,17 @@ export class UnpackedCardService implements UnpackedCardRegistry {
 
     // Duplicate meta.id across folders: the first folder loaded (incumbent)
     // wins; the newcomer is ignored entirely. The error rides on the
-    // incumbent's parsed.errors so it surfaces via extensions.unpackedErrors
+    // incumbent's notices so it surfaces via extensions.unpackedErrors
     // and the content signature (one broadcast, no registry flapping).
     const incumbent = this.registry.get(cardId);
     if (incumbent && incumbent.dir !== dir) {
       const message = `duplicate meta.id "${parsed.id}": also used by ${incumbent.dir} — this folder (${dir}) is ignored`;
-      if (!incumbent.parsed.errors.includes(message)) {
-        incumbent.parsed = { ...incumbent.parsed, errors: [...incumbent.parsed.errors, message] };
-      }
-      const signature = contentSignature(incumbent.parsed);
+      if (!incumbent.notices.includes(message)) incumbent.notices.push(message);
+      const effective = this.withNotices(incumbent);
+      const signature = contentSignature(effective);
       if (signature !== incumbent.signature) {
         incumbent.signature = signature;
-        await this.broadcastSnapshot(cardId, incumbent.parsed);
+        await this.broadcastSnapshot(cardId, effective);
         await this.broadcastList();
       }
       log.warn({ dir, incumbentDir: incumbent.dir, cardId }, 'unpacked card: duplicate meta.id — keeping the first folder');
@@ -240,12 +271,13 @@ export class UnpackedCardService implements UnpackedCardRegistry {
     const byDir = this.findByDir(dir);
     if (byDir && byDir.cardId !== cardId) await this.removeFolder(byDir.cardId);
 
-    const signature = contentSignature(parsed);
     const state: RegistryState =
-      this.registry.get(cardId) ?? { parsed, dir, avatarMtimeMs: null, lorebookSignature: '', signature: '' };
+      this.registry.get(cardId) ?? { parsed, dir, notices: [], avatarMtimeMs: null, lorebookSignature: '', signature: '' };
     state.parsed = parsed;
     state.dir = dir;
     this.registry.set(cardId, state);
+    const effective = this.withNotices(state);
+    const signature = contentSignature(effective);
 
     // Upsert the thin handle row (id + name + tags) via the INNER repo. Collision
     // with a pre-existing row of the same id is accepted — the `unpacked/`
@@ -275,7 +307,7 @@ export class UnpackedCardService implements UnpackedCardRegistry {
 
     if (signature !== state.signature) {
       state.signature = signature;
-      await this.broadcastSnapshot(cardId, parsed);
+      await this.broadcastSnapshot(cardId, effective);
       await this.broadcastList();
     }
   }
@@ -359,8 +391,9 @@ export class UnpackedCardService implements UnpackedCardRegistry {
     this.deps.bus.broadcast({
       type: 'character.listed',
       characters: list.items.map((item) => {
-        const entry = this.get(item.id);
-        return toCharacterSummary(entry ? overlayCharacterSummary(item, entry.parsed) : item);
+        // Freshly scanned above — the cached parse is disk-fresh here, so no re-parse.
+        const state = this.registry.get(item.id);
+        return toCharacterSummary(state ? overlayCharacterSummary(item, this.withNotices(state)) : item);
       }),
     });
   }

@@ -28,7 +28,7 @@ let worldInfo: ReadThroughWorldInfoRepository;
 
 class StubRegistry implements UnpackedCardRegistry {
   entries = new Map<string, UnpackedCardEntry>();
-  get(cardId: string): UnpackedCardEntry | undefined {
+  async get(cardId: string): Promise<UnpackedCardEntry | undefined> {
     return this.entries.get(cardId);
   }
   has(cardId: string): boolean {
@@ -36,6 +36,9 @@ class StubRegistry implements UnpackedCardRegistry {
   }
   list(): string[] {
     return [...this.entries.keys()];
+  }
+  dirOf(cardId: string): string | undefined {
+    return this.entries.get(cardId)?.dir;
   }
 }
 

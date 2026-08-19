@@ -31,6 +31,9 @@ access.log
 secrets.json
 credentials.json
 
+# Local MCP test client (embeds the bearer token)
+/mcp-call.sh
+
 # IDE
 .vscode/**
 !.vscode/extensions.json

@@ -1,6 +1,7 @@
 /**
  * Read-through world-info repository — serves the virtual `unpacked/<id>:book`
- * lorebook of an on-disk card from its parsed `lorebook/` folder, so the
+ * lorebook of an on-disk card from its `lorebook/` folder, re-parsed from disk
+ * on every read (debug feature: correctness over performance), so the
  * generation pipeline (`worldInfo.getById(character.worldInfoId)` in
  * ChatPromptAssembly) reads disk-fresh entries with no row syncing.
  *
@@ -23,7 +24,7 @@ export class ReadThroughWorldInfoRepository implements IWorldInfoRepository {
 
   async getById(id: string): Promise<WorldInfo | undefined> {
     if (isUnpackedWorldInfoId(id)) {
-      const entry = this.registry.get(unpackedCardIdFromWorldInfoId(id));
+      const entry = await this.registry.get(unpackedCardIdFromWorldInfoId(id));
       if (entry) return buildUnpackedWorldInfo(id, entry.parsed);
       // Unknown/unloaded unpacked book — fall through to inner (normally absent).
     }
@@ -51,8 +52,9 @@ export class ReadThroughWorldInfoRepository implements IWorldInfoRepository {
   }
 
   private rejectUnpackedWrite(id: string): void {
-    const entry = isUnpackedWorldInfoId(id) ? this.registry.get(unpackedCardIdFromWorldInfoId(id)) : undefined;
-    if (!entry) return;
-    throw new Error(`Lorebook is unpacked (on-disk); edit the card folder instead: ${entry.dir}/lorebook/`);
+    if (!isUnpackedWorldInfoId(id)) return;
+    const dir = this.registry.dirOf(unpackedCardIdFromWorldInfoId(id));
+    if (!dir) return;
+    throw new Error(`Lorebook is unpacked (on-disk); edit the card folder instead: ${dir}/lorebook/`);
   }
 }

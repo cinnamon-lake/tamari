@@ -231,7 +231,7 @@ describe('scan', () => {
     await fs.writeFile(join(dir, 'meta.json'), '{ not json');
     await service.scanFolder(dir);
 
-    const entry = service.get('unpacked/alice');
+    const entry = await service.get('unpacked/alice');
     expect(entry?.parsed.name).toBe('Alice');
     expect(entry?.parsed.errors.length).toBeGreaterThan(0);
 
@@ -239,6 +239,21 @@ describe('scan', () => {
     const card = await characters.getById('unpacked/alice');
     expect(card?.description).toBe('good');
     expect(card?.extensions['unpackedErrors']).toBeDefined();
+  });
+
+  it('re-parses from disk on every read, without a rescan', async () => {
+    const dir = await writeCardFolder('alice', {
+      'meta.json': JSON.stringify({ name: 'Alice' }),
+      description: 'v1',
+    });
+    await service.start();
+    const characters = new ReadThroughCharacterRepository(innerCharacters, service);
+    expect((await characters.getById('unpacked/alice'))?.description).toBe('v1');
+
+    // Disk edit with NO scanFolder/scanAll — the next read must see it.
+    await fs.writeFile(join(dir, 'description'), 'v2');
+    expect((await characters.getById('unpacked/alice'))?.description).toBe('v2');
+    expect((await service.get('unpacked/alice'))?.parsed.textFields['description']).toBe('v2');
   });
 
   it('records non-fatal parse errors in the overlay', async () => {
@@ -265,7 +280,7 @@ describe('scan', () => {
     await writeCardFolder('bbb', { 'meta.json': JSON.stringify({ id: 'dup', name: 'Second' }) });
     await service.start();
 
-    const entry = service.get('unpacked/dup');
+    const entry = await service.get('unpacked/dup');
     expect(entry?.dir).toBe(join(cardsRoot, 'aaa'));
     expect(entry?.parsed.name).toBe('First');
     expect((await innerCharacters.getById('unpacked/dup'))?.name).toBe('First');
@@ -274,7 +289,7 @@ describe('scan', () => {
     // Repeated scans: no flapping — the incumbent stays, the error stays.
     await service.scanAll();
     await service.scanAll();
-    expect(service.get('unpacked/dup')?.dir).toBe(join(cardsRoot, 'aaa'));
+    expect((await service.get('unpacked/dup'))?.dir).toBe(join(cardsRoot, 'aaa'));
     expect((await innerCharacters.getById('unpacked/dup'))?.name).toBe('First');
 
     // The duplicate error surfaces on the character's extensions.

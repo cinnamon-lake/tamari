@@ -2,8 +2,9 @@
  * Read-through character repository — the write-guard chokepoint for unpacked
  * (on-disk) cards.
  *
- * Reads: rows whose id is in the UnpackedCardService registry get the parsed
- * folder content overlaid on the thin handle row (overlay.ts), so every
+ * Reads: rows whose id is in the UnpackedCardService registry get the folder
+ * content re-parsed from disk on EVERY read (debug feature: correctness over
+ * performance) and overlaid on the thin handle row (overlay.ts), so every
  * consumer — WS handlers, REST, StApi, workbench, generation — sees disk-fresh
  * content. Unknown `unpacked/`-prefixed ids (folder deleted but row lingering,
  * or the feature off) pass through the inner result unchanged.
@@ -35,8 +36,8 @@ export class ReadThroughCharacterRepository implements ICharacterRepository {
     private registry: UnpackedCardRegistry,
   ) {}
 
-  private overlay(row: Character): Character {
-    const entry = this.registry.get(row.id);
+  private async overlay(row: Character): Promise<Character> {
+    const entry = await this.registry.get(row.id);
     return entry ? overlayCharacter(row, entry.parsed) : row;
   }
 
@@ -46,7 +47,7 @@ export class ReadThroughCharacterRepository implements ICharacterRepository {
   }
 
   async getByIds(ids: string[]): Promise<Character[]> {
-    return (await this.inner.getByIds(ids)).map((row) => this.overlay(row));
+    return Promise.all((await this.inner.getByIds(ids)).map((row) => this.overlay(row)));
   }
 
   async getByName(name: string): Promise<Character | undefined> {
@@ -56,7 +57,7 @@ export class ReadThroughCharacterRepository implements ICharacterRepository {
 
   async list(opts: ListOpts = {}): Promise<{ items: Character[]; total: number }> {
     const res = await this.inner.list(opts);
-    return { items: res.items.map((row) => this.overlay(row)), total: res.total };
+    return { items: await Promise.all(res.items.map((row) => this.overlay(row))), total: res.total };
   }
 
   async listSummaries(opts: ListOpts = {}): Promise<{
@@ -67,10 +68,12 @@ export class ReadThroughCharacterRepository implements ICharacterRepository {
   }> {
     const res = await this.inner.listSummaries(opts);
     return {
-      items: res.items.map((item) => {
-        const entry = this.registry.get(item.id);
-        return entry ? overlayCharacterSummary(item, entry.parsed) : item;
-      }),
+      items: await Promise.all(
+        res.items.map(async (item) => {
+          const entry = await this.registry.get(item.id);
+          return entry ? overlayCharacterSummary(item, entry.parsed) : item;
+        }),
+      ),
       total: res.total,
     };
   }
@@ -93,8 +96,9 @@ export class ReadThroughCharacterRepository implements ICharacterRepository {
   }
 
   private rejectUnpackedWrite(id: string): void {
-    const entry = isUnpackedCardId(id) ? this.registry.get(id) : undefined;
-    if (!entry) return;
-    throw new Error(`Card is unpacked (on-disk); edit the folder instead: ${entry.dir}`);
+    if (!isUnpackedCardId(id)) return;
+    const dir = this.registry.dirOf(id);
+    if (!dir) return;
+    throw new Error(`Card is unpacked (on-disk); edit the folder instead: ${dir}`);
   }
 }
