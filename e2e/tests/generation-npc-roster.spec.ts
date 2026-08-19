@@ -34,12 +34,17 @@ test.describe('NPC Roster Widget', () => {
       firstMes: 'The tavern is quiet tonight.',
     });
 
+    // Unique NPC name per attempt: characters persist on the shared e2e server
+    // across retries, and a hardcoded name would leave the promote button
+    // permanently in its "Promoted" state after the first successful create.
+    const npcName = uniqueName('Marta');
+
     // npc_register declares no `endsTurn`: the mock walks the `tool:` sequence,
     // then its plain-text round streams the actual reply. The tool result part
     // carries extra.renderType = "npc_roster" plus the full registry, so the
     // client hydrates the interactive roster inline in the parts flow.
     await app.sendUserMessage(
-      'tool:npc_register{"name":"Marta","description":"Innkeeper","personality":"Gruff"}',
+      `tool:npc_register{"name":"${npcName}","description":"Innkeeper","personality":"Gruff"}`,
     );
 
     const assistantBubble = app.lastBubble('assistant');
@@ -47,7 +52,7 @@ test.describe('NPC Roster Widget', () => {
     await expect(roster).toBeVisible({ timeout: 10000 });
     await expect(page.locator('.message-bubble.streaming')).toHaveCount(0, { timeout: 30000 });
     await expect(roster.locator('.npc-roster-item')).toHaveCount(1);
-    await expect(roster.locator('.npc-roster-name')).toHaveText('Marta');
+    await expect(roster.locator('.npc-roster-name')).toHaveText(npcName);
     await expect(roster.locator('.npc-roster-field')).toHaveText(['Innkeeper', 'Gruff']);
     // No generic server-rendered block for the renderType part, and the raw
     // tool-call block (JSON args) is suppressed — the widget represents the call.
@@ -57,14 +62,14 @@ test.describe('NPC Roster Widget', () => {
     await expectNoAxeViolations(page);
 
     // Promote sends character.create; the server rebroadcasts character.listed
-    // and Marta appears in the sidebar character list.
+    // and the NPC appears in the sidebar character list.
     const promoteBtn = roster.locator('.npc-promote-btn');
     await expect(promoteBtn).toBeEnabled();
     await expect(promoteBtn).toHaveText('Promote to character');
     await promoteBtn.click();
 
-    await page.locator('input[placeholder="Search characters..."]').fill('Marta');
-    await expect(page.locator('.character-list li', { hasText: 'Marta' })).toBeVisible({ timeout: 10000 });
+    await page.locator('input[placeholder="Search characters..."]').fill(npcName);
+    await expect(page.locator('.character-list li', { hasText: npcName })).toBeVisible({ timeout: 10000 });
 
     // Once the character exists, the roster button flips to the promoted state.
     await expect(promoteBtn).toBeDisabled();
