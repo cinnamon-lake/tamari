@@ -212,7 +212,7 @@ const RUN_VERBS: Record<string, RunVerb> = {
     run: (p, a, c) => p.characterWorkbench.execute('lorebook_entry_move', a, c),
   },
   add_game_lib: {
-    summary: "{characterId} — vendor the game lib (lib/*.lua: loop, transcript, ledger, todo, registry, …) into the card's backend_logic VFS",
+    summary: "{characterId} — vendor the game lib (lib/*.lua: loop, rolling, ledger, todo, registry, …) into the card's backend_logic VFS",
     run: (p, a, c) => p.characterWorkbench.execute('backend_logic_add_game_lib', a, c),
   },
 };
