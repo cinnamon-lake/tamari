@@ -9,23 +9,27 @@
 -- stairs marker is only included once the stairs room is actually seen —
 -- never spoil the way down.
 --
+-- Grid layouts (rooms carry numeric x/y — lib/layout) emit coordinates so
+-- the display rule can draw a real 2D map: rooms as `id=x,y,Name` and
+-- passages as undirected `a-b` pairs (coordinates are normalized over the
+-- WHOLE graph, not the visible part, so the map never drifts as fog lifts).
+-- Rooms without coordinates fall back to the legacy direction-labeled shape,
+-- which the rule renders as the old room list.
+--
 --   local tag = maptag.tag(pack.rooms, {
 --     cur = "r2",            -- current room (always shown, highlighted)
 --     entrance = pack.entrance,
 --     stairs = pack.stairsDown,
 --     seen = { r1 = true, r2 = true },   -- nil = reveal the whole graph
 --   })
---
--- The companion display rule (floor map) renders any tag of this shape;
--- its source is in topic `game_cards_example` and the `regexes` recipe.
 
 local M = {}
 
 local function clean(s)
-  return (tostring(s):gsub("[|;>%[%]=<'\"&]", " "):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1"))
+  return (tostring(s):gsub("[|;>%[%]=<'\"&,%-]", " "):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1"))
 end
 
---- rooms: { id = { name = string, exits = { dir -> to } } }
+--- rooms: { id = { name = string, x = number?, y = number?, exits = { dir -> to } } }
 --- opts: { cur, entrance, stairs, seen? } — see above.
 function M.tag(rooms, opts)
   opts = opts or {}
@@ -33,6 +37,19 @@ function M.tag(rooms, opts)
   local ids = {}
   for id in pairs(rooms) do ids[#ids + 1] = id end
   table.sort(ids)
+
+  -- Grid mode when every room carries coordinates.
+  local grid = true
+  local minX, minY = math.huge, math.huge
+  for _, id in ipairs(ids) do
+    local r = rooms[id]
+    if type(r.x) == "number" and type(r.y) == "number" then
+      if r.x < minX then minX = r.x end
+      if r.y < minY then minY = r.y end
+    else
+      grid = false
+    end
+  end
 
   -- Which rooms exist for the player at all: everything, or seen + frontier.
   local visible = {}
@@ -54,17 +71,22 @@ function M.tag(rooms, opts)
   for _, id in ipairs(ids) do
     if visible[id] then
       local known = not seen or seen[id]
-      roomParts[#roomParts + 1] = id .. "=" .. (known and clean(rooms[id].name) or "?")
-      local dirs = {}
-      for d in pairs(rooms[id].exits or {}) do dirs[#dirs + 1] = d end
-      table.sort(dirs)
-      for _, d in ipairs(dirs) do
-        local to = rooms[id].exits[d]
+      local label = known and clean(rooms[id].name) or "?"
+      if grid then
+        roomParts[#roomParts + 1] = id .. "=" .. (rooms[id].x - minX) .. "," .. (rooms[id].y - minY) .. "," .. label
+      else
+        roomParts[#roomParts + 1] = id .. "=" .. label
+      end
+      for d, to in pairs(rooms[id].exits or {}) do
         if rooms[to] and visible[to] then
-          local key = id < to and (id .. "|" .. to) or (to .. "|" .. id)
-          if not edgeSeen[key] then
-            edgeSeen[key] = true
-            edgeParts[#edgeParts + 1] = id .. ">" .. clean(d) .. ">" .. to
+          local ekey = id < to and (id .. "|" .. to) or (to .. "|" .. id)
+          if not edgeSeen[ekey] then
+            edgeSeen[ekey] = true
+            if grid then
+              edgeParts[#edgeParts + 1] = id .. "-" .. to
+            else
+              edgeParts[#edgeParts + 1] = id .. ">" .. clean(d) .. ">" .. to
+            end
           end
         end
       end

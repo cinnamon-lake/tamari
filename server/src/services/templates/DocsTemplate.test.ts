@@ -79,8 +79,8 @@ describe('gameCardsExample embedded sources match canonical files', () => {
   const EXAMPLES_DIR = new URL('../../../../docs/design/examples/', import.meta.url);
   const blocks = [...GAME_CARDS_EXAMPLE_DOC.matchAll(/```lua\n([\s\S]*?)```/g)].map((m) => m[1]!);
 
-  it('embeds exactly the 11 lib modules + the Guildhall main (12 lua blocks)', () => {
-    expect(blocks.length).toBe(12);
+  it('embeds exactly the 12 lib modules + the Guildhall main (13 lua blocks)', () => {
+    expect(blocks.length).toBe(13);
   });
 
   it.each(GAME_LIB_MODULES)('lib/%s.lua embedded copy == canonical file', (name) => {

@@ -3,6 +3,13 @@
 -- json.decode maps JSON null to a truthy js_null userdata, NOT Lua nil —
 -- `if pack.encounter then` would take the wrong branch and `..` on it errors.
 -- sanitize.data strips anything that isn't plain data before use.
+--
+-- ALIASING CONTRACT (mixed by necessity): an ARRAY argument is REBUILT — the
+-- return value is a fresh table and the input is untouched (nil-ing a null
+-- element in place would punch a sequence hole and break #/ipairs). A MAP
+-- argument is MUTATED IN PLACE — the same table comes back, cleaned, and
+-- every alias sees the cleaning. So always use the return value, and never
+-- assume the input survived unchanged.
 
 local M = {}
 

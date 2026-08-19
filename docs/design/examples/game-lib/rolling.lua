@@ -12,10 +12,11 @@
 --     appending — is what makes "hair: black" → "hair: white" impossible to
 --     contradict.
 --   * the COMPACTING half: ch.ids — an array of entry ids. An entry is a blob
---     in the append-only store ({ label, gist, content? }); the entry's id IS
---     the blob id, so the store doubles as the archive: inspect(id) resolves
---     any id forever, live or folded away long ago. When the log outgrows the
---     window the oldest entries FOLD into a digest entry (see below).
+--     in the append-only store ({ label, gist, content?, fold }); the entry's
+--     id IS the blob id, so the store doubles as the archive: inspect(id)
+--     resolves any id forever, live or folded away long ago. When the log
+--     outgrows the window the oldest entries FOLD into a digest entry (see
+--     below).
 --
 --   local story = rolling.channel()  -- in ensureState: state.story = state.story or rolling.channel()
 --   rolling.bind(prompt)                          -- once per generate: arms folds
@@ -35,8 +36,12 @@
 -- FOLD: when the live list outgrows recent + backlog, briefing (or parts)
 -- compresses the oldest entries into ONE fold entry: its gist is a
 -- delegate-written digest, its content is the DESCRIPTOR array
--- { id, label, gist } of what it compressed, and its id replaces theirs in
--- the array. Fold entries fold the same way, so the model can tool-call its
+-- { id, label, gist } of what it compressed, its id replaces theirs in
+-- the array, and it is TAGGED fold = true — reads classify by the tag, not
+-- by sniffing the content shape (a plain entry whose content happens to be
+-- an array of { id, gist } tables is NOT a fold; the shape sniff survives
+-- only as the fallback for entries filed before the tag existed). Fold
+-- entries fold the same way, so the model can tool-call its
 -- way up the chat: briefing ids → inspect a fold entry → the summaries
 -- inside it, each with an id → inspect those for the raw log. Fold-on-read:
 -- a channel nobody reads never costs a token. Loud on delegate error — ids
@@ -85,6 +90,11 @@ local function isDescriptor(item)
 end
 
 local function isFoldEntry(entry)
+  -- Every entry filed by THIS lib is tagged (push marks fold = false, fold()
+  -- marks fold = true), so the marker decides; the content-shape sniff is the
+  -- fallback for entries filed BEFORE the tag existed (stored state from an
+  -- older lib still folds correctly).
+  if entry.fold ~= nil then return entry.fold == true end
   return type(entry.content) == "table" and #entry.content > 0 and isDescriptor(entry.content[1])
 end
 
@@ -122,7 +132,9 @@ function M.push(ch, entry)
   assert(type(entry) == "table", "rolling.push: entry table required")
   local gist = chrome.oneline(entry.gist)
   if gist == "" then error("rolling.push: gist required", 2) end
-  local blob = { label = chrome.oneline(entry.label), gist = gist }
+  -- fold = false: a PLAIN entry says so explicitly, so isFoldEntry never
+  -- misreads descriptor-shaped content as a fold (the marker decides).
+  local blob = { label = chrome.oneline(entry.label), gist = gist, fold = false }
   if entry.content ~= nil then blob.content = entry.content end
   local id = store.putJson("roll", blob):await()
   ch.ids[#ch.ids + 1] = id
@@ -155,7 +167,7 @@ local function fold(ids)
   local digest = type(res) == "table" and type(res.text) == "string" and chrome.oneline(res.text) or ""
   if digest == "" then return end -- empty answer is a content outcome: retry next read
   local foldId = store.putJson("roll", {
-    label = cut .. " episodes", gist = digest, content = descriptors,
+    label = cut .. " episodes", gist = digest, content = descriptors, fold = true,
   }):await()
   for _ = 1, cut do table.remove(ids, 1) end
   table.insert(ids, 1, foldId)
@@ -305,7 +317,10 @@ function M.tools(ch)
       if name == "set_fact" then
         local k = tostring(args and args.key or "")
         if k == "" then return "rejected: key required" end
-        ch.kv[k] = args and args.value
+        -- Assigning nil DELETES the key — a missing value must not report
+        -- success while silently un-filing the fact.
+        if args == nil or args.value == nil then return "rejected: value required" end
+        ch.kv[k] = args.value
         return json.encode({ fact_set = k })
       end
       return nil

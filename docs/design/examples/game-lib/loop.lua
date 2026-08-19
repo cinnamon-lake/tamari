@@ -19,13 +19,25 @@
 -- pending, loop.run THROWS — a wedged delegate fails the turn loudly (the
 -- user sees which tools it was stuck on; a swipe retries) instead of
 -- silently dropping the model's pending work.
+--
+-- opts (both for "the work may already be done" loops, e.g. an event
+-- finalizer whose close_event already landed):
+--   done  — zero-arg predicate checked before each round; when true the
+--           loop stops early and returns the last res (pending toolCalls
+--           cleared). Once the goal state is reached, further rounds are
+--           pure downside.
+--   soft  — hitting the cap RETURNS the last res instead of throwing. The
+--           caller owns the fallback (the tool results already executed
+--           are real either way).
 
 local M = {}
 
-function M.run(sub, res, exec, maxRounds)
+function M.run(sub, res, exec, maxRounds, opts)
+  opts = opts or {}
   local rounds = 0
   local cap = maxRounds or 16
-  while res.toolCalls and #res.toolCalls > 0 and rounds < cap do
+  while res.toolCalls and #res.toolCalls > 0 and rounds < cap
+    and not (opts.done and opts.done()) do
     rounds = rounds + 1
     local content = {}
     if type(res.reasoning) == "string" and res.reasoning ~= "" then
@@ -46,6 +58,10 @@ function M.run(sub, res, exec, maxRounds)
     res = backends.generate(sub):await()
   end
   if res.toolCalls and #res.toolCalls > 0 then
+    if opts.soft or (opts.done and opts.done()) then
+      res.toolCalls = nil -- the caller's fallback owns what happens next
+      return res
+    end
     local names = {}
     for _, call in ipairs(res.toolCalls) do names[#names + 1] = call.name end
     error("tool loop exceeded " .. cap .. " rounds and the delegate is still calling tools ("

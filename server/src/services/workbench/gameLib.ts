@@ -24,6 +24,7 @@ export const GAME_LIB_MODULES = [
   'summarize',
   'events',
   'rolling',
+  'layout',
 ] as const;
 
 const LIB_DIR = new URL('../../../../docs/design/examples/game-lib/', import.meta.url);

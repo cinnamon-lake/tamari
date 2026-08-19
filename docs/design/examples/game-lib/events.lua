@@ -58,6 +58,10 @@
 -- records are plain tables in state[key], so roster.get(id) returns the
 -- LIVE record — an ad-hoc tool mutates it (rec.dead = true) and every
 -- consumer sees it: get_character copies all record fields into its result.
+-- The roster must be UNPARTITIONED: this module calls roster.get(id)
+-- one-arg, which a partitioned registry reads as get(pk, id) and never
+-- resolves. Registry instances carry an R.partitioned marker, and
+-- events.new rejects a partitioned roster at construction.
 --
 -- Instance surface beyond the contract (PLAIN DOT CALLS):
 --   ev.isOpen()  ev.kind()  ev.eventLine()  ev.clear()
@@ -92,12 +96,29 @@ function M.new(def)
   if not def.roster and not def.fields then
     error("events.new: provide roster (a registry instance) or fields (to create one)", 2)
   end
+  -- The RESERVED guard runs on BOTH construction paths: declared fields here,
+  -- an injected roster's own fields below (the injected path used to skip it,
+  -- so a card could file a character field named digest/dossier/older_takes
+  -- and have get_character silently clobber it).
   if def.fields then
     for _, f in ipairs(def.fields) do
       if RESERVED[f.name] then
         error("events.new: field name '" .. f.name .. "' is reserved (get_character injects it)", 2)
       end
     end
+  end
+  if def.roster and def.roster.fieldNames then
+    for _, name in ipairs(def.roster.fieldNames()) do
+      if RESERVED[name] then
+        error("events.new: injected roster field '" .. name .. "' is reserved (get_character injects it)", 2)
+      end
+    end
+  end
+  -- A PARTITIONED roster can never work here: this module looks members up
+  -- one-arg (roster.get(id)), which a partitioned registry reads as
+  -- get(pk, id). Fail at construction, not on the first get_character.
+  if def.roster and def.roster.partitioned then
+    error("events.new: the roster must be UNPARTITIONED — events looks characters up one-arg, which a partitioned registry reads as get(pk, id)", 2)
   end
   -- The roster: injected (shared with the card's other subsystems) or
   -- created from the declared fields.
@@ -149,7 +170,10 @@ function M.new(def)
   -- The model never types a bracket: freelanced structural tags in delegate
   -- text are stripped before serving; the script emits every tag.
   function E.strip(text)
-    return (tostring(text or ""):gsub("%[/?event [^%]]*%]", ""):gsub("%[/?chat[^%]]*%]", ""))
+    -- The space after the tag name is OPTIONAL ("[event]" / "[/event]" are
+    -- freelanced just the same) — matching the chat tag's pattern, which
+    -- never required one.
+    return (tostring(text or ""):gsub("%[/?event[^%]]*%]", ""):gsub("%[/?chat[^%]]*%]", ""))
   end
 
   --- The cast note: who is on stage, from state.event.participants — appended
@@ -158,7 +182,15 @@ function M.new(def)
   function E.castLine()
     local cast = participants()
     if #cast == 0 then return "" end
-    return "(In the scene with you: " .. table.concat(cast, ", ") .. ")"
+    -- Participants are stored as slug ids; the model addresses characters by
+    -- NAME, so serve the display name when the record has one (fall back to
+    -- the id for a record without a name field or one that went missing).
+    local names = {}
+    for i, id in ipairs(cast) do
+      local rec = roster.get(id)
+      names[i] = (rec and type(rec.name) == "string" and rec.name ~= "" and rec.name) or id
+    end
+    return "(In the scene with you: " .. table.concat(names, ", ") .. ")"
   end
 
   -- ---------- the span (the event's prompt IS the record) ----------
@@ -245,10 +277,17 @@ function M.new(def)
   -- strangers are dropped and reported, per the canonical-record rule.
   local function closeEvent(args)
     if not state.event then return "rejected: no event is open" end
-    if state.event.closed then return "already closing: " .. state.event.id end
+    if state.event.closed then
+      -- Terminal success, NOT a retryable error: the close already landed, so
+      -- re-calling is a no-op that must read as "done" to the model. (An
+      -- "already closing" string invited the finalizer to retry until the
+      -- round cap threw — bricking the branch AFTER the work had succeeded.)
+      return json.encode({ closing = state.event.id, gist = state.event.closed.gist, already_closed = true,
+        note = "the event is already closed — this is final; do NOT call close_event again" })
+    end
     local gist = chrome.oneline(args.gist or "")
     if gist == "" then gist = "The " .. state.event.kind .. " breaks off." end
-    local filed, dropped = {}, {}
+    local filed, dropped, pending = {}, {}, {}
     if type(args.takes) == "table" then
       for id, take in pairs(args.takes) do
         local present = false
@@ -256,11 +295,22 @@ function M.new(def)
           if p == id then present = true break end
         end
         if present then
-          rolling.push(dossier(id), { label = state.event.kind, gist = take })
-          filed[#filed + 1] = id
+          -- Validate BEFORE any push: rolling.push hard-errors on an empty
+          -- gist, and a throw out of the tool exec bricks the branch — bad
+          -- tool input fails as an ordinary error result instead, retried
+          -- without double-filing the takes already collected.
+          local text = chrome.oneline(tostring(take or ""))
+          if text == "" then
+            return "rejected: empty take for " .. tostring(id) .. " — write what they carry away, or omit the key"
+          end
+          pending[#pending + 1] = { id = id, text = text }
         else
           dropped[#dropped + 1] = tostring(id)
         end
+      end
+      for _, p in ipairs(pending) do
+        rolling.push(dossier(p.id), { label = state.event.kind, gist = p.text })
+        filed[#filed + 1] = p.id
       end
     end
     state.event.closed = { gist = gist }
@@ -276,12 +326,15 @@ function M.new(def)
         required = { "gist" } } },
   }
 
-  --- The /leave path. One finalize gen writes the gist and takes. Loud on
-  --- error: a delegate failure throws and fails the turn (the card's Failure
-  --- UX marks the branch bricked; recovery is a swipe or rewind). If the
-  --- model just spends its rounds without calling close_event (a content
-  --- outcome, not an error), the event still closes with a script-composed
-  --- fallback gist. Returns the gist (a plain-text memoir line to serve).
+  --- The /leave path. One finalize gen writes the gist and takes. Loud on a
+  --- genuine delegate error: a thrown generate fails the turn (the card's
+  --- Failure UX marks the branch bricked; recovery is a swipe or rewind).
+  --- Content outcomes never throw: once close_event lands the loop stops
+  --- early (further rounds are pure downside — a model re-calling close_event
+  --- gets a terminal "already closed" success, not an error to retry), and
+  --- if the model spends its rounds WITHOUT calling close_event the loop
+  --- ends soft and the event still closes with a script-composed fallback
+  --- gist. Returns the gist (a plain-text memoir line to serve).
   function E.finalize(prompt)
     if not state.event then return "" end
     local ts = toolset.new()
@@ -301,7 +354,10 @@ function M.new(def)
       if m.role ~= "system" then sub.messages[#sub.messages + 1] = m end
     end
     local res = backends.generate(sub):await()
-    loop.run(sub, res, ts:exec(), 4)
+    loop.run(sub, res, ts:exec(), 4, {
+      soft = true, -- a capped finalizer falls through to the fallback gist
+      done = function() return state.event ~= nil and state.event.closed ~= nil end,
+    })
     if not state.event.closed then
       state.event.closed = { gist = "The " .. state.event.kind .. " breaks off." }
     end
@@ -340,10 +396,12 @@ function M.new(def)
     local r = roster.exec(name, args)
     if r ~= nil then return r end
     if name == "list_characters" then
-      -- roster.briefing(): one line per record ("- id: label"), field-agnostic.
+      -- roster.briefing(): one line per record ("- id: label"), field-agnostic,
+      -- and it already opens with its own "\n<characters>:" header — adding a
+      -- "registry:" prefix stacked two labels.
       local b = roster.briefing()
       if b == "" then return "registry: empty — no characters filed yet" end
-      return "registry:" .. b
+      return b
     end
     if name == "get_character" then
       local rec, file = characterFile(args and args.id)

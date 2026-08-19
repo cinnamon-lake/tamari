@@ -165,8 +165,10 @@ describe('lib/summarize', () => {
     expect(spanText).toContain('trade blows');
     expect(spanText).toContain('potion shattered');
 
-    // The memoir is a PLAIN line — no tag, nothing to regex away.
-    expect(text).toBe('You wipe the blade. You "barely" made it, every potion spent.');
+    // The memoir is a PLAIN line — no tag, nothing to regex away. The lib
+    // enforces the one-line/no-double-quotes discipline: quotes fold to
+    // singles, whitespace collapses.
+    expect(text).toBe("You wipe the blade. You 'barely' made it, every potion spent.");
   });
 
   it('falls back when there is no tracked span (and never calls the delegate)', async () => {
@@ -793,7 +795,8 @@ function generate(prompt, ctx)
   if cmd == "refile" then return ledger.exec("promise", { id = "bro", what = "REDESIGN the brother", due = state.turn + 8 }) end
   if cmd == "resolve" then return ledger.exec("resolve_promise", { id = "bro", outcome = "kept" }) end
   if cmd == "fail" then return ledger.exec("resolve_promise", { id = "bro", outcome = "failed" }) end
-  if cmd == "unknown" then return ledger.exec("resolve_promise", { id = "nope" }) end
+  if cmd == "unknown" then return ledger.exec("resolve_promise", { id = "nope", outcome = "kept" }) end
+  if cmd == "badoutcome" then return ledger.exec("resolve_promise", { id = "bro", outcome = "sorta" }) end
   if cmd == "briefing" then return ledger.briefing() end
   return "?"
 end
@@ -827,5 +830,8 @@ describe('lib/ledger set semantics', () => {
     expect(t.text).toContain('FAILED — canon');
     t = await roll(adapter, t.scriptState, 'unknown');
     expect(t.text).toBe('unknown promise: nope');
+    // Outcome is validated: anything but "kept"/"failed" is rejected outright.
+    t = await roll(adapter, t.scriptState, 'badoutcome');
+    expect(t.text).toBe('rejected: outcome must be "kept" or "failed"');
   });
 });

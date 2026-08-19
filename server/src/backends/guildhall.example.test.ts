@@ -22,9 +22,9 @@ import { consumeStream, type BackendStreamItem, type Prompt } from './BackendAda
 
 const luaSource = readFileSync(new URL('../../../docs/design/examples/guildhall/main.lua', import.meta.url), 'utf8');
 
-// The card VFS: main.lua requires all eleven vendored game-lib modules.
+// The card VFS: main.lua requires all twelve vendored game-lib modules.
 const LIB_FILES: Record<string, string> = Object.fromEntries(
-  ['loop', 'sanitize', 'chrome', 'ledger', 'toolset', 'todo', 'registry', 'summarize', 'maptag', 'events', 'rolling'].map((m) => [
+  ['loop', 'sanitize', 'chrome', 'ledger', 'toolset', 'todo', 'registry', 'summarize', 'maptag', 'events', 'rolling', 'layout'].map((m) => [
     `lib/${m}.lua`,
     readFileSync(new URL(`../../../docs/design/examples/game-lib/${m}.lua`, import.meta.url), 'utf8'),
   ]),
@@ -155,18 +155,21 @@ const clone = (p: Prompt): Prompt => JSON.parse(JSON.stringify(p)) as Prompt;
 /** A floor pack blob in the registry shape: one section per partitioned registry. */
 interface PackBlob {
   floors?: Array<{ id: string; floor: string; name: string; description: string; entrance: string; stairsDown?: string; ambient: string[] }>;
-  rooms?: Array<{ id: string; floor: string; name: string; desc: string; exits: Record<string, string> }>;
+  rooms?: Array<{ id: string; floor: string; name: string; desc: string; x?: number; y?: number; section?: string; exits: Record<string, string> }>;
   enemies?: Array<{ id: string; floor: string; name: string; hp: number; maxHp: number; atk: number; reward: number; lines: { intro: string; hit: string; death: string } }>;
   interactables?: Array<{ id: string; key: string; floor: string; responses: string[]; effect?: Record<string, unknown> }>;
 }
 
-/** The floor-1 pack as a bare store blob (what the registries resolve via the pointer). */
+/** The floor-1 pack as a bare store blob (what the registries resolve via the pointer).
+ *  Grid geometry: r1(0,1)—r2(0,0)—r3(1,0) with the stairs down; r5(1,1) is a sealed
+ *  annex with no exits — the add_exit tests' adjacency target (east of r1, south of r3). */
 const F1_PACK = JSON.stringify({
   floors: [{ id: 'f1', floor: 'f1', name: 'The Upper Halls', description: 'Dust and old bones, galleries collapsing inward.', entrance: 'r1', stairsDown: 'r3', ambient: ['Water drips below.'] }],
   rooms: [
-    { id: 'r1', floor: 'f1', name: 'Collapsed Nave', desc: 'Dust and old bones.', exits: { north: 'r2' } },
-    { id: 'r2', floor: 'f1', name: 'Ossuary', desc: 'Stacked femurs like cordwood.', exits: { south: 'r1', east: 'r3' } },
-    { id: 'r3', floor: 'f1', name: 'Silent Choir', desc: 'Stone seats in rows.', exits: { west: 'r2', down: 'down' } },
+    { id: 'r1', floor: 'f1', name: 'Collapsed Nave', desc: 'Dust and old bones.', x: 0, y: 1, section: 'A', exits: { north: 'r2' } },
+    { id: 'r2', floor: 'f1', name: 'Ossuary', desc: 'Stacked femurs like cordwood.', x: 0, y: 0, section: 'A', exits: { south: 'r1', east: 'r3' } },
+    { id: 'r3', floor: 'f1', name: 'Silent Choir', desc: 'Stone seats in rows.', x: 1, y: 0, section: 'B', exits: { west: 'r2', down: 'down' } },
+    { id: 'r5', floor: 'f1', name: 'Sealed Annex', desc: 'A sealed annex.', x: 1, y: 1, section: 'B', exits: {} },
   ],
   enemies: [{ id: 'crypt-rat', floor: 'f1', name: 'Crypt Rat', hp: 3, maxHp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat sinks its teeth in.', death: 'The rat twitches and is still.' } }],
   interactables: [{ id: 'r1-crate', key: 'r1:crate', floor: 'f1', responses: ['Inside: a few coins and a rat nest.', 'Just the rat nest now.'], effect: { gold: 5 } }],
@@ -176,12 +179,25 @@ const F1_PACK = JSON.stringify({
 const RELIC_PACK = JSON.stringify({
   floors: [{ id: 'f1', floor: 'f1', name: 'The Upper Halls', description: 'Dust and old bones.', entrance: 'r1', stairsDown: 'r3', ambient: [] }],
   rooms: [
-    { id: 'r1', floor: 'f1', name: 'Collapsed Nave', desc: 'Dust and old bones.', exits: { north: 'r2' } },
-    { id: 'r2', floor: 'f1', name: 'Ossuary', desc: 'Femurs.', exits: { south: 'r1' } },
-    { id: 'r3', floor: 'f1', name: 'Silent Choir', desc: 'Seats.', exits: { west: 'r2' } },
+    { id: 'r1', floor: 'f1', name: 'Collapsed Nave', desc: 'Dust and old bones.', x: 0, y: 1, section: 'A', exits: { north: 'r2' } },
+    { id: 'r2', floor: 'f1', name: 'Ossuary', desc: 'Femurs.', x: 0, y: 0, section: 'A', exits: { south: 'r1' } },
+    { id: 'r3', floor: 'f1', name: 'Silent Choir', desc: 'Seats.', x: 1, y: 0, section: 'B', exits: { west: 'r2' } },
   ],
   enemies: [],
   interactables: [{ id: 'r1-relic', key: 'r1:relic', floor: 'f1', responses: ['You take the relic. It hums in your grip.'], effect: { item: 'relic' } }],
+} satisfies PackBlob);
+
+/** The journey's floor: relic in the entrance room (grab it after the fight), one rat
+ *  in the roster. Planning can't place the relic on f1 anymore (deepest floor only),
+ *  so the journey seeds its pack — the planning boundary is covered by the delve test. */
+const JOURNEY_PACK = JSON.stringify({
+  floors: [{ id: 'f1', floor: 'f1', name: 'The Upper Halls', description: 'Dust and old bones.', entrance: 'r1', stairsDown: '', ambient: [] }],
+  rooms: [
+    { id: 'r1', floor: 'f1', name: 'Collapsed Nave', desc: 'Dust.', x: 0, y: 1, section: 'A', exits: { north: 'r2' } },
+    { id: 'r2', floor: 'f1', name: 'Ossuary', desc: 'Femurs.', x: 0, y: 0, section: 'A', exits: { south: 'r1' } },
+  ],
+  enemies: [{ id: 'crypt-rat', floor: 'f1', name: 'Crypt Rat', hp: 3, maxHp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'It bites.', death: 'It dies.' } }],
+  interactables: [{ id: 'r1-relic', key: 'r1:relic', floor: 'f1', responses: ['You take the relic. It hums.'], effect: { item: 'relic' } }],
 } satisfies PackBlob);
 
 /** The pointer every floor-1 test state carries (matches the beforeEach seed). */
@@ -237,27 +253,40 @@ function eventState(extra: Record<string, unknown> = {}): string {
   });
 }
 
-/** Delegate that designs floor 1 via tool calls, then writes the intro. */
+// loop.lua rebuilds rounds as assistant messages with typed tool_use/tool_result blocks.
+const hasToolResult = (p: Prompt): boolean =>
+  p.messages.some((m) => Array.isArray(m.content) && m.content.some((b) => typeof b === 'object' && b !== null && (b as { type?: string }).type === 'tool_result'));
+
+/** Delegate that themes the fixed layout via tool calls, then finishes with the intro. */
 function planningDelegate(): CustomBackendDelegate {
-  let round = 0;
+  let finished = false;
   return {
     generate: vi.fn(async (_cfg: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
-      round++;
-      if (sysOf(prompt).includes('content designer') && round === 1) {
-        return {
-          text: '', finishReason: 'stop', usage: USAGE,
-          toolCalls: [
-            { id: 'd1', name: 'add_description', arguments: { text: 'Dust and old bones, galleries collapsing inward.' } },
-            { id: 'r1', name: 'add_rooms', arguments: { rooms: [
-              { id: 'r1', name: 'Collapsed Nave', desc: 'Dust and old bones.', exits: { north: 'r2' } },
-              { id: 'r2', name: 'Ossuary', desc: 'Stacked femurs like cordwood.', exits: { south: 'r1', east: 'r3' } },
-              { id: 'r3', name: 'Silent Choir', desc: 'Stone seats in rows.', exits: { west: 'r2', down: 'DOWN' } },
-            ] } },
-            { id: 'e1', name: 'add_encounter', arguments: { name: 'Crypt Rat', hp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat sinks its teeth in.', death: 'The rat twitches and is still.' } } },
-            { id: 'i1', name: 'add_interactable', arguments: { room: 'r1', name: 'crate', responses: ['Inside: a few coins and a rat nest.', 'Just the rat nest now.'], effect: { gold: 5 } } },
-            { id: 'a1', name: 'add_ambient', arguments: { lines: ['Water drips below.'] } },
-          ],
-        };
+      if (sysOf(prompt).includes('content designer')) {
+        if (!hasToolResult(prompt)) {
+          // The skeleton rides the system prompt: room ids (r1..rN) and section letters.
+          const sys = sysOf(prompt);
+          const rooms = [...new Set([...sys.matchAll(/\br(\d+)\b/g)].map((m) => `r${m[1]}`))];
+          const sections = [...new Set([...sys.matchAll(/^\s*([A-D]): /gm)].map((m) => m[1]))];
+          return {
+            text: '', finishReason: 'stop', usage: USAGE,
+            toolCalls: [
+              { id: 'd1', name: 'add_description', arguments: { text: 'Dust and old bones, galleries collapsing inward.' } },
+              ...sections.map((s, i) => ({ id: `s${i}`, name: 'theme_section', arguments: { section: s, name: `Wing ${s}`, vibe: 'Old stone, older dust.' } })),
+              { id: 'f1', name: 'furnish_rooms', arguments: { rooms: rooms.map((r) => ({ room: r, name: r === 'r1' ? 'Collapsed Nave' : `Gallery ${r}`, desc: `Dust and dark in ${r}.` })) } },
+              { id: 'e1', name: 'add_encounter', arguments: { name: 'Crypt Rat', hp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat sinks its teeth in.', death: 'The rat twitches and is still.' } } },
+              { id: 'i1', name: 'add_interactable', arguments: { room: 'r1', name: 'crate', responses: ['Inside: a few coins and a rat nest.', 'Just the rat nest now.'], effect: { gold: 5 } } },
+              { id: 'a1', name: 'add_ambient', arguments: { lines: ['Water drips below.'] } },
+            ],
+          };
+        }
+        if (!finished) {
+          finished = true;
+          return { text: '', finishReason: 'stop', usage: USAGE,
+            toolCalls: [{ id: 'fin', name: 'finish_floor', arguments: { intro: 'You stand in the Collapsed Nave.' } }] };
+        }
+        // The planner's raw final text is backstage design — never served.
+        return { text: 'FULL DESIGN DUMP: the roster, the rewards, every hidden room.', finishReason: 'stop', usage: USAGE };
       }
       return { text: 'You stand in the Collapsed Nave.', finishReason: 'stop', usage: USAGE };
     }),
@@ -351,7 +380,9 @@ function dungeonEconomyDelegate(): CustomBackendDelegate {
         return { text: '', finishReason: 'stop', usage: USAGE,
           toolCalls: [
             { id: 'r1', name: 'remove_item', arguments: { name: 'bomb' } },
-            { id: 'x1', name: 'add_exit', arguments: { direction: 'west', to: 'r3', via: 'blown wall' } },
+            // No direction param: the destination must be GRID-ADJACENT to the
+            // current room (r1 here); the compass label is derived from the geometry.
+            { id: 'x1', name: 'add_exit', arguments: { to: 'r5', via: 'blown wall' } },
           ] };
       }
       return { text: 'The way opens.', finishReason: 'stop', usage: USAGE };
@@ -396,11 +427,12 @@ describe('The Guildhall (merged card)', () => {
       const t = await runTurn(makeAdapter(planningDelegate()), '/delve', hallState());
       expect(t.state.mode).toBe('dungeon');
       expect(t.state.dun.room).toBe('f1:r1');
-      // The boundary gen is invisible: the reply is just the entrance
-      // narration — no "Designed …" memoir about the pack.
+      // The boundary gen is invisible: the reply is the finish_floor intro and
+      // NOTHING else — the planner's raw final text is backstage design.
       expect(t.text).not.toContain('Designed');
-      expect(t.text).toContain('Collapsed Nave');
-      expect(t.text).toContain('data-post-response="/go north"');
+      expect(t.text).toContain('You stand in the Collapsed Nave.');
+      expect(t.text).not.toContain('FULL DESIGN DUMP');
+      expect(t.text).toMatch(/data-post-response="\/go (north|south|east|west)"/); // the layout's exits, whichever way they go
       expect(t.text).not.toContain('data-post-response="/delve"'); // hall menu gone
       // Planning writes rode the registry mutation queue and flushed into ONE
       // pack blob for the floor: one pointer move, one blob with a section per
@@ -411,7 +443,15 @@ describe('The Guildhall (merged card)', () => {
       expect(Object.keys((t.state._regq as object) ?? {}).length).toBe(0); // flushed
       const pack = JSON.parse((await testBlobs.get(pid))!) as PackBlob;
       expect(pack.floors?.[0]?.name).toBe('The Upper Halls');
-      expect(pack.rooms?.map((r) => r.id)).toEqual(['r1', 'r2', 'r3']);
+      // Lua laid the floor out (6-9 rooms at depth 1); the planner themed it.
+      const ids = pack.rooms?.map((r) => r.id) ?? [];
+      expect(ids.length).toBeGreaterThanOrEqual(6);
+      expect(ids.length).toBeLessThanOrEqual(9);
+      expect(ids).toContain('r1');
+      for (const r of pack.rooms ?? []) {
+        expect(r.name.length).toBeGreaterThan(0); // every room furnished — no blank fallbacks
+        expect(Number.isInteger(r.x) && Number.isInteger(r.y)).toBe(true);
+      }
       expect(pack.enemies?.map((e) => e.name)).toEqual(['Crypt Rat']);
       expect(pack.interactables?.map((i) => i.key)).toEqual(['r1:crate']);
     });
@@ -419,24 +459,28 @@ describe('The Guildhall (merged card)', () => {
 
   describe('dungeon (factory ratio)', () => {
     it('planning the deepest floor (f3) yields no stairs down — descend cannot soft-lock', async () => {
-      // Regression: validateGraph used to inject a stairs-down on EVERY floor,
-      // so f3 (terminal) offered a Descend button to a non-existent f4 —
-      // "Nowhere to go.", no buttons, no recovery. f3 is terminal now: the
-      // designed `down` exit is stripped and none is injected, so serve never
-      // offers "go down" on f3 and the relic stays the only way out.
-      let call = 0;
+      // f3 is terminal: lib/layout is told `terminal`, so the skeleton has NO
+      // stairsDown by construction (no validateGraph repair pass exists or is
+      // needed) — serve never offers "go down" on f3 and the relic stays the
+      // only way out.
+      let finished = false;
       const delegate: CustomBackendDelegate = {
         generate: vi.fn(async (_cfg: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
-          call++;
-          if (sysOf(prompt).includes('content designer') && call === 1) {
-            return { text: '', finishReason: 'stop', usage: USAGE,
-              toolCalls: [
-                { id: 'r', name: 'add_rooms', arguments: { rooms: [
-                  { id: 'r1', name: 'Entry Vault', desc: 'Sealed stone.', exits: { north: 'r2' } },
-                  { id: 'r2', name: 'Relic Chamber', desc: 'A plinth.', exits: { south: 'r1', down: 'DOWN' } },
-                ] } },
-                { id: 'i', name: 'add_interactable', arguments: { room: 'r2', name: 'relic', responses: ['You take the relic.'], effect: { item: 'relic' } } },
-              ] };
+          if (sysOf(prompt).includes('content designer')) {
+            if (!hasToolResult(prompt)) {
+              const rooms = [...new Set([...sysOf(prompt).matchAll(/\br(\d+)\b/g)].map((m) => `r${m[1]}`))];
+              return { text: '', finishReason: 'stop', usage: USAGE,
+                toolCalls: [
+                  { id: 'f', name: 'furnish_rooms', arguments: { rooms: rooms.map((r) => ({ room: r, name: `Vault ${r}`, desc: 'Sealed stone.' })) } },
+                  { id: 'i', name: 'add_interactable', arguments: { room: 'r1', name: 'relic', responses: ['You take the relic.'], effect: { item: 'relic' } } },
+                ] };
+            }
+            if (!finished) {
+              finished = true;
+              return { text: '', finishReason: 'stop', usage: USAGE,
+                toolCalls: [{ id: 'fin', name: 'finish_floor', arguments: { intro: 'Sealed vaults; something glints on a plinth.' } }] };
+            }
+            return { text: 'Design notes, backstage.', finishReason: 'stop', usage: USAGE };
           }
           return { text: 'Sealed vaults; something glints on a plinth.', finishReason: 'stop', usage: USAGE };
         }),
@@ -444,11 +488,11 @@ describe('The Guildhall (merged card)', () => {
       };
       const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f3', seen: {}, escalations: 0 } });
       const t = await runTurn(makeAdapter(delegate), 'look', start);
-      expect(t.text).not.toContain('Designed'); // the boundary gen is invisible
+      expect(t.text).toContain('Sealed vaults'); // the finish_floor intro is the reply
       // The pack blob lives in the store, not the message — assert on it.
       const pack = JSON.parse((await testBlobs.get(t.state.packIds?.f3 ?? ''))!) as PackBlob;
-      expect(JSON.stringify(pack.rooms)).not.toContain('"down":"down"'); // the designed stairs were stripped
-      expect(pack.floors?.[0]?.stairsDown ?? '').toBe(''); // and none was injected on the terminal floor
+      expect(JSON.stringify(pack.rooms)).not.toContain('"down":"down"'); // no stairs on the layout
+      expect(pack.floors?.[0]?.stairsDown ?? '').toBe(''); // terminal floor: none filed
       expect(t.text).not.toContain('data-post-response="/go down"'); // no Descend button offered
     });
 
@@ -502,7 +546,7 @@ describe('The Guildhall (merged card)', () => {
     });
 
     it('escalation: the dungeon DM resolves novelty; costs are deducted by Lua', async () => {
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: { bomb: 1 }, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0 } });
+      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: { bomb: 1 }, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0 } });
       const t = await runTurn(makeAdapter(dungeonEconomyDelegate()), 'I blow the door open', start);
       expect(t.state.dun.escalations).toBe(1);
       expect(t.state.dun.inventory.bomb).toBeUndefined(); // consumed by the engine
@@ -512,11 +556,12 @@ describe('The Guildhall (merged card)', () => {
       expect(t.state.packIds?.f1).not.toBe('pack:f1#1');
       expect(Object.keys((t.state._regq as object) ?? {}).length).toBe(0);
       const pack = JSON.parse((await testBlobs.get(t.state.packIds?.f1 ?? ''))!) as PackBlob;
-      expect(pack.rooms?.find((r) => r.id === 'r2')?.exits.west).toBe('r3'); // the new exit
+      expect(pack.rooms?.find((r) => r.id === 'r1')?.exits.east).toBe('r5'); // the new exit, grid-derived label
+      expect(pack.rooms?.find((r) => r.id === 'r5')?.exits.west).toBe('r1'); // both sides written
       // Branch correctness: the OLD pointer still resolves to the OLD blob —
       // a swipe back keeps its own version of the floor.
       const old = JSON.parse((await testBlobs.get('pack:f1#1'))!) as PackBlob;
-      expect(old.rooms?.find((r) => r.id === 'r2')?.exits.west).toBeUndefined();
+      expect(old.rooms?.find((r) => r.id === 'r1')?.exits.east).toBeUndefined();
     });
 
     it('spawn_enemy files into the same floor pack as planning content (one pack per floor)', async () => {
@@ -529,7 +574,7 @@ describe('The Guildhall (merged card)', () => {
           if (round === 1) {
             return { text: '', finishReason: 'stop', usage: USAGE,
               toolCalls: [
-                { id: 'x1', name: 'add_exit', arguments: { direction: 'west', to: 'r3', via: 'blown wall' } },
+                { id: 'x1', name: 'add_exit', arguments: { to: 'r5', via: 'blown wall' } },
                 { id: 's1', name: 'spawn_enemy', arguments: { name: 'Crypt Thing', hp: 4, atk: 1 } },
               ] };
           }
@@ -537,13 +582,13 @@ describe('The Guildhall (merged card)', () => {
         }),
         resolveAdapter: noPassthrough(),
       };
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0 } });
+      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0 } });
       const t = await runTurn(makeAdapter(delegate), 'I blast the wall', start);
       expect(t.state.dun.combat?.name).toBe('Crypt Thing'); // the spawn is live at once
       expect(Object.keys(t.state.packIds ?? {})).toEqual(['f1']); // still ONE pack for the floor
       expect(t.state.packIds?.f1).not.toBe('pack:f1#1');
       const pack = JSON.parse((await testBlobs.get(t.state.packIds?.f1 ?? ''))!) as PackBlob;
-      expect(pack.rooms?.find((r) => r.id === 'r2')?.exits.west).toBe('r3'); // the planning-era record, mutated
+      expect(pack.rooms?.find((r) => r.id === 'r1')?.exits.east).toBe('r5'); // the planning-era record, mutated
       expect(pack.enemies?.map((e) => e.name).sort()).toEqual(['Crypt Rat', 'Crypt Thing']); // planning + escalation in one pack
       // …and the old pointer still resolves to the pre-escalation blob.
       const old = JSON.parse((await testBlobs.get('pack:f1#1'))!) as PackBlob;
@@ -637,9 +682,16 @@ describe('The Guildhall (merged card)', () => {
       expect(p3.messages.slice(0, p2.messages.length)).toEqual(p2.messages); // strict prefix
     });
 
-    it('close_event: the gist rides the close tag; takes file the dossiers', async () => {
+    it('close_event: the gist files the STORY entry; takes file the dossiers', async () => {
       const t = await runTurn(makeAdapter(closeDelegate()), 'Great. Let\'s go.', eventState());
-      expect(t.text).toContain('Recruited Ser Aldric at the quest board.'); // the memoir line
+      // The gist is NOT re-appended after the closing prose (that read as the
+      // same summary twice) — its home is the STORY entry, zoomable via
+      // inspect_summary.
+      expect(t.text).toContain('"Done, then."');
+      expect(t.text).not.toContain('Recruited Ser Aldric at the quest board.');
+      const storyIds = (t.state.story?.ids ?? []) as string[];
+      const lastEntry = JSON.parse((await testBlobs.get(storyIds[storyIds.length - 1]!))!) as { gist: string };
+      expect(lastEntry.gist).toBe('Recruited Ser Aldric at the quest board.');
       expect(t.state.dossiers?.['ser-aldric']?.ids).toHaveLength(1); // one rolling entry id
       expect(t.state.event).toBeUndefined();
       expect(t.text).toContain('data-post-response="/delve"'); // back to idle
@@ -749,8 +801,9 @@ describe('The Guildhall (merged card)', () => {
       expect(p2js).toContain('"type":"tool_use"');
       expect(p2js).toContain('"type":"tool_result"');
       expect(p2js).toContain('ser-aldric');
-      // …the cast rides the newest message (from state, not a tag)…
-      expect(p2js).toContain('(In the scene with you: ser-aldric)');
+      // …the cast rides the newest message (from state, not a tag), named —
+      // the record's display name, not the slug id…
+      expect(p2js).toContain('(In the scene with you: Ser Aldric)');
       // …so turn 2's scene-runner answer needed no tool call.
       expect(toolResults[toolResults.length - 1]).toBeUndefined();
     });
@@ -1079,22 +1132,6 @@ describe('The Guildhall (merged card)', () => {
         generate: vi.fn(async (_cfg: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
           const sys = sysOf(prompt);
           const js = JSON.stringify(prompt.messages);
-          // planning: design floor 1 (relic in the entrance room so the player can grab it after the fight)
-          if (sys.includes('content designer')) {
-            if (!js.includes('"add_rooms"')) {
-              return { text: '', finishReason: 'stop', usage: USAGE, toolCalls: [
-                { id: 'd1', name: 'add_description', arguments: { text: 'Dust and old bones.' } },
-                { id: 'rm', name: 'add_rooms', arguments: { rooms: [
-                  { id: 'r1', name: 'Collapsed Nave', desc: 'Dust.', exits: { north: 'r2' } },
-                  { id: 'r2', name: 'Ossuary', desc: 'Femurs.', exits: { south: 'r1', east: 'r3' } },
-                  { id: 'r3', name: 'Silent Choir', desc: 'Seats.', exits: { west: 'r2' } },
-                ] } },
-                { id: 'e1', name: 'add_encounter', arguments: { name: 'Crypt Rat', hp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'It bites.', death: 'It dies.' } } },
-                { id: 'i1', name: 'add_interactable', arguments: { room: 'r1', name: 'relic', responses: ['You take the relic. It hums.'], effect: { item: 'relic' } } },
-              ] };
-            }
-            return { text: 'You stand in the Collapsed Nave.', finishReason: 'stop', usage: USAGE };
-          }
           // /leave finalize: file a take for Aldric
           if (sys.includes('Close it properly') || sys.includes('walked out')) {
             if (!js.includes('"close_event"')) {
@@ -1132,11 +1169,16 @@ describe('The Guildhall (merged card)', () => {
       };
       const adapter = makeAdapter(delegate, luaAlways);
 
+      // The delve's floor pre-exists as a seeded pack (planning can't place the
+      // relic on f1 — deepest floor only — so the journey seeds; the planning
+      // boundary itself is covered by the /delve test above).
+      testBlobs.seed('pack:f1#1', JOURNEY_PACK);
+
       // The engine threads the whole branch between turns; accumulate every
-      // prior turn so the floor pack (written at /delve) stays reachable to
-      // findPack across the whole crawl.
+      // prior turn so the floor pack stays reachable to findPack across the
+      // whole crawl.
       const hist: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-      let scriptState: string | undefined = hallState();
+      let scriptState: string | undefined = hallState({ packIds: { ...F1_POINTER } });
       const step = async (userText: string) => {
         const t = await runTurn(adapter, userText, scriptState, hist.length ? hist : undefined);
         hist.push({ role: 'user', content: userText });
@@ -1163,14 +1205,13 @@ describe('The Guildhall (merged card)', () => {
       expect(aldricIds).toHaveLength(1);
       expect(await testBlobs.get(aldricIds[0]!)).toContain('meant business');
 
-      // 4. /delve → planning designs floor 1 → enter the dungeon. The boundary
-      // gen is invisible: the reply is the entrance narration, and the pack is
-      // ONE flushed blob under state.packIds.f1.
+      // 4. /delve → enter the seeded floor 1: the reply is the pack's
+      // description + notice line, served with zero delegate calls.
       const t4 = await step('/delve');
       expect(t4.state.mode).toBe('dungeon');
       expect(t4.state.dun.room).toBe('f1:r1');
-      expect(t4.text).not.toContain('Designed');
-      expect(t4.state.packIds?.f1).toBeDefined();
+      expect(t4.text).toContain('Dust and old bones.');
+      expect(t4.state.packIds?.f1).toBe('pack:f1#1');
 
       // 5. go north → r2 → a rat rolls up (ENCOUNTER_CHANCE=1).
       const t5 = await step('go north');
@@ -1233,7 +1274,7 @@ describe('The Guildhall (merged card)', () => {
       // the scene-runner saw the receptionist already on stage (no cold-start
       // list_characters dance), and the cast note rides the newest message.
       expect(JSON.stringify(scenePrompts[0]!.messages)).toContain('Thornwall');
-      expect(JSON.stringify(scenePrompts[0]!.messages)).toContain('(In the scene with you: receptionist)');
+      expect(JSON.stringify(scenePrompts[0]!.messages)).toContain('(In the scene with you: The Receptionist)');
       expect(t.state.onboarded).toBe(true);
       expect(t.state.playerName).toBe('Grok');
       // The kv demo: register_player filed the player's name as a verbatim fact

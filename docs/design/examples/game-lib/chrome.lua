@@ -19,18 +19,20 @@ end
 function M.unwrap(text)
   local inner = text:match("^%s*%[sys%](.-)%[/sys%]%s*$") or text
   inner = inner:gsub("^%s*(.-)%s*$", "%1")
-  return (inner:gsub("^/", ""))
+  return (inner:gsub("^/+", ""))
 end
 
 -- The deterministic cleaning every delegate view shares: strip legacy
--- [sys]…[/sys], <button>…</button>, and [HUD…]; trim. Transcript and the
--- event span BOTH use this — the append-only-prefix property of the event
--- span depends on the cleaning never diverging between views.
+-- [sys]…[/sys], <button>…</button>, [HUD…], and [MAP…]; trim. Transcript and
+-- the event span BOTH use this — the append-only-prefix property of the event
+-- span depends on the cleaning never diverging between views. Both script
+-- tags go: a delegate that ever sees transcript text must not inherit chrome.
 function M.clean(text)
   return (tostring(text or "")
     :gsub("%s*%[sys%].-%[/sys%]%s*", "\n\n")
     :gsub("%s*<button.-</button>", "")
     :gsub("%[HUD[^%]]*%]", "")
+    :gsub("%[MAP[^%]]*%]", "")
     :gsub("^%s*(.-)%s*$", "%1"))
 end
 

@@ -8,8 +8,7 @@
 --
 -- Every todo tool result echoes the REMAINING list, so the plan rides the
 -- tool loop for free — the model sees its own checklist on every round
--- without spending prompt. todo.briefing() puts the same list in the
--- delegate's system prompt for cross-turn tasks.
+-- without spending prompt.
 
 local M = {}
 
@@ -50,13 +49,16 @@ end
 
 function M.exec(name, args)
   if name == "set_todo" then
+    -- items is required by the schema: a missing or non-array value is a
+    -- malformed call, so reject it instead of silently erasing the plan.
+    if type(args.items) ~= "table" then
+      return "rejected: items must be an array of strings — the plan is unchanged. remaining: " .. remaining()
+    end
     local list = todos()
     while #list > 0 do table.remove(list) end
-    if type(args.items) == "table" then
-      for _, item in ipairs(args.items) do
-        local text = tostring(item)
-        if text ~= "" then list[#list + 1] = { text = text, done = false } end
-      end
+    for _, item in ipairs(args.items) do
+      local text = tostring(item)
+      if text ~= "" then list[#list + 1] = { text = text, done = false } end
     end
     return "plan set (" .. #list .. " items). remaining: " .. remaining()
   end
@@ -64,20 +66,13 @@ function M.exec(name, args)
     local i = tonumber(args.index)
     local list = todos()
     if not i or not list[i] then return "rejected: no item " .. tostring(args.index) .. " — remaining: " .. remaining() end
+    if list[i].done then
+      return "already done: " .. list[i].text .. ". remaining: " .. remaining()
+    end
     list[i].done = true
     return "done: " .. list[i].text .. ". remaining: " .. remaining()
   end
   return nil
-end
-
---- The remaining items as a prompt block ("" when there is no plan).
-function M.briefing()
-  local out = {}
-  for _, t in ipairs(todos()) do
-    if not t.done then out[#out + 1] = "- " .. t.text end
-  end
-  if #out == 0 then return "" end
-  return "\nYOUR PLAN (work it; mark items done with todo_done):\n" .. table.concat(out, "\n")
 end
 
 return M

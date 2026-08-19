@@ -16,9 +16,11 @@
 -- never touches `state` beyond its own key.
 --
 -- SET semantics (the ledger is non-compacting information): records are keyed
--- by id — promise({ id, … }) with an existing pending id OVERWRITES what/due
--- (latest is canon, never a duplicate), and resolve_promise overwrites the
--- status even on a resolved entry.
+-- by id — promise({ id, … }) with an existing id REPLACES the first entry with
+-- that id regardless of status (latest is canon, never a duplicate; a resolved
+-- id re-filed is REOPENED as pending, so resolve_promise can never strand a
+-- shadow copy), and resolve_promise overwrites the status even on a resolved
+-- entry.
 
 local M = {}
 
@@ -38,7 +40,7 @@ function M.tools()
     type = "function",
     ["function"] = {
       name = "promise",
-      description = "File a plot debt for your future self: something that MUST happen at a later turn (foreshadowing, a scheduled event, a threat that matures).",
+      description = "File a plot debt for your future self: something that MUST happen at a later turn (foreshadowing, a scheduled event, a threat that matures). due is an ABSOLUTE turn number (not 'in N turns from now'), clamped to now+1 through now+50.",
       parameters = { type = "object", properties = {
         id = { type = "string" }, what = { type = "string" }, due = { type = "integer" } }, required = { "id", "what", "due" } },
     },
@@ -48,7 +50,7 @@ function M.tools()
       name = "resolve_promise",
       description = "Mark a plot-ledger entry as kept or failed once it comes due.",
       parameters = { type = "object", properties = {
-        id = { type = "string" }, outcome = { type = "string" } }, required = { "id" } },
+        id = { type = "string" }, outcome = { type = "string", enum = { "kept", "failed" } } }, required = { "id" } },
     },
   } }
 end
@@ -66,12 +68,15 @@ function M.exec(name, args)
       return "rejected: id, what, and a concrete due are required"
     end
     due = math.max(now + 1, math.min(math.floor(due), now + 50))
-    -- Set semantics: re-filing an existing pending id OVERWRITES — latest is
-    -- canon, never a duplicate.
+    -- Set semantics: re-filing an existing id REPLACES the first entry with
+    -- that id, whatever its status — latest is canon, and the re-file REOPENS
+    -- a resolved entry (status cleared), so no shadow duplicate can survive
+    -- for resolve_promise to strand.
     for _, p in ipairs(promises()) do
-      if p.id == id and not p.status then
+      if p.id == id then
         p.what = what
         p.due = due
+        p.status = nil
         return json.encode({ promised = id, due = due, replaced = true })
       end
     end
@@ -81,9 +86,13 @@ function M.exec(name, args)
   end
   if name == "resolve_promise" then
     local id = tostring(args.id or "")
+    -- Only two canon outcomes; anything else is a model slip, not a "kept".
+    if args.outcome ~= "kept" and args.outcome ~= "failed" then
+      return "rejected: outcome must be \"kept\" or \"failed\""
+    end
     for _, p in ipairs(promises()) do
       if p.id == id then
-        p.status = args.outcome == "failed" and "failed" or "kept"
+        p.status = args.outcome
         return json.encode({ resolved = id, outcome = p.status })
       end
     end

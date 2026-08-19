@@ -10,7 +10,10 @@
 -- string fields take any length. Re-registering an existing id returns the
 -- EXISTING record instead of overwriting: on regenerate, state has rolled
 -- back and re-filing converges to the same record — swipe-stable by
--- construction.
+-- construction. The fallback slug "thing" is never a real id: id_from must
+-- name a DECLARED field (checked at construction) and a missing routing
+-- value rejects the file — otherwise every record would converge on one
+-- slug and the registry would silently cap at a single record.
 --
 -- STORAGE, two shapes:
 --   * Unpartitioned (default): a plain array of records at state[key]
@@ -21,10 +24,15 @@
 --     packs_key (default state.packIds). state carries only the pointer
 --     table: state[packs_key] maps each partition name to that partition's
 --     pack blob id ({ f1 = "pack#7", craft = "pack#3", … }). The partition is
---     a property OF THE RECORD, derived by the card: partition_by(rec) is
---     read at file time (a monster's partition is the floor it spawns on).
---     The model never hears the word — tool schemas carry no partition
---     field; `floor` is just a field the record happens to have.
+--     a property OF THE RECORD, read at file time (a monster's partition is
+--     the floor it spawns on). Declare partition_by as a FIELD NAME
+--     ("floor") whenever the routing field is a real record field: the
+--     model-facing query/update tools then ask for it by its DOMAIN name
+--     ("the floor the monster is on" — never the word "partition") and every
+--     lookup lands in exactly one partition. A function-form partition_by
+--     routes the same but leaves the field anonymous, so model-facing
+--     lookups must scan all partitions — and an id filed in several
+--     partitions is a loud rejection, never a silent guess.
 --
 -- WRITES (partitioned): a write updates nothing on disk immediately — it
 -- queues a mutation record in state._regq (branch-aware) and every READ
@@ -52,7 +60,8 @@
 --     description = "Register an enemy design. Lua clamps stats to the power budget.",
 --     key = "enemies",
 --     id_from = "name",
---     partition_by = function(rec) return rec.floor end,  -- optional: packs
+--     partition_by = "floor",               -- optional: packs; a FIELD NAME routes
+--                                           --   and names the lookup argument
 --     packs_key = "packIds",                -- optional; shared pointer table
 --     mutable = { "hp" },                   -- optional: emits update_enemy
 --     update_tool = "update_enemy",         -- optional; derived by default
@@ -90,6 +99,15 @@
 local sanitize = require("lib/sanitize")
 
 local M = {}
+
+-- Pack blob bodies are IMMUTABLE (a flush is a new put plus a pointer move),
+-- so fetched bodies are memoized module-wide by pointer id — every
+-- partitioned registry sharing a packs_key shares the cache, and one serve
+-- turn's repeated floorPack() calls cost ONE store round-trip per pack
+-- instead of four-plus. The DECODE still runs per call on purpose:
+-- resolvePartition mutates records in place while applying the queue, and a
+-- shared decoded table would let those mutations leak between resolves.
+local packBodies = {} -- pid -> raw body string
 
 local function slugify(s)
   local slug = tostring(s or ""):lower():gsub("[^%w]+", "-"):gsub("^-+", ""):gsub("-+$", "")
@@ -187,26 +205,48 @@ end
 
 local RESERVED_METHODS = {
   tools = true, exec = true, get = true, all = true, list = true,
-  create = true, update = true, briefing = true,
+  create = true, update = true, briefing = true, fieldNames = true,
 }
 
 function M.new(def)
-  local partitioned = def.partition_by ~= nil
+  -- partition_by: a field NAME ("floor") or a function(rec). The string form
+  -- is preferred — it names the routing field, so model-facing query/update
+  -- tools can ask for it by its domain name ("the floor the monster is on").
+  -- A bare function routes fine but leaves the routing field anonymous, and
+  -- the model-facing lookups can only scan (see findAll/ambiguity).
+  local partitionField = def.partition_field
+  local partition_by = def.partition_by
+  if type(partition_by) == "string" then
+    partitionField = partition_by
+    local f = partition_by
+    partition_by = function(rec) return rec[f] end
+  end
+  local partitioned = partition_by ~= nil
   local packsKey = def.packs_key or "packIds"
   if partitioned and def.store then
     error("registry.new: store (draft mode) and partition_by don't combine — "
       .. "partitioned writes ARE the commit path; drop one", 2)
   end
+  local known = {}
+  for _, f in ipairs(def.fields or {}) do known[f.name] = true end
+  -- The routing field must be a real field — the model can't name a floor the
+  -- record doesn't carry.
+  if partitionField and not known[partitionField] then
+    error("registry.new: partition field '" .. tostring(partitionField) .. "' is not a declared field", 2)
+  end
   local mutableSet = {}
   if def.mutable then
-    local known = {}
-    for _, f in ipairs(def.fields or {}) do known[f.name] = true end
     for _, name in ipairs(def.mutable) do
       if not known[name] then
         error("registry.new: mutable field '" .. tostring(name) .. "' is not a declared field", 2)
       end
       mutableSet[name] = true
     end
+  end
+  -- id_from routes the record to its slug; an undeclared field would file
+  -- every record under the same fallback slug, capping the registry at one.
+  if def.id_from and not known[def.id_from] then
+    error("registry.new: id_from '" .. tostring(def.id_from) .. "' is not a declared field", 2)
   end
   local updateTool = def.update_tool
   if not updateTool and def.mutable then
@@ -221,6 +261,9 @@ function M.new(def)
   end
 
   local R = {}
+  -- Shape marker for consumers whose call conventions differ by partitioning
+  -- (lib/events needs an UNPARTITIONED roster: it looks members up one-arg).
+  R.partitioned = partitioned
 
   -- ---------- storage ----------
 
@@ -241,10 +284,14 @@ function M.new(def)
   local function loadPackBlob(pks, pk)
     local pid = type(state) == "table" and state[pks] and state[pks][pk] or nil
     if not pid then return {} end
-    local body = store.getJson(pid):await()
+    local body = packBodies[pid]
     if not body then
-      error("registry: pack blob missing for partition " .. tostring(pk) .. " (" .. tostring(pid)
-        .. ") — blobs are script-written, this is a bug", 3)
+      body = store.getJson(pid):await()
+      if not body then
+        error("registry: pack blob missing for partition " .. tostring(pk) .. " (" .. tostring(pid)
+          .. ") — blobs are script-written, this is a bug", 3)
+      end
+      packBodies[pid] = body
     end
     return sanitize.data(json.decode(body))
   end
@@ -327,6 +374,67 @@ function M.new(def)
     return nil
   end
 
+  --- Find within ONE named partition (ids are stored slugified; normalize the
+  --- needle so this exact lookup agrees with the case-insensitive scan).
+  local function findInPartition(pk, idOrName)
+    local recs, byId = resolvePartition(tostring(pk))
+    local rec = byId[slugify(idOrName)]
+    if rec then return rec end
+    local needle = tostring(idOrName or ""):lower()
+    for _, r in ipairs(recs) do
+      if def.id_from and tostring(r[def.id_from] or ""):lower() == needle then return r end
+    end
+    return nil
+  end
+
+  --- The partition a model-facing call named, or nil plus a rejection string.
+  --- The routing field is REQUIRED on partitioned lookups: "the floor the
+  --- monster is on" is a domain fact the model knows, not hidden machinery.
+  local function namedPartition(args)
+    local pk = args and args[partitionField]
+    if pk == nil or pk == "" then
+      return nil, "rejected: " .. partitionField .. " is required"
+    end
+    return tostring(pk)
+  end
+
+  --- ALL (rec, pk) matches across partitions — the fallback for a partitioned
+  --- registry whose routing field is ANONYMOUS (function-form partition_by):
+  --- the model-facing execs can't ask for the partition by name, so an id
+  --- living in several partitions is an ambiguity they must REPORT — not a
+  --- coin flip in sorted-key order (findRecord returns the f1 goblin even
+  --- when the player is on f2).
+  local function findAll(idOrName)
+    local needle = tostring(idOrName or ""):lower()
+    local out = {}
+    local function match(rec, pk)
+      if rec.id == needle then return true end
+      return def.id_from and tostring(rec[def.id_from] or ""):lower() == needle
+    end
+    if not partitioned then
+      for _, rec in ipairs(records()) do
+        if match(rec) then out[#out + 1] = { rec = rec } end
+      end
+      return out
+    end
+    for _, pk in ipairs(partitionKeys()) do
+      for _, rec in ipairs(resolvePartition(pk)) do
+        if match(rec, pk) then out[#out + 1] = { rec = rec, pk = pk } end
+      end
+    end
+    return out
+  end
+
+  --- Rejection text when a model-facing lookup hits an id in >1 partition and
+  --- no routing field is nameable (function-form partition_by). String-form
+  --- partition_by asks for the field up front, so this never fires there.
+  local function ambiguity(id, matches)
+    local pks = {}
+    for _, m in ipairs(matches) do pks[#pks + 1] = m.pk end
+    return "rejected: '" .. id .. "' exists in multiple partitions (" .. table.concat(pks, ", ")
+      .. ") and this lookup can't name one — disambiguate card-side with the partition key"
+  end
+
   -- ---------- filing ----------
 
   --- The shared write path. Returns id, status, record, dropped where status
@@ -336,9 +444,14 @@ function M.new(def)
     if #missing > 0 then
       return nil, "rejected: " .. table.concat(missing, ", ") .. " required"
     end
+    -- A missing routing value would slugify to the "thing" fallback, filing
+    -- every such record under one slug — reject it like a nil partition.
+    if def.id_from and (rec[def.id_from] == nil or rec[def.id_from] == "") then
+      return nil, "rejected: " .. def.id_from .. " is required"
+    end
     local id = slugify(def.id_from and rec[def.id_from] or nil)
     if partitioned then
-      local pk = def.partition_by(rec)
+      local pk = partition_by(rec)
       if pk == nil then
         error("registry: partition_by returned nil for '" .. id .. "' — the record lacks its routing field", 3)
       end
@@ -356,6 +469,7 @@ function M.new(def)
       end
       rec.id = id
       if def.on_register then def.on_register(rec) end
+      rec.id = id -- reassert the assigned slug: the hook may have clobbered it
       local q = mutationQueue()
       q[#q + 1] = { pks = packsKey, pk = pk, reg = def.key, op = "set", id = id, rec = rec }
       return id, "filed", rec, dropped
@@ -369,6 +483,7 @@ function M.new(def)
     end
     rec.id = id
     if def.on_register then def.on_register(rec) end
+    rec.id = id -- reassert the assigned slug: the hook may have clobbered it
     list[#list + 1] = rec
     return id, "filed", rec, dropped
   end
@@ -385,8 +500,25 @@ function M.new(def)
   end
 
   local function query(args)
-    local rec = findRecord(args and args.id)
-    if not rec then return "unknown " .. tostring(def.key or "record") .. ": " .. tostring(args and args.id) end
+    local id = args and args.id
+    if partitioned and partitionField then
+      -- The routing field is a domain fact ("the floor the monster is on") —
+      -- the model names it, the lookup stays inside that partition.
+      local pk, err = namedPartition(args)
+      if not pk then return err end
+      local rec = findInPartition(pk, id)
+      if not rec then return "unknown " .. tostring(def.key or "record") .. ": " .. tostring(id) .. " in " .. pk end
+      return json.encode(rec)
+    end
+    if partitioned then
+      -- function-form partition_by: no field to ask for — scan, but loudly
+      local matches = findAll(id)
+      if #matches > 1 then return ambiguity(tostring(id), matches) end
+      if #matches == 0 then return "unknown " .. tostring(def.key or "record") .. ": " .. tostring(id) end
+      return json.encode(matches[1].rec)
+    end
+    local rec = findRecord(id)
+    if not rec then return "unknown " .. tostring(def.key or "record") .. ": " .. tostring(id) end
     return json.encode(rec)
   end
 
@@ -395,20 +527,16 @@ function M.new(def)
   local function applyUpdate(pk, id, fields)
     local partial, dropped = coercePartial(def.fields, fields, mutableSet)
     if not next(partial) then
+      if not def.mutable then
+        return nil, "rejected: no mutable fields declared"
+      end
       return nil, "rejected: nothing to update (mutable: " .. table.concat(def.mutable, ", ") .. ")"
     end
     if partitioned then
       local rec, foundPk
       if pk ~= nil then
         foundPk = tostring(pk)
-        local recs, byId = resolvePartition(foundPk)
-        rec = byId[tostring(id)]
-        if not rec then
-          local needle = tostring(id):lower()
-          for _, r in ipairs(recs) do
-            if def.id_from and tostring(r[def.id_from] or ""):lower() == needle then rec = r break end
-          end
-        end
+        rec = findInPartition(foundPk, id)
       else
         rec, foundPk = findRecord(id)
       end
@@ -426,15 +554,45 @@ function M.new(def)
   local function updateExec(args)
     local id = tostring(args and args.id or "")
     if id == "" then return "rejected: id required" end
-    local ok, droppedOrErr = applyUpdate(nil, id, args)
+    local pk = nil
+    if partitioned and partitionField then
+      -- The routing field is part of the call ("the floor the monster is
+      -- on"), so the update lands in exactly one partition.
+      local err
+      pk, err = namedPartition(args)
+      if not pk then return err end
+    elseif partitioned then
+      -- function-form partition_by: the model can't name a partition — an id
+      -- filed on several floors would silently update whichever sorts first.
+      local matches = findAll(id)
+      if #matches > 1 then return ambiguity(id, matches) end
+    end
+    local ok, droppedOrErr = applyUpdate(pk, id, args)
     if not ok then return droppedOrErr end
-    local rec = findRecord(id)
+    local rec = pk and findInPartition(pk, id) or findRecord(id)
     local result = { updated = rec.id, record = rec }
+    if pk then result[partitionField] = pk end
     if droppedOrErr and #droppedOrErr > 0 then result.dropped = droppedOrErr end
     return json.encode(result)
   end
 
+  --- The declared field names (validation targets, e.g. lib/events' RESERVED
+  --- guard when a roster is INJECTED rather than declared through it).
+  function R.fieldNames()
+    local out = {}
+    for _, f in ipairs(def.fields or {}) do out[#out + 1] = f.name end
+    return out
+  end
+
   -- ---------- the tool contract ----------
+
+  -- The routing field rides model-facing lookups under its DOMAIN name — the
+  -- model says "the floor the monster is on", never the word "partition".
+  local function partitionProp()
+    if not (partitioned and partitionField) then return nil end
+    return { type = "string",
+      description = "The " .. partitionField .. " the " .. tostring(def.key or "record") .. " is in — required; records are filed per " .. partitionField }
+  end
 
   function R.tools()
     local out = {}
@@ -452,17 +610,28 @@ function M.new(def)
       },
     }
     if def.query_tool then
+      local qprops = { id = { type = "string" } }
+      local qreq = { "id" }
+      if partitionProp() then
+        qprops[partitionField] = partitionProp()
+        qreq[#qreq + 1] = partitionField
+      end
       out[#out + 1] = {
         type = "function",
         ["function"] = {
           name = def.query_tool,
           description = "Look up a filed " .. tostring(def.key or "record") .. " by id or name. The answer is canonical.",
-          parameters = { type = "object", properties = { id = { type = "string" } }, required = { "id" } },
+          parameters = { type = "object", properties = qprops, required = qreq },
         },
       }
     end
     if updateTool then
       local uprops = { id = { type = "string" } }
+      local ureq = { "id" }
+      if partitionProp() then
+        uprops[partitionField] = partitionProp()
+        ureq[#ureq + 1] = partitionField
+      end
       for _, f in ipairs(def.fields) do
         if mutableSet[f.name] then uprops[f.name] = fieldSchema(f) end
       end
@@ -473,7 +642,7 @@ function M.new(def)
           description = "Update an existing " .. tostring(def.key or "record")
             .. ": OVERWRITES the given fields (latest value is canon). Only these fields may change: "
             .. table.concat(def.mutable, ", ") .. ".",
-          parameters = { type = "object", properties = uprops, required = { "id" } },
+          parameters = { type = "object", properties = uprops, required = ureq },
         },
       }
     end
@@ -514,19 +683,18 @@ function M.new(def)
   --- Look up one record. Partitioned: R.get(pk, id). Unpartitioned: R.get(id).
   function R.get(a, b)
     if not partitioned then return findRecord(a) end
-    local _, byId = resolvePartition(tostring(a))
-    local rec = byId[tostring(b)]
-    if rec then return rec end
-    local needle = tostring(b or ""):lower()
-    for _, r in ipairs(resolvePartition(tostring(a))) do
-      if def.id_from and tostring(r[def.id_from] or ""):lower() == needle then return r end
-    end
-    return nil
+    return findInPartition(a, b)
   end
 
   --- The records of one partition (or the whole registry, unpartitioned).
   function R.list(pk)
     if not partitioned then return records() end
+    -- nil used to read as the literal "nil" partition and return {} — a
+    -- forgotten argument looked like an empty floor. Loud instead; R.all()
+    -- is the cross-partition read.
+    if pk == nil then
+      error("registry: list() on a partitioned registry needs a partition key (use R.all() for cross-partition)", 2)
+    end
     return (resolvePartition(tostring(pk)))
   end
 
@@ -600,7 +768,7 @@ function M.flush()
     local pid = state[g.pks][g.pk]
     local blob = {}
     if pid then
-      local body = store.getJson(pid):await()
+      local body = packBodies[pid] or store.getJson(pid):await()
       if not body then
         error("registry.flush: pack blob missing for partition " .. tostring(g.pk)
           .. " (" .. tostring(pid) .. ") — blobs are script-written, this is a bug", 2)
@@ -634,7 +802,11 @@ function M.flush()
         end
       end
     end
-    state[g.pks][g.pk] = store.putJson("pack", blob):await()
+    local newPid = store.putJson("pack", blob):await()
+    -- Seed the memo with the body just written: the next read of this pack
+    -- would otherwise pay a store round-trip for bytes already in hand.
+    packBodies[newPid] = json.encode(blob)
+    state[g.pks][g.pk] = newPid
   end
   state._regq = {}
 end

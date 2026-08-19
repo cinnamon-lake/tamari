@@ -12,9 +12,9 @@
 -- The span is the caller's, passed via opts.span (message-shaped entries,
 -- usually tracked mechanically in state). gist() returns nil only when there
 -- is nothing to summarize (no span, empty span, empty delegate answer) — the
--- caller picks the fallback. A delegate ERROR propagates and fails the turn —
--- failed turns never overwrite the last good state snapshot, so the user sees
--- the real error and a swipe/regenerate retries from a clean world. One
+-- caller picks the fallback. A delegate ERROR propagates to the CALLER, who
+-- decides what it means — main.lua's endFight pcalls gist() and degrades to
+-- a canned line rather than failing the turn. One
 -- honest bound: the gist is only as good as what the span shows — anything
 -- kept out of the delegate's view can't make it into the summary.
 
@@ -31,10 +31,13 @@ function M.gist(prompt, opts)
   local lines = {}
   local budget = opts.maxSpanChars or 6000
   for i = #span, 1, -1 do -- newest-first until the budget is spent
-    local line = span[i].role .. ": " .. span[i].content
-    if #line > budget then break end
-    table.insert(lines, 1, line)
-    budget = budget - #line
+    -- Tool-call-shaped entries carry no content; skip them, never crash.
+    if type(span[i].content) == "string" then
+      local line = span[i].role .. ": " .. span[i].content
+      if #line > budget then break end
+      table.insert(lines, 1, line)
+      budget = budget - #line
+    end
   end
   if #lines == 0 then return nil end -- no line fit the budget: caller's fallback, not an empty-span sub-gen
 
@@ -51,7 +54,9 @@ function M.gist(prompt, opts)
   }
   local res = backends.generate(sub):await()
   local s = type(res.text) == "string" and res.text or ""
-  s = s:gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1")
+  -- "No double quotes" is a prompt wish the model ignores often enough; fold
+  -- them to single quotes here so the constraint is actually real.
+  s = s:gsub('"', "'"):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1")
   if s == "" then return nil end
   return s
 end
