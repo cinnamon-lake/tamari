@@ -77,6 +77,8 @@ test.describe('Generation Tools', () => {
     await expect(assistantBubble).toContainText('Result', { timeout: 10000 });
 
     // The message should render the tool call and its executed result.
+    // Both collapse into the tool-activity dropdown (a text part follows them).
+    await new App(page).expandToolActivity(assistantBubble);
     await expect(assistantBubble.locator('.tool-call-block').first()).toBeVisible({ timeout: 10000 });
     const resultBlock = assistantBubble.locator('.tool-result-block').first();
     await expect(resultBlock).toBeVisible({ timeout: 10000 });
@@ -99,7 +101,9 @@ test.describe('Generation Tools', () => {
       const bubble = app.lastBubble('assistant');
       // roll_dice has a renderType ("dice"): its tool_use block is suppressed and
       // its result renders as the dice widget. encourage is a plain tool: one
-      // tool-call block and one generic result block.
+      // tool-call block and one generic result block. The sequence terminates
+      // with a plain-text answer, so all of it collapses into the dropdown.
+      await app.expandToolActivity(bubble);
       await expect(bubble.locator('.tool-call-block')).toHaveCount(1, { timeout: 10000 });
       await expect(bubble.locator('.dice-result')).toBeVisible();
       await expect(bubble.locator('.tool-result-block')).toHaveCount(2);

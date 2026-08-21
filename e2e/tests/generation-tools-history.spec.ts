@@ -66,6 +66,8 @@ test.describe('Generation Tools — history serialization', () => {
     // roll_dice has renderType 'dice': its tool_use block is suppressed and the
     // result renders as the dice widget ("Dice Roll 1 (1d6)"), not the raw
     // "Rolled 1d6: ..." text — that string only exists on the wire, asserted below.
+    // The final text part pushes the widget into the tool-activity dropdown.
+    await app.expandToolActivity(bubble);
     const resultBlock = bubble.locator('.tool-result-block.dice-result').first();
     await expect(resultBlock).toBeVisible({ timeout: 10000 });
     await expect(resultBlock).toContainText('1d6');

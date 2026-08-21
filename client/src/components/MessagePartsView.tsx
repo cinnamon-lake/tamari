@@ -46,6 +46,27 @@ export function MessagePartsView(props: MessagePartsViewProps) {
   const renderedHtml = createMemo(() => props.message.renderedHtml ?? []);
   const widgetToolUseIds = createMemo(() => collectWidgetToolUseIds(parts()));
 
+  // Everything before the last text part (tool calls/results, reasoning,
+  // interim chatter) collapses into one dropdown; the final text stays
+  // visible. While streaming with no text yet (lastTextIndex === -1)
+  // nothing collapses, so live tool activity stays on screen.
+  const lastTextIndex = createMemo(() => {
+    const ps = parts();
+    for (let i = ps.length - 1; i >= 0; i--) {
+      const p = ps[i];
+      if (p?.type === 'text' && p.text.trim()) return i;
+    }
+    return -1;
+  });
+  const collapsedParts = createMemo(() => parts().slice(0, Math.max(lastTextIndex(), 0)));
+  const visibleParts = createMemo(() =>
+    lastTextIndex() >= 0 ? parts().slice(lastTextIndex()) : parts(),
+  );
+  // Keep the dropdown open when the part being edited lives inside it.
+  const editingCollapsedPart = createMemo(
+    () => props.editingPartIndex != null && props.editingPartIndex < collapsedParts().length,
+  );
+
   const renderPart = (part: ContentPart, index: () => number): JSX.Element => {
     switch (part.type) {
       case 'text': {
@@ -128,6 +149,14 @@ export function MessagePartsView(props: MessagePartsViewProps) {
     }
   };
 
+  // offset keeps part indices aligned with the original `parts` array
+  // (renderedHtml and editingPartIndex are indexed against it).
+  const renderEntry = (part: ContentPart, index: () => number, offset: number): JSX.Element => (
+    <div data-part-index={index() + offset} class={`message-part message-part-${part.type}`}>
+      {renderPart(part, () => index() + offset)}
+    </div>
+  );
+
   return (
     <div
       class={`message-content${props.isStreamingTarget && props.streamFadeIn ? ' stream-fade-in' : ''}`}
@@ -143,12 +172,18 @@ export function MessagePartsView(props: MessagePartsViewProps) {
           </Show>
         }
       >
-        <For each={parts()}>
-          {(part, index) => (
-            <div data-part-index={index()} class={`message-part message-part-${part.type}`}>
-              {renderPart(part, index)}
+        <Show when={collapsedParts().length > 0}>
+          <details class="tool-activity-block" open={editingCollapsedPart()}>
+            <summary class="tool-activity-summary">
+              <i class="bi bi-tools" /> Tool activity ({collapsedParts().length})
+            </summary>
+            <div class="tool-activity-content">
+              <For each={collapsedParts()}>{(part, index) => renderEntry(part, index, 0)}</For>
             </div>
-          )}
+          </details>
+        </Show>
+        <For each={visibleParts()}>
+          {(part, index) => renderEntry(part, index, collapsedParts().length)}
         </For>
       </Show>
       {/* Editing a message that has no text part: the edit area appends one

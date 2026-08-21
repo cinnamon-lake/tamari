@@ -143,7 +143,9 @@ test.describe('Gemini backend adapter', () => {
 
     const bubble = app.lastBubble('assistant');
     await expect(bubble).toContainText('Here is my final answer.', { timeout: 10000 });
-    // thought:true parts stream as reasoning tokens -> collapsible block.
+    // thought:true parts stream as reasoning tokens -> collapsible block, which
+    // the final text part pushes into the tool-activity dropdown.
+    await app.expandToolActivity(bubble);
     const reasoningBlock = bubble.locator('.reasoning-block');
     await expect(reasoningBlock).toBeVisible({ timeout: 10000 });
     await expect(reasoningBlock).toContainText('I am thinking through this carefully.');
@@ -159,6 +161,8 @@ test.describe('Gemini backend adapter', () => {
 
       const bubble = app.lastBubble('assistant');
       // roll_dice has a dice renderType: its result renders as the dice widget.
+      // The final text part pushes it into the tool-activity dropdown.
+      await app.expandToolActivity(bubble);
       await expect(bubble.locator('.dice-result')).toBeVisible({ timeout: 10000 });
       // After seeing the functionResponse the mock answers with plain text.
       expect(await app.lastAssistantText()).toContain('deterministic mock response');

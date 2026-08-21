@@ -38,6 +38,10 @@ test.describe('TTS (speak tool)', () => {
       await app.sendUserMessage('tool:speak {"text":"hello out there"}', { expectReply: true });
 
       const bubble = app.lastBubble('assistant');
+      // The tool blocks collapse into the tool-activity dropdown (the mock's
+      // plain-text answer follows them); the inline audio is an attachment
+      // strip below the bubble and stays visible.
+      await app.expandToolActivity(bubble);
       await expect(bubble.locator('.tool-call-block').first()).toBeVisible({ timeout: 10000 });
       await expect(bubble.locator('.tool-result-block').first()).toBeVisible({ timeout: 10000 });
       // The generated WAV is saved as an attachment and rendered inline.

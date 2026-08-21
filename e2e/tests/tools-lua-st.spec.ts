@@ -57,6 +57,7 @@ test.describe('Lua st API (allowSt)', () => {
     );
 
     const result = app.lastBubble('assistant').locator('.tool-result-block').last();
+    await app.expandToolActivity(app.lastBubble('assistant'));
     await expect(result).toBeVisible({ timeout: 15000 });
     // var round-trip + chat query + entity write worked…
     await expect(result).toContainText('var:hail-mocktopia');
@@ -86,6 +87,7 @@ test.describe('Lua st API (allowSt)', () => {
     );
 
     const result = app.lastBubble('assistant').locator('.tool-result-block').last();
+    await app.expandToolActivity(app.lastBubble('assistant'));
     await expect(result).toBeVisible({ timeout: 15000 });
     await expect(result).toContainText('Lua execution error');
   });

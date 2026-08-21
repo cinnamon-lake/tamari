@@ -55,6 +55,33 @@ export class App {
     });
   }
 
+  /**
+   * Expand a message bubble's collapsed tool-activity dropdown, if any.
+   * MessagePartsView wraps every part before the last text part (tool calls,
+   * tool results, reasoning, backend debug, interim text) in a closed
+   * <details class="tool-activity-block">; visibility assertions and clicks on
+   * those parts must open it first. No-op when the bubble has no dropdown
+   * (the message ends with a widget or has no text part) or it is already open.
+   *
+   * The dropdown only mounts once the trailing text part exists, so callers
+   * right after sendUserMessage can race its mount — poll briefly for it.
+   */
+  async expandToolActivity(message: Locator, timeout = 10000): Promise<void> {
+    const details = message.locator('details.tool-activity-block');
+    const deadline = Date.now() + timeout;
+    for (;;) {
+      if ((await details.count()) === 0) {
+        if (Date.now() > deadline) return; // no dropdown — nothing to expand
+      } else if (await details.evaluate((el: HTMLDetailsElement) => el.open)) {
+        return; // already open
+      } else {
+        await details.locator('summary.tool-activity-summary').click();
+        if (await details.evaluate((el: HTMLDetailsElement) => el.open)) return;
+      }
+      await this.page.waitForTimeout(100);
+    }
+  }
+
   /** Click a per-message action button by its title (Edit/Hide/Unhide/Delete/Fork/Regenerate/Continue). */
   async clickMessageAction(message: Locator, title: string): Promise<void> {
     await this.revealHoverButtons();

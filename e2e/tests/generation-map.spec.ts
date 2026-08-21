@@ -43,6 +43,9 @@ test.describe('Map Widget', () => {
     );
 
     const assistantBubble = app.lastBubble('assistant');
+    // The sequence ends with a plain-text answer, so all three map widgets
+    // collapse into the tool-activity dropdown.
+    await app.expandToolActivity(assistantBubble);
     const grids = assistantBubble.locator('.message-content .map-grid');
     await expect(grids.last()).toBeVisible({ timeout: 10000 });
     await expect(page.locator('.message-bubble.streaming')).toHaveCount(0, { timeout: 30000 });

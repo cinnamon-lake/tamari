@@ -165,6 +165,8 @@ test.describe('Claude backend adapter', () => {
     await app.sendUserMessage('think: step by step', { expectReply: true });
     const bubble = app.lastBubble('assistant');
     await expect(bubble).toContainText('Here is my final answer.', { timeout: 10000 });
+    // The final text part pushes the reasoning block into the tool-activity dropdown.
+    await app.expandToolActivity(bubble);
     const reasoningBlock = bubble.locator('.reasoning-block');
     await expect(reasoningBlock).toBeVisible({ timeout: 10000 });
     await expect(reasoningBlock).toContainText('I am thinking through this carefully.');
@@ -200,6 +202,7 @@ test.describe('Claude backend adapter', () => {
     await app.sendUserMessage('tool:roll_dice{"sides":6}', { expectReply: true });
 
     const bubble = app.lastBubble('assistant');
+    await app.expandToolActivity(bubble);
     await expect(bubble.locator('.dice-result')).toBeVisible({ timeout: 10000 });
     expect(await app.lastAssistantText()).toContain('deterministic mock response');
 

@@ -57,7 +57,9 @@ test.describe('Reasoning — Text Completion Mode', () => {
 
     const bubble = app.lastBubble('assistant');
     // Reasoning was split out of the raw text into a details block; the
-    // remaining markdown paragraph is exactly the visible content.
+    // remaining markdown paragraph is exactly the visible content. The final
+    // text part pushes the reasoning block into the tool-activity dropdown.
+    await app.expandToolActivity(bubble);
     const reasoningBlock = bubble.locator('.reasoning-block');
     await expect(reasoningBlock).toBeVisible({ timeout: 10000 });
     await expect(reasoningBlock).toContainText('I pondered deeply');

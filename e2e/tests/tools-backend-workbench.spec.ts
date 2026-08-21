@@ -93,6 +93,7 @@ test.describe('Backend Workbench Tools', () => {
       expectReply: true,
     });
 
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const result = app.lastBubble('assistant').locator('.tool-result-block').last();
     await expect(result).toBeVisible({ timeout: 10000 });
     await expect(result).toContainText('"hasApiKey": true');
@@ -153,6 +154,7 @@ test.describe('Backend Workbench Tools', () => {
       expectReply: true,
     });
 
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const result = app.lastBubble('assistant').locator('.tool-result-block').last();
     await expect(result).toBeVisible({ timeout: 15000 });
     await expect(result).toContainText('"ok":true');

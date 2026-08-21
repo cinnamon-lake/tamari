@@ -57,6 +57,7 @@ test.describe('Memory Tools', () => {
     await app.sendUserMessage(`tool:memory_get_raw{"messageIds":[${greetingId}]}`, { expectReply: true });
 
     // The tool result block renders `[msg:<id>] assistant: <greeting>`.
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const resultBlock = app.lastBubble('assistant').locator('.tool-result-block').first();
     await expect(resultBlock).toBeVisible({ timeout: 10000 });
     await expect(resultBlock).toContainText(`[msg:${greetingId}]`);

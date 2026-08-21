@@ -58,6 +58,7 @@ test.describe('Lua Media Capabilities (fetch + attachments)', () => {
     // The test_luatool result wraps the tool's return: inline text + audio parts
     // with the attachment URL.
     const result = app.lastBubble('assistant').locator('.tool-result-block').last();
+    await app.expandToolActivity(app.lastBubble('assistant'));
     await expect(result).toBeVisible({ timeout: 15000 });
     await expect(result).toContainText('/api/attachments/');
     await expect(result).toContainText('audio/wav');
@@ -79,6 +80,7 @@ test.describe('Lua Media Capabilities (fetch + attachments)', () => {
     );
 
     const result = app.lastBubble('assistant').locator('.tool-result-block').last();
+    await app.expandToolActivity(app.lastBubble('assistant'));
     await expect(result).toBeVisible({ timeout: 15000 });
     await expect(result).toContainText('nil');
     await expect(result).not.toContainText('/api/attachments/');

@@ -10,10 +10,20 @@ import { resolveHtmlImages } from '../lib/resolveHtmlImages.js';
 const domWindow = new JSDOM('').window;
 const DOMPurify = createDOMPurify(domWindow);
 
-// Custom renderer for syntax highlighting (same as client)
+// Custom renderer for code blocks. In marked v18 `text` arrives RAW
+// (unescaped) — the default renderer escapes it, so an override must too.
+// Without escaping, markup inside a fenced block (HTML/JSX/XML samples)
+// survives DOMPurify's permissive tag list and materializes as hundreds of
+// live DOM elements inside the bubble, instead of inert text in one <pre>.
+const escapeHtml = (s: string) =>
+  s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 const renderer = new marked.Renderer();
 renderer.code = ({ text, lang }: { text: string; lang?: string }) => {
-  return `<pre><code class="hljs language-${lang ?? 'plaintext'}">${text}</code></pre>`;
+  return `<pre><code class="hljs language-${escapeHtml(lang ?? 'plaintext')}">${escapeHtml(text)}</code></pre>`;
 };
 marked.use({ renderer });
 marked.setOptions({

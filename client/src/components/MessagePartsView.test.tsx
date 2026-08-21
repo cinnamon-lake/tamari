@@ -198,4 +198,65 @@ describe('MessagePartsView', () => {
     render(() => <MessagePartsView message={message} />);
     expect(screen.getByText('legacy flat')).toBeInTheDocument();
   });
+
+  it('wraps everything before the last text part in a collapsed tool-activity dropdown', () => {
+    render(() => (
+      <MessagePartsView
+        message={makeMessage(
+          [
+            { type: 'reasoning', text: 'hmm' },
+            { type: 'tool_use', id: 'call-1', name: 'roll_dice', input: {} },
+            { type: 'tool_result', toolUseId: 'call-1', content: '7' },
+            { type: 'text', text: 'the answer' },
+          ],
+          [null, null, null, '<p>the answer</p>'],
+        )}
+      />
+    ));
+    const details = document.querySelector<HTMLDetailsElement>('details.tool-activity-block');
+    expect(details).not.toBeNull();
+    expect(details!.open).toBe(false);
+    // The three preceding parts live inside the dropdown…
+    expect(details!.querySelectorAll('[data-part-index]')).toHaveLength(3);
+    expect(details!.querySelector('.tool-call-block')).not.toBeNull();
+    expect(details!.querySelector('.tool-result-block')).not.toBeNull();
+    expect(details!.querySelector('.reasoning-block')).not.toBeNull();
+    // …the final text stays outside.
+    const finalPart = document.querySelector('[data-part-index="3"]');
+    expect(finalPart).not.toBeNull();
+    expect(details!.contains(finalPart)).toBe(false);
+  });
+
+  it('does not collapse anything when there is no text part (live tool activity)', () => {
+    render(() => (
+      <MessagePartsView
+        message={makeMessage([
+          { type: 'tool_use', id: 'call-1', name: 'roll_dice', input: {} },
+          { type: 'tool_result', toolUseId: 'call-1', content: '7' },
+        ])}
+      />
+    ));
+    expect(document.querySelector('details.tool-activity-block')).toBeNull();
+    expect(document.querySelector('.tool-call-block')).not.toBeNull();
+  });
+
+  it('keeps the dropdown open when the edited part is inside it', () => {
+    render(() => (
+      <MessagePartsView
+        message={makeMessage(
+          [
+            { type: 'text', text: 'interim' },
+            { type: 'text', text: 'final' },
+          ],
+          ['<p>interim</p>', '<p>final</p>'],
+        )}
+        editingPartIndex={0}
+        renderEditArea={(idx, text) => <textarea data-testid={`edit-${idx}`} value={text} />}
+      />
+    ));
+    const details = document.querySelector<HTMLDetailsElement>('details.tool-activity-block');
+    expect(details).not.toBeNull();
+    expect(details!.open).toBe(true);
+    expect(screen.getByTestId('edit-0')).toBeInTheDocument();
+  });
 });

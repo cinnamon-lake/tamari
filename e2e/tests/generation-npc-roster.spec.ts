@@ -48,6 +48,9 @@ test.describe('NPC Roster Widget', () => {
     );
 
     const assistantBubble = app.lastBubble('assistant');
+    // The plain-text reply round pushes the roster widget into the tool-activity
+    // dropdown; expand it before interacting with the widget.
+    await app.expandToolActivity(assistantBubble);
     const roster = assistantBubble.locator('.message-content .npc-roster');
     await expect(roster).toBeVisible({ timeout: 10000 });
     await expect(page.locator('.message-bubble.streaming')).toHaveCount(0, { timeout: 30000 });

@@ -194,6 +194,8 @@ test.describe('Character Workbench (verbs & vfs)', () => {
     );
     const seedResults = app.lastBubble('assistant').locator('.tool-result-block');
     await expect(seedResults).toHaveCount(2, { timeout: 20000 });
+    // innerText is empty for collapsed content — expand the dropdown first.
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const entryA = await resultUuid(seedResults.first());
     const entryB = await resultUuid(seedResults.nth(1));
 
@@ -223,6 +225,8 @@ test.describe('Character Workbench (verbs & vfs)', () => {
     // lorebookEntryMove result: { entryId, index, entryOrder } — compact JSON via `run`.
     await expect(moveResult).toContainText(`"entryId":"${entryA}"`, { timeout: 20000 });
     await expect(moveResult).toContainText('"index":1');
+    // innerText is empty for collapsed content — expand the dropdown first.
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const moveText = await moveResult.innerText();
     const orderMatch = moveText.match(/"entryOrder":\s*\[([\s\S]*?)\]/);
     expect(orderMatch, 'move result carries entryOrder').toBeTruthy();
@@ -264,6 +268,8 @@ test.describe('Character Workbench (verbs & vfs)', () => {
     );
     const addResult = app.lastBubble('assistant').locator('.tool-result-block').last();
     await expect(addResult).toContainText(ruleName, { timeout: 20000 });
+    // innerText is empty for collapsed content — expand the dropdown first.
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const ruleId = await resultUuid(addResult);
 
     // Disable the rule via a whole-file write; read-back shows the patch.

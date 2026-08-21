@@ -63,6 +63,9 @@ test.describe('Scene Stage', () => {
     );
 
     const assistantBubble = app.lastBubble('assistant');
+    // The plain-text reply round pushes the scene chip into the tool-activity
+    // dropdown; the stage panel lives outside the bubble and stays visible.
+    await app.expandToolActivity(assistantBubble);
     const chip = assistantBubble.locator('.message-content .scene-chip');
     await expect(chip).toBeVisible({ timeout: 10000 });
     await expect(chip).toContainText('The Tavern');

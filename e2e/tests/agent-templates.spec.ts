@@ -132,6 +132,7 @@ test.describe('Agent / Workbench / Forge Templates', () => {
       userText: 'tool:run_agent',
     });
 
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const result = app.lastBubble('assistant').locator('.tool-result-block').last();
     await expect(result).toBeVisible({ timeout: 15000 });
     await expect(result).toContainText('agent says hi');
@@ -195,10 +196,18 @@ test.describe('Agent / Workbench / Forge Templates', () => {
     // UUID ordering, so assert the success block exists anywhere in the chat.
     await sendThenGenerate(page, chatId!, `tool:chat_remove_member${JSON.stringify({ characterId: memberId })}`);
 
-    const removed = page.locator('.message-bubble.assistant .tool-result-block', { hasText: '"removed"' });
+    const removedBubble = page.locator('.message-bubble.assistant', {
+      has: page.locator('.tool-result-block', { hasText: '"removed"' }),
+    });
+    const removed = removedBubble.locator('.tool-result-block', { hasText: '"removed"' });
+    // The success block lands inside the collapsed tool-activity dropdown (the
+    // mock answers with text after the tool round): wait for it to attach and
+    // for streaming to settle, then expand before the visibility assertion.
+    await expect(removed.first()).toBeAttached({ timeout: 20000 });
+    await expect(page.locator('.message-bubble.streaming')).toHaveCount(0, { timeout: 30000 });
+    await app.expandToolActivity(removedBubble.first());
     await expect(removed.first()).toBeVisible({ timeout: 20000 });
     await expect(removed.first()).toContainText(memberId!);
-    await expect(page.locator('.message-bubble.streaming')).toHaveCount(0, { timeout: 30000 });
 
     await page.locator('.group-chat-toolbar button:has-text("Manage Members")').click();
     await expect(panel).toBeVisible();
@@ -220,6 +229,7 @@ test.describe('Agent / Workbench / Forge Templates', () => {
     });
 
     const bubble = app.lastBubble('assistant');
+    await app.expandToolActivity(bubble);
     await expect(bubble.locator('.tool-call-block').first()).toContainText('generate_image', { timeout: 15000 });
     await expect(bubble.locator('.tool-result-block').last()).toBeVisible({ timeout: 15000 });
     // A failed Forge call returns an error string; the happy path must not.
@@ -249,6 +259,7 @@ test.describe('Agent / Workbench / Forge Templates', () => {
       userText: 'tool:generate_image',
     });
 
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const result = app.lastBubble('assistant').locator('.tool-result-block').last();
     await expect(result).toBeVisible({ timeout: 15000 });
     await expect(result).toContainText('Forge returned 404');

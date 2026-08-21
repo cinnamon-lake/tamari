@@ -218,6 +218,7 @@ test.describe('Workbench VFS Tools', () => {
 
     await app.sendUserMessage('tool:run{}', { expectReply: true, userText: 'run' });
 
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const result = app.lastBubble('assistant').locator('.tool-result-block').last();
     await expect(result).toBeVisible({ timeout: 15000 });
     await expect(result).toContainText('run verbs');
@@ -242,6 +243,8 @@ test.describe('Workbench VFS Tools', () => {
 
     const createResult = app.lastBubble('assistant').locator('.tool-result-block').last();
     await expect(createResult).toContainText(`"name": "${name}"`, { timeout: 15000 });
+    // innerText is empty for collapsed content — expand the dropdown first.
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const createText = await createResult.innerText();
     const idMatch = createText.match(/"path": "\/backends\/([0-9a-f-]{36})\.json"/);
     expect(idMatch, 'created backend config path in tool result').toBeTruthy();
@@ -300,6 +303,8 @@ test.describe('Workbench VFS Tools', () => {
 
     const createResult = app.lastBubble('assistant').locator('.tool-result-block').last();
     await expect(createResult).toContainText('"id": "', { timeout: 15000 });
+    // innerText is empty for collapsed content — expand the dropdown first.
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const createText = await createResult.innerText();
     const idMatch = createText.match(/"id":\s*"([0-9a-f-]{36})"/);
     expect(idMatch, 'created template id in tool result').toBeTruthy();
@@ -342,6 +347,8 @@ test.describe('Workbench VFS Tools', () => {
 
     const createResult = app.lastBubble('assistant').locator('.tool-result-block').last();
     await expect(createResult).toContainText(`"label": "${label}"`, { timeout: 15000 });
+    // innerText is empty for collapsed content — expand the dropdown first.
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const createText = await createResult.innerText();
     const idMatch = createText.match(/"path": "\/quickreplies\/global\/_\/([^".]+)\.json"/);
     expect(idMatch, 'created quick reply path in tool result').toBeTruthy();
@@ -379,6 +386,8 @@ test.describe('Workbench VFS Tools', () => {
 
     const createResult = app.lastBubble('assistant').locator('.tool-result-block').last();
     await expect(createResult).toContainText(`"name": "${name}"`, { timeout: 15000 });
+    // innerText is empty for collapsed content — expand the dropdown first.
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const createText = await createResult.innerText();
     const idMatch = createText.match(/"path": "\/custom-backends\/([0-9a-f-]{36})\/"/);
     expect(idMatch, 'created custom backend path in tool result').toBeTruthy();

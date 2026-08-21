@@ -74,7 +74,9 @@ test.describe('Lua Tool Workbench', () => {
     await expect(results.last()).toContainText('echo:hello os:nil');
 
     // Now test the stored template — its saved allowOs flag must apply.
-    // The stored template's id is needed; read it from the first tool result.
+    // The stored template's id is needed; read it from the first tool result
+    // (innerText is empty for collapsed content — expand the dropdown first).
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const createText = await results.first().innerText();
     const idMatch = createText.match(/"id":\s*"([0-9a-f-]{36})"/);
     expect(idMatch, 'created template id in tool result').toBeTruthy();
@@ -85,6 +87,7 @@ test.describe('Lua Tool Workbench', () => {
     );
 
     const stored = app.lastBubble('assistant').locator('.tool-result-block').last();
+    await app.expandToolActivity(app.lastBubble('assistant'));
     await expect(stored).toBeVisible({ timeout: 15000 });
     await expect(stored).toContainText('echo:stored os:table');
   });
@@ -107,6 +110,7 @@ test.describe('Lua Tool Workbench', () => {
     );
 
     const result = app.lastBubble('assistant').locator('.tool-result-block').last();
+    await app.expandToolActivity(app.lastBubble('assistant'));
     await expect(result).toBeVisible({ timeout: 15000 });
     await expect(result).toContainText('validation failed');
   });

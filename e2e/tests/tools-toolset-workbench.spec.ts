@@ -61,6 +61,8 @@ test.describe('Toolset Workbench', () => {
 
     const createResult = app.lastBubble('assistant').locator('.tool-result-block').last();
     await expect(createResult).toContainText('echo_live', { timeout: 15000 });
+    // innerText is empty for collapsed content — expand the dropdown first.
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const createText = await createResult.innerText();
     const templateId = createText.match(/"id":\s*"([0-9a-f-]{36})"/)?.[1];
     expect(templateId, 'created template id in tool result').toBeTruthy();

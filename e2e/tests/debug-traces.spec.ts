@@ -197,6 +197,8 @@ test.describe('Debug traces', () => {
     await expect(results.last()).toContainText('sub agent answer');
     await expect(results.last()).toContainText('[trace: ');
 
+    // innerText is empty for collapsed content — expand the dropdown first.
+    await app.expandToolActivity(app.lastBubble('assistant'));
     const traceId = (await results.last().innerText()).match(/\[trace: ([0-9a-f-]{36})\]/)?.[1];
     expect(traceId).toBeTruthy();
 

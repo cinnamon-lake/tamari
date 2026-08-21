@@ -244,6 +244,9 @@ test.describe.serial('TTS providers (speak tool)', () => {
 
         // (a) Tool call + result rendered; audio saved as attachment, inline player visible.
         const bubble = app.lastBubble('assistant');
+        // The tool blocks collapse into the tool-activity dropdown (a text part
+        // follows them); the inline audio is an attachment strip and stays visible.
+        await app.expandToolActivity(bubble);
         await expect(bubble.locator('.tool-call-block').first()).toBeVisible({ timeout: 10000 });
         await expect(bubble.locator('.tool-result-block').first()).toBeVisible({ timeout: 10000 });
         await expect(page.locator('audio, .message-inline-audio').first()).toBeVisible({ timeout: 10000 });
@@ -275,6 +278,7 @@ test.describe.serial('TTS providers (speak tool)', () => {
       await app.sendUserMessage('tool:speak {"text":"hello from azure"}', { expectReply: true });
 
       const bubble = app.lastBubble('assistant');
+      await app.expandToolActivity(bubble);
       const result = bubble.locator('.tool-result-block').first();
       await expect(result).toBeVisible({ timeout: 10000 });
       // SpeakTemplate wraps adapter errors as `TTS generation failed: <adapter msg>`.

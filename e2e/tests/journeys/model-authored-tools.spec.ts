@@ -67,6 +67,8 @@ test.describe('Model-Authored Tools Journey', () => {
         );
         const result = app.lastBubble('assistant').locator('.tool-result-block').last();
         await expect(result).toContainText('fetch_scrolls', { timeout: 15000 });
+        // innerText is empty for collapsed content — expand the dropdown first.
+        await app.expandToolActivity(app.lastBubble('assistant'));
         templateId = (await result.innerText()).match(/"id":\s*"([0-9a-f-]{36})"/)?.[1];
         expect(templateId, 'created template id in tool result').toBeTruthy();
       });
@@ -82,6 +84,7 @@ test.describe('Model-Authored Tools Journey', () => {
         const result = app.lastBubble('assistant').locator('.tool-result-block').last();
         await expect(result).toContainText('"enabled": true', { timeout: 15000 });
         await expect(result).toContainText('fetch_scrolls');
+        await app.expandToolActivity(app.lastBubble('assistant'));
         createdToolsetId = (await result.innerText()).match(/"id":\s*"([0-9a-f-]{36})"/)?.[1];
       });
 
@@ -98,6 +101,7 @@ test.describe('Model-Authored Tools Journey', () => {
         await expect(result).toContainText('# The Sacred Scrolls of Mocktopia');
         await expect(result).toContainText('incrementeth eternally');
 
+        await app.expandToolActivity(app.lastBubble('assistant'));
         attachmentId = (await result.innerText()).match(/\/api\/attachments\/([0-9a-f-]{36})/)?.[1];
         expect(attachmentId, 'attachment id in tool result').toBeTruthy();
       });

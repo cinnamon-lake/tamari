@@ -294,7 +294,9 @@ end`,
       await app.sendUserMessage('respond: marco', { expectReply: true });
       const bubble = app.lastBubble('assistant');
       // The tool loop executed roll_dice (dice widget) and the continuation
-      // round produced the final text through the delegate.
+      // round produced the final text through the delegate — which pushes the
+      // widget into the tool-activity dropdown.
+      await app.expandToolActivity(bubble);
       await expect(bubble.locator('.dice-result')).toBeVisible({ timeout: 10000 });
       await app.waitForAssistantText('marco');
     } finally {

@@ -87,6 +87,22 @@ describe('renderMessageParts', () => {
     expect(html[0]).toContain('<strong>flat</strong>');
   });
 
+  it('escapes markup inside fenced code blocks instead of emitting live HTML', async () => {
+    const parts: ContentPart[] = [
+      {
+        type: 'text',
+        text: 'Here is the component:\n```jsx\n<div class="modal"><button style="color:red">Click</button></div>\n```',
+      },
+    ];
+    const html = await renderMessageParts(makeCtx(parts));
+    expect(html[0]).toContain('<pre><code');
+    // The snippet must arrive as inert text, not real elements.
+    // (DOMPurify re-serializes &quot; as " in text context — still inert.)
+    expect(html[0]).toContain('&lt;div class="modal"&gt;');
+    expect(html[0]).not.toContain('<div');
+    expect(html[0]).not.toContain('<button');
+  });
+
   it('keeps the Layer-3 button protocol in permissive mode, strips it in strict mode', async () => {
     const parts: ContentPart[] = [
       { type: 'text', text: 'Choose: <button data-post-response="draw" data-evil="x" onclick="hack()">Draw</button>' },

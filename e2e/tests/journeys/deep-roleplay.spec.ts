@@ -60,6 +60,8 @@ test.describe('Deep Roleplay Journey', () => {
 
     await test.step('a reasoning block streams and renders', async () => {
       await app.sendUserMessage('think: walk me through your plan', { expectReply: true });
+      // The final text part pushes the reasoning block into the tool-activity dropdown.
+      await app.expandToolActivity(app.lastBubble('assistant'));
       const reasoning = app.lastBubble('assistant').locator('.reasoning-block');
       await expect(reasoning).toBeVisible({ timeout: 10000 });
       await expect(reasoning).toContainText(/thinking/i);
@@ -69,6 +71,9 @@ test.describe('Deep Roleplay Journey', () => {
       toolsetId = await enableBuiltinToolset(page, 'lua_encouragement');
       await app.sendUserMessage('tool:encourage', { expectReply: true });
       const bubble = app.lastBubble('assistant');
+      // The tool blocks collapse into the tool-activity dropdown (a text part
+      // follows them).
+      await app.expandToolActivity(bubble);
       await expect(bubble.locator('.tool-call-block').first()).toBeVisible({ timeout: 10000 });
       const result = bubble.locator('.tool-result-block').first();
       await expect(result).toBeVisible({ timeout: 10000 });

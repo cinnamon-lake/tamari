@@ -2,6 +2,7 @@ import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
 import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
+import { App } from '../helpers/app.js';
 
 function uniqueName(base: string): string {
   return `${base} ${Date.now()}`;
@@ -65,7 +66,9 @@ test.describe('Generation Reasoning', () => {
     const assistantBubble = page.locator('.message-bubble.assistant').last();
     await expect(assistantBubble).toContainText('Here is my final answer.', { timeout: 10000 });
 
-    // The reasoning block should be rendered as a collapsible details element.
+    // The reasoning block should be rendered as a collapsible details element —
+    // the final text part pushes it into the tool-activity dropdown.
+    await new App(page).expandToolActivity(assistantBubble);
     const reasoningBlock = assistantBubble.locator('.reasoning-block');
     await expect(reasoningBlock).toBeVisible({ timeout: 10000 });
     await expect(reasoningBlock).toContainText('I am thinking through this carefully.');

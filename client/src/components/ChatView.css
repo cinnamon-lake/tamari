@@ -108,6 +108,11 @@
   gap: var(--space-xs);
   max-width: 100%;
   min-width: 0;
+  /* Skip layout/paint for off-screen messages; the list can hold 50+
+   * bubbles and code-heavy ones are expensive. `auto` remembers the real
+   * height after first render so the scrollbar stays stable. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 160px;
   transition:
     border-color var(--transition-fast),
     box-shadow var(--transition-fast);
@@ -800,6 +805,51 @@
   padding-right: var(--space-md);
   margin-top: var(--space-sm);
   font-size: var(--text-sm);
+}
+
+/* Tool activity dropdown: everything before the final text part */
+.tool-activity-block {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-sm);
+  padding-right: var(--space-sm);
+}
+
+.tool-activity-block summary {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.tool-activity-block summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-activity-block summary::before {
+  font-family: 'bootstrap-icons';
+  content: '\F285';
+  font-size: var(--text-sm);
+  transition: transform var(--transition-fast);
+  display: inline-flex;
+}
+
+.tool-activity-block[open] summary::before {
+  content: '\F282';
+}
+
+.tool-activity-content {
+  margin-top: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--color-bg-tertiary);
 }
 
 /* Placeholder the client hydrates an interactive tool widget into */
