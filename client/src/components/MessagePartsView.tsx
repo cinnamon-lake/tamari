@@ -1,5 +1,5 @@
 import { For, Show, createMemo, type JSX } from 'solid-js';
-import type { ContentPart, Message, ToolResultPart } from '@tamari/types';
+import type { ContentPart, InlineContentPart, Message, TextPart, ToolResultPart } from '@tamari/types';
 import { getToolRenderer } from './tool-renderers/index.js';
 
 /**
@@ -38,7 +38,29 @@ function collectWidgetToolUseIds(parts: ContentPart[]): Set<string> {
 }
 
 function toolResultText(part: ToolResultPart): string {
-  return typeof part.content === 'string' ? part.content : '';
+  if (typeof part.content === 'string') return part.content;
+  return part.content
+    .filter((c): c is TextPart => c.type === 'text')
+    .map((c) => c.text)
+    .join('\n');
+}
+
+/** Non-text inline items (image/audio/video) carried alongside the text. */
+function toolResultMedia(part: ToolResultPart): InlineContentPart[] {
+  return Array.isArray(part.content) ? part.content.filter((c) => c.type !== 'text') : [];
+}
+
+function renderInlineMedia(part: InlineContentPart): JSX.Element {
+  switch (part.type) {
+    case 'image':
+      return <img class="message-inline-img" src={part.source} alt="" loading="lazy" />;
+    case 'audio':
+      return <audio class="message-inline-audio" controls src={part.source} preload="metadata" />;
+    case 'video':
+      return <video class="message-inline-video" controls src={part.source} preload="metadata" />;
+    default:
+      return null;
+  }
 }
 
 export function MessagePartsView(props: MessagePartsViewProps) {
@@ -99,14 +121,10 @@ export function MessagePartsView(props: MessagePartsViewProps) {
           </Show>
         );
       }
-      case 'image': {
-        return <img class="message-inline-img" src={part.source} alt="" loading="lazy" />;
-      }
-      case 'audio': {
-        return <audio class="message-inline-audio" controls src={part.source} preload="metadata" />;
-      }
+      case 'image':
+      case 'audio':
       case 'video': {
-        return <video class="message-inline-video" controls src={part.source} preload="metadata" />;
+        return renderInlineMedia(part);
       }
       case 'tool_use': {
         return (
@@ -137,12 +155,15 @@ export function MessagePartsView(props: MessagePartsViewProps) {
         const isError = part.isError === true;
         // Raw content in a <pre>: tool results are JSON / plain text —
         // markdown-rendering them would mangle headings, escapes, etc.
+        // Array content (e.g. text + a generated image) renders text in the
+        // <pre> and the media items inline below it.
         return (
           <div class={`tool-result-block${isError ? ' error' : ''}`}>
             <div class="tool-result-header">
               <i class={`bi ${isError ? 'bi-exclamation-triangle' : 'bi-check-circle'}`} /> {isError ? 'Error' : 'Result'}
             </div>
             <pre class="tool-result-content">{toolResultText(part)}</pre>
+            <For each={toolResultMedia(part)}>{(item) => renderInlineMedia(item)}</For>
           </div>
         );
       }

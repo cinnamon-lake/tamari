@@ -117,6 +117,25 @@ Config options:
 | `files` | Optional reference images (img2img, ControlNet), passed to the request script as base64. |
 | `requestScript` | Lua script that mutates the outgoing HTTP request — see [Request Scripts](./request-scripts.md). |
 
+### NovelAI Image Generator (`nai_image`)
+
+Generates anime-style images with the NovelAI Diffusion API. Requires a NovelAI API key (the `pst-...` token from your NovelAI account settings).
+
+| Tool | Description |
+|------|-------------|
+| `generate_image` | Generate an image from a text prompt (`orientation`: `square`/`portrait`/`landscape`; optional `negative_prompt`, optional `seed`). The result includes an `{{attachment::ID}}` reference the model can embed to display the image. |
+
+Config options:
+
+| Option | Description |
+|--------|-------------|
+| `apiKey` | NovelAI API key, or a vault reference (`secret:<key>`). Required. |
+| `model` | Diffusion model id (default `nai-diffusion-5-full`; e.g. `nai-diffusion-4-5-full`, `nai-diffusion-3`). |
+| `baseUrl` | API base URL (default `https://image.novelai.net`) — override only for proxies. |
+| `requestScript` | Lua script that mutates the outgoing HTTP request — see [Request Scripts](./request-scripts.md). Use it to tweak `steps`, `scale`, `sampler`, etc. |
+
+Generation consumes Anlas from your NovelAI account per call, at the account's standard rates.
+
 ### Lua Runner (`lua_runner`)
 
 | Tool | Description |

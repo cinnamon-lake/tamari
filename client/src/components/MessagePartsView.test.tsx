@@ -82,6 +82,30 @@ describe('MessagePartsView', () => {
     expect(result!.querySelector('.tool-result-content')?.textContent).toBe('Rolled 2d6: 7');
   });
 
+  it('renders array tool_result content: text in the pre, media inline', () => {
+    render(() => (
+      <MessagePartsView
+        message={makeMessage([
+          {
+            type: 'tool_result',
+            toolUseId: 'call-1',
+            content: [
+              { type: 'text', text: 'Generated square image (seed 42).' },
+              { type: 'image', source: '/api/attachments/abc', mimeType: 'image/png' },
+            ],
+          },
+        ])}
+      />
+    ));
+    const result = document.querySelector('.tool-result-block');
+    expect(result).not.toBeNull();
+    expect(result!.querySelector('.tool-result-content')?.textContent).toBe(
+      'Generated square image (seed 42).',
+    );
+    const img = result!.querySelector('img.message-inline-img');
+    expect(img?.getAttribute('src')).toBe('/api/attachments/abc');
+  });
+
   it('mounts the registered widget directly for tool_result parts with extra.renderType', () => {
     render(() => (
       <MessagePartsView

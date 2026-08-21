@@ -598,7 +598,7 @@ State is automatically saved after each tool execution into the `tool_result` me
 
 ### Built-in Templates
 
-tamari ships with built-in tool templates that don't require Lua — the **workbench** (filesystem-style editing of characters, backends, toolsets, quick replies, and Lua tools), **docs**, **assets**, **scene**, **agent**, **lua_runner**, **speak**, **forge_image**, **memory**, and **chat_workbench** — plus a set of seeded Lua templates (dice, time, map, choices, and more) that serve as reference implementations.
+tamari ships with built-in tool templates that don't require Lua — the **workbench** (filesystem-style editing of characters, backends, toolsets, quick replies, and Lua tools), **docs**, **assets**, **scene**, **agent**, **lua_runner**, **speak**, **forge_image**, **nai_image**, **memory**, and **chat_workbench** — plus a set of seeded Lua templates (dice, time, map, choices, and more) that serve as reference implementations.
 
 For the full catalog with every tool name and config option, see [Tools & Lua Templates](./tools.md). For the workbench's path layout and `run` verbs, see [The Workbench](./workbench.md).
 
