@@ -52,6 +52,10 @@ playwright-report/
 .test-data-*/
 e2e/.auth/
 
+# Local-only e2e scratch space (personal card development)
+/e2e/local/
+/e2e/.local-results/
+
 # Claude Code (per-user local settings; not shared)
 .claude/settings.local.json
 .claude/settings.local.json.tmp.*

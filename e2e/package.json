@@ -6,6 +6,7 @@
     "test": "playwright test",
     "test:smoke": "playwright test --project=chromium-smoke",
     "test:journeys": "playwright test --project=chromium-journeys",
+    "test:local": "playwright test --config=playwright.local.config.ts",
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
     "shots:mobile": "node mobile-screenshots.mjs",

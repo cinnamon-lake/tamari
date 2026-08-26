@@ -38,6 +38,7 @@
     "db:seed": "npx tsx server/src/db/seed.ts",
     "test:e2e:smoke": "npm run build && npm run test:smoke --workspace=e2e",
     "test:e2e:journeys": "npm run build && npm run test:journeys --workspace=e2e",
+    "test:e2e:local": "npm run build && npm run test:local --workspace=e2e",
     "test:e2e:coverage": "rm -rf e2e/.coverage e2e/coverage && E2E_COVERAGE=1 npm run build && E2E_COVERAGE=1 npm run test --workspace=e2e",
     "lint:css": "node audit_css_hooks.cjs"
   },

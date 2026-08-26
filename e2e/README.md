@@ -50,6 +50,23 @@ docker stop tamari-e2e
 not in the checkout.
 
 
+### Local-only specs (`e2e/local/`)
+
+Gitignored scratch space for specs you are **not** committing — e.g. smoke-testing
+a personal unpacked card through the real UI. They never enter commits and the
+stock projects (which scan `tests/` only) never pick them up. `playwright.local.config.ts`
+inherits the stock webServer/auth/port handling, just pointed at `./local`:
+
+```bash
+# Build once, then run everything in e2e/local/ (or add a file filter):
+npm run test:e2e:local
+cd e2e && npx playwright test --config=playwright.local.config.ts
+
+# Parallel-safe alongside another Playwright instance (same E2E_PORT mechanism):
+E2E_PORT=8767 npm run test:e2e:local
+```
+
+
 ### Architecture
 
 - **`fixtures/server.ts`** — Starts/stops a real server with an isolated SQLite database.
