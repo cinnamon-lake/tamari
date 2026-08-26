@@ -4,6 +4,7 @@ import { state } from '../stores/serverStore.js';
 import { bus } from '../bus/WebSocketBus.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 
 export interface AuthorsNotePanelProps {
@@ -118,7 +119,7 @@ export function AuthorsNotePanel(props: AuthorsNotePanelProps) {
 
   return (
     <Show when={props.open}>
-      <div class="modal-overlay" onClick={(e) => e.target === e.currentTarget && close()}>
+      <div class="modal-overlay" {...createBackdropDismiss(close)}>
         <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="authors-note-title" onKeyDown={(e) => trapFocus(e.currentTarget, e)}>
           <h2 class="authors-note-title" id="authors-note-title">
             <i class="bi bi-journal-text" /> {t('authorsNote.title')}

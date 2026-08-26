@@ -5,6 +5,7 @@ import type { QuickReply, QuickReplyInsert } from '@tamari/types';
 import { QuickReplyAutoExecute } from '@tamari/types';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import './QuickReplyEditor.css';
 
 interface Props {
@@ -65,7 +66,7 @@ export function QuickReplyEditor(props: Props) {
 
   return (
     <Portal mount={document.body}>
-      <div class="modal-overlay" onClick={(e) => e.target === e.currentTarget && close()}>
+      <div class="modal-overlay" {...createBackdropDismiss(close)}>
         <div class="modal-content qr-modal" role="dialog" aria-modal="true" aria-label={props.qr ? t('quickReply.editQuickReply') : t('quickReply.newQuickReply')} onKeyDown={(e) => trapFocus(e.currentTarget, e)}>
           <h3 class="modal-title">{props.qr ? t('quickReply.editQuickReply') : t('quickReply.newQuickReply')}</h3>
 

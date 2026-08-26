@@ -4,6 +4,7 @@ import { state } from '../stores/serverStore.js';
 import { apiFetch } from '../lib/apiFetch.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import './GenerationTracesModal.css';
 
 type TFunc = ReturnType<typeof useI18n>['t'];
@@ -133,7 +134,7 @@ export function GenerationTracesModal(props: GenerationTracesModalProps) {
 
   return (
     <Show when={props.open}>
-      <div class="modal-overlay" onClick={(e) => e.target === e.currentTarget && close()}>
+      <div class="modal-overlay" {...createBackdropDismiss(close)}>
         <div class="modal settings-modal generation-traces-modal" role="dialog" aria-modal="true" aria-labelledby="generation-traces-title" onKeyDown={(e) => trapFocus(e.currentTarget, e)}>
           <h2 class="generation-traces-title" id="generation-traces-title">
             <i class="bi bi-diagram-3" /> {t('generationTraces.title')}

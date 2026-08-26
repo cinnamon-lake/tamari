@@ -7,6 +7,7 @@ import type { RegexRule } from '@tamari/types';
 import { applyDisplayRules, parseRegexString } from '../lib/regexDisplay.js';
 import { str } from '../lib/coerce.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import './RegexRulesModal.css';
 
 function parseRegexRules(raw: unknown): RegexRule[] {
@@ -137,7 +138,7 @@ export function RegexRulesModal(props: { onClose: () => void }) {
   };
 
   return (
-    <div class="modal-overlay" onClick={close}>
+    <div class="modal-overlay" {...createBackdropDismiss(close)}>
       <div class="modal regex-rules-modal" role="dialog" aria-modal="true" aria-label={t('settings.regex.heading')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
         <div class="modal-header-row">
           <h2 class="modal-title">{t('settings.regex.heading')}</h2>

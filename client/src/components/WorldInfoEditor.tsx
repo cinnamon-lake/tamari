@@ -4,6 +4,7 @@ import { activeWorldInfoId, setActiveWorldInfoId } from '../stores/uiStore.js';
 import { bus } from '../bus/WebSocketBus.js';
 import { confirmPopup } from '../stores/popupStore.js';
 import { onEnterActivate, trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import { useI18n } from '../i18n/index.js';
 import { IdBadge } from './IdBadge.js';
@@ -37,7 +38,7 @@ export function WorldInfoEditor(props: { onClose: () => void }) {
   };
 
   return (
-    <div class="modal-overlay" onClick={close}>
+    <div class="modal-overlay" {...createBackdropDismiss(close)}>
       <div class="modal worldinfo-modal" role="dialog" aria-modal="true" aria-label={t('worldInfo.modalAriaLabel')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
         <div class="modal-header-row">
           <h2 class="modal-title">{t('worldInfo.title')}</h2>

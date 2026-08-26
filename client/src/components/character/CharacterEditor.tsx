@@ -5,6 +5,7 @@ import { confirmPopup, alertPopup } from '../../stores/popupStore.js';
 import { apiFetch, authenticatedUrl } from '../../lib/apiFetch.js';
 import { useI18n } from '../../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../../lib/focusUtils.js';
+import { createBackdropDismiss } from '../../lib/backdropDismiss.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../../timing.js';
 import type { Character, RegexRule } from '@tamari/types';
 import { CropModal } from '../CropModal.js';
@@ -320,7 +321,7 @@ export function CharacterEditor(props: CharacterEditorProps) {
   };
 
   return (
-    <div class="modal-overlay" onClick={close}>
+    <div class="modal-overlay" {...createBackdropDismiss(close)}>
       <div class="modal character-editor-modal" role="dialog" aria-modal="true" aria-label={t('character.modalAriaLabel')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
         <div class="modal-header-row">
           <h2 class="modal-title">{char.name}</h2>

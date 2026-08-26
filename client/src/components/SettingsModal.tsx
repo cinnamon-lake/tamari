@@ -6,6 +6,7 @@ import { useI18n, type Locale } from '../i18n/index.js';
 
 import type { AppSettings, MemorySettings } from '@tamari/types';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import './SettingsModal.css';
 
 export function SettingsModal(props: { onClose: () => void }) {
@@ -128,7 +129,7 @@ export function SettingsModal(props: { onClose: () => void }) {
   };
 
   return (
-    <div class="modal-overlay" onClick={close}>
+    <div class="modal-overlay" {...createBackdropDismiss(close)}>
       <div class="modal settings-modal" role="dialog" aria-modal="true" aria-label={t('settings.title')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
         <h2 class="modal-title">{t('settings.title')}</h2>
 

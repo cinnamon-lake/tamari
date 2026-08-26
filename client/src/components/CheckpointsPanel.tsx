@@ -5,6 +5,7 @@ import { bus } from '../bus/WebSocketBus.js';
 import { confirmPopup } from '../stores/popupStore.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 
 export interface CheckpointsPanelProps {
   open: boolean;
@@ -76,7 +77,7 @@ export function CheckpointsPanel(props: CheckpointsPanelProps) {
 
   return (
     <Show when={props.open}>
-      <div class="modal-overlay" onClick={(e) => e.target === e.currentTarget && close()}>
+      <div class="modal-overlay" {...createBackdropDismiss(close)}>
         <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="checkpoints-panel-title" onKeyDown={(e) => trapFocus(e.currentTarget, e)}>
           <h2 class="modal-title" id="checkpoints-panel-title">
             <i class="bi bi-bookmark" /> {t('chatHeader.checkpoints')}

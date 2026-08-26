@@ -1,6 +1,7 @@
 import { createSignal, Show, onMount } from 'solid-js';
 import { useI18n } from '../../i18n/index.js';
 import { trapFocus } from '../../lib/focusUtils.js';
+import { createBackdropDismiss } from '../../lib/backdropDismiss.js';
 
 /**
  * Labeled, auto-growing textarea for long-form card fields (description,
@@ -90,7 +91,7 @@ function ExpandedTextModal(props: ExpandedTextModalProps) {
   });
 
   return (
-    <div class="modal-overlay" onClick={props.onClose}>
+    <div class="modal-overlay" {...createBackdropDismiss(props.onClose)}>
       <div
         class="modal expanded-text-modal"
         role="dialog"

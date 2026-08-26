@@ -6,6 +6,7 @@ import { IdBadge } from './IdBadge.js';
 import { confirmPopup } from '../stores/popupStore.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import type { Toolset, ToolTemplate } from '@tamari/types';
 import './ToolsModal.css';
@@ -41,7 +42,7 @@ export function ToolsModal(props: { onClose: () => void }) {
   });
 
   return (
-    <div class="modal-overlay" onClick={close}>
+    <div class="modal-overlay" {...createBackdropDismiss(close)}>
       <div class="modal tools-modal" role="dialog" aria-modal="true" aria-label={t('tools.title')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
         <div class="modal-header-row">
           <h2 class="modal-title">

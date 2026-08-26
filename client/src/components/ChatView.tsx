@@ -1,6 +1,7 @@
 import { Show, For, Switch, Match, createSignal, createEffect, createMemo, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { onEnterActivate, trapFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import { serializeResponseForm } from '../lib/responseForm.js';
 import { materializeChat } from '../lib/materializeChat.js';
 import type { JSX } from 'solid-js';
@@ -979,7 +980,7 @@ function MessageBubble(props: {
       swipePicker={
         <Show when={showSwipePicker()}>
           <Portal>
-            <div class="modal-overlay" onClick={() => setShowSwipePicker(false)}>
+            <div class="modal-overlay" {...createBackdropDismiss(() => setShowSwipePicker(false))}>
               <div
                 class="modal settings-modal swipe-picker-modal"
                 onClick={(e) => e.stopPropagation()}

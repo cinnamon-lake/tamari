@@ -6,6 +6,7 @@ import { bus } from '../bus/WebSocketBus.js';
 import { confirmPopup } from '../stores/popupStore.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import type { ActivationStrategy } from '@tamari/types';
 import './GroupChatPanel.css';
 
@@ -88,7 +89,7 @@ export function GroupChatPanel(props: GroupChatPanelProps) {
   };
 
   return (
-    <div class="group-panel-overlay" onClick={close}>
+    <div class="group-panel-overlay" {...createBackdropDismiss(close)}>
       <div class="group-panel" role="dialog" aria-modal="true" aria-labelledby="group-panel-title" onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
         <div class="group-panel-header">
           <h2 class="panel-title" id="group-panel-title">{t('groupChat.membersTitle')}</h2>

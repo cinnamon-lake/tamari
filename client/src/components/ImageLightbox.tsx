@@ -1,6 +1,7 @@
 import { lightboxSrc, closeLightbox } from '../stores/lightboxStore.js';
 import { Show, onCleanup, onMount } from 'solid-js';
 import { useI18n } from '../i18n/index.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 
 export function ImageLightbox() {
   const { t } = useI18n();
@@ -21,9 +22,7 @@ export function ImageLightbox() {
       {(src) => (
         <div
           class="lightbox-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeLightbox();
-          }}
+          {...createBackdropDismiss(closeLightbox)}
         >
           <img class="lightbox-img" src={src()} alt="" />
           <button class="lightbox-close" onClick={closeLightbox} type="button" aria-label={t('common.close')}>

@@ -10,6 +10,7 @@ import { SafeImage } from './SafeImage.js';
 import { apiFetch } from '../lib/apiFetch.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import './PersonaManager.css';
 
@@ -54,7 +55,7 @@ export function PersonaManager(props: { onClose: () => void }) {
   };
 
   return (
-    <div class="modal-overlay" onClick={close}>
+    <div class="modal-overlay" {...createBackdropDismiss(close)}>
       <div class="modal persona-modal" role="dialog" aria-modal="true" aria-label={t('persona.modalAriaLabel')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
         <div class="modal-header-row">
           <h2 class="modal-title">{t('persona.title')}</h2>

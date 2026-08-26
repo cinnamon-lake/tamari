@@ -2,6 +2,7 @@ import { createResource, Show, For } from 'solid-js';
 import { apiFetch } from '../lib/apiFetch.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import './StatsModal.css';
 
 interface GlobalStats {
@@ -36,7 +37,7 @@ export function StatsModal(props: { onClose: () => void }) {
   };
 
   return (
-    <div class="modal-overlay" onClick={close}>
+    <div class="modal-overlay" {...createBackdropDismiss(close)}>
       <div class="modal stats-modal" role="dialog" aria-modal="true" aria-label={t('stats.ariaLabel')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
         <h2 class="modal-title">
           <i class="bi bi-bar-chart" /> {t('stats.title')}

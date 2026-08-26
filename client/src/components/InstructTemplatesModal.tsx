@@ -5,6 +5,7 @@ import { confirmPopup, alertPopup } from '../stores/popupStore.js';
 import { useI18n } from '../i18n/index.js';
 import { str } from '../lib/coerce.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import './InstructTemplatesModal.css';
 
 interface InstructTemplateDef {
@@ -131,7 +132,7 @@ export function InstructTemplatesModal(props: { onClose: () => void }) {
   };
 
   return (
-    <div class="modal-overlay" onClick={close}>
+    <div class="modal-overlay" {...createBackdropDismiss(close)}>
       <div class="modal instruct-templates-modal" role="dialog" aria-modal="true" aria-label={t('settings.templates.heading')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
         <div class="modal-header-row">
           <h2 class="modal-title">{t('settings.templates.heading')}</h2>

@@ -3,6 +3,7 @@ import Cropper from 'cropperjs';
 import 'cropperjs/dist/cropper.css';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 
 export interface CropModalProps {
   imageUrl: string;
@@ -54,7 +55,7 @@ export function CropModal(props: CropModalProps) {
   };
 
   return (
-    <div class="modal-overlay" onClick={cancel}>
+    <div class="modal-overlay" {...createBackdropDismiss(cancel)}>
       <div class="modal crop-modal" role="dialog" aria-modal="true" onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
         <h3 class="crop-modal-title">{t('crop.title')}</h3>
         <div class="crop-container">

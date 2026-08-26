@@ -5,6 +5,7 @@ import { bus } from '../bus/WebSocketBus.js';
 import { confirmPopup, alertPopup } from '../stores/popupStore.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import type { PresetPromptDef, PresetPromptOrderEntry } from '@tamari/types';
 import './PromptListModal.css';
@@ -392,7 +393,7 @@ export function PromptListModal(props: { onClose: () => void }) {
   };
 
   return (
-    <div class="modal-overlay" onClick={close}>
+    <div class="modal-overlay" {...createBackdropDismiss(close)}>
       <div class="modal settings-modal" role="dialog" aria-modal="true" aria-label={t('promptList.modalAriaLabel')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
         <h2 class="modal-title">{t('promptList.title')} {saving() && <span class="text-sm text-muted">{t('promptList.saving')}</span>}</h2>
 

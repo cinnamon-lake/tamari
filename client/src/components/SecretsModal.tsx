@@ -9,6 +9,7 @@
 import { createSignal, Show, For, onMount } from 'solid-js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
+import { createBackdropDismiss } from '../lib/backdropDismiss.js';
 import { listSecrets, setSecret, deleteSecret, type SecretEntry } from '../lib/secrets.js';
 import { confirmPopup } from '../stores/popupStore.js';
 
@@ -87,7 +88,7 @@ export function SecretsModal(props: { onClose: () => void }) {
   const toggleReveal = (k: string) => setRevealed((p) => ({ ...p, [k]: !p[k] }));
 
   return (
-    <div class="modal-overlay" onClick={close}>
+    <div class="modal-overlay" {...createBackdropDismiss(close)}>
       <div class="modal settings-modal" role="dialog" aria-modal="true" aria-label={t('secrets.title')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
         <h2 class="modal-title">{t('secrets.title')}</h2>
 
