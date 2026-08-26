@@ -281,6 +281,15 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     // Cheap — keeps the `custom` provider dropdown populated even when the
     // Custom Backends modal was never opened this session.
     bus.send({ type: 'custombackend.list' });
+
+    // Duplicate Config activates its copy: react to the server's confirmation
+    // with the regular switch flow (flush edits → settings.set → select).
+    // Self-filtered so another tab duplicating doesn't move this modal's
+    // selection (AGENTS.md §Active Entity).
+    const unsubCreated = bus.on('backendConfig.created', (msg) => {
+      if (msg.clientId === state.clientId) switchConfig(msg.backendConfig.id);
+    });
+    onCleanup(() => unsubCreated());
   });
 
   // Select the active config reactively. The initial state snapshot can land
@@ -663,10 +672,14 @@ export function BackendConfigModal(props: { onClose: () => void }) {
           <h3 class="section-title">{t('backendConfig.activeSection')}</h3>
           <label class="field-label">
             {t('backendConfig.configLabel')}
+            {/* `selected` per option, not just value= on the select: right after
+              duplicating, the active id switches on backendConfig.created while
+              the new <option> only appears with the later listed broadcast —
+              by then the one-shot value assignment has already failed to match. */}
             <select class="select" value={activeBackendConfigId() ?? ''} onChange={(e) => switchConfig(e.currentTarget.value)}>
               <For each={state.backendConfigs}>
                 {(config) => (
-                  <option class="select-option" id={config.id} value={config.id}>
+                  <option class="select-option" id={config.id} value={config.id} selected={config.id === activeBackendConfigId()}>
                     {config.name}
                   </option>
                 )}

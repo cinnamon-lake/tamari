@@ -210,6 +210,15 @@ export function PromptListModal(props: { onClose: () => void }) {
       setActivePromptListId(id);
       bus.send({ type: 'promptList.select', promptListId: id });
     }
+
+    // Duplicate List activates its copy: react to the server's confirmation
+    // with the regular switch flow (flush edits → settings.set → select).
+    // Self-filtered so another tab duplicating doesn't move this modal's
+    // selection (AGENTS.md §Active Entity).
+    const unsubCreated = bus.on('promptList.created', (msg) => {
+      if (msg.clientId === state.clientId) switchList(msg.promptList.id);
+    });
+    onCleanup(() => unsubCreated());
   });
 
   const loadListData = (list: NonNullable<typeof state.activePromptList>) => {
@@ -402,10 +411,14 @@ export function PromptListModal(props: { onClose: () => void }) {
           <h3 class="section-heading">{t('promptList.activeListHeading')}</h3>
           <label class="field-label">
             {t('promptList.listLabel')}
+            {/* `selected` per option, not just value= on the select: right after
+              duplicating, the active id switches on promptList.created while
+              the new <option> only appears with the later listed broadcast —
+              by then the one-shot value assignment has already failed to match. */}
             <select class="select" value={activePromptListId() ?? ''} onChange={(e) => switchList(e.currentTarget.value)}>
               <For each={state.promptLists}>
                 {(list) => (
-                  <option class="select-option" id={list.id} value={list.id}>
+                  <option class="select-option" id={list.id} value={list.id} selected={list.id === activePromptListId()}>
                     {list.name}
                   </option>
                 )}

@@ -429,18 +429,19 @@ test.describe('Backend Config Modal', () => {
     const originalName = await nameInput.inputValue();
     const optionTexts = async () => configSelect.locator('option').allTextContents();
 
-    // Duplicate the active config -> "<name> (Copy)" appears alongside it.
+    // Duplicate the active config -> "<name> (Copy)" appears alongside it,
+    // and the editor switches to the copy automatically.
     await modal.locator('button:has-text("Duplicate Config")').click();
     const copyDefaultName = `${originalName} (Copy)`;
     await expect.poll(optionTexts).toContain(copyDefaultName);
     expect(await optionTexts()).toContain(originalName);
 
-    // Switch to the copy and rename it. Wait for the copy's snapshot to land
-    // in the form first: switchConfig's backendConfig.select round-trips, and
-    // if loadConfigData resets the input mid-fill (selection is lost before
-    // onInput marks the form dirty), insertText APPENDS to the old name
-    // ("Default (Copy)E2E Copy …") instead of replacing it.
-    await configSelect.selectOption({ label: copyDefaultName });
+    // Wait for the copy's snapshot to land in the form: switchConfig's
+    // backendConfig.select round-trips, and if loadConfigData resets the input
+    // mid-fill (selection is lost before onInput marks the form dirty),
+    // insertText APPENDS to the old name ("Default (Copy)E2E Copy …") instead
+    // of replacing it.
+    await expect(configSelect.locator('option:checked')).toHaveText(copyDefaultName);
     await expect(nameInput).toHaveValue(copyDefaultName);
     const copyName = uniqueName('E2E Copy');
     await nameInput.fill(copyName);

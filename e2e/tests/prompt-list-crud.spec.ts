@@ -125,7 +125,7 @@ test.describe('Prompt List CRUD', () => {
     await resetBackendConfig(page);
   });
 
-  test('duplicates the active list and selects the copy', async ({ page }) => {
+  test('duplicates the active list and activates the copy', async ({ page }) => {
     const modal = await openPromptListModal(page);
     const originalLabel = await selectedListLabel(modal);
     const copyLabel = `${originalLabel} (Copy)`;
@@ -137,8 +137,10 @@ test.describe('Prompt List CRUD', () => {
       .poll(async () => (await optionLabels(modal)).includes(copyLabel), { timeout: 10000 })
       .toBe(true);
 
-    // promptList.select → promptList.snapshot loads the copy into the editor.
-    await listSelect(modal).selectOption({ label: copyLabel });
+    // The self-originated promptList.created broadcast switches the selection
+    // onto the copy without a user-driven selectOption...
+    await expect.poll(async () => selectedListLabel(modal), { timeout: 10000 }).toBe(copyLabel);
+    // ...and promptList.select → promptList.snapshot loads it into the editor.
     await expect(modal.locator('h3.section-heading', { hasText: `Edit: ${copyLabel}` })).toBeVisible();
     expect(await selectedListLabel(modal)).toBe(copyLabel);
 
