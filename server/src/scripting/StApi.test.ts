@@ -711,6 +711,29 @@ describe('StApi', () => {
       await st.delay(10);
       expect(Date.now() - start).toBeGreaterThanOrEqual(5);
     });
+
+    it('delay clamps to a 30s maximum instead of holding the chat lock forever', async () => {
+      vi.useFakeTimers();
+      try {
+        const p = st.delay(Number.MAX_SAFE_INTEGER);
+        const advance = vi.advanceTimersByTimeAsync(30_000);
+        await p;
+        await advance;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('delay rejects when the script is aborted mid-wait', async () => {
+      const p = st.delay(10_000);
+      ctx.abort();
+      await expect(p).rejects.toThrow('Script aborted');
+    });
+
+    it('delay rejects negative or non-finite input', async () => {
+      await expect(st.delay(-5)).rejects.toThrow('non-negative');
+      await expect(st.delay(Number.NaN)).rejects.toThrow('non-negative');
+    });
   });
 
   describe('variables', () => {

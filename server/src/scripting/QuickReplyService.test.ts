@@ -192,6 +192,61 @@ describe('QuickReplyService', () => {
     expect(toasts[0].message).toBe('auto fired');
   });
 
+  it('wall ceiling kills scripts that wait forever and reports the limit', async () => {
+    const { chatId } = await setupChat();
+
+    const qr = await h.deps.quickReplies.create('qr-wall', {
+      scope: 'chat',
+      scopeId: chatId,
+      label: 'Forever',
+      // 8 × 50ms serial waits ≈ 400ms total life — past the 250ms wall.
+      script: 'for i=1,8 do st.sleep(0.05) end st.send("should not send")',
+      icon: '',
+      color: '',
+      language: 'lua',
+      autoExecute: 0,
+      orderIndex: 0,
+    });
+
+    await h.deps.quickReplyService.executeById(qr.id, chatId, client.connection.id, {
+      wallMs: 250,
+    });
+
+    const errors = client.messages.filter((m: any) => m.type === 'script.error') as any[];
+    expect(errors.some((e) => String(e.message).includes('total time limit'))).toBe(true);
+
+    const userMessages = client.messages.filter(
+      (m: any) => m.type === 'message.appended' && m.message.role === 'user',
+    ) as any[];
+    expect(userMessages.length).toBe(0);
+  });
+
+  it('scripts under the wall ceiling and bursts run to completion', async () => {
+    const { chatId } = await setupChat();
+
+    const qr = await h.deps.quickReplies.create('qr-under-budget', {
+      scope: 'chat',
+      scopeId: chatId,
+      label: 'Fine',
+      script: 'for i=1,2 do st.sleep(0.02) end st.send("done")',
+      icon: '',
+      color: '',
+      language: 'lua',
+      autoExecute: 0,
+      orderIndex: 0,
+    });
+
+    await h.deps.quickReplyService.executeById(qr.id, chatId, client.connection.id, {
+      wallMs: 30_000,
+    });
+
+    const userMessages = client.messages.filter(
+      (m: any) => m.type === 'message.appended' && m.message.role === 'user',
+    ) as any[];
+    expect(userMessages.length).toBe(1);
+    expect(userMessages[0].message.extra.parts[0].text).toBe('done');
+  });
+
   it('abortChat aborts a running script', async () => {
     const { chatId } = await setupChat();
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LuaRuntime } from './LuaRuntime.js';
+import { LuaRuntime, friendlyLuaError } from './LuaRuntime.js';
 
 describe('LuaRuntime timeout', () => {
   it('lets instruction-heavy scripts complete when under the deadline', async () => {
@@ -38,6 +38,80 @@ describe('LuaRuntime timeout', () => {
     await expect(lua.doString('while true do end')).rejects.toThrow();
     expect(Date.now() - start).toBeLessThan(5000);
     cleanup();
+  });
+});
+
+describe('wall ceiling with awaited host calls', () => {
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
+  }
+
+  it('lets a script await a slow host call well past short deadlines', async () => {
+    // Waits are free within the wall ceiling: suspending on a host promise
+    // consumes no instruction budget, so resuming afterwards is fine as long
+    // as the resumed tail stays small (~one 1000-instruction hook batch).
+    // This is why media templates can await multi-second APIs and QR scripts
+    // can await slow LLM calls under their ceilings.
+    const rt = new LuaRuntime();
+    const { lua, cleanup } = await rt.createState({}, 250);
+
+    const d = deferred<string>();
+    setTimeout(() => d.resolve('done'), 700);
+    // Deliver the promise as a host-call result — the same shape st.* / fetch
+    // use (raw promises assigned as globals don't marshal into awaitables).
+    lua.global.set('slow_op', () => d.promise);
+
+    try {
+      const result = await lua.doString(`
+        local v = slow_op():await()
+        return v .. ':ok'
+      `);
+      expect(result).toBe('done:ok');
+    } finally {
+      cleanup();
+    }
+  }, 10_000);
+
+  it('still kills sustained post-deadline computation (busy loops ride the hook)', async () => {
+    // A resumed tail BIGGER than one hook batch cannot hide behind the grace:
+    // sustained computation past the armed deadline hard-aborts even when it
+    // started life as an innocent await. The JS-side wall race in
+    // QuickReplyService/LuaToolExecutor turns this case into a clean message.
+    const rt = new LuaRuntime();
+    const { lua, cleanup } = await rt.createState({}, 250);
+
+    const d = deferred<string>();
+    setTimeout(() => d.resolve('done'), 400);
+    lua.global.set('slow_op', () => d.promise);
+
+    try {
+      await expect(
+        lua.doString(`
+          local v = slow_op():await()
+          local s = 0
+          for i = 1, 5000000 do s = s + i end
+          return v .. ':' .. s
+        `),
+      ).rejects.toThrow(/Aborted\(native code called abort/);
+    } finally {
+      cleanup();
+    }
+  }, 10_000);
+});
+
+describe('friendlyLuaError', () => {
+  it('maps both deadline families and passes other messages through', () => {
+    // Yield-boundary family (not reachable via doString child threads today,
+    // mapped anyway should upstream surface it)…
+    expect(friendlyLuaError(new Error('thread timeout exceeded'), 300_000)).toContain('300s time limit between host calls');
+    // …the WASM-hook abort family keeps its legacy wording…
+    expect(friendlyLuaError('Aborted(native code called abort())', 5_000)).toBe('script timed out (5s execution limit)');
+    // …and everything else passes through untouched.
+    expect(friendlyLuaError('st.send: expected string', 5_000)).toBe('st.send: expected string');
   });
 });
 

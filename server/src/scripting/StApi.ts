@@ -1173,8 +1173,27 @@ export function createStApi(ctx: ScriptContext, deps: StApiDeps): StApi {
     },
 
     delay: async (ms: number) => {
-      const duration = Math.max(0, Math.floor(Number(ms) || 0));
-      await new Promise((resolve) => setTimeout(resolve, duration));
+      checkAbort();
+      const n = Number(ms);
+      if (!Number.isFinite(n) || n < 0) throw new Error('delay: expected non-negative number');
+      // Same clamp as sleep: an unbounded await here would hold the script
+      // open — and the chat lock with it — indefinitely.
+      const maxDelayMs = 30_000;
+      const clamped = Math.min(Math.floor(n), maxDelayMs);
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, clamped);
+        if (ctx.signal.aborted) {
+          clearTimeout(timer);
+          reject(new Error('Script aborted'));
+          return;
+        }
+        const onAbort = () => {
+          clearTimeout(timer);
+          ctx.signal.removeEventListener('abort', onAbort);
+          reject(new Error('Script aborted'));
+        };
+        ctx.signal.addEventListener('abort', onAbort);
+      });
     },
 
     rename_chat: async (name: string) => {

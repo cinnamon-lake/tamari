@@ -1,6 +1,6 @@
 # Lua Scripting
 
-tamari uses Lua 5.4 (via WebAssembly) for scripting. Scripts run server-side in a sandboxed environment with a 5-second execution timeout.
+tamari uses Lua 5.4 (via WebAssembly) for scripting. Scripts run server-side in a sandboxed environment with enforced execution budgets (see [Execution limits](#execution-limits)).
 
 There are three ways to use Lua scripts:
 
@@ -14,7 +14,7 @@ Lua scripts run in an isolated sandbox with the following restrictions:
 
 - Dangerous standard libraries are removed: `io`, `os`, `debug`, `package`, `require`, `loadfile`, `dofile`, `load`, `loadstring`
 - Proxy access is disabled
-- Execution timeout: **5 seconds**
+- Execution budgets: a compute-burst limit and a total-time wall ceiling (see [Execution limits](#execution-limits))
 - Request scripts have additional SSRF protection (cannot request private IPs or non-HTTP(S) URLs; loopback is allowed when the configured backend is itself loopback, e.g. a local llama.cpp)
 
 **Per-template sandbox flags:** DB-stored *Lua Tool Templates* (not `run_lua`, not Quick Replies) can individually re-enable `io`, `os`, `debug`, and `require`/`package` via the checkboxes in the template editor. Two further flags unlock media/API tooling:
@@ -22,6 +22,25 @@ Lua scripts run in an isolated sandbox with the following restrictions:
 - **`allowNet`** — exposes an async `fetch(url, opts?)` global (`opts`: `method`, `headers`, `body`). Await it with wasmoon's promise support: `local res = fetch(url):await()`. Returns `{ status, headers, body, bodyBase64 }` — `body` is the UTF-8 text (or `null` for binary), `bodyBase64` always holds the raw bytes. Requests are SSRF-guarded: loopback is allowed (local media servers like Forge/Silero are the point), other private/LAN ranges are blocked. 30s timeout, 25MB body cap.
 - **`allowFiles`** — exposes `attachments.create(base64Data, mimeType)`, awaited the same way: `local att = attachments.create(b64, "image/png"):await()` → `{ id, url, mimeType }`. Saves the file under `files/attachments/` and registers it as a chat attachment.
 - **`allowSt`** — exposes a **curated subset of the `st` API** (the same API Quick Reply scripts get) as the global `st`. One rule: *queries, entity writes, variables/state, settings, quiet generation, and utilities are in; chat actions are out.* Concretely: `st.get_messages`, `st.create_character`, `st.update_character`, `st.setvar`/`st.getvar`, `st.set_state`/`st.get_state`, `st.wi_add`/`st.wi_list`/`st.wi_get`/`st.wi_remove`, `st.get_setting`/`st.set_setting`, `st.get_model`/`st.set_model`, `st.generate`/`st.genraw`/`st.ask`/`st.sysgen` (quiet one-shot generation), `st.toast`, `st.token_count`, `st.substitute_macros`, and the string/math helpers are available. Excluded: anything that mutates the running chat's message history or drives generation flow (`st.send`, `st.trigger`, `st.regenerate`, `st.continue`, `st.impersonate`, `st.stop`, `st.edit`, `st.cut`, `st.swipe`, `st.add_swipe`, `st.comment`, `st.send_as`, `st.send_narrator`, …) and chat lifecycle (`st.branch`, `st.checkpoint`, `st.hard_fork`, `st.new_chat`, `st.delete_chat`, `st.reset_chat`) — a tool runs *inside* an active generation, which owns the chat during its turn. Async functions return promises — await them with `st.await(...)` (or `promise:await()`); `st.sleep` and `st.generate` are pre-wrapped. `st` is only available when the tool executes in a real chat context — which includes `luatool_test`, so you can iterate on st-enabled templates live.
+
+### Execution limits
+
+Every script runs under one **wall ceiling**: an absolute cap on its total life, from state creation to teardown — **waits included**. Within that ceiling, awaiting host calls (`st.generate`, `fetch`, `sleep`, …) is effectively free: suspending on a promise consumes no execution budget, so scripts can await slow LLM calls or media APIs without fear. The legacy flat "5 seconds" used to abort exactly those pipelines mid-run; the ceilings below are sized for what each surface legitimately does:
+
+| Surface | Wall ceiling |
+|---|---|
+| Quick Reply Scripts | 60 s |
+| Lua Tool Templates | 5 min |
+| Backend request scripts | 5 s |
+| Custom backends (`generate` / `list_models`) | 10 min / 10 s |
+| `run_lua` tool | 5 s |
+
+Two enforcement notes worth knowing as an author:
+
+- **Pure-Lua busy loops are still killed hard.** Tight zero-await loops (the classic `while true do end`) are caught by the instruction-count hook and die mid-loop with *"script timed out (Ns execution limit)"*.
+- **Resumed tails should stay small.** The hook samples in batches; a script whose continuation after a long await does only trivial work always survives, but heavy sustained computation well past the ceiling can still trip it and surface as the same timeout message.
+
+Pipelines needing more room than these ceilings belong in a **custom backend** (`generate()` gets 10 minutes).
 
 Notes on what you get (wasmoon, not native Lua):
 
@@ -127,7 +146,7 @@ request.body["data_sources"] = {
 
 > **Note:** The `request.body` is a Lua table. Modify it directly — it will be serialized back to JSON automatically.
 
-> **Timeout:** Request scripts run with a 5-second execution limit. A runaway script (e.g. an accidental `while true do end` loop) fails the generation with a request-script error instead of hanging the server.
+> **Timeout:** Request scripts run under a static 5-second limit (see [Execution limits](#execution-limits)). A runaway script (e.g. an accidental `while true do end` loop) fails the generation with a request-script error instead of hanging the server.
 
 ### Testing Scripts with the Workbench
 
@@ -166,7 +185,7 @@ All Quick Reply scripts have access to the global `st` table. Functions are cate
 | `st.stop()` ⏳ | Stop the active generation |
 | `st.reset_chat()` ⏳ | Delete all messages in the current chat |
 | `st.trigger()` ⏳ | Trigger the AI to generate a response |
-| `st.delay(ms)` ⏳ | Wait for N milliseconds |
+| `st.delay(ms)` ⏳ | Wait for N milliseconds (clamped to 30,000 ms; aborts when generation is stopped) |
 | `st.rename_chat(name)` ⏳ | Rename the current chat |
 | `st.delete_chat()` ⏳ | Delete the current chat |
 | `st.new_chat(name?)` ⏳ | Create a new chat with the same character |
@@ -627,7 +646,7 @@ When the AI is given access to the `run_lua` tool (via **Tools** in the sidebar)
 | `fetch` (network) | ⚠️ Per-template opt-in (`allowNet`), SSRF-guarded | ❌ Not available |
 | `attachments.create` (files) | ⚠️ Per-template opt-in (`allowFiles`) | ❌ Not available |
 | `st` API | ⚠️ Per-template opt-in (`allowSt`) — curated subset, chat actions excluded | ❌ Not available |
-| Timeout | 5 seconds | 5 seconds |
+| Timeout | 5 min wall ceiling | 5 s total (static) |
 | Trigger | AI calls any tool from the template | AI calls `run_lua` specifically |
 
 ### Example: What the AI Might Send
@@ -651,6 +670,8 @@ If a script throws an error, you'll see a toast notification with the error mess
 
 - `"Chat is busy"` — Another script or generation is running on this chat
 - `"Script aborted"` — The stop button was pressed
+- `"script exceeded its Ns total time limit"` — Total script life (waits included) crossed the wall ceiling
+- `"script timed out (Ns execution limit)"` — A tight Lua loop with no awaits was hard-killed at the wall ceiling
 - `"Expected string"` / `"Expected number"` — Wrong argument type passed to an API function
 - `"SSRF blocked"` — Request script tried to access an unsafe URL
 

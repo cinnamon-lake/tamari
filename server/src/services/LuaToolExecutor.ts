@@ -21,7 +21,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { LuaRuntime, LuaRuntimeOptions } from '../scripting/LuaRuntime.js';
-import { friendlyLuaError, MAX_EXECUTION_MS } from '../scripting/LuaRuntime.js';
+import { friendlyLuaError, MAX_EXECUTION_MS, LUA_TOOL_BUDGET, type ExecutionBudget } from '../scripting/LuaRuntime.js';
 import { ScriptContext } from '../scripting/ScriptContext.js';
 import { createToolStApi, type StApiDeps } from '../scripting/StApi.js';
 import { str } from '../lib/coerce.js';
@@ -86,8 +86,9 @@ export class LuaToolExecutor {
     args: Record<string, unknown>,
     context?: ToolContext,
     sandbox?: LuaRuntimeOptions,
+    budget: ExecutionBudget = LUA_TOOL_BUDGET,
   ): Promise<ToolExecuteResult> {
-    const loaded = await this.loadTemplate(code, sandbox);
+    const loaded = await this.loadTemplate(code, sandbox, budget);
     if ('error' in loaded) {
       return { content: loaded.error };
     }
@@ -96,117 +97,165 @@ export class LuaToolExecutor {
     const stateKey = def.stateKey || toolName;
     let drainSt: (() => Promise<void>) | null = null;
 
-    try {
-      const tt = lua.global.get('Tool') as Record<string, unknown> | undefined;
-      if (!tt || typeof tt.execute !== 'function') {
-        return { content: 'Lua tool must return a table with an execute function (assign to global "Tool")' };
-      }
+    // Current st-injection context, so the wall ceiling can abort in-flight
+    // st calls when it fires.
+    let activeStCtx: ScriptContext | null = null;
 
-      // Inject the curated `st` API when the template opted in (allowSt) and a
-      // chat context is available.
-      drainSt = await this.maybeInjectSt(lua, context, sandbox);
-
-      // 1. Restore state from branch history
-      const stateSnapshot = findLatestStateSnapshot(stateKey, context?.messages);
-      if (stateSnapshot !== undefined && typeof tt.deserialize === 'function') {
-        try {
-          await (tt.deserialize as (raw: string) => Promise<unknown>)(stateSnapshot);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          return { content: `Lua deserialize error: ${msg}` };
+    /**
+     * Steps 1–5 of the old inline flow, verbatim: restore state → build
+     * context → execute → serialize → build result. Runs under the JS-side
+     * wall ceiling below (waits included — media pipelines legitimately
+     * await slow APIs, and bursts alone cannot bound repeat offenders).
+     */
+    const computeResult = async (): Promise<ToolExecuteResult> => {
+      try {
+        const tt = lua.global.get('Tool') as Record<string, unknown> | undefined;
+        if (!tt || typeof tt.execute !== 'function') {
+          return { content: 'Lua tool must return a table with an execute function (assign to global "Tool")' };
         }
-      }
 
-      // 2. Build Lua context table
-      const luaContext: Record<string, unknown> = {};
-      if (context?.chatId) {
-        luaContext.chatId = context.chatId;
-      }
-      if (context?.config) {
-        luaContext.config = context.config;
-      }
-
-      // 3. Run execute (passing toolName as 3rd arg). Two invocation paths:
-      // - default: JS proxy call — the long-standing path, immune to a wasmoon
-      //   pathology where doString-invoked heavy templates abort the engine.
-      // - when the code awaits JS promises (':await(' or the QR-style
-      //   'st.await(' helper): invoked via doString, because promise:await()
-      //   cannot yield across a JS→Lua proxy call (wasmoon C-call boundary).
-      //   The static check picks the FIRST path only — it is never wrong to
-      //   take doString, but proxy-first for an awaiting template would run
-      //   its pre-await side effects twice. A false negative (await hidden
-      //   from the substring check) throws 'attempt to yield across a C-call
-      //   boundary' from the proxy call; we catch that and retry via doString,
-      //   which is strictly better than today's hard failure.
-      let execResult: unknown;
-      if (code.includes(':await(') || code.includes('.await(')) {
-        const run = await this.runExecuteViaDoString(lua, args, luaContext, toolName);
-        if (run.error) {
-          return { content: `Lua execution error: ${friendlyLuaError(run.error, MAX_EXECUTION_MS)}` };
+        // Inject the curated `st` API when the template opted in (allowSt) and a
+        // chat context is available.
+        const injected = await this.maybeInjectSt(lua, context, sandbox);
+        if (injected) {
+          drainSt = injected.drain;
+          activeStCtx = injected.ctx;
         }
-        execResult = run.result;
-      } else {
-        try {
-          execResult = await (tt.execute as (args: Record<string, unknown>, context: Record<string, unknown>, toolName: string) => Promise<unknown>)(args, luaContext, toolName);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (!msg.includes('attempt to yield')) throw err;
-          log.debug({ toolName }, 'Lua tool yielded across the proxy boundary; retrying via doString');
+
+        // 1. Restore state from branch history
+        const stateSnapshot = findLatestStateSnapshot(stateKey, context?.messages);
+        if (stateSnapshot !== undefined && typeof tt.deserialize === 'function') {
+          try {
+            await (tt.deserialize as (raw: string) => Promise<unknown>)(stateSnapshot);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return { content: `Lua deserialize error: ${msg}` };
+          }
+        }
+
+        // 2. Build Lua context table
+        const luaContext: Record<string, unknown> = {};
+        if (context?.chatId) {
+          luaContext.chatId = context.chatId;
+        }
+        if (context?.config) {
+          luaContext.config = context.config;
+        }
+
+        // 3. Run execute (passing toolName as 3rd arg). Two invocation paths:
+        // - default: JS proxy call — the long-standing path, immune to a wasmoon
+        //   pathology where doString-invoked heavy templates abort the engine.
+        // - when the code awaits JS promises (':await(' or the QR-style
+        //   'st.await(' helper): invoked via doString, because promise:await()
+        //   cannot yield across a JS→Lua proxy call (wasmoon C-call boundary).
+        //   The static check picks the FIRST path only — it is never wrong to
+        //   take doString, but proxy-first for an awaiting template would run
+        //   its pre-await side effects twice. A false negative (await hidden
+        //   from the substring check) throws 'attempt to yield across a C-call
+        //   boundary' from the proxy call; we catch that and retry via doString,
+        //   which is strictly better than today's hard failure.
+        let execResult: unknown;
+        if (code.includes(':await(') || code.includes('.await(')) {
           const run = await this.runExecuteViaDoString(lua, args, luaContext, toolName);
           if (run.error) {
-            return { content: `Lua execution error: ${friendlyLuaError(run.error, MAX_EXECUTION_MS)}` };
+            return { content: `Lua execution error: ${friendlyLuaError(run.error, budget.wallMs)}` };
           }
           execResult = run.result;
-        }
-      }
-
-      // 4. Serialize state
-      let stateToStore: string | null = null;
-      if (typeof tt.serialize === 'function') {
-        try {
-          const serialized = await (tt.serialize as () => Promise<unknown>)();
-          if (serialized !== null && serialized !== undefined) {
-            stateToStore = str(serialized);
-          }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          return { content: `Lua serialize error: ${msg}` };
-        }
-      }
-
-      // 5. Build result
-      let content: string | import('../backends/BackendAdapter.js').InlineContentPart[];
-      let extra: Record<string, unknown> | undefined;
-      if (typeof execResult === 'string') {
-        content = execResult;
-      } else if (execResult && typeof execResult === 'object') {
-        const obj = execResult as Record<string, unknown>;
-        if (Array.isArray(obj.content)) {
-          content = obj.content as import('../backends/BackendAdapter.js').InlineContentPart[];
         } else {
-          content = str(obj.content);
+          try {
+            execResult = await (tt.execute as (args: Record<string, unknown>, context: Record<string, unknown>, toolName: string) => Promise<unknown>)(args, luaContext, toolName);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (!msg.includes('attempt to yield')) throw err;
+            log.debug({ toolName }, 'Lua tool yielded across the proxy boundary; retrying via doString');
+            const run = await this.runExecuteViaDoString(lua, args, luaContext, toolName);
+            if (run.error) {
+              return { content: `Lua execution error: ${friendlyLuaError(run.error, budget.wallMs)}` };
+            }
+            execResult = run.result;
+          }
         }
-        extra = obj.extra as Record<string, unknown> | undefined;
-      } else {
-        content = str(execResult);
-      }
 
-      const stateExtra: Record<string, unknown> = {};
-      if (stateToStore !== null) {
-        stateExtra[TOOL_STATE_KEY] = { [stateKey]: stateToStore };
-      }
+        // 4. Serialize state
+        let stateToStore: string | null = null;
+        if (typeof tt.serialize === 'function') {
+          try {
+            const serialized = await (tt.serialize as () => Promise<unknown>)();
+            if (serialized !== null && serialized !== undefined) {
+              stateToStore = str(serialized);
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return { content: `Lua serialize error: ${msg}` };
+          }
+        }
 
-      return {
-        content,
-        extra: { ...extra, ...stateExtra },
-      };
-    } catch (err) {
-      const msg = friendlyLuaError(err, MAX_EXECUTION_MS);
-      return { content: `Lua execution error: ${msg}` };
+        // 5. Build result
+        let content: string | import('../backends/BackendAdapter.js').InlineContentPart[];
+        let extra: Record<string, unknown> | undefined;
+        if (typeof execResult === 'string') {
+          content = execResult;
+        } else if (execResult && typeof execResult === 'object') {
+          const obj = execResult as Record<string, unknown>;
+          if (Array.isArray(obj.content)) {
+            content = obj.content as import('../backends/BackendAdapter.js').InlineContentPart[];
+          } else {
+            content = str(obj.content);
+          }
+          extra = obj.extra as Record<string, unknown> | undefined;
+        } else {
+          content = str(execResult);
+        }
+
+        const stateExtra: Record<string, unknown> = {};
+        if (stateToStore !== null) {
+          stateExtra[TOOL_STATE_KEY] = { [stateKey]: stateToStore };
+        }
+
+        return {
+          content,
+          extra: { ...extra, ...stateExtra },
+        };
+      } catch (err) {
+        const msg = friendlyLuaError(err, budget.wallMs);
+        return { content: `Lua execution error: ${msg}` };
+      }
+    };
+
+    let result: ToolExecuteResult | undefined;
+    const work = computeResult().then((r) => {
+      result = r;
+      return false;
+    });
+    // If the wall fires, the abandoned continuation may still touch the closing
+    // engine; swallow whatever it rejects with — drain/cleanup own teardown.
+    work.catch(() => {});
+    let wallTimer: NodeJS.Timeout | undefined;
+    const outcome = await Promise.race([
+      work,
+      new Promise<'timeout'>((resolve) => {
+        wallTimer = setTimeout(() => {
+          activeStCtx?.abort();
+          resolve('timeout');
+        }, budget.wallMs);
+      }),
+    ]);
+    clearTimeout(wallTimer);
+
+    try {
+      if (outcome === 'timeout' || !result) {
+        return {
+          content: `Lua execution error: script exceeded its ${Math.round(budget.wallMs / 1000)}s total time limit`,
+        };
+      }
+      return result;
     } finally {
       // Let fire-and-forget async st.* calls settle before tearing down the
-      // Lua state (10s cap, same policy as QuickReplyService).
-      if (drainSt) await drainSt();
+      // Lua state (10s cap, same policy as QuickReplyService). The cast
+      // defeats TS narrowing — drainSt is assigned inside computeResult's
+      // closure, which the checker does not track.
+      const drain = drainSt as (() => Promise<void>) | null;
+      if (drain) await drain();
       cleanup();
     }
   }
@@ -227,14 +276,15 @@ export class LuaToolExecutor {
   /**
    * Inject the curated `st` API (createToolStApi) when the template opted in
    * via allowSt, deps are wired, and the execution context carries a chatId.
-   * Returns a drain function for pending fire-and-forget promises, or null
-   * when `st` is not available for this execution.
+   * Returns the injected ScriptContext (for wall-ceiling aborts) plus a drain
+   * function for pending fire-and-forget promises, or null when `st` is not
+   * available for this execution.
    */
   private async maybeInjectSt(
     lua: import('wasmoon').LuaEngine,
     context: ToolContext | undefined,
     sandbox: LuaRuntimeOptions | undefined,
-  ): Promise<(() => Promise<void>) | null> {
+  ): Promise<{ ctx: ScriptContext; drain: () => Promise<void> } | null> {
     if (!sandbox?.allowSt || !this.stDeps || !context?.chatId) return null;
 
     // NOTE: no acquireLock() — the enclosing generation already holds the chat
@@ -266,15 +316,19 @@ export class LuaToolExecutor {
       _G.st = st
     `);
 
-    return async () => {
+    const drain = async () => {
       await Promise.race([
         Promise.allSettled(Array.from(pendingPromises)),
         new Promise((resolve) => setTimeout(resolve, 10000)),
       ]);
     };
+    return { ctx, drain };
   }
 
-  /** Mirror of QuickReplyService's wrapApi: track async st.* promises so they can be drained before engine teardown. */
+  /**
+   * Mirror of QuickReplyService's wrapApi: track async st.* promises so they
+   * can be drained before engine teardown.
+   */
   private wrapStApi(obj: Record<string, unknown>, pendingPromises: Set<Promise<unknown>>): Record<string, unknown> {
     const wrapped: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj)) {
@@ -298,8 +352,11 @@ export class LuaToolExecutor {
     return wrapped;
   }
 
-  private async loadTemplate(code: string, sandbox?: LuaRuntimeOptions): Promise<LoadedTemplate | { error: string }> {
-    const { lua, cleanup } = await this.luaRuntime.createState(sandbox);
+  private async loadTemplate(code: string, sandbox?: LuaRuntimeOptions, budget?: ExecutionBudget): Promise<LoadedTemplate | { error: string }> {
+    // The armed hook deadline is the template's wall ceiling — total life
+    // from creation (compile + getDefinition + execute + serialize; media
+    // pipelines legitimately await slow APIs inside it).
+    const { lua, cleanup } = await this.luaRuntime.createState(sandbox, budget?.wallMs ?? MAX_EXECUTION_MS);
     try {
       // attachments.create — only for templates that opted into allowFiles, and
       // only when the server wired media deps (always in production).

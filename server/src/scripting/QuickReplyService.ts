@@ -18,7 +18,7 @@ import type { QuickReply } from '@tamari/types';
 import type { IWorldInfoRepository } from '../repos/WorldInfoRepository.js';
 import type { IChatMemberRepository } from '../repos/ChatMemberRepository.js';
 import type { IExtensionDataRepository } from '../repos/ExtensionDataRepository.js';
-import { LuaRuntime } from './LuaRuntime.js';
+import { LuaRuntime, QUICK_REPLY_BUDGET, friendlyLuaError, type ExecutionBudget } from './LuaRuntime.js';
 import { ScriptContext } from './ScriptContext.js';
 import { createStApi } from './StApi.js';
 
@@ -47,7 +47,7 @@ export class QuickReplyService {
     this.luaRuntime = new LuaRuntime();
   }
 
-  async executeById(id: string, chatId: string, clientId: string): Promise<void> {
+  async executeById(id: string, chatId: string, clientId: string, budget: ExecutionBudget = QUICK_REPLY_BUDGET): Promise<void> {
     const qr = await this.deps.quickReplies.getById(id);
     if (!qr) {
       this.deps.bus.sendTo(clientId, {
@@ -57,7 +57,7 @@ export class QuickReplyService {
       });
       return;
     }
-    await this.execute(qr, chatId, clientId);
+    await this.execute(qr, chatId, clientId, { silent: false, budget });
   }
 
   /**
@@ -96,7 +96,7 @@ export class QuickReplyService {
     log.debug({ chatId, trigger, count: matching.length }, 'running auto-execute QRs');
 
     for (const qr of matching) {
-      await this.execute(qr, chatId, clientId, { silent: true });
+      await this.execute(qr, chatId, clientId, { silent: true, budget: QUICK_REPLY_BUDGET });
     }
   }
 
@@ -104,7 +104,7 @@ export class QuickReplyService {
     qr: { script: string; language: string; label: string },
     chatId: string,
     clientId: string,
-    options?: { silent?: boolean },
+    options?: { silent?: boolean; budget?: ExecutionBudget },
   ): Promise<void> {
     if (qr.language !== 'lua') {
       this.deps.bus.sendTo(clientId, {
@@ -114,6 +114,7 @@ export class QuickReplyService {
       });
       return;
     }
+    const budget = options?.budget ?? QUICK_REPLY_BUDGET;
 
     const ctx = new ScriptContext(chatId, this.deps.generationService);
     if (!ctx.acquireLock()) {
@@ -159,7 +160,11 @@ export class QuickReplyService {
     let cleanup: (() => void) | undefined;
 
     try {
-      const { lua, cleanup: c } = await this.luaRuntime.createState();
+      // The armed hook deadline doubles as the wall ceiling — total script
+      // life from creation, waits included. Awaiting is free within it, so
+      // the ceiling is sized for real pipelines (QUICK_REPLY_BUDGET), unlike
+      // the legacy flat 5s that aborted long-pipeline scripts opaquely.
+      const { lua, cleanup: c } = await this.luaRuntime.createState({}, budget.wallMs);
       cleanup = c;
       const api = createStApi(ctx, {
         generationService: this.deps.generationService,
@@ -201,9 +206,37 @@ export class QuickReplyService {
         _G.st = st
       `);
 
-      const { error } = await this.luaRuntime.run(lua, qr.script, ctx.signal);
-      if (error) {
-        this.deps.bus.sendTo(clientId, { type: 'script.error', message: error, source: 'quickreply' });
+      // Wall ceiling (JS-side race): mirrors the armed hook deadline so the
+      // failure surfaces as a clean error message and abort-aware st calls
+      // reject promptly (letting teardown proceed), instead of relying on the
+      // hook's opaque WASM panic in the busy-loop case.
+      const finished = this.luaRuntime.run(lua, qr.script, ctx.signal).then(({ error }) => {
+        if (error) {
+          this.deps.bus.sendTo(clientId, {
+            type: 'script.error',
+            message: friendlyLuaError(error, budget.wallMs),
+            source: 'quickreply',
+          });
+        }
+        return false;
+      });
+      let wallTimer: NodeJS.Timeout | undefined;
+      const exceeded = await Promise.race([
+        finished,
+        new Promise<boolean>((resolve) => {
+          wallTimer = setTimeout(() => {
+            ctx.abort();
+            resolve(true);
+          }, budget.wallMs);
+        }),
+      ]);
+      clearTimeout(wallTimer);
+      if (exceeded) {
+        this.deps.bus.sendTo(clientId, {
+          type: 'script.error',
+          message: `script exceeded its ${Math.round(budget.wallMs / 1000)}s total time limit`,
+          source: 'quickreply',
+        });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

@@ -5,11 +5,38 @@
  * enforces timeout and memory limits.
  */
 
-import { LuaFactory, LuaEngine } from 'wasmoon';
+import { LuaFactory, LuaEngine, LuaTimeoutError } from 'wasmoon';
 import { luaFetch } from './LuaFetch.js';
 import { vfsRequirePrelude } from './LuaVfs.js';
 /** Default execution deadline for createState — also the number friendlyLuaError reports. */
 export const MAX_EXECUTION_MS = 5000;
+
+/**
+ * Per-surface wall ceilings. One flat absolute deadline per execution, armed
+ * once as the wasmoon instruction-hook deadline — enforced MID-INSTRUCTION,
+ * killing zero-await busy loops hard. Awaiting host calls (st.generate,
+ * fetch, ...) suspends the VM and consumes no instruction budget: waits are
+ * free within the ceiling, so these are sized for real pipelines, unlike the
+ * legacy flat 5s under which media templates and multi-generation scripts
+ * aborted opaquely mid-run.
+ *
+ * WHY NOT DYNAMIC BURSTS (fresh budget per awaited call)? wasmoon doString
+ * executes on a CHILD thread whose own .timeout field is never set, so its
+ * yield-boundary checks never see renewals pushed through global.setTimeout;
+ * the instruction hook alone reaches executing code, and that hook latches a
+ * single captured deadline (positive-value updates change only the unreachable
+ * field). Disarm/re-arm cycles would grant renewals but permanently leak
+ * module-lifetime function-table slots — the factory shares one Emscripten
+ * module across every engine and the disarm path never calls removeFunction.
+ */
+export interface ExecutionBudget {
+  wallMs: number;
+}
+
+/** Quick Reply scripts: buttons may chain generations; ~1 minute of total life. */
+export const QUICK_REPLY_BUDGET: ExecutionBudget = { wallMs: 60_000 };
+/** Lua tool templates: media pipelines legitimately await slow image/TTS APIs. */
+export const LUA_TOOL_BUDGET: ExecutionBudget = { wallMs: 300_000 };
 
 /** Default Lua heap cap per execution — wasmoon enforces it in the allocator
     (traceAllocations), so a memory bomb fails with "not enough memory" instead
@@ -50,6 +77,12 @@ export interface LuaRuntimeOptions extends LuaVmSandboxOptions {
   allowSt?: boolean;
 }
 
+/** Result of createState. */
+export interface LuaStateHandle {
+  lua: LuaEngine;
+  cleanup: () => void;
+}
+
 export class LuaRuntime {
   private factory: LuaFactory;
 
@@ -57,7 +90,14 @@ export class LuaRuntime {
     this.factory = new LuaFactory();
   }
 
-  async createState(opts: LuaVmSandboxOptions = {}, timeoutMs: number = MAX_EXECUTION_MS): Promise<{ lua: LuaEngine; cleanup: () => void }> {
+  /**
+   * Create a fresh sandboxed engine. `timeoutMs` arms the wasmoon instruction
+   * hook with an absolute epoch-ms wall-clock deadline — total script life,
+   * waits included, enforced mid-instruction. Surfaces with long legitimate
+   * pipelines pass their own ceiling (QUICK_REPLY_BUDGET / LUA_TOOL_BUDGET);
+   * everything else keeps the legacy 5s default.
+   */
+  async createState(opts: LuaVmSandboxOptions = {}, timeoutMs: number = MAX_EXECUTION_MS): Promise<LuaStateHandle> {
     // traceAllocations routes the Lua state through a JS allocator wrapper so
     // setMemoryMax can actually reject allocations (see wasmoon Global).
     const lua = await this.factory.createEngine({
@@ -164,11 +204,11 @@ export class LuaRuntime {
 }
 
 /**
- * wasmoon enforces the execution deadline by aborting the WASM engine from the
- * instruction hook; the LuaTimeoutError it pushes is not a string, so lua_error
- * surfaces it as `RuntimeError: Aborted(native code called abort())`. There is
- * no cleaner signal to key on — match the message shape. (Rare false positives:
- * anything else that aborts the engine, e.g. WASM OOM, reads as a timeout too.)
+ * Detects the WASM-abort family: wasmoon's instruction hook raises its timeout
+ * error from C, where the non-string Error object makes lua_error surface it as
+ * `RuntimeError: Aborted(native code called abort())`. There is no cleaner
+ * signal to key on — match the message shape. (Rare false positives: anything
+ * else that aborts the engine, e.g. WASM OOM, reads as a timeout too.)
  */
 export function isLuaTimeoutError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
@@ -176,10 +216,19 @@ export function isLuaTimeoutError(err: unknown): boolean {
 }
 
 /**
- * Model-facing message for a Lua failure: translates the opaque wasmoon
- * timeout abort into something actionable, anything else passes through.
+ * Model-facing message for a Lua failure. Deadline families in play:
+ * - JS-side LuaTimeoutError ('thread timeout exceeded') from wasmoon's own
+ *   yield-boundary checks — unreachable for doString child threads today,
+ *   but mapped anyway should an upstream path ever surface it.
+ * - The C-side instruction-hook abort (isLuaTimeoutError) — the armed wall
+ *   ceiling passed mid-stretch; hard-killed, uncatchable in pcall.
  */
 export function friendlyLuaError(err: unknown, timeoutMs: number): string {
-  if (isLuaTimeoutError(err)) return `script timed out (${Math.round(timeoutMs / 1000)}s execution limit)`;
-  return err instanceof Error ? err.message : String(err);
+  const secs = Math.round(timeoutMs / 1000);
+  const message = err instanceof Error ? err.message : String(err);
+  if (err instanceof LuaTimeoutError || /thread timeout exceeded/.test(message)) {
+    return `script exceeded its ${secs}s time limit between host calls`;
+  }
+  if (isLuaTimeoutError(err)) return `script timed out (${secs}s execution limit)`;
+  return message;
 }
