@@ -24,7 +24,6 @@ LLM Frontend for Power Users
 | `HTTP_JSON_LIMIT` | `5mb` | Max body size for JSON HTTP requests |
 | `WS_MAX_PAYLOAD_BYTES` | `1048576` | Max WebSocket message payload in bytes (1 MB) |
 | `AVATAR_MAX_FILE_SIZE_BYTES` | `52428800` | Max persona avatar upload file size in bytes (50 MB) |
-| `WS_AUTH_REJECTION_MS` | `500` | Delay before closing an unauthenticated WebSocket connection |
 | `SHUTDOWN_TIMEOUT_MS` | `5000` | Graceful shutdown timeout before force-exit |
 | `MAX_TOOL_ROUNDS` | `100` | Tool-call rounds allowed per generation turn |
 | `MAX_AGENT_DEPTH` | `4` | Maximum nesting depth for sub-agents (`run_agent`) |

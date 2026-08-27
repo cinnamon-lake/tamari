@@ -5,13 +5,13 @@
 
 import { createSignal, Show, For } from 'solid-js';
 import { useI18n } from '../i18n/index.js';
-import { listSecrets, type SecretEntry } from '../lib/secrets.js';
+import { listSecrets, type SecretListItem } from '../lib/secrets.js';
 import './SecretPicker.css';
 
 export function SecretPicker(props: { onPick: (ref: string) => void }) {
   const { t } = useI18n();
   const [open, setOpen] = createSignal(false);
-  const [secrets, setSecrets] = createSignal<SecretEntry[]>([]);
+  const [secrets, setSecrets] = createSignal<SecretListItem[]>([]);
   const [loading, setLoading] = createSignal(false);
 
   const toggle = async () => {
@@ -30,7 +30,7 @@ export function SecretPicker(props: { onPick: (ref: string) => void }) {
     }
   };
 
-  const pick = (s: SecretEntry) => {
+  const pick = (s: SecretListItem) => {
     props.onPick(`secret:${s.key}`);
     setOpen(false);
   };

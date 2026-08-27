@@ -10,7 +10,7 @@
  * request-script guard with allowLocalhost=true.
  */
 
-import { assertSafeUrl } from '../backends/RequestScript.js';
+import { safeFetch } from '../backends/RequestScript.js';
 
 const FETCH_TIMEOUT_MS = 30_000;
 const MAX_BODY_BYTES = 25 * 1024 * 1024;
@@ -60,17 +60,23 @@ export async function luaFetch(url: string, opts?: LuaFetchOptions): Promise<Lua
   if (typeof url !== 'string' || url.length === 0) {
     throw new Error('fetch: url is required');
   }
-  await assertSafeUrl(url, /* allowLocalhost */ true);
+  // URL safety (including every redirect hop) is enforced by safeFetch.
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
-      method: opts?.method ?? 'GET',
-      headers: opts?.headers,
-      body: opts?.body,
-      signal: controller.signal,
-    });
+    // safeFetch follows redirects hop-by-hop through assertSafeUrl so a
+    // redirect into link-local/RFC1918 space cannot slip past the guard.
+    const res = await safeFetch(
+      url,
+      {
+        method: opts?.method ?? 'GET',
+        headers: opts?.headers,
+        body: opts?.body,
+        signal: controller.signal,
+      },
+      { allowLocalhost: true },
+    );
 
     const headers: Record<string, string> = {};
     res.headers.forEach((value, key) => {

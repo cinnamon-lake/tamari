@@ -38,7 +38,6 @@ export interface ServerConfig {
   httpJsonLimit: string;
   wsMaxPayloadBytes: number;
   avatarMaxFileSizeBytes: number;
-  wsAuthRejectionMs: number;
   shutdownTimeoutMs: number;
   /** Tool-call rounds allowed per generation turn before the loop stops. */
   maxToolRounds: number;
@@ -59,7 +58,6 @@ export function loadConfig(): ServerConfig {
   const httpJsonLimit = process.env.HTTP_JSON_LIMIT ?? '5mb';
   const wsMaxPayloadBytes = parseInt(process.env.WS_MAX_PAYLOAD_BYTES ?? String(1024 * 1024), 10);
   const avatarMaxFileSizeBytes = parseInt(process.env.AVATAR_MAX_FILE_SIZE_BYTES ?? String(50 * 1024 * 1024), 10);
-  const wsAuthRejectionMs = parseInt(process.env.WS_AUTH_REJECTION_MS ?? '500', 10);
   const shutdownTimeoutMs = parseInt(process.env.SHUTDOWN_TIMEOUT_MS ?? '5000', 10);
   // 100: agentic workflows (character porting, multi-step tool sequences)
   // treat 25 as an appetizer.
@@ -78,7 +76,6 @@ export function loadConfig(): ServerConfig {
     httpJsonLimit,
     wsMaxPayloadBytes,
     avatarMaxFileSizeBytes,
-    wsAuthRejectionMs,
     shutdownTimeoutMs,
     maxToolRounds,
     maxAgentDepth,

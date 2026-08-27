@@ -1,6 +1,7 @@
-import { For, Show, createMemo, type JSX } from 'solid-js';
+import { For, Show, createMemo, createRenderEffect, type JSX } from 'solid-js';
 import type { ContentPart, InlineContentPart, Message, TextPart, ToolResultPart } from '@tamari/types';
 import { getToolRenderer } from './tool-renderers/index.js';
+import { applyAuthTokenToMedia, authenticatedSrc } from '../lib/apiFetch.js';
 
 /**
  * Renders a message's content parts. Only text parts carry server-rendered
@@ -53,11 +54,11 @@ function toolResultMedia(part: ToolResultPart): InlineContentPart[] {
 function renderInlineMedia(part: InlineContentPart): JSX.Element {
   switch (part.type) {
     case 'image':
-      return <img class="message-inline-img" src={part.source} alt="" loading="lazy" />;
+      return <img class="message-inline-img" src={authenticatedSrc(part.source)} alt="" loading="lazy" />;
     case 'audio':
-      return <audio class="message-inline-audio" controls src={part.source} preload="metadata" />;
+      return <audio class="message-inline-audio" controls src={authenticatedSrc(part.source)} preload="metadata" />;
     case 'video':
-      return <video class="message-inline-video" controls src={part.source} preload="metadata" />;
+      return <video class="message-inline-video" controls src={authenticatedSrc(part.source)} preload="metadata" />;
     default:
       return null;
   }
@@ -89,13 +90,24 @@ export function MessagePartsView(props: MessagePartsViewProps) {
     () => props.editingPartIndex != null && props.editingPartIndex < collapsedParts().length,
   );
 
+  // Server-rendered HTML can embed <img>/<audio>/<video> pointing at
+  // token-checked routes (/api/attachments, /files). Media elements cannot
+  // send headers, so rewrite those sources to query-param form after every
+  // innerHTML swap.
+  const bindTokenedMedia = (el: HTMLElement): void => {
+    createRenderEffect(() => {
+      void renderedHtml();
+      applyAuthTokenToMedia(el);
+    });
+  };
+
   const renderPart = (part: ContentPart, index: () => number): JSX.Element => {
     switch (part.type) {
       case 'text': {
         return (
           <Show
             when={props.editingPartIndex === index() && props.renderEditArea !== undefined}
-            fallback={<div class="message-part-text" innerHTML={renderedHtml()[index()] ?? ''} />}
+            fallback={<div class="message-part-text" ref={bindTokenedMedia} innerHTML={renderedHtml()[index()] ?? ''} />}
           >
             {props.renderEditArea!(index(), part.text)}
           </Show>
@@ -189,7 +201,7 @@ export function MessagePartsView(props: MessagePartsViewProps) {
         fallback={
           // Legacy messages without parts: single rendered block.
           <Show when={renderedHtml()[0] != null}>
-            <div class="message-part-text" innerHTML={renderedHtml()[0] ?? ''} />
+            <div class="message-part-text" ref={bindTokenedMedia} innerHTML={renderedHtml()[0] ?? ''} />
           </Show>
         }
       >

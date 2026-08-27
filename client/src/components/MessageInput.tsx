@@ -17,6 +17,7 @@ import {
 import { QuickReplyBar } from './QuickReplyBar.js';
 import { materializeChat } from '../lib/materializeChat.js';
 import type { AttachmentRef } from '@tamari/types';
+import { authenticatedSrc } from '../lib/apiFetch.js';
 import { useI18n } from '../i18n/index.js';
 import './MessageInput.css';
 
@@ -366,7 +367,7 @@ export function MessageInput() {
                       </div>
                     }
                   >
-                    <img class="attachment-preview-img" src={att.url} alt="" loading="lazy" />
+                    <img class="attachment-preview-img" src={authenticatedSrc(att.url)} alt="" loading="lazy" />
                   </Show>
                   <button
                     class="remove-attach"

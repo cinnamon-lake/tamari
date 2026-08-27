@@ -39,7 +39,10 @@ function createApp(deps: McpRouterDeps, opts?: { withAuth?: boolean }) {
   const app = express();
   app.use(express.json());
   if (opts?.withAuth === true) {
-    const auth = { validate: (token?: string) => token === 'secret-token' } as unknown as AuthService;
+    const auth = {
+      classify: async (_source: string | undefined, token?: string) =>
+        token === 'secret-token' ? ('master' as const) : null,
+    } as unknown as AuthService;
     app.use('/api', createAuthMiddleware(auth));
     app.use('/api/mcp', createMcpRouter(deps));
   } else {

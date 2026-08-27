@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { TestHarness } from '../testing/TestHarness.js';
+import { AuthService } from '../services/AuthService.js';
 import { createAttachmentDownloadRouter, createAttachmentsRouter } from './attachments.js';
+
+const TEST_SECRET = 'audit-test-secret';
 
 const minimalPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
@@ -20,10 +23,11 @@ function binaryParser(res: any, callback: (err: any, body: Buffer) => void) {
   });
 }
 
-/** Download router only — mounted without any auth middleware, as in main.ts. */
-function createDownloadApp(harness: TestHarness) {
+/** Download router only — mounted without the global auth middleware, as in
+ * main.ts; the router enforces the bearer/query token itself. */
+function createDownloadApp(harness: TestHarness, auth: AuthService) {
   const app = express();
-  app.use('/api/attachments', createAttachmentDownloadRouter(harness.deps.attachments, harness.deps.storage));
+  app.use('/api/attachments', createAttachmentDownloadRouter(harness.deps.attachments, harness.deps.storage, auth));
   return app;
 }
 
@@ -47,22 +51,34 @@ async function seedAttachment(h: TestHarness, mimeType: string) {
 describe('createAttachmentDownloadRouter', () => {
   let h: TestHarness;
   let app: ReturnType<typeof createDownloadApp>;
+  let auth: AuthService;
 
   beforeEach(async () => {
     h = new TestHarness();
     await h.initSchema();
-    app = createDownloadApp(h);
+    auth = new AuthService(TEST_SECRET);
+    app = createDownloadApp(h, auth);
   });
 
   afterEach(async () => {
     await h.teardown();
   });
 
-  it('serves an attachment without any auth (mounted before the auth middleware)', async () => {
+  it('rejects a request without any token (mounted before the auth middleware)', async () => {
+    const attachment = await seedAttachment(h, 'image/png');
+    await request(app).get(`/api/attachments/${attachment.id}`).expect(401);
+  });
+
+  it('rejects a wrong token', async () => {
+    const attachment = await seedAttachment(h, 'image/png');
+    await request(app).get(`/api/attachments/${attachment.id}?token=nope`).expect(401);
+  });
+
+  it('serves an attachment with the query-param token (inline media form)', async () => {
     const attachment = await seedAttachment(h, 'image/png');
 
     const res = await request(app)
-      .get(`/api/attachments/${attachment.id}`)
+      .get(`/api/attachments/${attachment.id}?token=${encodeURIComponent(TEST_SECRET)}`)
       .buffer(true)
       .parse(binaryParser)
       .expect(200)
@@ -72,18 +88,39 @@ describe('createAttachmentDownloadRouter', () => {
     expect(res.body).toEqual(minimalPng);
   });
 
+  it('accepts the Bearer header as well', async () => {
+    const attachment = await seedAttachment(h, 'image/png');
+    await request(app)
+      .get(`/api/attachments/${attachment.id}`)
+      .set('Authorization', `Bearer ${TEST_SECRET}`)
+      .expect(200);
+  });
+
   it('forces download for non-inline-safe MIME types', async () => {
     const attachment = await seedAttachment(h, 'text/plain');
 
     await request(app)
-      .get(`/api/attachments/${attachment.id}`)
+      .get(`/api/attachments/${attachment.id}?token=${encodeURIComponent(TEST_SECRET)}`)
       .expect(200)
       .expect('Content-Type', 'text/plain')
       .expect('Content-Disposition', 'attachment');
   });
 
+  it('forces SVG to attachment disposition with a sandboxing CSP', async () => {
+    const attachment = await seedAttachment(h, 'image/svg+xml');
+
+    const res = await request(app)
+      .get(`/api/attachments/${attachment.id}?token=${encodeURIComponent(TEST_SECRET)}`)
+      .expect(200)
+      .expect('Content-Type', 'image/svg+xml')
+      .expect('Content-Disposition', 'attachment');
+    expect(res.headers['content-security-policy']).toContain('sandbox');
+  });
+
   it('returns 404 for a missing attachment', async () => {
-    const res = await request(app).get('/api/attachments/does-not-exist').expect(404);
+    const res = await request(app)
+      .get('/api/attachments/does-not-exist?token=' + encodeURIComponent(TEST_SECRET))
+      .expect(404);
     expect(res.body.error).toBe('Not found');
   });
 });

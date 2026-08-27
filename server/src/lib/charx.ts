@@ -9,7 +9,8 @@
  * Uses fflate for ZIP decompression (already available in workspace).
  */
 
-import { unzipSync, strFromU8 } from 'fflate';
+import { strFromU8 } from 'fflate';
+import { unzipWithCap } from './zipGuard.js';
 import { str } from './coerce.js';
 
 
@@ -117,7 +118,7 @@ export function parseCharX(buffer: Buffer): CharXParseResult {
   const zipData = u8.slice(zipOffset);
   let files: Record<string, Uint8Array>;
   try {
-    files = unzipSync(zipData, { filter: (file) => !file.name.endsWith('/') });
+    files = unzipWithCap(zipData, { skipDirectories: true });
   } catch (err) {
     throw new Error(`Failed to parse ZIP: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
   }
@@ -170,7 +171,7 @@ export function extractCharXAssets(
   }
 
   const zipData = u8.slice(zipOffset);
-  const files = unzipSync(zipData, { filter: (file) => !file.name.endsWith('/') });
+  const files = unzipWithCap(zipData, { skipDirectories: true });
 
   const result = new Map<string, Buffer>();
   for (const def of assetDefs) {

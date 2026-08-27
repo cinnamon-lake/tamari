@@ -117,10 +117,10 @@ export async function applyRequestScript(
   script: string | undefined,
   extras?: Record<string, unknown>,
   allowLocalhost = false,
-): Promise<{ url: string; init: RequestInit }> {
+): Promise<{ url: string; init: RequestInit; guardAllowLocalhost: boolean }> {
   if (!script?.trim()) {
     await assertSafeUrl(url, allowLocalhost);
-    return { url, init };
+    return { url, init, guardAllowLocalhost: allowLocalhost };
   }
 
   // If the adapter's configured endpoint is itself loopback, the user runs a
@@ -186,11 +186,53 @@ export async function applyRequestScript(
         headers: (mutated.headers) ?? init.headers,
         body: mutated.body !== undefined ? JSON.stringify(mutated.body) : init.body,
       },
+      guardAllowLocalhost: allowLoopback,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new RequestScriptError(message);
   } finally {
     lua.global.close();
+  }
+}
+
+// ---------- SSRF-guarded fetch with redirect re-validation ----------
+
+const MAX_REDIRECT_HOPS = 5;
+const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
+
+export interface SsrfGuardOptions {
+  /** Whether loopback targets are permitted for this fetch chain. */
+  allowLocalhost?: boolean;
+}
+
+/**
+ * fetch() wrapper used by every SSRF-guarded surface (Lua `fetch`, Lua request
+ * scripts). Follows redirects MANUALLY so each hop passes assertSafeUrl — the
+ * initial-URL pre-flight alone is bypassable by a 302 pointing into
+ * link-local/RFC1918 space. Non-guarded adapters keep plain `fetch` semantics
+ * (their URL comes straight from operator settings, documented trade-off).
+ */
+export async function safeFetch(url: string, init: RequestInit, opts?: SsrfGuardOptions): Promise<Response> {
+  const allowLocalhost = opts?.allowLocalhost ?? false;
+  let current = url;
+  let currentInit = init;
+  for (let hop = 0; ; hop++) {
+    await assertSafeUrl(current, allowLocalhost);
+    const res = await fetch(current, { ...currentInit, redirect: 'manual' });
+    if (!REDIRECT_STATUS.has(res.status)) return res;
+    const location = res.headers.get('location');
+    if (!location) return res;
+    // Body must be consumed before the connection can be reused; a redirect
+    // has no useful payload.
+    await res.arrayBuffer().catch(() => undefined);
+    if (hop >= MAX_REDIRECT_HOPS) {
+      throw new RequestScriptError(`SSRF blocked: more than ${MAX_REDIRECT_HOPS} redirects`);
+    }
+    current = new URL(location, current).toString();
+    const method = (currentInit.method ?? 'GET').toUpperCase();
+    if (res.status === 303 || ((res.status === 301 || res.status === 302) && method !== 'HEAD')) {
+      currentInit = { ...currentInit, method: 'GET', body: undefined };
+    }
   }
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@solidjs/testing-library';
 import { AuthGate } from './AuthModal.js';
-import { clearAuthToken, setAuthToken } from '../lib/auth.js';
+import { clearAuthToken, setAuthToken, getAuthToken } from '../lib/auth.js';
 import { bus } from '../bus/WebSocketBus.js';
 
 describe('AuthGate', () => {
@@ -38,7 +38,11 @@ describe('AuthGate', () => {
     expect(screen.queryByText('Authentication Required')).not.toBeInTheDocument();
   });
 
-  it('submitting token sets auth and reconnects', () => {
+  it('submitting the password exchanges it for a session token and reconnects', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ token: 'session-token-1' }), { status: 200 }),
+    ));
+
     render(() => (
       <AuthGate>
         <div class="auth-gate-test-content">Protected content</div>
@@ -48,9 +52,30 @@ describe('AuthGate', () => {
     const input = screen.getByPlaceholderText('Secret token');
     fireEvent.input(input, { target: { value: 'my-secret' } });
     screen.getByText('Connect').click();
+    await vi.waitFor(() => expect(getAuthToken()).toBe('session-token-1'));
 
+    // The stored credential is the issued session token, never the password.
+    expect(getAuthToken()).not.toBe('my-secret');
     expect(bus.disconnect).toHaveBeenCalled();
-    // connect is called via setTimeout, so we don't check it synchronously
+  });
+
+  it('rejects a wrong password without storing anything', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Invalid password' }), { status: 401 }),
+    ));
+
+    render(() => (
+      <AuthGate>
+        <div class="auth-gate-test-content">Protected content</div>
+      </AuthGate>
+    ));
+
+    const input = screen.getByPlaceholderText('Secret token');
+    fireEvent.input(input, { target: { value: 'wrong-password' } });
+    screen.getByText('Connect').click();
+
+    await vi.waitFor(() => expect(screen.getByText('Incorrect password')).toBeInTheDocument());
+    expect(bus.disconnect).not.toHaveBeenCalled();
   });
 
   it('shows error for empty token', () => {

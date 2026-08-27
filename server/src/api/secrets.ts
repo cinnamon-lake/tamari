@@ -1,11 +1,19 @@
 /**
  * Secret REST API — encrypted vault list/set/delete.
+ *
+ * Listing masks values unless the request authenticated with the MASTER
+ * credential (TAMARI_SECRET). Session tokens get `{masked, hint}` shapes so
+ * a leaked browser token can enumerate but not read vault contents; setting
+ * or deleting needs no plaintext readback and stays open to sessions.
  */
 
 import { Router } from 'express';
+import type { Request } from 'express';
 import { z } from 'zod';
 import { getLogger } from '../lib/logger.js';
-import type { SecretService } from '../services/SecretService.js';
+import type { SecretService, SecretEntry } from '../services/SecretService.js';
+import { extractBearerToken, type AuthedRequest } from '../middleware/auth.js';
+import type { AuthService, AuthKind } from '../services/AuthService.js';
 
 const log = getLogger('api/secrets');
 
@@ -15,13 +23,44 @@ const SecretSetSchema = z.object({
   label: z.string().max(256).optional(),
 });
 
-export function createSecretsRouter(secretService: SecretService, secretsPassword: string): Router {
+/** Value-free shape returned to non-master credentials. */
+export interface MaskedSecretEntry {
+  key: string;
+  label?: string;
+  masked: true;
+  hint: string;
+}
+
+export function createSecretsRouter(
+  secretService: SecretService,
+  secretsPassword: string,
+  auth?: AuthService,
+): Router {
   const router = Router();
 
-  router.get('/', async (_req, res) => {
+  async function kindFor(req: Request): Promise<AuthKind | null> {
+    // When the AuthService is wired in, trust its classification of THIS
+    // request's presented credential (not the middleware's stored kind) so
+    // masking tracks exactly what was presented.
+    if (!auth) return (req as AuthedRequest).authKind ?? null;
+    return auth.classify(req.socket.remoteAddress ?? undefined, extractBearerToken(req));
+  }
+
+  router.get('/', async (req, res) => {
     try {
       const items = await secretService.list(secretsPassword);
-      res.json(items);
+      const kind = await kindFor(req);
+      if (kind === 'master') {
+        res.json(items satisfies SecretEntry[]);
+        return;
+      }
+      const masked: MaskedSecretEntry[] = items.map((item) => ({
+        key: item.key,
+        ...(item.label !== undefined ? { label: item.label } : {}),
+        masked: true,
+        hint: item.value.length >= 4 ? `••••${item.value.slice(-4)}` : '••••',
+      }));
+      res.json(masked);
     } catch (err) {
       log.error({ err }, 'secrets: list error');
       res.status(500).json({ error: 'Failed to list secrets' });

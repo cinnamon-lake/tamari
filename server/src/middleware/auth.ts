@@ -1,37 +1,62 @@
+/**
+ * Express auth middleware + shared bearer-token extraction.
+ *
+ * Marks each request with the credential kind that satisfied it
+ * (`req.authKind`) so routers can distinguish master credentials (scripts,
+ * full access incl. vault plaintext) from issued session tokens (the
+ * browser's revocable credential — see AuthService).
+ */
+
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
-import type { AuthService } from '../services/AuthService.js';
+import { getLogger } from '../lib/logger.js';
+import type { AuthService, AuthKind } from '../services/AuthService.js';
+
+const log = getLogger('middleware/auth');
+
+const PUBLIC_ASSET_PATH = /^\/characters\/[^/]+\/assets\/[^/]+$/;
+
+/** Bearer header first, query-param fallback for <img> tags that cannot send headers. */
+export function extractBearerToken(req: Request): string | undefined {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) return header.slice(7);
+  if (typeof req.query.token === 'string') return req.query.token;
+  return undefined;
+}
+
+/** Brute-force bucket key: raw peer address (x-forwarded-for is not trusted here). */
+function peerOf(req: Request): string | undefined {
+  return req.socket.remoteAddress ?? undefined;
+}
+
+export interface AuthedRequest extends Request {
+  authKind?: AuthKind;
+}
 
 export function createAuthMiddleware(auth: AuthService): RequestHandler {
-  return (req: Request, res: Response, next: NextFunction) => {
-    // Allow health checks without auth
-    if (req.path === '/health') {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Allow health checks without auth
+      if (req.path === '/health') {
+        next();
+        return;
+      }
+
+      // Character assets are public content referenced in message markdown
+      if (PUBLIC_ASSET_PATH.test(req.path)) {
+        next();
+        return;
+      }
+
+      const kind = await auth.classify(peerOf(req), extractBearerToken(req));
+      if (!kind) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      (req as AuthedRequest).authKind = kind;
       next();
-      return;
+    } catch (err) {
+      log.error({ err }, 'auth middleware error');
+      res.status(500).json({ error: 'Authentication failed' });
     }
-
-    // Character assets are public content referenced in message markdown
-    if (/^\/characters\/[^/]+\/assets\/[^/]+$/.test(req.path)) {
-      next();
-      return;
-    }
-
-    // Check Authorization header first
-    const authHeader = req.headers.authorization;
-    let token: string | undefined;
-    if (authHeader?.startsWith('Bearer ')) {
-      token = authHeader.slice(7);
-    }
-
-    // Fall back to query param (needed for <img> tags that can't send headers)
-    if (!token && typeof req.query.token === 'string') {
-      token = req.query.token;
-    }
-
-    if (!auth.validate(token)) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
-
-    next();
   };
 }

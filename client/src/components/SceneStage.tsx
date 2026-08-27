@@ -2,6 +2,7 @@ import { For, Show } from 'solid-js';
 import type { Component } from 'solid-js';
 import type { ResolvedScene } from '../lib/sceneState.js';
 import { sceneStageCollapsed, setSceneStageCollapsed } from '../stores/uiStore.js';
+import { authenticatedSrc } from '../lib/apiFetch.js';
 import { useI18n } from '../i18n/index.js';
 import './SceneStage.css';
 
@@ -18,13 +19,13 @@ export const SceneStage: Component<{ scene: ResolvedScene | null }> = (props) =>
         <div class={`scene-stage${sceneStageCollapsed() ? ' collapsed' : ''}`}>
           <Show when={!sceneStageCollapsed()}>
             <Show when={scene().backgroundUrl}>
-              {(url) => <img class="scene-stage-bg" src={url()} alt="" />}
+              {(url) => <img class="scene-stage-bg" src={authenticatedSrc(url())} alt="" />}
             </Show>
             <For each={scene().sprites}>
               {(sprite) => (
                 <img
                   class={`scene-sprite scene-sprite-${sprite.position}`}
-                  src={sprite.url}
+                  src={authenticatedSrc(sprite.url)}
                   alt={sprite.emotion ? `${sprite.name} (${sprite.emotion})` : sprite.name}
                 />
               )}

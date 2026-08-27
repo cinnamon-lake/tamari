@@ -10,6 +10,7 @@ export function AuthGate(props: { children: JSX.Element }) {
   const { t } = useI18n();
   const [tokenInput, setTokenInput] = createSignal('');
   const [authError, setAuthError] = createSignal('');
+  const [isSubmitting, setIsSubmitting] = createSignal(false);
 
   // Listen for auth errors from the WebSocket bus
   onMount(() => {
@@ -26,21 +27,44 @@ export function AuthGate(props: { children: JSX.Element }) {
     onCleanup(unsub);
   });
 
-  const submit = () => {
-    const token = tokenInput().trim();
-    if (!token) {
+  // Exchange the password for a revocable session token; only that token is
+  // ever persisted — the password itself stays out of localStorage.
+  const submit = async () => {
+    const password = tokenInput().trim();
+    if (!password) {
       setAuthError(t('auth.errors.tokenRequired'));
       return;
     }
-    setAuthToken(token);
-    setAuthError('');
-    // Reconnect WebSocket with the new token
-    bus.disconnect();
-    setTimeout(() => bus.connect(), 100);
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        setAuthError(res.status === 401 ? t('auth.errors.invalid') : t('auth.errors.requestFailed'));
+        return;
+      }
+      const data = (await res.json()) as { token?: string };
+      if (!data.token) {
+        setAuthError(t('auth.errors.requestFailed'));
+        return;
+      }
+      setAuthToken(data.token);
+      setAuthError('');
+      // Reconnect WebSocket with the new token
+      bus.disconnect();
+      setTimeout(() => bus.connect(), 100);
+    } catch {
+      setAuthError(t('auth.errors.network'));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') submit();
+  const handleKeyDown = () => {
+    void submit();
   };
 
   return (
@@ -71,8 +95,13 @@ export function AuthGate(props: { children: JSX.Element }) {
               aria-describedby={authError() ? 'auth-error' : undefined}
               data-testid="auth-input"
             />
-            <button class="btn btn-primary" onClick={submit} data-testid="auth-submit">
-              {t('auth.connect')}
+            <button
+              class="btn btn-primary"
+              onClick={() => void submit()}
+              disabled={isSubmitting()}
+              data-testid="auth-submit"
+            >
+              {isSubmitting() ? t('auth.connecting') : t('auth.connect')}
             </button>
           </div>
         </div>

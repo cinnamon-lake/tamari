@@ -26,6 +26,7 @@ import { AudioPlayer } from './AudioPlayer.js';
 
 import { getToolRenderer } from './tool-renderers/index.js';
 import { MessagePartsView } from './MessagePartsView.js';
+import { authenticatedSrc } from '../lib/apiFetch.js';
 import { useI18n } from '../i18n/index.js';
 import './ChatView.css';
 
@@ -1110,24 +1111,24 @@ function MessageBubble(props: {
                         type="button"
                         class="message-attachment-btn"
                         aria-label={t('chat.imageAttachment')}
-                        onClick={() => openLightbox(att.url)}
+                        onClick={() => openLightbox(authenticatedSrc(att.url))}
                       >
                         <img
                           class="message-attachment-img"
-                          src={att.url}
+                          src={authenticatedSrc(att.url)}
                           alt=""
                           loading="lazy"
                         />
                       </button>
                     </Match>
                     <Match when={att.mimeType.startsWith('audio/')}>
-                      <AudioPlayer src={att.url} title={t('chat.audioAttachment', { id: att.id })} />
+                      <AudioPlayer src={authenticatedSrc(att.url)} title={t('chat.audioAttachment', { id: att.id })} />
                     </Match>
                     <Match when={att.mimeType.startsWith('video/')}>
-                      <video class="message-attachment-video" controls src={att.url} preload="metadata" />
+                      <video class="message-attachment-video" controls src={authenticatedSrc(att.url)} preload="metadata" />
                     </Match>
                     <Match when={true}>
-                      <a class="attachment-link" href={att.url} target="_blank" rel="noopener">
+                      <a class="attachment-link" href={authenticatedSrc(att.url)} target="_blank" rel="noopener">
                         <i class="bi bi-paperclip" /> {att.id}
                       </a>
                     </Match>

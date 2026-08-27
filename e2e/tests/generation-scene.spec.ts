@@ -75,7 +75,7 @@ test.describe('Scene Stage', () => {
 
     const stage = page.locator('.scene-stage');
     await expect(stage).toBeVisible();
-    await expect(stage.locator('.scene-stage-bg')).toHaveAttribute('src', `/api/attachments/${attachmentId}`);
+    await expect(stage.locator('.scene-stage-bg')).toHaveAttribute('src', new RegExp(`/api/attachments/${attachmentId}\\?token=`));
     // Regression: the image must actually load — Express's sendFile used to 404
     // on dataDir paths containing a dot segment (like server/.test-data).
     await expect
@@ -88,6 +88,6 @@ test.describe('Scene Stage', () => {
     await stage.locator('.scene-stage-toggle').click();
     await expect(stage.locator('.scene-stage-bg')).toHaveCount(0);
     await stage.locator('.scene-stage-toggle').click();
-    await expect(stage.locator('.scene-stage-bg')).toHaveAttribute('src', `/api/attachments/${attachmentId}`);
+    await expect(stage.locator('.scene-stage-bg')).toHaveAttribute('src', new RegExp(`/api/attachments/${attachmentId}\\?token=`));
   });
 });

@@ -21,6 +21,7 @@ import {
   WorldInfoRepository,
   GenerationRepository,
   SecretRepository,
+  AuthSessionRepository,
   PersonaRepository,
   BackendConfigRepository,
   PromptListRepository,
@@ -39,6 +40,7 @@ import { UnpackedCardService } from './services/unpacked/UnpackedCardService.js'
 import { CardTestService } from './services/CardTestService.js';
 import { TestSessionService } from './services/TestSessionService.js';
 import { createMcpRouter } from './api/mcp.js';
+import { createAuthRouter } from './api/auth.js';
 import { ReadThroughCharacterRepository } from './services/unpacked/ReadThroughCharacterRepository.js';
 import { ReadThroughWorldInfoRepository } from './services/unpacked/ReadThroughWorldInfoRepository.js';
 import { createDispatcher } from './dispatcher.js';
@@ -132,9 +134,6 @@ if (!process.env.TAMARI_SECRET && !process.env.SILLYTAVERN_SECRET && canPromptIn
 
 const config = loadConfig();
 
-// Authentication service
-const auth = new AuthService(config.secret);
-
 // Without a persistent secret (non-interactive run with nothing set), bearer
 // tokens and vault-encrypted API keys die with the process — say so honestly.
 if (!process.env.TAMARI_SECRET && !process.env.SILLYTAVERN_SECRET) {
@@ -174,6 +173,12 @@ const customBackends = withLogging(new CustomBackendRepository(db), 'customBacke
 const scriptBlobs = withLogging(new ScriptBlobRepository(db), 'scriptBlobs');
 const secrets = withLogging(new SecretRepository(db), 'secrets');
 const secretService = new SecretService(secrets);
+
+// Authentication: master secret (TAMARI_SECRET) + revocable browser sessions.
+// See AuthService for the credential-kind split and middleware/auth.ts +
+// api/auth.ts for where the kinds are checked/issued.
+const authSessions = withLogging(new AuthSessionRepository(db), 'authSessions');
+const auth = new AuthService(config.secret, authSessions);
 
 // Backend factory wrapper: resolve `secret:<key>` references against the vault
 // (unlocked with the app login secret) before constructing the adapter.
@@ -503,8 +508,13 @@ const clientDist = join(__dirname, '../../client/dist');
 app.use(requestLogger());
 app.use(express.static(clientDist));
 
-// Public attachment download (must be before /api auth middleware so inline images load)
-app.use('/api/attachments', createAttachmentDownloadRouter(attachments, storage));
+// Attachment download (must be before /api auth middleware so inline images load;
+// the router carries its own token check for the same reason)
+app.use('/api/attachments', createAttachmentDownloadRouter(attachments, storage, auth));
+
+// Session-token exchange (the login endpoint) — intentionally reachable
+// without a bearer token; everything else under /api is guarded below.
+app.use('/api/auth', createAuthRouter(auth));
 
 // Auth middleware for all API routes
 const requireAuth = createAuthMiddleware(auth);
@@ -537,7 +547,7 @@ const dataMaid = new DataMaid(db, storage);
 app.use('/api/maid', createMaidRouter(dataMaid, chats, bus));
 
 // Secret REST API
-app.use('/api/secrets', createSecretsRouter(secretService, config.secret));
+app.use('/api/secrets', createSecretsRouter(secretService, config.secret, auth));
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -581,13 +591,15 @@ const wss = new WebSocketServer({
     const expectedOrigin = `${proto}://${host}`;
     const allowed = new Set([
       expectedOrigin,
-      'null',
       'http://localhost',
       'https://localhost',
       'http://127.0.0.1',
       'https://127.0.0.1',
       ...config.wsOrigins,
     ]);
+    // 'null' (sandboxed iframes, data: pages) is deliberately NOT allowed by
+    // default — a page that can't prove its origin doesn't get a socket.
+    // Operators who genuinely need it can add it via WS_ORIGINS=null.
     // In dev mode (DISABLE_CSRF=true), also allow any localhost/127.0.0.1 port
     if (config.disableCsrf) {
       if (origin && (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:'))) return true;
@@ -602,80 +614,84 @@ const wss = new WebSocketServer({
 });
 
 wss.on('connection', (ws, req) => {
-  const client = bus.addClient(ws);
-  let authRejectionTimer: ReturnType<typeof setTimeout> | undefined;
-
-  ws.on('error', (err) => {
-    log.warn({ err, clientId: client.id }, 'ws error');
-  });
-
-  ws.on('close', (code, reason) => {
-    log.debug({ clientId: client.id, code, reason: reason.toString() }, 'ws close');
-    if (authRejectionTimer) clearTimeout(authRejectionTimer);
-    bus.removeClient(client.id);
-  });
-
-  // Validate auth token from URL query params
+  // Validate BEFORE the client joins the bus: an unauthenticated socket that
+  // sat in the clients map (even for a rejection grace period) would receive
+  // live broadcasts — chat content and generation deltas included.
   const host = req.headers.host ?? 'localhost';
   const proto = req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
   const reqUrl = new URL(req.url ?? '/ws', `${proto}://${host}`);
   const token = reqUrl.searchParams.get('token') ?? undefined;
-
-  if (!auth.validate(token)) {
-    bus.sendTo(client.id, {
-      type: 'auth.error',
-      message: 'Invalid or missing authentication token',
-    });
-    // Give the client a moment to receive the error before closing
-    authRejectionTimer = setTimeout(() => {
-      ws.close(1008, 'Authentication required');
-    }, config.wsAuthRejectionMs);
-    return;
-  }
-
-  client.authenticated = true;
-
-  // Tell the client its ID so it can identify its own broadcasts
-  bus.sendTo(client.id, { type: 'client.assigned', clientId: client.id });
-
-  ws.on('message', (data) => {
-    try {
-      const parsed = JSON.parse((data as Buffer).toString()) as Record<string, unknown> | null;
-      // Heartbeat: respond to client ping with pong. (Legacy clients that only
-      // sent these are still ignored via the early return below.)
-      if (parsed?.type === 'ping') {
-        bus.sendTo(client.id, { type: 'pong' } as unknown as import('@tamari/types').ServerMessage);
-        return;
-      }
-      if (parsed?.type === 'pong') {
-        return;
-      }
-      const result = ClientMessageSchema.safeParse(parsed);
-      if (!result.success) {
-        log.error({ err: result.error.flatten() }, 'ws: validation error');
-        bus.sendTo(client.id, {
-          type: 'error',
-          message: `Invalid message: ${result.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ')}`,
-          code: 'VALIDATION_ERROR',
+  void auth
+    .classify(req.socket.remoteAddress ?? undefined, token)
+    .then((kind) => {
+      if (!kind) {
+        bus.sendDirect(ws, {
+          type: 'auth.error',
+          message: 'Invalid or missing authentication token',
         });
+        ws.close(1008, 'Authentication required');
         return;
       }
-      bus
-        .dispatch(client, result.data)
-        .catch((err) => {
-          // bus.dispatch is async; the surrounding try/catch can't catch its
-          // rejection, so log it here instead of letting it vanish.
-          log.error({ err }, 'ws: dispatch rejected (async)');
-        });
-    } catch (err) {
-      log.error({ err }, 'ws: dispatch error');
-      bus.sendTo(client.id, {
-        type: 'error',
-        message: 'Invalid message',
-        code: 'DISPATCH_ERROR',
+      const client = bus.addClient(ws);
+      client.authenticated = true;
+
+      ws.on('error', (err) => {
+        log.warn({ err, clientId: client.id }, 'ws error');
       });
-    }
-  });
+
+      ws.on('close', (code, reason) => {
+        log.debug({ clientId: client.id, code, reason: reason.toString() }, 'ws close');
+        bus.removeClient(client.id);
+      });
+
+      // Tell the client its ID so it can identify its own broadcasts
+      bus.sendTo(client.id, { type: 'client.assigned', clientId: client.id });
+
+      ws.on('message', (data) => {
+        try {
+          const parsed = JSON.parse((data as Buffer).toString()) as Record<string, unknown> | null;
+          // Heartbeat: respond to client ping with pong. (Legacy clients that only
+          // sent these are still ignored via the early return below.)
+          if (parsed?.type === 'ping') {
+            bus.sendTo(client.id, { type: 'pong' } as unknown as import('@tamari/types').ServerMessage);
+            return;
+          }
+          if (parsed?.type === 'pong') {
+            return;
+          }
+          const result = ClientMessageSchema.safeParse(parsed);
+          if (!result.success) {
+            log.error({ err: result.error.flatten() }, 'ws: validation error');
+            bus.sendTo(client.id, {
+              type: 'error',
+              message: `Invalid message: ${result.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ')}`,
+              code: 'VALIDATION_ERROR',
+            });
+            return;
+          }
+          bus
+            .dispatch(client, result.data)
+            .catch((err) => {
+              // bus.dispatch is async; the surrounding try/catch can't catch its
+              // rejection, so log it here instead of letting it vanish.
+              log.error({ err }, 'ws: dispatch rejected (async)');
+            });
+        } catch (err) {
+          log.error({ err }, 'ws: dispatch error');
+          bus.sendTo(client.id, {
+            type: 'error',
+            message: 'Invalid message',
+            code: 'DISPATCH_ERROR',
+          });
+        }
+      });
+    })
+    .catch((err) => {
+      // classify touches the session table; a DB hiccup must not become an
+      // unhandled rejection — the socket just gets dropped without a reply.
+      log.error({ err }, 'ws: auth validation threw');
+      ws.close(1011, 'Internal error');
+    });
 });
 
 // Backfill missing thumbnails for existing avatars

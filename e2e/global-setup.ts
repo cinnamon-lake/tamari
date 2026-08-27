@@ -91,9 +91,11 @@ export default async function globalSetup(config: FullConfig): Promise<() => Pro
   assertDistIsFresh(join(config.rootDir, '..'));
 
   // Pre-seeded localStorage for every browser context (use.storageState in
-  // playwright.config.ts). st_auth_token skips the UI login — the token IS the
-  // secret (AuthService compares directly), so this is byte-identical to what
-  // a real login stores. st_fast_timers collapses the autosave debounce
+  // playwright.config.ts). st_auth_token skips the UI login — the master
+  // secret is accepted anywhere a session token would be, so this behaves
+  // byte-identically for every guarded route. (A real UI login stores an
+  // issued session token instead — see api/auth.ts.) st_fast_timers collapses
+  // the autosave debounce
   // (client/src/timing.ts). Written here so the origin tracks E2E_PORT.
   const authDir = join(config.rootDir, '.auth');
   mkdirSync(authDir, { recursive: true });

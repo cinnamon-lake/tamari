@@ -10,6 +10,39 @@ import { resolveHtmlImages } from '../lib/resolveHtmlImages.js';
 const domWindow = new JSDOM('').window;
 const DOMPurify = createDOMPurify(domWindow);
 
+// ---------- style-attribute hardening ----------
+// `style` is allowlisted for card styling (Layer-3 forms etc.), but CSS can
+// draw fixed-position overlays over the app's own chrome (fake login/token
+// prompts). Strip viewport-covering positioning and stacked-above-everything
+// z-indexes from message-supplied styles; benign decorative values survive.
+
+const MAX_Z_INDEX = 1000;
+
+/** Remove the declarations that make an element a full-page overlay. */
+function stripOverlayCss(css: string): string {
+  return css
+    .split(';')
+    .filter((decl) => {
+      const match = /^\s*([-a-zA-Z]+)\s*:\s*(.*?)\s*$/.exec(decl);
+      if (!match) return true;
+      const prop = (match[1] ?? '').toLowerCase();
+      const value = (match[2] ?? '').toLowerCase();
+      if (prop === 'position' && (value === 'fixed' || value === 'sticky')) return false;
+      if (prop === 'z-index') {
+        const n = Number(value);
+        if (!Number.isNaN(n) && Math.abs(n) > MAX_Z_INDEX) return false;
+      }
+      return true;
+    })
+    .join(';');
+}
+
+DOMPurify.addHook('uponSanitizeAttribute', (_node, data) => {
+  if (data.attrName === 'style') {
+    data.attrValue = stripOverlayCss(data.attrValue);
+  }
+});
+
 // Custom renderer for code blocks. In marked v18 `text` arrives RAW
 // (unescaped) — the default renderer escapes it, so an override must too.
 // Without escaping, markup inside a fenced block (HTML/JSX/XML samples)

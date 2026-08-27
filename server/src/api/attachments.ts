@@ -1,8 +1,11 @@
 /**
- * Attachment REST API — base64 upload (authed) and public download.
+ * Attachment REST API — base64 upload + download.
  *
- * The download router is mounted before the /api auth middleware so inline
- * images load; the upload router is mounted after it.
+ * Both routers are mounted before the /api auth middleware (inline images in
+ * message HTML cannot send headers), so the download route performs its own
+ * bearer/query token check — it is a capability gated on the credential, not
+ * an open public endpoint. SVG uploads are forced to `attachment` disposition
+ * plus a sandboxing CSP: same-origin documents must not be hostable here.
  */
 
 import { Router } from 'express';
@@ -13,6 +16,8 @@ import { isAllowedAttachmentMime } from '../lib/mimeAllowlist.js';
 import type { IAttachmentRepository } from '../repos/AttachmentRepository.js';
 import type { FileStorage } from '../services/FileStorage.js';
 import type { EventBus } from '../bus/EventBus.js';
+import { extractBearerToken } from '../middleware/auth.js';
+import type { AuthService } from '../services/AuthService.js';
 
 const log = getLogger('api/attachments');
 
@@ -25,24 +30,38 @@ const AttachmentUploadSchema = z.object({
   ),
 });
 
-/** Public attachment download — mount BEFORE the /api auth middleware. */
+/** Attachment download — mounted BEFORE the /api auth middleware; checks the
+ * token itself so inline <img>/<audio>/<video> tags can pass it via query. */
 export function createAttachmentDownloadRouter(
   attachments: IAttachmentRepository,
   storage: FileStorage,
+  auth: AuthService,
 ): Router {
   const router = Router();
 
   router.get('/:id', async (req, res) => {
     try {
+      const kind = await auth.classify(req.socket.remoteAddress ?? undefined, extractBearerToken(req));
+      if (!kind) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
       const attachment = await attachments.getById(z.string().parse(req.params.id));
       if (!attachment) {
         res.status(404).json({ error: 'Not found' });
         return;
       }
       res.setHeader('Content-Type', attachment.mimeType);
-      // Force download for non-inline-safe types (prevents browser from rendering text/html etc.)
-      if (!attachment.mimeType.startsWith('image/') && !attachment.mimeType.startsWith('audio/') && !attachment.mimeType.startsWith('video/')) {
+      // Inline-safe = raster media, audio, video. SVG is a same-origin
+      // DOCUMENT (scripts run on direct navigation), so even though CSP
+      // blocks it inside the app, direct visits get forced-download + a
+      // sandboxing policy instead of hosting attacker-supplied markup.
+      const isSvg = attachment.mimeType === 'image/svg+xml';
+      if (isSvg || (!attachment.mimeType.startsWith('image/') && !attachment.mimeType.startsWith('audio/') && !attachment.mimeType.startsWith('video/'))) {
         res.setHeader('Content-Disposition', 'attachment');
+      }
+      if (isSvg) {
+        res.setHeader('Content-Security-Policy', 'sandbox; default-src \'none\'');
       }
       // dotfiles: 'allow' — the path is server-constructed and traversal-guarded by
       // FileStorage; send's default dotfile policy would 404 whenever DATA_DIR itself

@@ -73,8 +73,8 @@ describe('dispatcher: auth case must not bypass authentication', () => {
     h = new TestHarness();
     await h.initSchema();
     client = h.connectClient();
-    // Simulate a client whose WS token was rejected but which is still inside
-    // the wsAuthRejectionMs grace window.
+    // Simulate a socket that reached the bus without passing token validation
+    // (the dispatcher guard is defense-in-depth behind main.ts's pre-addClient check).
     client.connection.authenticated = false;
   });
 

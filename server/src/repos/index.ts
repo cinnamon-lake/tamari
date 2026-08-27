@@ -3,6 +3,7 @@ export * from './ChatRepository.js';
 export * from './SettingsRepository.js';
 export * from './WorldInfoRepository.js';
 export * from './SecretRepository.js';
+export * from './AuthSessionRepository.js';
 export * from './GenerationRepository.js';
 export * from './PersonaRepository.js';
 export * from './BackendConfigRepository.js';

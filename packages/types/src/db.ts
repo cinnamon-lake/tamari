@@ -301,6 +301,13 @@ export interface SecretRow {
   updatedAt: number;
 }
 
+export interface AuthSessionRow {
+  id: string;
+  tokenHash: string;
+  createdAt: number;
+  expiresAt: number | null;
+}
+
 export interface Generation {
   id: string;
   chatId: string;

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { unzipSync } from 'fflate';
+import { unzipWithCap } from '../../lib/zipGuard.js';
 import type { ToolRegistry } from '../ToolRegistry.js';
 import type { ToolContext, ToolExecuteResult, ToolTemplate } from '../ToolTemplate.js';
 import type { FileStorage } from '../FileStorage.js';
@@ -226,7 +226,7 @@ export class NaiImageTemplate implements ToolTemplate {
 
     let imageBuffer: Uint8Array | undefined;
     try {
-      const files = unzipSync(zipBytes);
+      const files = unzipWithCap(zipBytes);
       imageBuffer = Object.values(files)[0];
     } catch {
       return { content: 'Failed to unzip NovelAI response.' };

@@ -10,7 +10,7 @@
 import type { GenerationResult } from './BackendAdapter.js';
 import { logger } from '../lib/logger.js';
 import { logHttpError, logRequest, logRequestError, logResponseHeaders } from './RequestLogger.js';
-import { applyRequestScript, RequestScriptError } from './RequestScript.js';
+import { applyRequestScript, safeFetch, RequestScriptError } from './RequestScript.js';
 
 /**
  * Config fields shared by every backend adapter. Provider adapters extend
@@ -54,11 +54,13 @@ export async function executeRequest(options: ExecuteRequestOptions): Promise<Ex
 
   let finalUrl = request.url;
   let finalInit = request.init;
+  let guardAllowLocalhost = false;
   if (requestScript) {
     try {
       const result = await applyRequestScript(finalUrl, finalInit, requestScript);
       finalUrl = result.url;
       finalInit = result.init;
+      guardAllowLocalhost = result.guardAllowLocalhost;
     } catch (err) {
       if (err instanceof RequestScriptError) {
         logRequestError(adapterId, err);
@@ -78,7 +80,16 @@ export async function executeRequest(options: ExecuteRequestOptions): Promise<Ex
   logRequest(adapterId, finalUrl, finalInit);
   let response: Response;
   try {
-    response = await fetch(finalUrl, { ...finalInit, signal });
+    if (requestScript) {
+      // Script-guarded surface: redirects are followed hop-by-hop through the
+      // SSRF guard (the script's effective loopback allowance carries over).
+      response = await safeFetch(finalUrl, { ...finalInit, signal }, {
+        allowLocalhost: guardAllowLocalhost,
+      });
+    } else {
+      // Unguarded operator-configured URL — unchanged plain fetch semantics.
+      response = await fetch(finalUrl, { ...finalInit, signal });
+    }
   } catch (err) {
     logRequestError(adapterId, err);
     throw err;

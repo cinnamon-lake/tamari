@@ -34,14 +34,18 @@ export const core = {
   },
   auth: {
     title: 'Authentication Required',
-    description: 'Enter the server secret to continue.',
+    description: 'Enter the server password to continue.',
     hintPrefix: 'The secret is logged on server startup. Set',
     hintSuffix: 'to persist it.',
     secretTokenLabel: 'Secret token',
     secretTokenPlaceholder: 'Secret token',
     connect: 'Connect',
+    connecting: 'Connecting…',
     errors: {
       tokenRequired: 'Please enter the secret token',
+      invalid: 'Incorrect password',
+      requestFailed: 'Login failed — check the server logs',
+      network: 'Could not reach the server',
     },
   },
   hotswap: {

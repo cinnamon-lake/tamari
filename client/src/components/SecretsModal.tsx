@@ -10,12 +10,12 @@ import { createSignal, Show, For, onMount } from 'solid-js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
 import { createBackdropDismiss } from '../lib/backdropDismiss.js';
-import { listSecrets, setSecret, deleteSecret, type SecretEntry } from '../lib/secrets.js';
+import { listSecrets, setSecret, deleteSecret, isMaskedSecret, type SecretListItem } from '../lib/secrets.js';
 import { confirmPopup } from '../stores/popupStore.js';
 
 export function SecretsModal(props: { onClose: () => void }) {
   const { t } = useI18n();
-  const [entries, setEntries] = createSignal<SecretEntry[]>([]);
+  const [entries, setEntries] = createSignal<SecretListItem[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal('');
   const [formMode, setFormMode] = createSignal<'closed' | 'add' | 'edit'>('closed');
@@ -51,9 +51,13 @@ export function SecretsModal(props: { onClose: () => void }) {
     setFormKey(''); setFormLabel(''); setFormValue('');
   };
 
-  const openEdit = (s: SecretEntry) => {
+  // Masked entries carry no plaintext, so editing always starts blank — the
+  // save is a full overwrite of the stored value.
+  const openEdit = (s: SecretListItem) => {
     setFormMode('edit');
-    setFormKey(s.key); setFormLabel(s.label ?? ''); setFormValue(s.value);
+    setFormKey(s.key);
+    setFormLabel(s.label ?? '');
+    setFormValue(isMaskedSecret(s) ? '' : s.value);
   };
 
   const closeForm = () => setFormMode('closed');
@@ -71,7 +75,7 @@ export function SecretsModal(props: { onClose: () => void }) {
     }
   };
 
-  const remove = async (s: SecretEntry) => {
+  const remove = async (s: SecretListItem) => {
     const name = s.label ?? s.key;
     if (!(await confirmPopup(t('secrets.deleteConfirm', { name })))) return;
     try {
@@ -110,13 +114,15 @@ export function SecretsModal(props: { onClose: () => void }) {
                       <span class="text-sm"><strong>{s.label ?? s.key}</strong></span>
                       <span class="text-xs text-muted font-mono">{s.key}</span>
                       <span class="text-xs text-muted font-mono">
-                        {revealed()[s.key] ? s.value : '••••••••••••'}
+                        {isMaskedSecret(s) ? s.hint : revealed()[s.key] ? s.value : '••••••••••••'}
                       </span>
                     </div>
                     <div class="flex-row-sm">
-                      <button class="text-btn small" type="button" onClick={() => toggleReveal(s.key)}>
-                        {revealed()[s.key] ? t('secrets.hide') : t('secrets.reveal')}
-                      </button>
+                      <Show when={!isMaskedSecret(s)}>
+                        <button class="text-btn small" type="button" onClick={() => toggleReveal(s.key)}>
+                          {revealed()[s.key] ? t('secrets.hide') : t('secrets.reveal')}
+                        </button>
+                      </Show>
                       <button class="text-btn small" type="button" onClick={() => openEdit(s)}>
                         {t('secrets.edit')}
                       </button>

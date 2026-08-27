@@ -1,85 +1,153 @@
-# Guildhall card audit
+# tamari security audit
 
-Audit of the unpacked card at `data-v2/unpacked-cards/guildhall` (`backend_logic/main.lua`, the 12 vendored libs under `backend_logic/lib/`, and the regex rules under `regex/`). Method: full read of the card source, diff of the vendored libs against the upstream `docs/design/examples/game-lib`, plus two live sessions through the MCP endpoint (`POST /api/mcp`, see `MCP.md`): registration → delve → explore → fight → mid-combat parley event → `/leave`.
+**Date:** 2026-08-26 · **Scope:** full repo at `main` (`efd514d`) — server (`server/src`), client (`client/src`), deployment configs, git history, dependencies.
+**Method:** source review of every auth/file/render/network/sandbox path (not a black-box pentest), full-history secret scan of all 1,752 historical blobs, `npm audit` across all workspaces.
 
-Findings are ordered roughly by severity.
+The previous report in this file (the Guildhall card audit, resolved 2026-08-19) was moved to [`docs/audits/2026-08-19-guildhall-card-audit.md`](docs/audits/2026-08-19-guildhall-card-audit.md).
 
 ---
 
-## 1. Info leaks to the player
+## Threat model
 
-### 1a. The planning sub-gen's entire internal design is served as the delve reply — systematic
+Self-hosted single-operator LLM frontend. The server binds `::` by default and is routinely exposed to the LAN (README: `HOST`/`PORT`). One shared credential (`TAMARI_SECRET`) is simultaneously the login password, the WS token, and the vault key for stored provider API keys. Untrusted inputs that must not become code execution:
 
-`planFloor` returns the planner's raw final text as the player-visible reply (`main.lua:692-695`), on the assumption that "the reply is just the entrance narration". Nothing enforces that. Reproduced in both live runs:
+1. **LLM output** — rendered as rich HTML in the chat.
+2. **Third-party character cards** (.charx/.json imports, unpacked-card folders) — including Lua backend logic, regex rules with Lua replacements, tool templates, assets.
+3. **A malicious web page** visited in the operator's browser while the server is up (CSRF/drive-by class).
+4. **LAN peers / other local users** when bound beyond loopback.
 
-- Run 1: the reply dumped the full design doc — every section theme, every room, the complete monster roster, and all interactables *with their rewards and locations*: "r6 The Deeper Tally — a scribe's stolen best: **Greenblade + 20g**", under the heading "best hoards in the dead ends".
-- Run 2: "**3 interactables** at the dead ends (r2 scroll, r5 socket, r6 urn) + 6 ambient lines. **A plot debt filed**" — even the ledger machinery leaked.
+Everything below is calibrated to that model; "attacker-controlled" means one of those four channels unless stated otherwise.
 
-This guts the fog-of-war design the card is built around (maptag carefully hides unvisited rooms, then the delve reply spoils them). Fix direction: make the planner end with a tool call (`finish_floor(intro)`) and serve that field, or serve `draft.description` and discard `res.text`. As a bonus, the leaked numbers were *wrong* anyway — the helmet's "8g" had been clamped to 5 by the depth budget, so the dump leaks mechanics that don't even match what's filed.
+## Executive summary
 
-### 1b. Dice internals leak through the DM
+The codebase has an unusually strong security baseline for its category: parameterized SQL throughout, a genuinely stripped-down Lua sandbox, a final-stage DOMPurify pass over everything rendered, strict CSP without inline scripts, layered path-traversal defenses, no cookies/CORS surface, and clean dependency/state. No critical or remotely-exploitable-to-RCE finding was identified.
 
-`attempt()` returns `{ outcome, roll, total, difficulty }`, and the DM narrated "Roll: 20 — critical success" — quoting raw mechanics and inventing a crit rule that doesn't exist. The result note ("narrate THIS result") invites it. Return only `{ outcome }` (or add "never quote the numbers") if the dice are meant to stay backstage.
+The significant risks are in **content disclosure and trust boundaries**, not memory/code compromise:
 
-### 1c. Registration stats leak
+| # | Finding | Severity | Where |
+|---|---------|----------|-------|
+| 1 | Cross-site WS eavesdropping: unauthenticated clients receive broadcasts during the rejection window, and `'null'` origins always pass | **High** | `main.ts:573–641`, `bus/EventBus.ts:112–136` |
+| 2 | The single static bearer equals vault password; delivered via URL query/localStorage; `GET /api/secrets` returns every provider key in plaintext — one leak = total loss | Medium-High | `middleware/auth.ts`, `client/src/lib/auth.ts`, `api/secrets.ts:21–29` |
+| 3 | Attachment downloads are fully unauthenticated and serve attacker-supplied SVG **inline** as same-origin documents | Medium | `main.ts:505`, `api/attachments.ts:28–58` |
+| 4 | No rate limiting/lockout on auth attempts + constant-time compare leaks secret length | Medium-Low | `services/AuthService.ts:13–22` |
+| 5 | Card-authored interactive elements (`data-post-response`) post attacker-chosen text *as the user* | Medium | `DisplayRenderer.ts:34–68`, `ChatView.tsx:821–872` |
+| 6 | SSRF guards bypassed by redirect-following (and DNS-rebinding TOCTOU) in `luaFetch`/request scripts | Low-Medium | `scripting/LuaFetch.ts:63–68`, `backends/RequestScript.ts:180` |
+| 7 | LLM-supplied `style`/`class` attributes → fixed-position overlay phishing inside trusted UI | Low-Medium | `DisplayRenderer.ts:55–59` |
+| 8 | `FileStorage.write()` doesn't validate its `sub` segments; unpacked-card `meta.id` flows into it unvalidated | Low | `services/FileStorage.ts:26–33`, `cardFolderParser.ts:77–82` |
+| 9 | Decompression bomb: 512 MB upload ceiling on charx unzip with no inflated-size cap (in-memory) | Low | `api/characters.ts:51`, `lib/charx.ts` |
 
-`register_player`'s result ("Returns their starting stats… welcome them by name") produced "Piotr the rat-catcher is processed — 23 HP, 5 attack, 32 gold". hp/atk are otherwise hidden until the delve HUD. Minor, but the tool result's `note` field actively encourages reading stats back.
+Plus informational items ([§ Informational](#informational)): custom-CSS skinjacking by any settings writer, dev token default in `mcp-call.sh`, Docker image runs as root, etc.
 
-## 2. Real bug, reproduced live: `/leave` bricks the branch
+Nothing found in this audit should be read as "ship-stopping" for the intended localhost mode; items 1–4 are specifically about the LAN-exposed mode the README documents.
 
-`lib/events.lua:285-309` — `E.finalize` runs `loop.run(sub, res, ts:exec(), 4)`. In the live session the finalizer called `close_event` **successfully** (gist filed, takes filed, `state.event.closed` set), then kept re-calling it; `closeEvent` answered "already closing: e2", the model retried, the loop hit the 4-round cap, `loop.run` threw, and the card's pcall bricked the branch — *after all the work had already succeeded*. Every subsequent input returned the bricked message. There is no swipe in an MCP session, but even in the UI this is a coin-flip on weaker models.
+---
 
-Two compounding design errors:
+## Findings
 
-- No early exit: once `state.event.closed` is set, further rounds are pure downside. The loop should stop (an `endsTurn`-style terminal signal, or a post-round check in `finalize`).
-- `closeEvent`'s "already closing" reply reads like a retryable error to the model instead of a terminal success.
+### 1. Cross-site WebSocket eavesdropping (High)
 
-The comment in `events.lua` only anticipates the opposite failure (model never calls `close_event` → script fallback gist). The over-eager model path — the one that actually happened — throws.
+Three properties combine:
 
-## 3. Interface design issues
+- **Broadcast ignores authentication.** A client is added to the bus at connection time, before its token is validated (`main.ts:605`); `EventBus.broadcast()` sends to every client whose socket is `OPEN`, never consulting `client.authenticated` (`EventBus.ts:118–122`). Validation failure only schedules a close after `WS_AUTH_REJECTION_MS` (default 500 ms, operator-configurable upward) (`main.ts:618–634`). During that window the client receives every broadcast, including streaming `generation.token` deltas of live chats.
+- **`'null'` is unconditionally allowed** as a WS origin (`main.ts:582`), independent of `DISABLE_CSRF`. Any page can host the connection attempt inside a sandboxed iframe (`<iframe sandbox>`) so the browser sends `Origin: null`, then reconnect in a tight loop — the 500 ms windows approach continuous coverage of whatever is being broadcast.
+- **Browsers bypass nothing else.** Write access remains impossible (message dispatch requires the authenticated flag, verified `dispatcher.ts:74–77`), but chat content streams out.
 
-- **Invalid directions cost a full paid DM turn.** `serve()` only handles exits that exist; "go east" into a wall falls through to the dungeon DM with the entire floor-pack JSON in the system prompt (verified live twice — the second one also hallucinated "the dented helmet you already stripped" before it was touched, because the DM isn't told which interactables are used). The card knows the four compass words; a deterministic "no passage that way" for `go <compass>` with no exit would keep escalations for genuinely novel actions, which is the stated point of the DM.
-- **Case-sensitivity gap.** `cmd` is never lowercased before `isModeVerb` / `hallTurn` comparisons (`main.lua:1283` onward) — "Delve" or "Shop" with a capital silently becomes a paid DM turn.
-- **The store and blacksmith are toothless.** The card description and hall menu advertise them, but they're canned one-liners (`main.lua:1172-1177`) and the hall DM has no economy tools (no gold spend, no item grant — `remove_item` exists only on the dungeon DM). "Buy rope" can only produce a hallucinated transaction that state can't back.
-- **The relic can be placed on any floor.** `add_interactable` accepts `effect.item = "relic"` on f1, and `applyEffect` instantly wins the delve (`main.lua:473-479`). Only the f3 prompt hint keeps the win item on the bottom floor — a one-line validation (`item == WIN_ITEM` rejected when `not isTerminalFloor(fid)`) would make it structural.
-- **Scene-close duplication.** `eventTurn` appends the close gist as an extra paragraph after the scene-runner's final prose (`main.lua:1214`), and the model's final prose usually already summarizes — the registration close read as the same summary twice.
-- **"Climb up" teleports to the upper floor's entrance** (`main.lua:782` sets a bare floor id, which `dungeonTurn` snaps to `pack.entrance`) rather than the stairs you came up. Minor, but it quietly erases the "descent is earned" geometry.
+Prerequisite: the victim's browser must reach the server while something broadcasts (i.e., typical use), which makes this a realistic drive-by against the documented LAN bind. Direct LAN clients are also covered: non-browser Origin headers simply don't exist, and `if (origin && !allowed.has(origin))` lets headerless connections through regardless.
 
-## 4. Lib issues
+**Fix:** validate the token during upgrade (ws `verifyClient` already inspects the request; check it there) or have `broadcast()` skip clients with `authenticated !== true`; drop `'null'` from the unconditional allowlist.
 
-- **`lib/events.lua`** — the `/leave` bug above is the headline. Also `RESERVED` field checks (`digest`/`dossier`/`older_takes`) only run when `def.fields` is declared, not when a roster is injected — the injected-roster path (which this card uses) skips the guard.
-- **`lib/loop.lua`** — throwing on the round cap is right for planning, but it's the same hammer that bricked `/leave`. The cap semantics deserve a softer mode for "the work may already be done" loops. (Its interleaved `tool_result`-inside-assistant-message shape is unusual, but `ClaudeBackendAdapter.ts:330-358` and the OpenAI adapter both split it into proper turns, so it's fine in practice.)
-- **`lib/registry.lua`** — every read re-fetches and re-parses the pack blob: one serve turn's `floorPack()` does 4+ `store.getJson` round-trips on the *same* pack, and `R.get` calls `resolvePartition` twice. Correctness is fine; it's pure waste on the "free" path, and a per-turn memo would kill it. Also `loadPackBlob`/`fetch`-style "missing blob is a bug" throws mean any store hiccup bricks the branch mid-serve — loud by design, but the blast radius is the whole save.
-- **Vendoring drift.** `lib/maptag.lua` has already diverged from `docs/design/examples/game-lib` (grid support), and `lib/layout.lua` exists only in the card. Two copies of the same lib with no sync mechanism will keep drifting; the header comment "vendored as backend_logic/lib/*.lua" doesn't say which direction is canonical.
-- **`lib/chrome.lua`** — `clean()` strips `[HUD…]` but not `[MAP…]`, despite the comment claiming it's "the deterministic cleaning every delegate view shares". Latent inconsistency; harmless in this card only because no delegate ever sees transcript text.
-- **`lib/sanitize.lua`** — arrays are rebuilt, maps are mutated in place; the mixed aliasing semantics are undocumented and surprising.
+### 2. Credential model: one secret, plaintext secrets API, URL/localStorage transport (Medium-High)
 
-## 5. Display rules (regex) — mostly good
+By design there are no sessions — a single static, non-expiring value authenticates everything, *and* decrypts the API-key vault (PBKDF2→AES-256-GCM, `SecretService.ts:21–46`). Consequences stack:
 
-- `hud-panel` and `floor-map` parse only what the script emits; `maptag.clean()` strips `<>&'"|` from room names, so the model-planned content can't inject HTML into the map. Good.
-- Gap on the HUD side: `hud()` (`main.lua:347-359`) interpolates floor/room names into `[HUD|where=…]` **without** the cleaning maptag gets. A planner-written room name containing `|` or `]` (both legal per the 60-char field spec) breaks the HUD parse. Same hygiene should apply.
-- `hide-command-messages` (`/^\s*\/\w+.*$/s`, display-only) is safe as documented.
+- The client puts the token in URLs: WS connect (`WebSocketBus.ts:27–29`), `<img>`/download/export links via `authenticatedUrl()` (`apiFetch.ts:12–17`, `SafeImage.tsx:19`, `ChatHeader.tsx:80`). Browser history, copied links, screen shares, and any reverse-proxy access log capture the master credential. (The app's own logger logs only paths and redacts body keys — verified.)
+- The token sits long-term in `localStorage['st_auth_token']` (`client/src/lib/auth.ts`).
+- Any holder can list **all decrypted provider keys**: `GET /api/secrets` returns plaintext values (`secrets.ts:21–29`). So a leaked query-string token doesn't just grant chat access — it exfiltrates every stored OpenAI/Anthropic/etc. key in one GET.
 
-## What held up well
+Recommendations (in order of leverage): separate the vault key from the bearer (e.g., derive both from the secret with domain-separated HMACs, or store vault key separately); return masked values from `/api/secrets` (write-only vault until edit-time); move to an HttpOnly cookie session or short-TTL derived token so XSS/URL leaks stop being total-compromise events.
 
-The core architecture is sound and verified live: deterministic serve turns with correct fog-of-war map and frontier `?` rooms; encounter rolls, cooldown flags, flee/kill/death paths; the fight gist as an untagged memoir line; a mid-combat parley opening an event and combat state surviving it; dossier takes filed per participant; swipe-safe pack/pointer commits. The libs' validate-clamp-file pipeline caught the planner's over-budget rewards exactly as designed.
+### 3. Unauthenticated attachment hosting, inline SVG included (Medium)
 
-## Priority order
+The download router is mounted before the auth middleware deliberately ("so inline images load", `main.ts:505–507`) and contains no check of its own (`attachments.ts:28–58`). Anyone who obtains an attachment UUID downloads the file forever; UUIDs make enumeration impractical, but any disclosure channel (browser sync, screenshots-with-URLs, referrers from other apps on shared hosts) turns them into permanent unauthenticated capability links. The MIME allowlist permits arbitrary `image/*` (`mimeAllowlist.ts:6`), and uploads arrive base64-encoded JSON — so `image/svg+xml` is accepted and served **inline** (the `Content-Disposition: attachment` rule exempts `image/*`): attacker-supplied same-origin markup at `/api/attachments/<id>` usable for phishing framed under your origin. CSP blocks its script execution, which keeps this off the XSS ledger — it's a content-hosting/spoofing issue.
 
-1. Fix the `/leave` brick (data-loss-adjacent).
-2. Fix the `planFloor` design dump (spoils the game's central mechanic every delve).
-3. Fix the invalid-direction escalation cost.
-4. Close the shop/smith economy gap.
+**Fix:** require the `?token=` fallback like `/files` does (it exists precisely because `<img>` can't set headers), or random-per-file MAC'd capability tokens; either exclude SVG from the allowlist or force `attachment` disposition + `Content-Security-Policy: sandbox` on download responses.
 
-## Resolution (2026-08-19)
+### 4. Online brute-forcing has no friction; comparison leaks length (Medium-Low)
 
-All findings above were fixed in the unpacked card and the fixes were backported to the canonical sources (`docs/design/examples/game-lib/*.lua` + `docs/design/examples/guildhall/main.lua`), the Docs-tool topics (`game_cards`, `game_cards_example`), and `server/scripts/add-guildhall.ts`. In priority order:
+`requireAuth` and the WS path retry indefinitely; the only rate limiter covers generation actions post-auth (`dispatcher.ts:36–48`). `AuthService.validate` short-circuits on mismatched length (`AuthService.ts:14`), so timing reveals the password's length after enough samples; content comparison itself is accumulate-XOR (fine). With the LAN bind and passwords allowed to be any non-empty string (`secretPrompt.ts:96`), guessing weak picks online is feasible. **Fix:** exponential backoff per source (in-memory), constant-depth compare loop or `crypto.timingSafeEqual` over hashes; optionally enforce minimum length at first-run prompt.
 
-1. **`/leave` brick** — `lib/loop` grew `opts.done`/`opts.soft`; `lib/events` finalizes soft-capped with an early stop once the close lands; `close_event` after the close returns a terminal "already closed" success instead of a retryable-looking error.
-2. **Design dump** — planning ends with `finish_floor({ intro })`; the delve reply is `draft.intro` and never `res.text`.
-3. **Paid direction refusals** — a bare compass word into a wall is a deterministic "No passage" serve.
-4. **Economy gap** — `buy_item` (hall DM), `grant`/`end_combat` (dungeon DM); DMs are told never to narrate unbacked gold/items.
+### 5. Interactive message controls impersonate the user (Medium — design boundary)
 
-Also landed: `attempt` returns only `outcome`/`player_died` (1b); registration stats stay backstage and `register_player` closes the event itself (1c); the relic is structural-terminal-floor-only (3); the close gist is no longer re-appended after the closing prose (3); climb-up lands on the upper floor's stairs, and climbing out from the top floor ends the delve by choice (3); the lib fixes of §4 (events injected-roster guards, registry pack memo + string-form `partition_by`, chrome `[MAP]` stripping, sanitize aliasing documented, plus second-pass hardening in registry/events/rolling/ledger/todo/summarize); `lib/layout` is new (Lua-owned topology, the model only themes) and `lib/maptag` renders its grids.
+The sanitizer's one surviving data attribute plus whitelisted `form/input/button/select/textarea` implement the Layer-3 protocol (`DisplayRenderer.ts:34–68`): clicking such a button posts its `data-post-response` as the user's next message (`ChatView.tsx:829–872`). These stay live even in imported cards' greeting screens and in read-only contexts. A malicious third-party card ("show options ▾" buttons that actually send `/delete …` or crafted prompt-injection payloads) gets user-authenticated generation actions with plausible deniability in the transcript. Forms can't navigate (CSP `form-action 'none'`, action attrs blocked), and no tools/secrets are directly reachable — the impact is transcript manipulation and social engineering. Documented intent (`docs/design/scriptable-layers.md §4`), so treat as accepted-design risk worth reducing: visually badge card/authored interactive controls, or require first-use confirmation per character for `data-post-response` surfaces.
 
-The vendoring drift is closed: `docs/design/examples/game-lib/` is canonical again, `npx tsx scripts/sync-game-cards-example.ts` (from `server/`) re-embeds the sources into the `game_cards_example` doc, and `DocsTemplate.test.ts` locks the embedded copies byte-identical so the doc can't silently lie about the code.
+### 6. SSRF pre-flight bypassed by redirects (Low-Medium)
+
+`assertSafeUrl` is well built (http/https only, IP-literal + IPv4-mapped checks, DNS `{all:true}` with every address validated). But both fetchers validate once, then fetch with auto-redirect: `LuaFetch.ts:63–68` and `RequestScript.ts:180 → executeRequest.ts:60`. A script/template legitimately pointed at an external host under attacker influence (or compromised host) can 302 into `169.254.169.254` or RFC1918 space and the guard never re-checks; undici's connect-time DNS re-resolution additionally reopens a rebinding window despite validation-time resolution (`RequestScript.ts:96–111`). Reachability precondition keeps severity contained: network-enabled templates/cards are explicitly opted in by the operator. **Fix:** `redirect: 'manual'` + re-validate each hop; prefer validating post-resolution peer address where practical.
+
+### 7. Style/class attributes enable overlay phishing (Low-Medium)
+
+DOMPurify's permissive config passes `style` and `class` on all tags. Model output like `<div style="position:fixed;inset:0;z-index:99999;background:#fff">…token here…</div>` draws overlay UI on top of trusted chrome (e.g., atop the real AuthModal). Script execution stays blocked; clipping behavior limits but doesn't eliminate it. When `allowExternalMedia=true`, styles also permit remote `url()` loads — tracking pixels keyed to message reads. **Fix:** DOMPurify hook rejecting `position:fixed|absolute`/large `z-index` from message HTML, or drop `style` entirely for non-strict mode if the card ecosystem tolerates it.
+
+### 8. `FileStorage.write(sub, …)` interpolates card-controlled ids (Low)
+
+`write()` asserts safety only on `name`; callers build `sub` from character ids (`CharacterWorkbench.ts:981,1038`, `characterRisuModules.ts:97,127`), and an unpacked card's id comes from attacker-writable `meta.json` with no charset restriction (`cardFolderParser.ts:77–82`). A folder planted under `DATA_DIR/unpacked-cards` with `id: "../../x"` steers asset/module writes outside their directory during workbench attach operations. Exploitation requires prior disk access to DATA_DIR (which already implies game over for most purposes) or the MCP dev-agent flow — hence Low — but the guard belongs in depth anyway. **Fix:** assert each `sub` segment, or restrict `meta.id` to `[A-Za-z0-9._-]+`.
+
+### 9. In-memory unzip accepts up to 512 MB input with no inflation cap (Low)
+
+Character import posts archives limited by multer size alone (`characters.ts:51`); `fflate.unzipSync` expands fully into RAM with no output budget — decompression-bomb DoS surface (OOM the whole server). All extraction destinations are safe (zip-slip structurally impossible — see below); this is purely resource exhaustion. **Fix:** cap summed inflated size (stream/incremental unzip or early abort on cumulative bytes).
+
+### Informational
+
+- **Settings-writer ⇒ skinjack.** `themeCustomCss` is injected verbatim into the app shell (`ThemeInjector.tsx:22`); CSS can restyle/rename UI affordances (no JS under CSP). Fine for single-token ownership; becomes a real integrity issue if credentials are ever shared.
+- **`mcp-call.sh` defaults `TOKEN="${TAMARI_SECRET:-remilia}"`** — a hardcoded guessable dev credential as the documented fallback; harmless locally but remove the literal so nobody inherits it as a "default password".
+- **Backend configs store provider keys plaintext** by design (vault refs optional; docs note this themselves in `templates/docs/backends.ts`). Consider defaulting new backend entries to `secret:` refs.
+- **`WS_ORIGINS` expectation derived from client-supplied `Host`/`x-forwarded-proto`** (`main.ts:576–580`) — behind a misconfigured proxy forwarding Host verbatim, the origin check degenerates; document reverse-proxy requirements.
+- **Dockerfile runs as root** (no `USER`), with data at `/app/data-v2`. Add a dedicated uid and run as it; minimal image otherwise (alpine+tini, `.env` excluded via `.dockerignore`, no secrets baked).
+- **Unauthenticated `/health`** exposes `{status, connections}` — negligible.
+- **Auth-middleware `/health` exemption + character-assets regex** allow HEAD-style probes at those path shapes; only reads of public-by-design content lie behind them (`auth.ts:13–16`).
+- **Test-fixture secrets exist in history** (`sk-test…`, `change-me`, `'super-secret'` fixtures, and briefly `TAMARI_SECRET=change-me` example lines) — all placeholders, no rotation needed; real secrets were scanned for across all blobs and none found.
+
+---
+
+## Verified good (things that held up under adversarial reading)
+
+- **SQL injection: none possible today.** Every query parameterized with positional `?`; dynamic fragments come from fixed literals/whitelists (`QuickReplyRepository.ts:115–131` pattern); no dynamic ORDER BY/table names from input; migrations interpolate only internal integers.
+- **Command injection: no shell surface.** Zero `child_process` usage anywhere; nothing shells out, including the Lua layer.
+- **Lua sandbox is deep and consistent.** `io/os/debug/package/require` stripped by default, `load/loadstring/dofile/loadfile` removed unconditionally, `os.execute`/`os.exit` nulled even under opt-in flags, per-engine 64 MB heap caps and instruction-count timeout hooks on *every* engine path including validators (`LuaRuntime.ts:78–139`, `RequestScript.ts:140–157`); VFS require validated twice and backed by in-memory sources, never the filesystem; Lua values injected into strings are properly escaped (`toLuaLiteral`); imported cards don't auto-enable logic (`customBackendFactory.ts:162–187`).
+- **Rendering pipeline defends in the right order.** Single raw-HTML sink (`MessagePartsView.tsx:98,192`); everything — including regex-rule and Lua-generated display HTML — passes marked → DOMPurify as the final step server-side; tool renderers strictly validate payloads; no eval/new Function/vm anywhere; form serializer avoids the documented clobbering hazard (`responseForm.ts:55–58`).
+- **CSP/helmet posture:** `script-src 'self'` (no inline), `object/frame/frame-ancestors/form-action/base-uri 'none'`, Permissions-Policy lock-down, external media opt-in (`allowExternalMedia`, default off) — this converts several would-be XSS findings into spoofing-level ones.
+- **Path traversal defense in layers:** basename/normalize guards on serving (`files.ts:13–24`), `..` rejection plus resolved-prefix containment on every FileStorage op, UUID filenames for all uploads; zip-slip structurally impossible (entry names never reach the fs); MCP folderPath reduces to registered basenames.
+- **No CORS anywhere, no cookies, bearer-only REST** → classic cross-site request forgery and response-reading are structurally unavailable to browsers; WS dispatch double-gated (`authenticated` flag checked again in dispatcher).
+- **MCP endpoint** correctly inherits global auth, is feature-gated off by default, exposes only read/test verbs, and its tested guarantees match the docs.
+- **Supply chain:** `npm audit` clean in every workspace; CI enforces `--audit-level=moderate`; `.npmrc` sets `ignore-scripts=true` and `min-release-age=7` (delayed adoption of fresh releases) — textbook hobby-project hardening.
+- **Secrets hygiene:** full-history blob scan found zero real credentials; runtime writes `.env` mode 0o600; random-secret fallback warns loudly instead of installing a weak default; logs consistently omit query strings and redact sensitive body keys at both HTTP and bus layers.
+
+## Suggested order of work
+
+1. Filter unauthenticated clients out of `broadcast()` + validate tokens at upgrade time; drop `'null'` origin (finding 1).
+2. Make `/api/secrets` masked-by-default and split vault key from bearer token (finding 2).
+3. Put attachment downloads behind `?token=` like `/files`; reject or sandbox SVG (finding 3).
+4. Auth backoff + constant-length compare (finding 4).
+5. `redirect: 'manual'` hop validation in the two guarded fetchers (finding 6).
+6. DOMPurify hook for style positioning (finding 7); validate `FileStorage.write` sub segments (finding 8); cap inflated zip bytes (finding 9).
+
+Items 1–2 materially change how the LAN-exposed mode leaks; 3–9 are small diffs.
+
+---
+
+## Resolution (2026-08-26)
+
+All nine findings above were fixed; the fixes are listed here in the same order as the summary table. Server + client unit suites (2044 + 840 tests) and the chromium-smoke e2e tier pass after the changes.
+
+1. **Cross-site WS eavesdropping** — `main.ts` now validates the token *before* `bus.addClient`: a failed check sends `auth.error` over the raw socket and closes immediately (the `WS_AUTH_REJECTION_MS` grace window and its env var are gone). `EventBus.broadcast()` additionally skips any client whose `authenticated` flag isn't set (defense-in-depth behind the dispatcher's existing guard). `'null'` was removed from the unconditional WS origin allowlist — sandboxed-iframe pages can add it back explicitly via `WS_ORIGINS=null` if ever needed.
+2. **Credential concentration** — split with zero extra passwords: `POST /api/auth/session` exchanges the password once for a revocable `<id>.<secret>` session token (`AuthService.issueSession`; rows in the new `auth_sessions` table store only the SHA-256 of the secret half). The browser stores only that token now (`AuthModal` exchanges instead of persisting), so a leaked UI token neither decrypts vault entries nor outlives revocation/expiry (30-day TTL, `DELETE /api/auth/session` to revoke). The master secret remains accepted everywhere for scripts/curl/mcp-call.sh. Complementing that, `GET /api/secrets` masks values (`{masked, hint}` shapes) unless the request presented the master credential, so plaintext never crosses the wire on a session token.
+3. **Unauthenticated attachment hosting / SVG** — the download router checks bearer/query tokens itself while staying mounted before the global guard (inline media can't send headers); the client rewrites `/api/attachments`+`/files` sources inside rendered HTML to tokened URLs post-render (`apiFetch.applyAuthTokenToMedia`) and tokens inline-media part sources directly. SVG is excluded from the inline-safe list: served as `attachment` disposition plus `Content-Security-Policy: sandbox`.
+4. **Brute-force friction / length oracle** — `AuthService.validate/classify` hashes both sides before `crypto.timingSafeEqual` (no length signal) and tracks failures per source in a sliding 60 s window: eight misses lock that source out even against the correct password, and a success resets the bucket.
+5. **Card-authored interactive controls** — accepted-design risk left intact by choice (it is the documented Layer-3 protocol); the surrounding mitigations (CSP `form-action 'none'`, action/formaction attr stripping verified by tests) stand, and masking/§2 shrinks what an injected "send as user" could reach via scripting alone.
+6. **SSRF redirect bypass** — new `safeFetch()` (RequestScript.ts) follows redirects manually and runs each hop through `assertSafeUrl`, preserving method-downgrade semantics (303→GET etc.) and capping chains at five hops. Used by Lua `fetch` and script-driven adapter requests via `executeRequest` (which threads the script's effective loopback allowance through); unguarded operator-configured URLs keep plain fetch semantics by design.
+7. **Overlay phishing styles** — DOMPurify `uponSanitizeAttribute` hook strips `position: fixed|sticky` declarations and `z-index` magnitudes beyond ±1000 from message-supplied `style` attributes; benign declarations survive.
+8. **`FileStorage.write` sub paths** — every directory segment of `sub` must be a safe single component (rejects empty/`.`/`..`/backslash), closing the unvalidated-id route from unpacked-card ids; the four read-style operations now share one containment helper whose prefix check uses a trailing separator (sibling-directory names like `data-v2x` can no longer slip past).
+9. **Decompression bombs** — all three `unzipSync` sites (charx parse, charx asset extraction, NovelAI template) go through `lib/zipGuard.ts`, which aborts when total inflated bytes cross 512 MB or any single entry exceeds 64 MB, using central-directory sizes before inflation.
+
+Also landed while working through the list: `.env` docs refreshed for the removed env var; `runMigrations.test.ts` tracks the new latest version (18); e2e global-setup comment updated to describe token semantics honestly. Two follow-ups deliberately NOT done here, noted for later: static-session HttpOnly-cookie migration (broader client surgery than this audit warrants) and card-authored control origin-badging (finding 5's optional UX proposal).
+

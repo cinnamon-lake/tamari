@@ -194,6 +194,13 @@ export const SecretRowSchema = z.object({
   updated_at: z.number(),
 });
 
+export const AuthSessionRowSchema = z.object({
+  id: z.string(),
+  token_hash: z.string(),
+  created_at: z.number(),
+  expires_at: z.number().nullable(),
+});
+
 export const QuickReplyRowSchema = z.object({
   id: z.string(),
   scope: z.enum(['global', 'character', 'chat']),

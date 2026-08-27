@@ -14,9 +14,17 @@ function createSecretService() {
   } as unknown as SecretService;
 }
 
-function createApp(secretService: SecretService) {
+function createApp(secretService: SecretService, kind?: string) {
   const app = express();
   app.use(express.json());
+  // Stand-in for requireAuth: marks the credential kind the way production
+  // middleware does before the secrets router runs.
+  if (kind !== undefined) {
+    app.use((req, _res, next) => {
+      (req as unknown as { authKind?: string }).authKind = kind;
+      next();
+    });
+  }
   app.use('/secrets', createSecretsRouter(secretService, PASSWORD));
   return app;
 }
@@ -27,21 +35,34 @@ describe('createSecretsRouter', () => {
 
   beforeEach(() => {
     secretService = createSecretService();
-    app = createApp(secretService);
+    app = createApp(secretService, 'session');
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('GET / returns the vault entries from the service', async () => {
+  it('GET / masks values for non-master credentials', async () => {
     const entries = [{ key: 'api_key', value: 'decrypted-value', label: 'OpenAI' }];
     vi.mocked(secretService.list).mockResolvedValue(entries);
 
     const res = await request(app).get('/secrets').expect(200);
 
-    expect(res.body).toEqual(entries);
+    expect(res.body).toEqual([
+      { key: 'api_key', label: 'OpenAI', masked: true, hint: '••••alue' },
+    ]);
+    expect(JSON.stringify(res.body)).not.toContain('decrypted-value');
     expect(secretService.list).toHaveBeenCalledWith(PASSWORD);
+  });
+
+  it('GET / returns plaintext only for the master credential', async () => {
+    vi.mocked(secretService.list).mockResolvedValue([
+      { key: 'api_key', value: 'decrypted-value', label: undefined },
+    ]);
+    const masterApp = createApp(secretService, 'master');
+
+    const res = await request(masterApp).get('/secrets').expect(200);
+    expect(res.body).toEqual([{ key: 'api_key', value: 'decrypted-value', label: undefined }]);
   });
 
   it('POST / stores the secret and answers with a bare ack (no value echoed back)', async () => {

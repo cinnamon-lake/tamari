@@ -116,6 +116,10 @@ export class EventBus {
     }
     let count = 0;
     for (const client of this.clients.values()) {
+      // Un-authenticated sockets must never receive content — a client is
+      // only added to the map after token validation, but stay defensive:
+      // broadcasts carry full chat payloads (including generation deltas).
+      if (!client.authenticated) continue;
       if (client.ws.readyState === WebSocket.OPEN) {
         try {
           client.ws.send(payload);
@@ -162,6 +166,28 @@ export class EventBus {
         { client: clientId, type: msg.type },
         `→ ${clientId} ${msg.type}`,
       );
+    }
+  }
+
+  /**
+   * Send to a raw socket that is NOT in the clients map — the pre-auth
+   * rejection path only (`auth.error` before the connection is trusted).
+   */
+  sendDirect(ws: WebSocket, msg: ServerMessage): void {
+    this.debugValidateOutbound(msg);
+    let payload: string;
+    try {
+      payload = JSON.stringify(msg);
+    } catch (err) {
+      log.error({ type: msg.type, err }, 'sendDirect: JSON.stringify threw — message NOT sent');
+      return;
+    }
+    if (ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(payload);
+      } catch (err) {
+        log.error({ type: msg.type, err }, 'sendDirect: ws.send threw');
+      }
     }
   }
 

@@ -140,4 +140,25 @@ describe('renderMessageParts', () => {
     expect(strict[0]).not.toContain('<form');
     expect(strict[0]).not.toContain('<input');
   });
+
+  it('strips overlay-capable inline styles (position:fixed/sticky, huge z-index)', async () => {
+    const parts: ContentPart[] = [
+      {
+        type: 'text',
+        text:
+          '<div style="position:fixed;inset:0;z-index:99999;background:#fff">Enter your token:</div>' +
+          '<div style="position:sticky;z-index:100001;top:0">sticky overlay</div>' +
+          '<div style="background:#333;color:#fff;z-index:5;border-radius:4px">benign</div>',
+      },
+    ];
+    const html = (await renderMessageParts(makeCtx(parts)))[0] ?? '';
+    expect(html).not.toContain('position:fixed');
+    expect(html).not.toContain('position:sticky');
+    expect(html).not.toContain('99999');
+    expect(html).not.toContain('100001');
+    // Benign declarations survive — including the modest z-index.
+    expect(html).toContain('background:#333');
+    expect(html).toContain('border-radius:4px');
+    expect(html.toLowerCase()).toContain('z-index:5');
+  });
 });
