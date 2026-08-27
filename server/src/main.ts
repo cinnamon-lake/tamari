@@ -206,6 +206,11 @@ const toolTemplates = withLogging(new ToolTemplateRepository(db), 'toolTemplates
 await ensureDefaultBackendConfig(backendConfigs, settings);
 await ensureDefaultPromptList(promptLists, settings);
 
+// The proxy API (/v1) authenticates with its own key, not the login token.
+if (!(await settings.get('proxyApi.apiKey'))) {
+  await settings.setValue('proxyApi.apiKey', randomUUID());
+}
+
 // Ensure at least one persona exists
 await ensureDefaultPersona(personas);
 
@@ -530,8 +535,10 @@ app.use('/api/mcp', createMcpRouter({ workbench: workbenchTemplate, cardTest, te
 // Model listing REST API
 app.use('/api/models', createModelsRouter(settings, backendConfigs, secretService, config.secret, createBackendAdapterResolved));
 
-// Anthropic-like proxy API — backend configs exposed as models (`${uuid}-${name}`)
-app.use('/v1', requireAuth, createProxyRouter(settings, backendConfigs, createBackendAdapterResolved));
+// Anthropic-like proxy API — backend configs exposed as models (`${uuid}-${name}`).
+// The router carries its own feature gate + dedicated API-key auth; the app
+// login token is deliberately NOT accepted here.
+app.use('/v1', createProxyRouter(settings, backendConfigs, createBackendAdapterResolved));
 
 // Attachment upload (filesystem-backed)
 app.use('/api/attachments', createAttachmentsRouter(attachments, storage, bus));

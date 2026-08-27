@@ -6,6 +6,7 @@ import { createProxyRouter } from './proxy.js';
 import type { BackendAdapter } from '../backends/BackendAdapter.js';
 
 const CONFIG_ID = '11111111-2222-3333-4444-555555555555';
+const API_KEY = 'test-proxy-key';
 
 function makeAdapter(overrides?: Partial<BackendAdapter>): BackendAdapter {
   return {
@@ -48,15 +49,16 @@ describe('createProxyRouter', () => {
   beforeEach(async () => {
     h = new TestHarness();
     await h.initSchema();
-    await h.deps.settings.setValue('proxy.enabled', true);
+    await h.deps.settings.setValue('proxyApi.enabled', true);
+    await h.deps.settings.setValue('proxyApi.apiKey', API_KEY);
   });
 
   afterEach(async () => {
     await h.teardown();
   });
 
-  it('404s both endpoints when proxy.enabled is off', async () => {
-    await h.deps.settings.setValue('proxy.enabled', false);
+  it('404s both endpoints when proxyApi.enabled is off', async () => {
+    await h.deps.settings.setValue('proxyApi.enabled', false);
     await seedConfig(h);
     const { app, createResolvedAdapter } = createApp(h, makeAdapter());
 
@@ -64,17 +66,44 @@ describe('createProxyRouter', () => {
     expect(models.body.error.type).toBe('not_found_error');
 
     await request(app)
-      .post('/v1/messages')
+      .post('/v1/messages').set('x-api-key', API_KEY)
       .send({ model: `${CONFIG_ID}-Test Config`, messages: [{ role: 'user', content: 'hi' }] })
       .expect(404);
     expect(createResolvedAdapter).not.toHaveBeenCalled();
+  });
+
+  it('rejects requests without the proxy API key', async () => {
+    await seedConfig(h);
+    const { app, createResolvedAdapter } = createApp(h, makeAdapter());
+
+    const noKey = await request(app)
+      .post('/v1/messages')
+      .send({ model: `${CONFIG_ID}-Test Config`, messages: [{ role: 'user', content: 'hi' }] })
+      .expect(401);
+    expect(noKey.body.error.type).toBe('authentication_error');
+
+    await request(app)
+      .post('/v1/messages')
+      .set('x-api-key', 'wrong-key')
+      .send({ model: `${CONFIG_ID}-Test Config`, messages: [{ role: 'user', content: 'hi' }] })
+      .expect(401);
+
+    await request(app).get('/v1/models').expect(401);
+    expect(createResolvedAdapter).not.toHaveBeenCalled();
+  });
+
+  it('accepts the key as a Bearer token too', async () => {
+    await seedConfig(h);
+    const { app } = createApp(h, makeAdapter());
+
+    await request(app).get('/v1/models').set('Authorization', `Bearer ${API_KEY}`).expect(200);
   });
 
   it('lists backend configs as anthropic-style models', async () => {
     await seedConfig(h);
     const { app } = createApp(h, null);
 
-    const res = await request(app).get('/v1/models').expect(200);
+    const res = await request(app).get('/v1/models').set('x-api-key', API_KEY).expect(200);
     expect(res.body.has_more).toBe(false);
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0]).toMatchObject({
@@ -90,7 +119,7 @@ describe('createProxyRouter', () => {
     const { app, createResolvedAdapter } = createApp(h, makeAdapter());
 
     const res = await request(app)
-      .post('/v1/messages')
+      .post('/v1/messages').set('x-api-key', API_KEY)
       .send({ model: 'not-a-proxy-model', messages: [{ role: 'user', content: 'hi' }] })
       .expect(400);
     expect(res.body).toEqual({
@@ -104,7 +133,7 @@ describe('createProxyRouter', () => {
     const { app } = createApp(h, makeAdapter());
 
     const res = await request(app)
-      .post('/v1/messages')
+      .post('/v1/messages').set('x-api-key', API_KEY)
       .send({ model: `${CONFIG_ID}-Missing`, messages: [{ role: 'user', content: 'hi' }] })
       .expect(404);
     expect(res.body.error.type).toBe('not_found_error');
@@ -113,7 +142,7 @@ describe('createProxyRouter', () => {
   it('rejects an invalid request body', async () => {
     const { app } = createApp(h, makeAdapter());
 
-    const res = await request(app).post('/v1/messages').send({ model: `${CONFIG_ID}-X` }).expect(400);
+    const res = await request(app).post('/v1/messages').set('x-api-key', API_KEY).send({ model: `${CONFIG_ID}-X` }).expect(400);
     expect(res.body.error.type).toBe('invalid_request_error');
   });
 
@@ -123,7 +152,7 @@ describe('createProxyRouter', () => {
     const { app, createResolvedAdapter } = createApp(h, adapter);
 
     const res = await request(app)
-      .post('/v1/messages')
+      .post('/v1/messages').set('x-api-key', API_KEY)
       .send({
         model: `${CONFIG_ID}-Test Config`,
         system: 'You are terse.',
@@ -164,7 +193,7 @@ describe('createProxyRouter', () => {
     const { app } = createApp(h, adapter);
 
     await request(app)
-      .post('/v1/messages')
+      .post('/v1/messages').set('x-api-key', API_KEY)
       .send({
         model: `${CONFIG_ID}-Test Config`,
         system: [{ type: 'text', text: 'block system' }],
@@ -213,7 +242,7 @@ describe('createProxyRouter', () => {
     const { app } = createApp(h, adapter);
 
     const res = await request(app)
-      .post('/v1/messages')
+      .post('/v1/messages').set('x-api-key', API_KEY)
       .send({ model: `${CONFIG_ID}-Test Config`, messages: [{ role: 'user', content: 'weather?' }] })
       .expect(200);
 
@@ -234,7 +263,7 @@ describe('createProxyRouter', () => {
     const { app } = createApp(h, adapter);
 
     const res = await request(app)
-      .post('/v1/messages')
+      .post('/v1/messages').set('x-api-key', API_KEY)
       .send({ model: `${CONFIG_ID}-Test Config`, messages: [{ role: 'user', content: 'hi' }] })
       .expect(500);
     expect(res.body).toEqual({ type: 'error', error: { type: 'api_error', message: 'boom' } });
@@ -245,7 +274,7 @@ describe('createProxyRouter', () => {
     const { app } = createApp(h, null);
 
     const res = await request(app)
-      .post('/v1/messages')
+      .post('/v1/messages').set('x-api-key', API_KEY)
       .send({ model: `${CONFIG_ID}-Test Config`, messages: [{ role: 'user', content: 'hi' }] })
       .expect(400);
     expect(res.body.error.type).toBe('invalid_request_error');

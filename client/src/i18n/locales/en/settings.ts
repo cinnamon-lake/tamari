@@ -71,6 +71,13 @@ export const settings = {
     unpackedCards: 'Unpacked cards (on-disk character card folders)',
     unpackedCardsHint:
       'Loads character cards from <dataDir>/unpacked-cards/ as plain folders you edit with external tools. Takes effect after restart.',
+    proxyApi: 'Proxy API (anthropic-like /v1 surface for external tools)',
+    proxyApiHint:
+      'Exposes GET /v1/models and POST /v1/messages (non-streaming), with each backend config listed as a model. Applies immediately — no restart needed.',
+    proxyApiKey: 'Proxy API key',
+    proxyFlush: 'Flush',
+    proxyFlushHint:
+      'The proxy authenticates with this key (x-api-key or Bearer), not your login token. Flush generates a new key and immediately invalidates the old one.',
   },
   memory: {
     heading: 'Memory',

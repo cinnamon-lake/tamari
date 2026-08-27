@@ -11,12 +11,16 @@
  * See https://platform.claude.com/docs/en/api/http/beta/messages/create for
  * the request/response shape this emulates.
  *
- * Gated on the `proxy.enabled` setting — 404 when off (same pattern as the
+ * Gated on the `proxyApi.enabled` setting — 404 when off (same pattern as the
  * MCP router's `mcp.enabled` gate).
+ *
+ * Auth: NOT the app login token. The proxy has its own randomly generated API
+ * key stored in settings (`proxyApi.apiKey`, created at boot when absent and
+ * regenerable from the client), presented as `x-api-key` or a Bearer token.
  */
 
-import { randomUUID } from 'node:crypto';
-import { Router, type Response } from 'express';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { getLogger } from '../lib/logger.js';
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
@@ -101,6 +105,21 @@ const STOP_REASONS: Record<FinishReason, string> = {
   error: 'end_turn',
 };
 
+/** Presented key: `x-api-key` header (anthropic convention) or a Bearer token. */
+function presentedKey(req: Request): string | undefined {
+  const header = req.headers['x-api-key'];
+  if (typeof header === 'string' && header.length > 0) return header;
+  const auth = req.headers.authorization;
+  if (auth?.startsWith('Bearer ')) return auth.slice(7);
+  return undefined;
+}
+
+function keysEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ab.length === bb.length && timingSafeEqual(ab, bb);
+}
+
 export function createProxyRouter(
   settingsRepo: ISettingsRepository,
   backendConfigRepo: IBackendConfigRepository,
@@ -109,17 +128,29 @@ export function createProxyRouter(
 ) {
   const router = Router();
 
-  // Feature gate — the endpoint does not exist unless proxy.enabled is on.
+  // Feature gate — the endpoint does not exist unless proxyApi.enabled is on.
   router.use((_req, res, next) => {
     settingsRepo
-      .get('proxy.enabled')
+      .get('proxyApi.enabled')
       .then((enabled) => {
         if (enabled === true) next();
         else
           res.status(404).json({
             type: 'error',
-            error: { type: 'not_found_error', message: 'The proxy API is unavailable! Enable it in the settings (proxy.enabled).' },
+            error: { type: 'not_found_error', message: 'The proxy API is unavailable! Enable it in the settings (proxyApi.enabled).' },
           });
+      })
+      .catch(next);
+  });
+
+  // Dedicated API key — the app login token is NOT accepted here.
+  router.use((req, res, next) => {
+    settingsRepo
+      .get('proxyApi.apiKey')
+      .then((stored) => {
+        const presented = presentedKey(req);
+        if (typeof stored === 'string' && presented && keysEqual(presented, stored)) next();
+        else anthropicError(res, 401, 'authentication_error', 'Invalid or missing proxy API key');
       })
       .catch(next);
   });

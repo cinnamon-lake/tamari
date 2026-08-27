@@ -103,6 +103,15 @@ export function SettingsModal(props: { onClose: () => void }) {
   // Developer settings
   const [mcpEnabled, setMcpEnabled] = createSignal(Boolean(s['mcp.enabled']));
   const [unpackedCardsEnabled, setUnpackedCardsEnabled] = createSignal(Boolean(s['unpackedCards.enabled']));
+  const [proxyEnabled, setProxyEnabled] = createSignal(Boolean(s['proxyApi.enabled']));
+  const [proxyApiKey, setProxyApiKey] = createSignal(String(s['proxyApi.apiKey'] ?? ''));
+
+  // Rotate the proxy API key: generate client-side, persist via settings.
+  const flushProxyKey = () => {
+    const key = crypto.randomUUID();
+    setProxyApiKey(key);
+    sendSetting('proxyApi.apiKey', key);
+  };
 
   // Memory settings — the server populates schema defaults; the `??` fallbacks below
   // only guard the brief window before `settings.loaded` arrives.
@@ -1145,6 +1154,37 @@ export function SettingsModal(props: { onClose: () => void }) {
             {t('settings.developer.unpackedCards')}
           </label>
           <span class="hint-text">{t('settings.developer.unpackedCardsHint')}</span>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={proxyEnabled()}
+              onChange={(e) => {
+                setProxyEnabled(e.currentTarget.checked);
+                sendSetting('proxyApi.enabled', e.currentTarget.checked);
+              }}
+              class="checkbox"
+            />
+            {t('settings.developer.proxyApi')}
+          </label>
+          <span class="hint-text">{t('settings.developer.proxyApiHint')}</span>
+          <Show when={proxyEnabled()}>
+            <label class="field-label">
+              {t('settings.developer.proxyApiKey')}
+              <div class="input-row">
+                <input
+                  type="text"
+                  readOnly
+                  value={proxyApiKey()}
+                  onFocus={(e) => e.currentTarget.select()}
+                  class="flex-1"
+                />
+                <button type="button" class="btn btn-sm" onClick={flushProxyKey}>
+                  {t('settings.developer.proxyFlush')}
+                </button>
+              </div>
+            </label>
+            <span class="hint-text">{t('settings.developer.proxyFlushHint')}</span>
+          </Show>
         </section>
 
         <div class="modal-actions">

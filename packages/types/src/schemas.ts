@@ -293,6 +293,12 @@ const _AppSettingsSchema = z.object({
   // MCP server (read/test-only tool surface for external agents at /api/mcp)
   'mcp.enabled': z.boolean().default(false),
 
+  // Anthropic-like proxy API (/v1) — backend configs exposed as models for
+  // external anthropic-speaking clients. Distinct from the outbound network
+  // proxy (`proxy.*` above); authenticates with its own key, not the login token.
+  'proxyApi.enabled': z.boolean().default(false),
+  'proxyApi.apiKey': z.string().default(''),
+
   // Prompt / Context
   chatMessageLoadLimit: z.number().int().default(30),
   promptHistoryLimit: z.number().int().default(100),
