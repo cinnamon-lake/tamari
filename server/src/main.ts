@@ -55,6 +55,7 @@ import { createMaidRouter } from './api/maid.js';
 import { createSecretsRouter } from './api/secrets.js';
 import { createStatsRouter } from './api/stats.js';
 import { createChatsRouter } from './api/chats.js';
+import { createProxyRouter } from './api/proxy.js';
 
 import { GenerationService } from './services/GenerationService.js';
 import { GenerationRunner } from './generation/GenerationRunner.js';
@@ -528,6 +529,9 @@ app.use('/api/mcp', createMcpRouter({ workbench: workbenchTemplate, cardTest, te
 
 // Model listing REST API
 app.use('/api/models', createModelsRouter(settings, backendConfigs, secretService, config.secret, createBackendAdapterResolved));
+
+// Anthropic-like proxy API — backend configs exposed as models (`${uuid}-${name}`)
+app.use('/v1', requireAuth, createProxyRouter(settings, backendConfigs, createBackendAdapterResolved));
 
 // Attachment upload (filesystem-backed)
 app.use('/api/attachments', createAttachmentsRouter(attachments, storage, bus));
