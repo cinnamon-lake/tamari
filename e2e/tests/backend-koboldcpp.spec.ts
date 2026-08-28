@@ -147,7 +147,8 @@ test.describe('KoboldCpp backend adapter', () => {
     const cap = await waitForRouteCapture('/api/extra/generate/stream');
     const body = cap.body;
 
-    // buildBody's paramMap: camelCase typed knobs → Kobold-native names.
+    // buildBody maps the camelCase typed knobs onto Kobold-native wire fields
+    // explicitly (setWireParam calls).
     expect(body['temperature']).toBe(0.66);
     expect(body['top_p']).toBe(0.42);
     expect(body['top_k']).toBe(17);

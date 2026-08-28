@@ -55,8 +55,8 @@ test.describe('OpenAI backend edge paths', () => {
 
     const captured = await getLastLlmRequest();
     const body = captured.body as Record<string, unknown>;
-    // The adapter's params merge (convertParamsToSnakeCase + fill-if-undefined)
-    // carries response_format into the outgoing request body.
+    // The adapter's params merge (wire-named overrides pass through verbatim,
+    // fill-if-undefined) carries response_format into the outgoing request body.
     expect(body['response_format']).toEqual({ type: 'json_object' });
   });
 

@@ -22,13 +22,14 @@ import type {
 import { logger } from '../lib/logger.js';
 import { logDelta } from './RequestLogger.js';
 import { executeRequest, type BaseAdapterConfig } from './executeRequest.js';
-import { convertParamsToSnakeCase } from './camelToSnake.js';
 import {
   OpenAIStreamChunkSchema,
   OpenAIModelListSchema,
   type OpenAIStreamChunk,
   type OpenAIChatCompletionRequest,
   type OpenAIChatMessage,
+
+  INTERNAL_PARAM_KEYS,
 } from './types.js';
 import { resolveLocalAttachmentUrl } from './resolveLocalAttachment.js';
 
@@ -83,13 +84,28 @@ export class OpenAIBackendAdapter implements BackendAdapter {
       body.response_format = this.convertResponseFormat(prompt.responseFormat);
     }
 
-    // Merge config-level params and prompt-level params (prompt wins)
-    const params = convertParamsToSnakeCase({ ...this.config.params, ...prompt.params });
+    // Provider params: typed knobs are mapped onto the request fields below,
+    // explicitly, one per line; every other key is a provider-native override
+    // (dry_multiplier, response_format, …) and passes through verbatim.
+    // Prompt-level params beat config-level; request fields above beat both.
+    const params = { ...this.config.params, ...prompt.params };
     for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== null && body[key] === undefined) {
-        body[key] = value;
-      }
+      if (value === undefined || value === null) continue;
+      if (INTERNAL_PARAM_KEYS.has(key)) continue;
+      if (body[key] !== undefined) continue;
+      body[key] = value;
     }
+    if (params.temperature !== undefined) body.temperature = params.temperature;
+    if (params.topP !== undefined) body.top_p = params.topP;
+    if (params.topK !== undefined) body.top_k = params.topK;
+    if (params.minP !== undefined) body.min_p = params.minP;
+    if (params.topA !== undefined) body.top_a = params.topA;
+    if (params.frequencyPenalty !== undefined) body.frequency_penalty = params.frequencyPenalty;
+    if (params.presencePenalty !== undefined) body.presence_penalty = params.presencePenalty;
+    if (params.repetitionPenalty !== undefined) body.repetition_penalty = params.repetitionPenalty;
+    if (params.logitBias !== undefined) body.logit_bias = params.logitBias;
+    if (params.stop !== undefined) body.stop = params.stop;
+    if (params.seed !== undefined) body.seed = params.seed;
 
     const init: RequestInit = {
       method: 'POST',

@@ -337,6 +337,55 @@ describe('OpenAIBackendAdapter', () => {
     expect(body.top_p).toBe(0.9);
   });
 
+  it('maps typed knobs explicitly and drops internal-only knobs', async () => {
+    const adapter = new OpenAIBackendAdapter({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+      model: 'gpt-4o',
+      params: {
+        temperature: 0.7,
+        minP: 0.05,
+        topA: 0.2,
+        stop: ['###'],
+        logitBias: { '42': -100 },
+        // Internal-only knobs: consumed by other machinery or provider-specific,
+        // never valid OpenAI wire fields — they must not reach the body.
+        strictTools: true,
+        cacheTTL: '1h',
+        cacheDepth: 2,
+        maxTokens: 999,
+        toolChoice: 'required',
+      },
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: createMockStream(['data: [DONE]']),
+    } as Response);
+
+    const { result } = await consumeStream(adapter.stream(
+      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
+      new AbortController().signal,
+    ));
+    expect(result.finishReason).toBe('stop');
+
+    const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.temperature).toBe(0.7);
+    expect(body.min_p).toBe(0.05);
+    expect(body.top_a).toBe(0.2);
+    expect(body.stop).toEqual(['###']);
+    expect(body.logit_bias).toEqual({ '42': -100 });
+    expect(body.strictTools).toBeUndefined();
+    expect(body.strict_tools).toBeUndefined();
+    expect(body.cacheTTL).toBeUndefined();
+    expect(body.cache_ttl).toBeUndefined();
+    expect(body.cacheDepth).toBeUndefined();
+    expect(body.cache_depth).toBeUndefined();
+    expect(body.maxTokens).toBeUndefined();
+    expect(body.toolChoice).toBeUndefined();
+  });
+
   it('applies responseFormat json_schema', async () => {
     const adapter = new OpenAIBackendAdapter({
       baseUrl: 'https://api.openai.com/v1',

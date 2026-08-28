@@ -26,7 +26,7 @@ import { MacroResolver } from './MacroResolver.js';
 import { TokenCounter, type ITokenCounter } from '../tokenizers/TokenCounter.js';
 import type { ExampleMessage, ExampleBuilder } from './ExampleBuilder.js';
 import type { ChatCompletionRenderer } from './renderers/ChatCompletionRenderer.js';
-import type { WorldInfoEntry, RegexRule, MemorySummary } from '@tamari/types';
+import type { WorldInfoEntry, RegexRule, MemorySummary, GenerationParams } from '@tamari/types';
 
 /** The subset of PromptBuilder the stage closures call (all `@internal`). */
 export interface PromptBuilderStageHost {
@@ -318,7 +318,7 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
           volatileBlock: ctx.volatileBlock,
         };
 
-        const params: Record<string, unknown> = {};
+        const params: GenerationParams = {};
         if (opts.stopStrings && opts.stopStrings.length > 0) {
           params.stop = opts.stopStrings;
         }

@@ -6,6 +6,8 @@
  * a server → types dependency cycle.
  */
 
+import type { GenerationParams } from './generationParams.js';
+
 export interface TextPart {
   type: 'text';
   text: string;
@@ -149,7 +151,8 @@ export interface Prompt {
   tokenUsage: { prompt: number; completion: number };
   systemPrompt?: string;
   tools?: ToolDefinition[];
-  params?: Record<string, unknown>;
+  /** Sampler knobs + provider-native overrides, merged into the request body by the adapter. */
+  params?: GenerationParams;
   responseFormat?: ResponseFormat;
   cacheDepth?: number;
   /**

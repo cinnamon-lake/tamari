@@ -75,7 +75,7 @@ export class OpenRouterBackendAdapter extends OpenAIBackendAdapter {
 
     // Prompt caching for Claude models via OpenRouter. The TTL rides in the
     // params blob (providerParams.cacheTTL, merged by buildBackendSettings).
-    const cacheTTL = this.openRouterConfig.params?.cacheTTL as string | undefined;
+    const cacheTTL = this.openRouterConfig.params?.cacheTTL;
 
     if (
       typeof prompt.cacheDepth === 'number' &&

@@ -179,6 +179,32 @@ describe('LlamaCppBackendAdapter', () => {
     expect(body.repeat_penalty).toBe(1.1);
   });
 
+  it('maps the typed repetitionPenalty knob onto repeat_penalty', async () => {
+    const adapter = new LlamaCppBackendAdapter({
+      baseUrl: 'http://localhost:8080',
+      apiKey: '',
+      model: 'test',
+      params: { repetitionPenalty: 1.15, topP: 0.95 },
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: createMockStream(['data: {"content":"","stop":true}']),
+    } as Response);
+
+    const { result } = await consumeStream(adapter.stream(
+      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+      new AbortController().signal,
+    ));
+    expect(result.finishReason).toBe('stop');
+
+    const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.repeat_penalty).toBe(1.15);
+    expect(body.top_p).toBe(0.95);
+    expect(body.repetition_penalty).toBeUndefined();
+  });
+
   it('strips trailing slashes from baseUrl', async () => {
     const adapter = new LlamaCppBackendAdapter({
       baseUrl: 'http://localhost:8080/',

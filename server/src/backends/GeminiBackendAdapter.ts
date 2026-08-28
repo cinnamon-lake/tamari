@@ -28,7 +28,9 @@ import {
   GeminiModelListSchema,
   type GeminiStreamChunk,
   type GeminiGenerateContentRequest,
+  type GeminiGenerationConfig,
   type GeminiContent,
+
 } from './types.js';
 import { resolveLocalAttachmentUrl } from './resolveLocalAttachment.js';
 
@@ -187,7 +189,7 @@ export class GeminiBackendAdapter implements BackendAdapter {
     }
 
     // Generation config
-    const generationConfig: Record<string, unknown> = {
+    const generationConfig: GeminiGenerationConfig = {
       maxOutputTokens: prompt.tokenUsage.completion,
     };
 
@@ -204,29 +206,16 @@ export class GeminiBackendAdapter implements BackendAdapter {
       }
     }
 
-    // Merge params into generationConfig or body
+    // Provider params: typed knobs are mapped onto the generationConfig fields
+    // Gemini supports; keys Gemini has no field for are dropped — Gemini has
+    // no provider-native override channel. Prompt-level params beat
+    // config-level.
     const params = { ...this.config.params, ...prompt.params };
-    for (const [key, value] of Object.entries(params)) {
-      if (value === undefined || value === null) continue;
-
-      // Map internal stopStrings to Gemini-native stopSequences
-      const geminiKey = key === 'stopStrings' ? 'stopSequences' : key;
-
-      // Known generation config keys
-      if (
-        geminiKey === 'temperature' ||
-        geminiKey === 'topP' ||
-        geminiKey === 'topK' ||
-        geminiKey === 'stopSequences' ||
-        geminiKey === 'maxOutputTokens' ||
-        geminiKey === 'responseMimeType' ||
-        geminiKey === 'responseSchema'
-      ) {
-        generationConfig[geminiKey] = value;
-      } else if (body[geminiKey] === undefined) {
-        body[geminiKey] = value;
-      }
-    }
+    if (params.temperature !== undefined) generationConfig.temperature = params.temperature;
+    if (params.topP !== undefined) generationConfig.topP = params.topP;
+    if (params.topK !== undefined) generationConfig.topK = params.topK;
+    if (params.seed !== undefined) generationConfig.seed = params.seed;
+    if (Array.isArray(params.stop)) generationConfig.stopSequences = params.stop;
 
     body.generationConfig = generationConfig;
     return body;

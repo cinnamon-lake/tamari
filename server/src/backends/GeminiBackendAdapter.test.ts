@@ -317,6 +317,37 @@ describe('GeminiBackendAdapter', () => {
     expect(body.generationConfig.topK).toBe(5);
   });
 
+  it('maps the internal stop key onto generationConfig.stopSequences and drops unmapped knobs', async () => {
+    const adapter = new GeminiBackendAdapter({
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+      apiKey: 'gemini-key',
+      model: 'gemini-2.0-flash',
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: createMockStream([]),
+    } as Response);
+
+    const { result } = await consumeStream(adapter.stream(
+      {
+        messages: [],
+        tokenUsage: { prompt: 10, completion: 100 },
+        // minP has no Gemini field: dropped, not dumped onto the body.
+        params: { stop: ['###'], minP: 0.05 },
+      },
+      new AbortController().signal,
+    ));
+    expect(result.finishReason).toBe('stop');
+
+    const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.generationConfig.stopSequences).toEqual(['###']);
+    expect(body.stop).toBeUndefined();
+    expect(body.minP).toBeUndefined();
+    expect(body.generationConfig.min_p).toBeUndefined();
+  });
+
   it('returns error on HTTP failure', async () => {
     const adapter = new GeminiBackendAdapter({
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta',

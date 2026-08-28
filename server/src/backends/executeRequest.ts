@@ -7,6 +7,7 @@
  * shared prologue — adapters implement `buildRequest` + stream parsing only.
  */
 
+import type { GenerationParams } from '@tamari/types';
 import type { GenerationResult } from './BackendAdapter.js';
 import { logger } from '../lib/logger.js';
 import { logHttpError, logRequest, logRequestError, logResponseHeaders } from './RequestLogger.js';
@@ -22,7 +23,7 @@ export interface BaseAdapterConfig {
   apiKey?: string;
   model?: string;
   /** Default provider-specific generation parameters (temperature, topP, etc.). */
-  params?: Record<string, unknown>;
+  params?: GenerationParams;
   /** Lua script that mutates the outgoing HTTP request before it is sent. */
   requestScript?: string;
 }

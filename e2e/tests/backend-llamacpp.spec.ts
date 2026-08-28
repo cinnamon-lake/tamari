@@ -125,9 +125,9 @@ test.describe('LlamaCpp backend adapter', () => {
 
   test('converts an OpenAI-style logitBias object to llama.cpp pairs', async ({ page }) => {
     // buildBackendSettings merges the config's logitBias into textgen.params
-    // (the blob the llamacpp factory branch consumes); the adapter converts the
-    // {tokenId: bias} object to [[tokenId, bias]] and camelToSnake renames the
-    // key to logit_bias.
+    // (the blob the llamacpp factory branch consumes); the adapter explicitly
+    // maps it onto the logit_bias wire field, converting the {tokenId: bias}
+    // object to [[tokenId, bias]] pairs.
     await patchActiveBackendConfig(page, {
       logitBias: { '123': -5 },
     });

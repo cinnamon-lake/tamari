@@ -20,6 +20,8 @@ import {
   KoboldStreamEventSchema,
   type KoboldStreamEvent,
   type KoboldCppGenerateRequest,
+
+  INTERNAL_PARAM_KEYS,
 } from './types.js';
 
 export interface KoboldCppAdapterConfig extends BaseAdapterConfig {
@@ -152,44 +154,25 @@ export class KoboldCppBackendAdapter implements BackendAdapter {
       max_length: prompt.tokenUsage.completion,
     };
 
-    // Map standard params to Kobold-native names
-    const paramMap: Record<string, string> = {
-      temperature: 'temperature',
-      topP: 'top_p',
-      topK: 'top_k',
-      repetitionPenalty: 'rep_pen',
-      rep_pen_range: 'rep_pen_range',
-      rep_pen_slope: 'rep_pen_slope',
-      minP: 'min_p',
-      topA: 'top_a',
-      typical: 'typical',
-      tfs: 'tfs',
-      sampler_seed: 'sampler_seed',
-      sampler_order: 'sampler_order',
-      mirostat: 'mirostat',
-      mirostat_tau: 'mirostat_tau',
-      mirostat_eta: 'mirostat_eta',
-      grammar: 'grammar',
-      stopStrings: 'stop_sequence',
-      stop_sequence: 'stop_sequence',
-      use_default_badwordsids: 'use_default_badwordsids',
-      singleline: 'singleline',
-    };
-
+    // Provider params: typed knobs are mapped onto the KoboldCpp field names
+    // below, explicitly; every other key is a Kobold-native override
+    // (mirostat, dry_*, sampler_seed, rep_pen_range, …) and passes through
+    // verbatim. Prompt-level params beat config-level; request fields above
+    // beat both.
     const params = { ...this.config.params, ...prompt.params };
-    for (const [stdKey, koboldKey] of Object.entries(paramMap)) {
-      const value = params[stdKey];
-      if (value !== undefined && value !== null) {
-        body[koboldKey] = value;
-      }
-    }
-
-    // Also pass through any raw Kobold params that were already set correctly
     for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== null && body[key] === undefined) {
-        body[key] = value;
-      }
+      if (value === undefined || value === null) continue;
+      if (INTERNAL_PARAM_KEYS.has(key)) continue;
+      if (body[key] !== undefined) continue;
+      body[key] = value;
     }
+    if (params.temperature !== undefined) body.temperature = params.temperature;
+    if (params.topP !== undefined) body.top_p = params.topP;
+    if (params.topK !== undefined) body.top_k = params.topK;
+    if (params.minP !== undefined) body.min_p = params.minP;
+    if (params.topA !== undefined) body.top_a = params.topA;
+    if (params.repetitionPenalty !== undefined) body.rep_pen = params.repetitionPenalty;
+    if (Array.isArray(params.stop)) body.stop_sequence = params.stop;
 
     return body;
   }

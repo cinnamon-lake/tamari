@@ -20,7 +20,8 @@ import { MoonshotBackendAdapter } from './MoonshotBackendAdapter.js';
 import { KoboldCppBackendAdapter } from './KoboldCppBackendAdapter.js';
 import { MockBackendAdapter } from './MockBackendAdapter.js';
 import type { BackendAdapter } from './BackendAdapter.js';
-import type { BackendConfig, GenerationMode } from '@tamari/types';
+import type { BackendConfig, GenerationMode, GenerationParams } from '@tamari/types';
+import { GenerationParamsSchema } from '@tamari/types';
 import { buildBackendSettings } from './buildBackendSettings.js';
 import { getInstructTemplate, parseCustomInstructTemplates, type InstructTemplate } from './InstructTemplate.js';
 import { str } from '../lib/coerce.js';
@@ -96,11 +97,11 @@ export interface AdapterFactoryInput {
   customInstructTemplates?: Record<string, InstructTemplate>;
   /** Whether past reasoning blocks are inlined into flat text prompts. */
   reasoningAddToPrompts?: boolean;
-  openaiParams?: Record<string, unknown>;
-  textgenParams?: Record<string, unknown>;
-  claudeParams?: Record<string, unknown>;
-  geminiParams?: Record<string, unknown>;
-  koboldcppParams?: Record<string, unknown>;
+  openaiParams?: GenerationParams;
+  textgenParams?: GenerationParams;
+  claudeParams?: GenerationParams;
+  geminiParams?: GenerationParams;
+  koboldcppParams?: GenerationParams;
   /** Inline response script for the deterministic 'mock' provider. */
   mockScript?: string;
   openrouter: OpenRouterFactoryOptions;
@@ -325,9 +326,14 @@ function parseNumber(value: unknown): number | undefined {
   return undefined;
 }
 
-function parseParams(value: unknown): Record<string, unknown> | undefined {
-  if (typeof value === 'object' && value !== null && !Array.isArray(value)) return value as Record<string, unknown>;
-  return undefined;
+/**
+ * The one untrusted boundary for params blobs: they arrive as raw JSON out of
+ * the settings map. The schema drops wrong-typed knobs and keeps provider-
+ * native overrides (catchall), so adapters see a typed `GenerationParams`.
+ */
+function parseParams(value: unknown): GenerationParams | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  return GenerationParamsSchema.parse(value);
 }
 
 function parseOptionalString(value: unknown): string | undefined {

@@ -100,6 +100,32 @@ describe('KoboldCppBackendAdapter', () => {
     expect(body.rep_pen).toBe(1.1);
   });
 
+  it('maps the internal stop key onto stop_sequence and passes Kobold-native params through', async () => {
+    const adapter = new KoboldCppBackendAdapter({
+      baseUrl: 'http://localhost:5001',
+      apiKey: '',
+      params: { stop: ['###'], mirostat_tau: 5, minP: 0.05 },
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: createMockStream(['data: {"token":"x"}']),
+    } as Response);
+
+    const { result } = await consumeStream(adapter.stream(
+      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+      new AbortController().signal,
+    ));
+    expect(result.finishReason).toBe('stop');
+
+    const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.stop_sequence).toEqual(['###']);
+    expect(body.stop).toBeUndefined();
+    expect(body.mirostat_tau).toBe(5);
+    expect(body.min_p).toBe(0.05);
+  });
+
   it('sends abort request when signal is aborted', async () => {
     const adapter = new KoboldCppBackendAdapter({
       baseUrl: 'http://localhost:5001',

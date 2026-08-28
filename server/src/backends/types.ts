@@ -15,6 +15,42 @@ export function isObjectRecord(value: unknown): value is Record<string, unknown>
 }
 
 // ===========================================================================
+// Generation params blob (adapter input)
+// ===========================================================================
+
+export type { GenerationParams } from '@tamari/types';
+
+/**
+ * Internal names that must never be copied onto a request body verbatim: the
+ * typed knobs of GenerationParams (each adapter maps the ones its provider
+ * supports explicitly) plus legacy/adapter-only keys. The verbatim-override
+ * loops in the adapters skip these.
+ */
+export const INTERNAL_PARAM_KEYS: ReadonlySet<string> = new Set([
+  'temperature',
+  'topP',
+  'topK',
+  'minP',
+  'topA',
+  'repetitionPenalty',
+  'frequencyPenalty',
+  'presencePenalty',
+  'logitBias',
+  'stop',
+  'stopStrings',
+  'stopSequences',
+  'seed',
+  'maxTokens',
+  'maxCompletionTokens',
+  'toolChoice',
+  'responseFormat',
+  'reasoningEffort',
+  'cacheTTL',
+  'strictTools',
+  'cacheDepth',
+]);
+
+// ===========================================================================
 // OpenAI-compatible (OpenAI, OpenRouter, Moonshot, TextCompletion)
 // ===========================================================================
 
@@ -224,11 +260,22 @@ export interface GeminiContent {
   parts: unknown[];
 }
 
+export interface GeminiGenerationConfig {
+  maxOutputTokens?: number;
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  seed?: number;
+  stopSequences?: string[];
+  responseMimeType?: string;
+  responseSchema?: unknown;
+}
+
 export interface GeminiGenerateContentRequest {
   contents: GeminiContent[];
   systemInstruction?: { parts: Array<{ text: string }> };
   tools?: Array<{ functionDeclarations: unknown[] }>;
-  generationConfig?: Record<string, unknown>;
+  generationConfig?: GeminiGenerationConfig;
   [key: string]: unknown;
 }
 

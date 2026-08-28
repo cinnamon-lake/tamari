@@ -8,8 +8,8 @@
  * Wire names are **provider-native** — already in the form the adapter sends —
  * so the server only has to merge `providerParams` verbatim into the provider's
  * `*.params` blob (see `server/src/backends/buildBackendSettings.ts`). The adapters
- * either map them via their `paramMap` (KoboldCpp) or pass them straight through
- * to the request body (`convertParamsToSnakeCase` preserves unknown keys).
+ * copy them straight onto the request body (wire-named overrides pass through
+ * untouched; see `server/src/backends/types.ts`).
  *
  * Adding a knob = add a `KnobDef` entry with its per-profile wire names AND
  * register the wire names in `packages/types/src/providerParams.ts`

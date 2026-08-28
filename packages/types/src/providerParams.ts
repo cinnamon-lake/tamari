@@ -15,7 +15,9 @@
  *     `client/src/components/samplerProfiles.ts` (KNOBS). Adding a UI knob
  *     means adding its wire names here too — a client test enforces the sync.
  *  3. ADAPTER PARAM KEYS — undocumented escape-hatch params adapters read from
- *     the params blob (`camelToSnake` maps them onto wire names).
+ *     the params blob (the Claude adapter consumes `cacheTTL`/`strictTools`
+ *     explicitly; see server/src/backends/types.ts for the knob-mapping
+ *     contract).
  */
 
 export const PROVIDER_PARAMS_STRUCTURAL_KEYS: readonly string[] = [

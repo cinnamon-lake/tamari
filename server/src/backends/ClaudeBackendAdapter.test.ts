@@ -380,6 +380,41 @@ describe('ClaudeBackendAdapter', () => {
     expect(body.top_k).toBe(5);
   });
 
+  it('maps the internal stop key onto stop_sequences and drops unmapped knobs', async () => {
+    const adapter = new ClaudeBackendAdapter({
+      baseUrl: 'https://api.anthropic.com/v1',
+      apiKey: 'sk-ant-test',
+      model: 'claude-sonnet-4-20250514',
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: createMockStream([
+        'event: message_start',
+        'data: {"type":"message_start","message":{"usage":{"input_tokens":10}}}',
+        'event: message_stop',
+        'data: {"type":"message_stop"}',
+      ]),
+    } as Response);
+
+    const { result } = await consumeStream(adapter.stream(
+      {
+        messages: [],
+        tokenUsage: { prompt: 10, completion: 100 },
+        // minP has no Claude wire field: dropped, not dumped onto the body.
+        params: { stop: ['###'], minP: 0.05 },
+      },
+      new AbortController().signal,
+    ));
+    expect(result.finishReason).toBe('stop');
+
+    const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.stop_sequences).toEqual(['###']);
+    expect(body.stop).toBeUndefined();
+    expect(body.min_p).toBeUndefined();
+  });
+
   it('applies output_config for structured JSON outputs', async () => {
     const adapter = new ClaudeBackendAdapter({
       baseUrl: 'https://api.anthropic.com/v1',

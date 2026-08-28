@@ -28,8 +28,9 @@ import {
   OpenAIModelListSchema,
   type LlamaCppStreamChunk,
   type LlamaCppCompletionRequest,
+
+  INTERNAL_PARAM_KEYS,
 } from './types.js';
-import { convertParamsToSnakeCase } from './camelToSnake.js';
 import { getInstructTemplate, type InstructTemplate } from './InstructTemplate.js';
 import { formatTextPrompt } from './formatTextPrompt.js';
 
@@ -163,32 +164,39 @@ export class LlamaCppBackendAdapter implements BackendAdapter {
       body.n_predict = prompt.tokenUsage.completion;
     }
 
-    // Merge config-level params and prompt-level params (prompt wins)
+    // Provider params: typed knobs are mapped onto llama.cpp's /completion
+    // fields below, explicitly, one per line (note repetitionPenalty's
+    // llama.cpp wire name is repeat_penalty — the typed knob wins over a
+    // same-field override); every other key is a provider-native override
+    // (tfs_z, dry_*, mirostat_*, …) and passes through verbatim.
     const params = { ...this.config.params, ...prompt.params };
+    for (const [key, value] of Object.entries(params)) {
+      if (value === undefined || value === null) continue;
+      if (INTERNAL_PARAM_KEYS.has(key)) continue;
+      if (body[key] !== undefined) continue;
+      body[key] = value;
+    }
 
-    // Convert OpenAI-style logitBias object to llama.cpp array format
+    // OpenAI-style logitBias object ({tokenId: bias}) → llama.cpp [[id, bias]] pairs.
     if (params.logitBias && typeof params.logitBias === 'object' && !Array.isArray(params.logitBias)) {
-      const biasArray: [number, number][] = [];
+      const pairs: Array<[number, number]> = [];
       for (const [token, bias] of Object.entries(params.logitBias)) {
         const tokenId = Number(token);
-        const biasValue = Number(bias);
-        if (!isNaN(tokenId) && !isNaN(biasValue)) {
-          biasArray.push([tokenId, biasValue]);
-        }
+        if (!isNaN(tokenId) && !isNaN(bias)) pairs.push([tokenId, bias]);
       }
-      if (biasArray.length > 0) {
-        params.logitBias = biasArray;
-      } else {
-        delete params.logitBias;
-      }
+      if (pairs.length > 0) body.logit_bias = pairs;
     }
 
-    const snakeParams = convertParamsToSnakeCase(params);
-    for (const [key, value] of Object.entries(snakeParams)) {
-      if (value !== undefined && value !== null && body[key] === undefined) {
-        body[key] = value;
-      }
-    }
+    if (params.temperature !== undefined) body.temperature = params.temperature;
+    if (params.topK !== undefined) body.top_k = params.topK;
+    if (params.topP !== undefined) body.top_p = params.topP;
+    if (params.minP !== undefined) body.min_p = params.minP;
+    if (params.topA !== undefined) body.top_a = params.topA;
+    if (params.repetitionPenalty !== undefined) body.repeat_penalty = params.repetitionPenalty;
+    if (params.frequencyPenalty !== undefined) body.frequency_penalty = params.frequencyPenalty;
+    if (params.presencePenalty !== undefined) body.presence_penalty = params.presencePenalty;
+    if (params.stop !== undefined) body.stop = params.stop;
+    if (params.seed !== undefined) body.seed = params.seed;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

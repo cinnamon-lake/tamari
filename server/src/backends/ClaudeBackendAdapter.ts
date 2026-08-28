@@ -22,7 +22,6 @@ import type {
 import { logger } from '../lib/logger.js';
 import { logDelta } from './RequestLogger.js';
 import { executeRequest, type BaseAdapterConfig } from './executeRequest.js';
-import { convertParamsToSnakeCase } from './camelToSnake.js';
 import {
   isObjectRecord,
   ClaudeStreamEventSchema,
@@ -31,6 +30,8 @@ import {
   type ClaudeMessageRequest,
   type ClaudeMessage,
   type ClaudeTool,
+
+  INTERNAL_PARAM_KEYS,
 } from './types.js';
 import { resolveLocalAttachmentUrl } from './resolveLocalAttachment.js';
 
@@ -205,7 +206,7 @@ export class ClaudeBackendAdapter implements BackendAdapter {
     const cachingEnabled = typeof prompt.cacheDepth === 'number' && prompt.cacheDepth >= 0;
     // Per-config TTL (providerParams.cacheTTL, merged into the params blob by
     // buildBackendSettings) — there is no global fallback.
-    const cacheTTL = this.config.params?.cacheTTL as string | undefined;
+    const cacheTTL = this.config.params?.cacheTTL;
 
     if (typeof prompt.cacheDepth === 'number' && prompt.cacheDepth >= 0) {
       this.injectCacheControls(messages, prompt.cacheDepth, cacheTTL);
@@ -233,7 +234,7 @@ export class ClaudeBackendAdapter implements BackendAdapter {
     }
 
     if (prompt.tools && prompt.tools.length > 0) {
-      const strictTools = Boolean(prompt.params?.strictTools ?? this.config.params?.strictTools ?? false);
+      const strictTools = prompt.params?.strictTools ?? this.config.params?.strictTools ?? false;
       const tools = this.convertTools(prompt.tools, strictTools);
       if (cachingEnabled && tools.length > 0) {
         (tools[tools.length - 1] as Record<string, unknown>).cache_control = {
@@ -249,22 +250,22 @@ export class ClaudeBackendAdapter implements BackendAdapter {
       body.output_config = { format: this.convertResponseFormat(prompt.responseFormat) };
     }
 
-    // Merge config-level params and prompt-level params (prompt wins)
-    const params = convertParamsToSnakeCase({ ...this.config.params, ...prompt.params });
+    // Provider params: typed knobs are mapped onto the request fields below,
+    // explicitly; every other key is a provider-native override and passes
+    // through verbatim. Claude-only knobs are consumed above (cacheTTL →
+    // cache_control, strictTools → per-tool strict); knobs Claude has no wire
+    // field for (min_p, top_a, penalties, logit_bias, …) are dropped.
+    const params = { ...this.config.params, ...prompt.params };
     for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== null && body[key] === undefined) {
-        body[key] = value;
-      }
+      if (value === undefined || value === null) continue;
+      if (INTERNAL_PARAM_KEYS.has(key)) continue;
+      if (body[key] !== undefined) continue;
+      body[key] = value;
     }
-
-    // Claude uses stop_sequences instead of stop
-    if (typeof body.stop === 'string') {
-      body.stop_sequences = [body.stop];
-      delete body.stop;
-    } else if (Array.isArray(body.stop)) {
-      body.stop_sequences = body.stop;
-      delete body.stop;
-    }
+    if (params.temperature !== undefined) body.temperature = params.temperature;
+    if (params.topP !== undefined) body.top_p = params.topP;
+    if (params.topK !== undefined) body.top_k = params.topK;
+    if (Array.isArray(params.stop)) body.stop_sequences = params.stop;
 
     const betaHeaders = ['output-128k-2025-02-19', 'context-1m-2025-08-07'];
     if (cachingEnabled) {

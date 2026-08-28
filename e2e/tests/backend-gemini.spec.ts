@@ -82,8 +82,8 @@ test.describe('Gemini backend adapter', () => {
   test('streams a basic reply and sends a Gemini-shaped request', async ({ page }) => {
     const app = new App(page);
     // Custom stop strings must arrive as generationConfig.stopSequences (the
-    // adapter maps the internal stopStrings param). Use a string that never
-    // occurs in the reply so the mock doesn't actually cut anything.
+    // adapter maps the internal params.stop onto Gemini's native field). Use a
+    // string that never occurs in the reply so the mock doesn't actually cut.
     await setSetting(page, 'customStoppingStrings', ['NEVERMATCH_SENTINEL']);
 
     await app.createCharacterAndChat({
@@ -125,14 +125,11 @@ test.describe('Gemini backend adapter', () => {
     // generationConfig: numeric maxOutputTokens.
     expect(typeof body.generationConfig?.maxOutputTokens).toBe('number');
     expect(body.generationConfig?.maxOutputTokens).toBeGreaterThan(0);
-    // NOTE: stop strings do NOT arrive as generationConfig.stopSequences.
-    // PromptBuilder emits them as params.stop (not params.stopStrings), so the
-    // adapter's stopStrings->stopSequences mapping never fires; the generic
-    // params merge drops them at the TOP LEVEL of the body as `stop` — which
-    // the real Gemini API would ignore. Asserted as-is (adapter behavior);
-    // flagged to the task author as a likely adapter/pipeline gap.
-    expect(body.stop).toEqual(['NEVERMATCH_SENTINEL']);
-    expect(body.generationConfig?.stopSequences).toBeUndefined();
+    // Stop strings arrive as generationConfig.stopSequences: PromptBuilder
+    // emits them as params.stop and the adapter maps that onto Gemini's
+    // native field (they must not leak onto the body top level).
+    expect(body.generationConfig?.stopSequences).toEqual(['NEVERMATCH_SENTINEL']);
+    expect(body.stop).toBeUndefined();
   });
 
   test('renders thought parts as a reasoning block', async ({ page }) => {
