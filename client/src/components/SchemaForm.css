@@ -56,3 +56,12 @@
   flex-direction: column;
   gap: var(--space-sm);
 }
+
+/* Inline variant: fields render directly inside a `.settings-section`, whose
+   own gap only applies between the section's children — so the form must
+   carry the section's vertical rhythm itself. */
+.schema-form-inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
