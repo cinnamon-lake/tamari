@@ -323,6 +323,17 @@ Design doc: `docs/design/scriptable-layers.md`. Three layers: **custom backends*
 
 ---
 
+## 16. Anthropic-Format Proxy (`/v1`) Gaps
+
+tamari-native feature (`server/src/api/proxy.ts`), so nothing to port — these are the gaps vs. the real Anthropic Messages API, found by pointing the official `@anthropic-ai/sdk` at the proxy (2026-08-29).
+
+| Feature                            | Priority | Notes                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SSE streaming (`stream: true`)** | 🟡       | Proxy is non-streaming; with `stream: true` it returns a JSON body where clients expect `text/event-stream` — SDK stream parsers silently yield zero events, and `messages.stream()` (what Claude Code uses) throws "request ended without sending any chunks". Needs `message_start` / `content_block_start` / `content_block_delta` / `content_block_stop` / `message_delta` / `message_stop` emitted off `adapter.stream()`. |
+| **Tool-use request round-trip**    | 🟡       | Inbound content blocks only allow `text`/`image` (`ContentBlockSchema`): `tool_use` / `tool_result` (and `thinking` / `document`) blocks get a 400, so real tool loops fail on the follow-up turn. Request-level `tools` / `tool_choice` are stripped by the Zod schema and never reach the backend (`Prompt.tools`). Response-side `tool_use` mapping already works.                                                           |
+
+---
+
 ## Appendix: Porting Checklist (Old → New File Map)
 
 | Old File                                                   | New Location                                                                                                          | Status                                                                                                                                                        |
