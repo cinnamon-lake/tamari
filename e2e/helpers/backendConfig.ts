@@ -50,6 +50,9 @@ export async function configureMockBackend(page: Page): Promise<void> {
     model: 'mock-model',
     apiUrl: mockUrl,
     apiKey: 'mock-api-key',
+    // Explicit response cap — maxTokens is optional and no longer has any
+    // global default, and several backend specs assert the wire cap is sent.
+    maxTokens: 512,
   });
 }
 
@@ -71,6 +74,7 @@ export async function resetBackendConfig(page: Page): Promise<void> {
         model: 'gpt-4-turbo',
         apiUrl: null,
         apiKey: null,
+        maxTokens: null,
       },
     },
     ['backendConfig.updated', 'backendConfig.snapshot'],

@@ -159,16 +159,25 @@ export function createSettings(c: StApiContext): SettingsApi {
 
     get_maxTokens: async () => {
       checkAbort();
-      const val = await settings.get('maxResponseTokens');
-      return val !== undefined ? Number(val) : 512;
+      // Response-length cap lives only on the BackendConfig (there is no
+      // global maxResponseTokens setting anymore); null when unset.
+      const activeBackendConfigId = str(await settings.get('activeBackendConfigId'));
+      if (activeBackendConfigId) {
+        const p = await backendConfigs.getById(activeBackendConfigId);
+        if (p) return p.maxTokens;
+      }
+      return null;
     },
 
     set_maxTokens: async (value: number) => {
       checkAbort();
       const num = Math.max(1, Math.floor(Number(value)));
       if (isNaN(num)) throw new Error('set_maxTokens: expected number');
-      await settings.setValue('maxResponseTokens', num);
-      bus.broadcast({ type: 'settings.changed', key: 'maxResponseTokens', value: num });
+      const activeBackendConfigId = str(await settings.get('activeBackendConfigId'));
+      const active = activeBackendConfigId ? await backendConfigs.getById(activeBackendConfigId) : null;
+      if (!active) throw new Error('set_maxTokens: no active backend config');
+      const updated = await backendConfigs.update(active.id, { maxTokens: num });
+      bus.broadcast({ type: 'backendConfig.updated', backendConfig: updated });
     },
 
     get_contextLength: async () => {

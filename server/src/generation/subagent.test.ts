@@ -80,7 +80,6 @@ describe('sub-agents', () => {
       await h.deps.settings.setValue('model', 'trivial-model');
       await h.deps.settings.setValue('apiKey', 'fake-key');
       await h.deps.settings.setValue('backendProvider', 'openai');
-      await h.deps.settings.setValue('maxResponseTokens', 100);
     })();
   }
 

@@ -198,7 +198,8 @@ export type StApi = {
   set_apiUrl(url: string): Promise<void>;
   get_temperature(): Promise<number>;
   set_temperature(value: number): Promise<void>;
-  get_maxTokens(): Promise<number>;
+  /** Active backend config's maxTokens, or null when unset (explicitly optional). */
+  get_maxTokens(): Promise<number | null>;
   set_maxTokens(value: number): Promise<void>;
   get_contextLength(): Promise<number>;
   set_contextLength(value: number): Promise<void>;

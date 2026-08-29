@@ -37,7 +37,9 @@ export function BackendConfigModal(props: { onClose: () => void }) {
   const [model, setModel] = createSignal(activeBackendConfig()?.model ?? 'gpt-3.5-turbo');
   const [generationMode, setGenerationMode] = createSignal(activeBackendConfig()?.generationMode ?? 'chat');
   const [temperature, setTemperature] = createSignal(activeBackendConfig()?.temperature ?? 1);
-  const [maxTokens, setMaxTokens] = createSignal(activeBackendConfig()?.maxTokens ?? 300);
+  // maxTokens is explicitly optional: null = no cap sent upstream (no hidden
+  // default — the old 300/512 fallbacks are gone).
+  const [maxTokens, setMaxTokens] = createSignal<number | null>(activeBackendConfig()?.maxTokens ?? null);
   const [topP, setTopP] = createSignal(activeBackendConfig()?.topP ?? 1);
   const [topK, setTopK] = createSignal(activeBackendConfig()?.topK ?? null);
   const [minP, setMinP] = createSignal(activeBackendConfig()?.minP ?? null);
@@ -278,7 +280,7 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     const provider = validateProviderForMode(config.generationMode, config.backendProvider);
     setBackendProvider(provider);
     setTemperature(config.temperature ?? 1);
-    setMaxTokens(config.maxTokens ?? 300);
+    setMaxTokens(config.maxTokens ?? null);
     setTopP(config.topP ?? 1);
     setTopK(config.topK ?? null);
     setMinP(config.minP ?? null);
@@ -988,9 +990,10 @@ export function BackendConfigModal(props: { onClose: () => void }) {
             class="input"
             type="number"
             min={1}
-            max={8192}
-            value={maxTokens()}
-            onInput={(e) => markDirty(setMaxTokens)(Number(e.currentTarget.value))}
+            value={maxTokens() ?? ''}
+            onInput={(e) =>
+              markDirty(setMaxTokens)(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))
+            }
           />
         </label>
         {/* KoboldCpp is the only provider that consumes contextLength (its

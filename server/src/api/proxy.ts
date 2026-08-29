@@ -213,9 +213,13 @@ export function createProxyRouter(
         abort.abort();
       });
 
+      // Adapters read the response-length cap from tokenUsage.completion
+      // (ClaudeBackendAdapter sends it as max_tokens). 0 = unset: the config
+      // owns sampling, so with no config maxTokens adapters omit the wire cap
+      // entirely rather than sending a fabricated value upstream.
       const prompt: Prompt = {
         messages: toPipelineMessages(body),
-        tokenUsage: { prompt: 0, completion: 0 },
+        tokenUsage: { prompt: 0, completion: config.maxTokens ?? 0 },
       };
       const { items, result } = await consumeStream(adapter.stream(prompt, abort.signal));
 

@@ -397,9 +397,21 @@ describe('StApi', () => {
       expect(await h.deps.settings.get('temperature')).toBeUndefined();
     });
 
-    it('maxTokens settings work', async () => {
+    it('maxTokens operates on the active backend config', async () => {
+      await st.set_backend_config(backendConfigId);
+      // Reads the config's maxTokens (100 from setup).
+      expect(await st.get_maxTokens()).toBe(100);
       await st.set_maxTokens(256);
       expect(await st.get_maxTokens()).toBe(256);
+      const cfg = await h.deps.backendConfigs.getById(backendConfigId);
+      expect(cfg?.maxTokens).toBe(256);
+      // The removed global maxResponseTokens setting is never written.
+      expect(await h.deps.settings.get('maxResponseTokens')).toBeUndefined();
+    });
+
+    it('maxTokens is null without an active config and set_maxTokens throws', async () => {
+      expect(await st.get_maxTokens()).toBeNull();
+      await expect(st.set_maxTokens(256)).rejects.toThrow('set_maxTokens: no active backend config');
     });
 
     it('contextLength operates on the active backend config', async () => {

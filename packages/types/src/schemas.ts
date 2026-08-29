@@ -254,8 +254,9 @@ const _AppSettingsSchema = z.object({
   userName: z.string().default('User'),
 
   // Generation
+  // (No maxResponseTokens here: the response-length cap lives only on
+  // BackendConfig.maxTokens — explicitly optional, no global default.)
   generationMode: z.enum(['chat', 'text']).default('chat'),
-  maxResponseTokens: z.number().int().default(512),
 
   // Memory
   memory: MemorySettingsSchema.default({

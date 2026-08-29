@@ -35,7 +35,6 @@ describe('streaming flush part.snapshot invariant', () => {
     await h.deps.settings.setValue('model', 'trivial-model');
     await h.deps.settings.setValue('apiKey', 'fake-key');
     await h.deps.settings.setValue('backendProvider', 'openai');
-    await h.deps.settings.setValue('maxResponseTokens', 4000);
 
     await h.send(client, { type: 'character.create', data: { name: 'Bot', description: 'd', firstMes: 'hi' } });
     const charId = h.expectBroadcast('character.created').character.id;

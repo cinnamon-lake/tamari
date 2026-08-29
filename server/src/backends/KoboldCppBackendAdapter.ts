@@ -130,8 +130,11 @@ export class KoboldCppBackendAdapter implements BackendAdapter {
         includeReasoning: this.config.includeReasoning ?? false,
       }),
       max_context_length: this.config.contextLength ?? 4096,
-      max_length: prompt.tokenUsage.completion,
     };
+    // 0 = unset — omit max_length rather than send an invalid zero upstream.
+    if (prompt.tokenUsage.completion > 0) {
+      body.max_length = prompt.tokenUsage.completion;
+    }
 
     // Provider params: typed knobs are mapped onto the KoboldCpp field names
     // below, explicitly; every other key is a Kobold-native override

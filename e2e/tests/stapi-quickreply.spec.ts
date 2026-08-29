@@ -48,12 +48,9 @@ test.describe('StApi quick-reply coverage', () => {
   // Requests `app` so the fixture's login + configureMockBackend run first:
   // the patch must land on the already-configured mock backend.
   test.beforeEach(async ({ app: _app, page }) => {
-    // The Backend Config modal's saveConfig ALWAYS writes maxTokens (default
-    // 300 when unset — BackendConfigModal.tsx loadConfigData), so any earlier
-    // spec that dirtied the modal leaves maxTokens: 300 on the active config.
-    // GenerationService prefers backendConfig.maxTokens over the
-    // maxResponseTokens setting that st.set_maxTokens drives — clear it so the
-    // sampler-setters test observes the values its own quick reply set.
+    // st.set_maxTokens patches the active config's maxTokens. Clear any value
+    // an earlier spec left on the config so the sampler-setters test observes
+    // only what its own quick reply set.
     await patchActiveBackendConfig(page, { maxTokens: null });
   });
 

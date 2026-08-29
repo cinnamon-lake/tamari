@@ -61,6 +61,32 @@ describe('GeminiBackendAdapter', () => {
     expect(body.generationConfig.maxOutputTokens).toBe(100);
   });
 
+  it('omits maxOutputTokens when no completion budget is configured (0 = unset)', async () => {
+    const adapter = new GeminiBackendAdapter({
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+      apiKey: 'gemini-key',
+      model: 'gemini-2.0-flash',
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: createMockStream([
+        'data: {"candidates":[{"content":{"parts":[{"text":"Hi"}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":3,"candidatesTokenCount":1}}',
+      ]),
+    } as Response);
+
+    await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Hello' }], tokenUsage: { prompt: 10, completion: 0 } },
+        new AbortController().signal,
+      ),
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.generationConfig.maxOutputTokens).toBeUndefined();
+  });
+
   it('prefixes model with models/ if missing', async () => {
     const adapter = new GeminiBackendAdapter({
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta',

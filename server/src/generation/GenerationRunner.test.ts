@@ -220,7 +220,6 @@ describe('generation meta (debug traces)', () => {
     await h.deps.settings.setValue('model', 'trivial-model');
     await h.deps.settings.setValue('apiKey', 'fake-key');
     await h.deps.settings.setValue('backendProvider', 'openai');
-    await h.deps.settings.setValue('maxResponseTokens', 100);
 
     await h.send(client, {
       type: 'character.create',

@@ -187,10 +187,15 @@ export class ClaudeBackendAdapter implements BackendAdapter {
 
     const body: ClaudeMessageRequest = {
       model: this.config.model,
-      max_tokens: prompt.tokenUsage.completion,
       messages,
       stream: true,
     };
+    // 0 = unset (no cap configured) — omit max_tokens rather than send an
+    // invalid zero upstream; the upstream's required-field error then points
+    // the user at the config's maxTokens.
+    if (prompt.tokenUsage.completion > 0) {
+      body.max_tokens = prompt.tokenUsage.completion;
+    }
 
     if (systemPrompt) {
       if (cachingEnabled) {

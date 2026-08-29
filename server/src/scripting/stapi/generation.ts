@@ -84,7 +84,7 @@ export function createGeneration(c: StApiContext): GenerationApi {
         scenario: character?.scenario,
         model: String(allSettings['model']),
         maxContext: activeConfig?.contextLength ?? 4096,
-        maxResponse: Number(allSettings['maxResponseTokens']),
+        maxResponse: activeConfig?.maxTokens ?? 0,
         now: new Date(),
         messages: msgs.map((m) => ({ id: m.id, role: m.role, content: getMessageText(m.extra.parts) })),
       };

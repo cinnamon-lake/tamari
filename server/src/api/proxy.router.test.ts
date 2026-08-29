@@ -31,7 +31,7 @@ function createApp(harness: TestHarness, adapter: BackendAdapter | null) {
   return { app, createResolvedAdapter };
 }
 
-async function seedConfig(h: TestHarness, id = CONFIG_ID, name = 'Test Config') {
+async function seedConfig(h: TestHarness, id = CONFIG_ID, name = 'Test Config', maxTokens: number | null = 300) {
   await h.deps.backendConfigs.create(id, {
     name,
     description: '',
@@ -40,6 +40,7 @@ async function seedConfig(h: TestHarness, id = CONFIG_ID, name = 'Test Config') 
     model: 'gpt-4',
     instructTemplate: '',
     providerParams: {},
+    maxTokens,
   });
 }
 
@@ -189,8 +190,27 @@ describe('createProxyRouter', () => {
           { role: 'system', content: 'You are terse.' },
           { role: 'user', content: 'hi' },
         ],
-        tokenUsage: { prompt: 0, completion: 0 },
+        tokenUsage: { prompt: 0, completion: 300 },
       },
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('sends an unset (0) completion budget when the config has no maxTokens', async () => {
+    await seedConfig(h, CONFIG_ID, 'Test Config', null);
+    const adapter = makeAdapter();
+    const { app } = createApp(h, adapter);
+
+    await request(app)
+      .post('/v1/messages')
+      .set('x-api-key', API_KEY)
+      .send({ model: `${CONFIG_ID}-Test Config`, messages: [{ role: 'user', content: 'hi' }] })
+      .expect(200);
+
+    // 0 = unset: adapters omit the wire cap entirely. The config owns
+    // sampling — there is no global maxResponseTokens fallback anymore.
+    expect(adapter.stream).toHaveBeenCalledWith(
+      expect.objectContaining({ tokenUsage: { prompt: 0, completion: 0 } }),
       expect.any(AbortSignal),
     );
   });
@@ -230,7 +250,7 @@ describe('createProxyRouter', () => {
             ],
           },
         ],
-        tokenUsage: { prompt: 0, completion: 0 },
+        tokenUsage: { prompt: 0, completion: 300 },
       },
       expect.any(AbortSignal),
     );

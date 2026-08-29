@@ -68,9 +68,13 @@ export class OpenAIBackendAdapter implements BackendAdapter {
       stream: true,
     };
 
-    // o-series / reasoning models use max_completion_tokens; legacy uses max_tokens
-    const tokenKey = this.isReasoningModel(this.config.model) ? 'max_completion_tokens' : 'max_tokens';
-    body[tokenKey] = prompt.tokenUsage.completion;
+    // o-series / reasoning models use max_completion_tokens; legacy uses max_tokens.
+    // 0 = unset (no cap configured) — omit the field rather than send an
+    // invalid zero upstream.
+    if (prompt.tokenUsage.completion > 0) {
+      const tokenKey = this.isReasoningModel(this.config.model) ? 'max_completion_tokens' : 'max_tokens';
+      body[tokenKey] = prompt.tokenUsage.completion;
+    }
 
     if (prompt.tools && prompt.tools.length > 0) {
       body.tools = prompt.tools;

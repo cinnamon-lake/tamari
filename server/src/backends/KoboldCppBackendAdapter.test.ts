@@ -55,6 +55,29 @@ describe('KoboldCppBackendAdapter', () => {
     expect(body.max_context_length).toBe(4096);
   });
 
+  it('omits max_length when no completion budget is configured (0 = unset)', async () => {
+    const adapter = new KoboldCppBackendAdapter({
+      baseUrl: 'http://localhost:5001',
+      apiKey: '',
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: createMockStream(['data: {"token":"Hello"}']),
+    } as Response);
+
+    await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Once upon a time' }], tokenUsage: { prompt: 10, completion: 0 } },
+        new AbortController().signal,
+      ),
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.max_length).toBeUndefined();
+  });
+
   it('streams tokens from SSE events', async () => {
     const adapter = new KoboldCppBackendAdapter({
       baseUrl: 'http://localhost:5001',

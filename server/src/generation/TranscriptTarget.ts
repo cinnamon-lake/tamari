@@ -117,8 +117,10 @@ export class TranscriptTarget implements GenerationTarget {
 
   async prompt(resolved: ResolvedGenerationBackend): Promise<Prompt> {
     if (this.assemblyKind === 'seed') {
-      const { allSettings, backendConfig } = resolved;
-      const maxResponseTokens = Math.max(1, backendConfig?.maxTokens ?? allSettings.maxResponseTokens);
+      const { backendConfig } = resolved;
+      // 0 = unset — no global maxResponseTokens fallback; adapters omit the
+      // wire cap when nothing is configured.
+      const maxResponseTokens = backendConfig?.maxTokens ?? 0;
       // Minimal prompt — seed + accumulated transcript, no chat
       // history/character/WI/pipeline. Round 1 (no parts yet) is the bare
       // seed message, byte-identical to the legacy genraw prompt.

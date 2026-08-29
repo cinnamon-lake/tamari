@@ -93,6 +93,28 @@ describe('OpenAIBackendAdapter', () => {
     expect(body.max_tokens).toBeUndefined();
   });
 
+  it('omits the token cap when no completion budget is configured (0 = unset)', async () => {
+    const adapter = new OpenAIBackendAdapter({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+      model: 'gpt-4o',
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: createMockStream(['data: [DONE]']),
+    } as Response);
+
+    await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 0 } }, new AbortController().signal),
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.max_tokens).toBeUndefined();
+    expect(body.max_completion_tokens).toBeUndefined();
+  });
+
   it('streams tokens and returns usage', async () => {
     const adapter = new OpenAIBackendAdapter({
       baseUrl: 'https://api.openai.com/v1',

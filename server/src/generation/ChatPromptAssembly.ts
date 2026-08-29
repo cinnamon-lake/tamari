@@ -229,10 +229,12 @@ export class ChatPromptAssembly {
 
     const promptHistoryLimit = backendConfig?.promptHistoryLimit ?? allSettings.promptHistoryLimit;
     const contextLength = backendConfig?.contextLength ?? 4096;
+    // 0 = unset: adapters omit the wire cap entirely when nothing is
+    // configured (there is no global maxResponseTokens setting anymore).
     const maxResponseTokens =
       args.maxResponseTokensOverride !== undefined
         ? Math.max(1, Math.floor(args.maxResponseTokensOverride))
-        : Math.max(1, backendConfig?.maxTokens ?? allSettings.maxResponseTokens);
+        : (backendConfig?.maxTokens ?? 0);
     const historySource =
       args.anchorMessageId !== undefined
         ? await chats.getBulkOfMessages(chatId, { limit: promptHistoryLimit, beforeId: args.anchorMessageId })

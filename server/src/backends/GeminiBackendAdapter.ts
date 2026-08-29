@@ -167,10 +167,12 @@ export class GeminiBackendAdapter implements BackendAdapter {
       body.tools = [{ functionDeclarations: this.convertTools(prompt.tools) }];
     }
 
-    // Generation config
-    const generationConfig: GeminiGenerationConfig = {
-      maxOutputTokens: prompt.tokenUsage.completion,
-    };
+    // Generation config. 0 = unset — omit maxOutputTokens rather than send an
+    // invalid zero upstream.
+    const generationConfig: GeminiGenerationConfig = {};
+    if (prompt.tokenUsage.completion > 0) {
+      generationConfig.maxOutputTokens = prompt.tokenUsage.completion;
+    }
 
     // Response format
     if (prompt.responseFormat) {

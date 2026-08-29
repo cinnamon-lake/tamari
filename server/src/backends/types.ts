@@ -169,7 +169,9 @@ export interface ClaudeTool {
 
 export interface ClaudeMessageRequest {
   model: string;
-  max_tokens: number;
+  // Optional: unset means "no cap configured" and the field is omitted (the
+  // upstream's own required-field error then tells the user to set maxTokens).
+  max_tokens?: number;
   messages: ClaudeMessage[];
   stream: boolean;
   system?: string | Array<{ type: 'text'; text: string; cache_control?: { type: string; ttl?: string } }>;
@@ -367,7 +369,8 @@ export type GeminiModelList = z.infer<typeof GeminiModelListSchema>;
 export interface KoboldCppGenerateRequest {
   prompt: string;
   max_context_length: number;
-  max_length: number;
+  // Optional: omitted when no response-length cap is configured.
+  max_length?: number;
   temperature?: number;
   top_p?: number;
   top_k?: number;

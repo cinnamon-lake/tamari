@@ -67,6 +67,30 @@ describe('ClaudeBackendAdapter', () => {
     expect(body.messages).toEqual([{ role: 'user', content: 'Hello' }]);
   });
 
+  it('omits max_tokens when no completion budget is configured (0 = unset)', async () => {
+    const adapter = new ClaudeBackendAdapter({
+      baseUrl: 'https://api.anthropic.com/v1',
+      apiKey: 'sk-ant-test',
+      model: 'claude-sonnet-4-20250514',
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: createMockStream(['event: message_stop', 'data: {"type":"message_stop"}']),
+    } as Response);
+
+    await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Hello' }], tokenUsage: { prompt: 10, completion: 0 } },
+        new AbortController().signal,
+      ),
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.max_tokens).toBeUndefined();
+  });
+
   it('extracts system messages to top-level system param', async () => {
     const adapter = new ClaudeBackendAdapter({
       baseUrl: 'https://api.anthropic.com/v1',
