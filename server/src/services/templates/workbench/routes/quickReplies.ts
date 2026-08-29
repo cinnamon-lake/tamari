@@ -101,7 +101,9 @@ async function read(call: RouteCall): Promise<string | RouteError> {
 
   const res = await provider(call, 'quickreply_list', { scope, scopeId: realScopeId(scopeId) });
   if (!res.ok) return { error: res.error };
-  const item = asArray(res.value).filter(isRecord).find((q) => q['id'] === stripJsonExt(file));
+  const item = asArray(res.value)
+    .filter(isRecord)
+    .find((q) => q['id'] === stripJsonExt(file));
   if (item === undefined) return { error: err(`no such file: ${call.path}`) };
   if (field === undefined) return pretty(item);
   const spec = fieldSpec(QR_FIELDS, field);
@@ -122,7 +124,10 @@ async function write(call: RouteCall, content: string): Promise<string> {
     if (spec === undefined) return err(`no such file: ${call.path}`);
     const parsed = parseFieldContent(spec, content);
     if (!parsed.ok) return parsed.error;
-    const res = await provider(call, 'quickreply_update', { id: stripJsonExt(file), patch: { [spec.key]: parsed.value } });
+    const res = await provider(call, 'quickreply_update', {
+      id: stripJsonExt(file),
+      patch: { [spec.key]: parsed.value },
+    });
     if (!res.ok) return res.error;
     return resultToString(res);
   }

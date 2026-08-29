@@ -60,3 +60,15 @@ export function resolveLocalAttachmentUrl(source: string, mimeType?: string): st
 
   return source;
 }
+
+/**
+ * Parse a `data:<mediaType>;base64,<data>` URL into its parts.
+ * Returns null for non-base64 or malformed data URLs.
+ */
+export function parseDataUrl(url: string): { mediaType: string; data: string } | null {
+  const match = /^data:([^;]+);base64,(.+)$/.exec(url);
+  const mediaType = match?.[1];
+  const data = match?.[2];
+  if (mediaType === undefined || data === undefined) return null;
+  return { mediaType, data };
+}

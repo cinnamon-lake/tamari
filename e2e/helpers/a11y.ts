@@ -72,19 +72,6 @@ export async function expectNoAxeViolations(
   expect(accessibilityScanResults.violations).toEqual([]);
 }
 
-/**
- * Run an axe scan and return violations for inspection instead of asserting.
- */
-export async function getAxeViolations(
-  page: Page,
-  options: { exclude?: string[]; include?: string; enableColorContrast?: boolean } = {},
-) {
-  await waitForAnimationsToSettle(page);
-  const builder = await buildScanner(page, options);
-  const accessibilityScanResults = await builder.analyze();
-  return accessibilityScanResults.violations;
-}
-
 /** Shared axe-builder setup: contrast toggle + include/exclude scoping. */
 async function buildScanner(
   page: Page,

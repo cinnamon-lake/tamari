@@ -18,10 +18,7 @@ export class AsyncMutex {
       return;
     }
     await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error('Chat lock acquisition timeout')),
-        30_000,
-      );
+      const timer = setTimeout(() => reject(new Error('Chat lock acquisition timeout')), 30_000);
       this.waiters.push(() => {
         clearTimeout(timer);
         resolve();
@@ -45,7 +42,8 @@ export class AsyncMutex {
   unlock(): boolean {
     if (!this.locked) return false;
     const next = this.waiters.shift();
-    if (next) next(); // hand off; `locked` stays true (no race window)
+    if (next)
+      next(); // hand off; `locked` stays true (no race window)
     else this.locked = false;
     return true;
   }

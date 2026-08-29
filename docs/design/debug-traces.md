@@ -2,7 +2,7 @@
 
 **Status:** implemented on `main` (structured error chains, `generations.meta` with debugPrompts-gated prompt snapshots, tool-result/dry-run/`/generations/<id>/` surfacing).
 **Refinement:** records store only their own layer; the full chain is composed by walking `parent_id` at render time (`server/src/generation/trace.ts`) — a child's record is created while its parent is mid-run, so accumulated chains would capture incomplete state.
-**Motivation:** with `MAX_AGENT_DEPTH = 4` and composable Lua backends, the failure chain *"Lua error in a delegate backend called by an agent called by a card backend"* is real — and currently undebuggable.
+**Motivation:** with `MAX_AGENT_DEPTH = 4` and composable Lua backends, the failure chain _"Lua error in a delegate backend called by an agent called by a card backend"_ is real — and currently undebuggable.
 
 ## Problem
 
@@ -14,10 +14,11 @@ card contextual backend (Type B Lua) → writer backend
        └─ backends.generate → delegate backend → Lua error HERE
 ```
 
-Every layer flattens errors into strings and returns them as *content*: the delegate's Lua error becomes `GenerationResult.error`, the sub-agent run returns `{ error }`, `run_agent` renders `"Agent error: …"` as tool-result text. The failure is recoverable (the model sees a string) but **undebuggable**: no layer attribution, no round detail, no record of which delegations happened before the failure. The generation-record tree (`kind`/`parent_id`) exists but each node carries only `error_message`.
+Every layer flattens errors into strings and returns them as _content_: the delegate's Lua error becomes `GenerationResult.error`, the sub-agent run returns `{ error }`, `run_agent` renders `"Agent error: …"` as tool-result text. The failure is recoverable (the model sees a string) but **undebuggable**: no layer attribution, no round detail, no record of which delegations happened before the failure. The generation-record tree (`kind`/`parent_id`) exists but each node carries only `error_message`.
 
 Design goals:
-1. Any failure answers *which layer died, with what input, after which delegations* — without log spelunking.
+
+1. Any failure answers _which layer died, with what input, after which delegations_ — without log spelunking.
 2. The model-author (the primary debugger of its own cards) gets traces through the channels it already reads: tool results and dry-runs.
 3. Persist enough to reconstruct post-hoc; don't build a UI until we know what we look at.
 
@@ -27,8 +28,8 @@ Errors inside the generation flow become structured internally:
 
 ```ts
 interface TraceError {
-  code: 'LUA_ERROR' | 'LUA_TIMEOUT' | 'DELEGATE_ERROR' | 'NO_BACKEND'
-      | 'DEPTH_CAP' | 'ABORTED' | 'HTTP_ERROR' | 'UNKNOWN';
+  code:
+    'LUA_ERROR' | 'LUA_TIMEOUT' | 'DELEGATE_ERROR' | 'NO_BACKEND' | 'DEPTH_CAP' | 'ABORTED' | 'HTTP_ERROR' | 'UNKNOWN';
   /** The layer that produced it: 'lua-backend(card:Goldie)',
       'custom-backend(research)', 'openai(gpt-4o)', 'run_agent', … */
   layer: string;
@@ -37,7 +38,7 @@ interface TraceError {
 }
 ```
 
-Each boundary **wraps, never flattens**: `LuaBackendAdapter` catches a script error → `{ code: 'LUA_ERROR', layer: <adapter id>, message, cause }`; a delegate call failure → `DELEGATE_ERROR` with the inner error as `cause`; the sub-agent's failed run → `run_agent` receives the chain intact. `GenerationResult.error` stays a string (adapter contract unchanged) — the chain is *rendered* at the outermost surface:
+Each boundary **wraps, never flattens**: `LuaBackendAdapter` catches a script error → `{ code: 'LUA_ERROR', layer: <adapter id>, message, cause }`; a delegate call failure → `DELEGATE_ERROR` with the inner error as `cause`; the sub-agent's failed run → `run_agent` receives the chain intact. `GenerationResult.error` stays a string (adapter contract unchanged) — the chain is _rendered_ at the outermost surface:
 
 ```
 run_agent → custom-backend(research) → delegate(openai/gpt-4o): LUA_ERROR: [string "lib/roll.lua"]:14: attempt to index nil

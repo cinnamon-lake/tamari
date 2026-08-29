@@ -28,19 +28,14 @@
  */
 import { test, expect, type Page } from '../fixtures/base.js';
 import { deflateSync } from 'node:zlib';
-import { login } from '../helpers/auth.js';
+import { login, authHeaders } from '../helpers/auth.js';
 import { App } from '../helpers/app.js';
+import { uniqueName } from '../helpers/names.js';
 
 /** The e2e webServer pins TAMARI_SECRET to this value (playwright.config.ts). */
-const AUTH = { Authorization: 'Bearer e2e-test-secret' };
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
 
 /** Reopen the character editor from the sidebar row (createCharacter closes it). */
 async function openEditor(page: Page, app: App, name: string) {
-  await app.revealHoverButtons();
   await page.locator('input[placeholder="Search characters..."]').fill(name);
   const row = app.characterRow(name);
   await row.waitFor({ state: 'visible' });
@@ -205,8 +200,10 @@ test.describe('Character card formats (avatar crop, greetings, backend, risu mod
     });
     await expect(cropModal).toBeVisible();
     await expect(cropModal.locator('.crop-modal-title')).toHaveText('Crop Avatar');
-    // Wait for cropperjs to finish initializing before applying.
-    await expect(cropModal.locator('.cropper-crop-box')).toBeVisible();
+    // Wait for cropperjs v2 to finish initializing before applying
+    // (the v1 .cropper-crop-box class is gone; the template renders a
+    // <cropper-selection> custom element instead).
+    await expect(cropModal.locator('cropper-selection')).toBeVisible();
     await cropModal.locator('button.primary:has-text("Apply")').click();
     await expect(cropModal).not.toBeVisible();
     // A failed upload would surface the "avatar upload failed" alert popup.
@@ -236,13 +233,11 @@ test.describe('Character card formats (avatar crop, greetings, backend, risu mod
       mimeType: 'image/png',
       buffer: buildSolidPng(),
     });
-    await expect(cropModal.locator('.cropper-crop-box')).toBeVisible();
+    await expect(cropModal.locator('cropper-selection')).toBeVisible();
     await cropModal.locator('button.primary:has-text("Apply")').click();
     await expect(cropModal).not.toBeVisible();
     await expect(page.locator('.popup-modal')).toHaveCount(0);
-    await expect
-      .poll(async () => editorAvatar.getAttribute('src'), { timeout: 10000 })
-      .not.toBe(firstSrc);
+    await expect.poll(async () => editorAvatar.getAttribute('src'), { timeout: 10000 }).not.toBe(firstSrc);
     const secondSrc = await editorAvatar.getAttribute('src');
     expect(secondSrc).toContain('/files/avatars/');
 
@@ -384,33 +379,33 @@ test.describe('Character card formats (avatar crop, greetings, backend, risu mod
 
     // Delete: the viewer has no delete UI (read-only porting reference) — the
     // REST DELETE endpoint is the only surface. Confirm via its response.
-    const listRes = await request.get(`/api/characters/${charId}/risu-modules`, { headers: AUTH });
+    const listRes = await request.get(`/api/characters/${charId}/risu-modules`, { headers: authHeaders() });
     expect(listRes.ok()).toBe(true);
     const listBody = (await listRes.json()) as { total: number; modules: Array<{ id: string }> };
     expect(listBody.total).toBe(1);
     const delRes = await request.delete(`/api/characters/${charId}/risu-module/${listBody.modules[0]!.id}`, {
-      headers: AUTH,
+      headers: authHeaders(),
     });
     expect(delRes.ok()).toBe(true);
     expect(((await delRes.json()) as { success: boolean }).success).toBe(true);
 
     // Gone server-side…
-    const afterRes = await request.get(`/api/characters/${charId}/risu-modules`, { headers: AUTH });
+    const afterRes = await request.get(`/api/characters/${charId}/risu-modules`, { headers: authHeaders() });
     expect(((await afterRes.json()) as { total: number }).total).toBe(0);
 
     // …and gone from the viewer after remount (it re-fetches on mount; wait for
     // that fetch before asserting the toggle is absent).
     await closeEditor(editor);
     const reopened = await openEditor(page, app, name);
-    const listFetch = reopened.page().waitForResponse(
-      (r) => r.url().includes(`/api/characters/${charId}/risu-modules`) && r.request().method() === 'GET',
-      { timeout: 10000 },
-    );
+    const listFetch = reopened
+      .page()
+      .waitForResponse(
+        (r) => r.url().includes(`/api/characters/${charId}/risu-modules`) && r.request().method() === 'GET',
+        { timeout: 10000 },
+      );
     await reopened.locator('#editor-tab-logic').click();
     await listFetch;
-    await expect(
-      reopened.locator('.risu-module-viewer button', { hasText: 'RisuAI modules' }),
-    ).toHaveCount(0);
+    await expect(reopened.locator('.risu-module-viewer button', { hasText: 'RisuAI modules' })).toHaveCount(0);
     await closeEditor(reopened);
   });
 
@@ -422,14 +417,14 @@ test.describe('Character card formats (avatar crop, greetings, backend, risu mod
     expect(charId).toBeTruthy();
 
     // Unknown character → 404 'Character not found'.
-    const unknownChar = await request.get('/api/characters/no-such-character/risu-modules', { headers: AUTH });
+    const unknownChar = await request.get('/api/characters/no-such-character/risu-modules', { headers: authHeaders() });
     expect(unknownChar.status()).toBe(404);
     expect(((await unknownChar.json()) as { error: string }).error).toBe('Character not found');
 
     // Attach a valid module over REST to exercise the section validation.
     const { module, payloads } = testModule(`REST Module ${Date.now()}`);
     const attach = await request.post(`/api/characters/${charId}/risu-module`, {
-      headers: AUTH,
+      headers: authHeaders(),
       multipart: {
         file: { name: 'module.risum', mimeType: 'application/octet-stream', buffer: buildRisum(module, payloads) },
       },
@@ -441,10 +436,9 @@ test.describe('Character card formats (avatar crop, greetings, backend, risu mod
     const moduleId = attachBody.module.id;
 
     // Unknown section param → 400 with the exact message.
-    const badSection = await request.get(
-      `/api/characters/${charId}/risu-modules/${moduleId}?section=bogus`,
-      { headers: AUTH },
-    );
+    const badSection = await request.get(`/api/characters/${charId}/risu-modules/${moduleId}?section=bogus`, {
+      headers: authHeaders(),
+    });
     expect(badSection.status()).toBe(400);
     expect(((await badSection.json()) as { error: string }).error).toBe(
       'Unknown section "bogus" (expected one of info, triggers, trigger, regex, lorebook, assets)',
@@ -452,7 +446,7 @@ test.describe('Character card formats (avatar crop, greetings, backend, risu mod
 
     // section=trigger without an index → 400.
     const noIndex = await request.get(`/api/characters/${charId}/risu-modules/${moduleId}?section=trigger`, {
-      headers: AUTH,
+      headers: authHeaders(),
     });
     expect(noIndex.status()).toBe(400);
     expect(((await noIndex.json()) as { error: string }).error).toBe(
@@ -461,14 +455,14 @@ test.describe('Character card formats (avatar crop, greetings, backend, risu mod
 
     // Unknown module id → 404 'Module not found'.
     const unknownModule = await request.get(`/api/characters/${charId}/risu-modules/no-such-module`, {
-      headers: AUTH,
+      headers: authHeaders(),
     });
     expect(unknownModule.status()).toBe(404);
     expect(((await unknownModule.json()) as { error: string }).error).toBe('Module not found');
 
     // Non-risum upload → 400 from the container parser (bad magic byte 'x'=120).
     const notRisum = await request.post(`/api/characters/${charId}/risu-module`, {
-      headers: AUTH,
+      headers: authHeaders(),
       multipart: {
         file: {
           name: 'notes.txt',
@@ -484,7 +478,7 @@ test.describe('Character card formats (avatar crop, greetings, backend, risu mod
 
     // Attach without a file field → 400 'No file uploaded'.
     const noFile = await request.post(`/api/characters/${charId}/risu-module`, {
-      headers: AUTH,
+      headers: authHeaders(),
       multipart: { note: 'no file field here' },
     });
     expect(noFile.status()).toBe(400);

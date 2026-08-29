@@ -15,15 +15,15 @@ describe('validateVfsPath', () => {
   });
 
   it.each([
-    '/abs.lua',       // leading slash
-    '../x.lua',       // traversal
-    'a/../b.lua',     // inner traversal
-    'a//b.lua',       // empty segment
-    'a/b/',           // trailing slash
-    'bad name.lua',   // spaces
-    'bad$name.lua',   // special chars
-    '',               // empty
-    '.hidden/x.lua',  // dot segment
+    '/abs.lua', // leading slash
+    '../x.lua', // traversal
+    'a/../b.lua', // inner traversal
+    'a//b.lua', // empty segment
+    'a/b/', // trailing slash
+    'bad name.lua', // spaces
+    'bad$name.lua', // special chars
+    '', // empty
+    '.hidden/x.lua', // dot segment
   ])('rejects %s', (input) => {
     expect(validateVfsPath(input)).toBeNull();
   });
@@ -52,10 +52,9 @@ describe('VFS require', () => {
   });
 
   it('appends .lua and strips leading ./ when resolving', async () => {
-    const { result } = await runWithVfs(
-      `return require('./utils') == require('utils.lua')`,
-      { 'utils.lua': 'return {}' },
-    );
+    const { result } = await runWithVfs(`return require('./utils') == require('utils.lua')`, {
+      'utils.lua': 'return {}',
+    });
     expect(result).toBe(true);
   });
 
@@ -64,8 +63,10 @@ describe('VFS require', () => {
       `require('counter')
        require('counter')
        return __count`,
-      { 'counter.lua': `__count = (__count or 0) + 1
-return {}` },
+      {
+        'counter.lua': `__count = (__count or 0) + 1
+return {}`,
+      },
     );
     expect(error).toBeUndefined();
     expect(result).toBe(1);
@@ -86,13 +87,10 @@ return { value = a.value + 1 }`,
   });
 
   it('raises on circular requires', async () => {
-    const { error } = await runWithVfs(
-      `return require('a')`,
-      {
-        'a.lua': `return require('b')`,
-        'b.lua': `return require('a')`,
-      },
-    );
+    const { error } = await runWithVfs(`return require('a')`, {
+      'a.lua': `return require('b')`,
+      'b.lua': `return require('a')`,
+    });
     expect(error).toContain('circular require');
   });
 
@@ -102,18 +100,12 @@ return { value = a.value + 1 }`,
   });
 
   it('raises on invalid module paths', async () => {
-    const { error } = await runWithVfs(
-      `return require('../escape')`,
-      { 'escape.lua': 'return 1' },
-    );
+    const { error } = await runWithVfs(`return require('../escape')`, { 'escape.lua': 'return 1' });
     expect(error).toContain('invalid module path');
   });
 
   it('cannot reach sources outside the VFS map', async () => {
-    const { error } = await runWithVfs(
-      `return require('/etc/passwd')`,
-      { 'etc/passwd.lua': 'return "oops"' },
-    );
+    const { error } = await runWithVfs(`return require('/etc/passwd')`, { 'etc/passwd.lua': 'return "oops"' });
     expect(error).toContain('invalid module path');
   });
 

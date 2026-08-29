@@ -66,7 +66,10 @@ function provider(call: RouteCall, tool: string, args: Record<string, unknown>):
   return callProvider(call.providers.characterWorkbench, tool, args, call.context);
 }
 
-async function getCharacter(call: RouteCall, id: string): Promise<{ ok: true; character: Record<string, unknown> } | { ok: false; error: string }> {
+async function getCharacter(
+  call: RouteCall,
+  id: string,
+): Promise<{ ok: true; character: Record<string, unknown> } | { ok: false; error: string }> {
   const res = await provider(call, 'character_get', { characterId: id });
   if (!res.ok) return res;
   if (!isRecord(res.value)) return { ok: false, error: err('unexpected character_get result') };
@@ -158,7 +161,8 @@ async function lsBackendLogicDir(call: RouteCall, id: string): Promise<ListEntry
   const res = await provider(call, 'backend_file_list', { characterId: id });
   // A failing provider call degrades to "no modules" rather than failing the
   // whole listing (same rule as the card dir).
-  const modules = res.ok && isRecord(res.value) ? asArray(res.value['files']).filter((f): f is string => typeof f === 'string') : [];
+  const modules =
+    res.ok && isRecord(res.value) ? asArray(res.value['files']).filter((f): f is string => typeof f === 'string') : [];
   return [{ name: 'main.lua', dir: false }, ...modules.map((f) => ({ name: f, dir: false }))];
 }
 
@@ -171,7 +175,11 @@ async function lsSubCollection(call: RouteCall, id: string, sub: string): Promis
       return entries.filter(isRecord).map((e) => {
         const comment = asString(e['comment']);
         const keys = asArray(e['keys']).filter((k): k is string => typeof k === 'string');
-        return { name: `${idOf(e)}.json`, dir: false, annotation: comment !== undefined && comment !== '' ? comment : keys.join(', ') || undefined };
+        return {
+          name: `${idOf(e)}.json`,
+          dir: false,
+          annotation: comment !== undefined && comment !== '' ? comment : keys.join(', ') || undefined,
+        };
       });
     }
     case 'greetings': {
@@ -184,19 +192,25 @@ async function lsSubCollection(call: RouteCall, id: string, sub: string): Promis
     case 'regex': {
       const res = await provider(call, 'regex_list', { characterId: id });
       if (!res.ok) return { error: res.error };
-      return asArray(res.value).filter(isRecord).map((r) => ({ name: `${idOf(r)}.json`, dir: false, annotation: asString(r['name']) }));
+      return asArray(res.value)
+        .filter(isRecord)
+        .map((r) => ({ name: `${idOf(r)}.json`, dir: false, annotation: asString(r['name']) }));
     }
     case 'assets': {
       const res = await provider(call, 'character_asset_list', { characterId: id });
       if (!res.ok) return { error: res.error };
       const assets = isRecord(res.value) ? asArray(res.value['assets']) : [];
-      return assets.filter(isRecord).map((a) => ({ name: `${idOf(a)}.json`, dir: false, annotation: asString(a['name']) }));
+      return assets
+        .filter(isRecord)
+        .map((a) => ({ name: `${idOf(a)}.json`, dir: false, annotation: asString(a['name']) }));
     }
     case 'modules': {
       const res = await provider(call, 'risu_module_list', { characterId: id });
       if (!res.ok) return { error: res.error };
       const modules = isRecord(res.value) ? asArray(res.value['modules']) : [];
-      return modules.filter(isRecord).map((m) => ({ name: `${idOf(m)}.json`, dir: false, annotation: asString(m['name']) }));
+      return modules
+        .filter(isRecord)
+        .map((m) => ({ name: `${idOf(m)}.json`, dir: false, annotation: asString(m['name']) }));
     }
     default:
       return { error: err(`no such file: ${call.path}`) };
@@ -291,7 +305,12 @@ async function readBackendFile(call: RouteCall, id: string, path: string): Promi
   return luaSource;
 }
 
-async function readLorebookEntry(call: RouteCall, id: string, entryId: string, rest: string[]): Promise<string | RouteError> {
+async function readLorebookEntry(
+  call: RouteCall,
+  id: string,
+  entryId: string,
+  rest: string[],
+): Promise<string | RouteError> {
   const res = await provider(call, 'lorebook_get', { characterId: id });
   if (!res.ok) return { error: res.error };
   const entries = isRecord(res.value) ? asArray(res.value['entries']) : [];
@@ -315,10 +334,17 @@ async function readGreeting(call: RouteCall, id: string, seg: string, rest: stri
   return text;
 }
 
-async function readRegexRule(call: RouteCall, id: string, ruleId: string, rest: string[]): Promise<string | RouteError> {
+async function readRegexRule(
+  call: RouteCall,
+  id: string,
+  ruleId: string,
+  rest: string[],
+): Promise<string | RouteError> {
   const res = await provider(call, 'regex_list', { characterId: id });
   if (!res.ok) return { error: res.error };
-  const rule = asArray(res.value).filter(isRecord).find((r) => r['id'] === ruleId);
+  const rule = asArray(res.value)
+    .filter(isRecord)
+    .find((r) => r['id'] === ruleId);
   if (rule === undefined) return { error: err(`no such file: ${call.path}`) };
   if (rest.length === 0) return pretty(rule);
   if (rest.length > 1) return { error: err(`no such file: ${call.path}`) };
@@ -385,7 +411,9 @@ async function write(call: RouteCall, content: string): Promise<string> {
       if (key in body.value) patch[key] = body.value[key];
     }
     if (Object.keys(patch).length === 0) {
-      return err(`meta.json writable fields: name, tags, alternateGreetings (avatarUrl/thumbnailUrl/worldInfoId are read-only)`);
+      return err(
+        `meta.json writable fields: name, tags, alternateGreetings (avatarUrl/thumbnailUrl/worldInfoId are read-only)`,
+      );
     }
     const res = await provider(call, 'character_update', { characterId: id, patch });
     if (!res.ok) return res.error;
@@ -407,7 +435,11 @@ async function write(call: RouteCall, content: string): Promise<string> {
     }
     // Module paths may nest (lib/deep/util.lua) — normalizePath already
     // rejected `.`/`..` segments; backend_file_set enforces the VFS rules.
-    const res = await provider(call, 'backend_file_set', { characterId: id, path: [file, ...rest].join('/'), luaSource: content });
+    const res = await provider(call, 'backend_file_set', {
+      characterId: id,
+      path: [file, ...rest].join('/'),
+      luaSource: content,
+    });
     if (!res.ok) return res.error;
     return resultToString(res);
   }
@@ -426,7 +458,13 @@ async function write(call: RouteCall, content: string): Promise<string> {
 }
 
 /** Write one meta.json field: meta.json/<field> → character_update with a single-key patch. */
-async function writeMetaField(call: RouteCall, id: string, file: string, rest: string[], content: string): Promise<string> {
+async function writeMetaField(
+  call: RouteCall,
+  id: string,
+  file: string,
+  rest: string[],
+  content: string,
+): Promise<string> {
   if (rest.length > 0) return err(`no such file: ${call.path}`);
   const spec = fieldSpec(META_FIELDS, file);
   if (spec === undefined) return err(`no such file: ${call.path}`);
@@ -437,7 +475,14 @@ async function writeMetaField(call: RouteCall, id: string, file: string, rest: s
   return resultToString(res);
 }
 
-async function writeInSubCollection(call: RouteCall, id: string, sub: string, file: string, rest: string[], content: string): Promise<string> {
+async function writeInSubCollection(
+  call: RouteCall,
+  id: string,
+  sub: string,
+  file: string,
+  rest: string[],
+  content: string,
+): Promise<string> {
   // Lorebook entries and regex rules expand into per-field files: <sub>/<entityId>.json/<field>.
   const specs = FIELD_FILE_SPECS[sub];
   if (specs !== undefined && rest.length > 0) {
@@ -467,7 +512,11 @@ async function writeInSubCollection(call: RouteCall, id: string, sub: string, fi
       }
       const body = parseJsonObjectBody(content);
       if (!body.ok) return body.error;
-      const res = await provider(call, 'lorebook_entry_update', { characterId: id, entryId: stripJsonExt(file), patch: body.value });
+      const res = await provider(call, 'lorebook_entry_update', {
+        characterId: id,
+        entryId: stripJsonExt(file),
+        patch: body.value,
+      });
       if (!res.ok) return res.error;
       return resultToString(res);
     }
@@ -479,7 +528,10 @@ async function writeInSubCollection(call: RouteCall, id: string, sub: string, fi
       if (!res.ok) return res.error;
       const current = asArray(res.character['alternateGreetings']);
       if (isNewSegment(file)) {
-        const res2 = await provider(call, 'character_update', { characterId: id, patch: { alternateGreetings: [...current, content] } });
+        const res2 = await provider(call, 'character_update', {
+          characterId: id,
+          patch: { alternateGreetings: [...current, content] },
+        });
         if (!res2.ok) return res2.error;
         return createdResult(res2, `/characters/${id}/greetings/${current.length}`);
       }
@@ -501,7 +553,11 @@ async function writeInSubCollection(call: RouteCall, id: string, sub: string, fi
       }
       const body = parseJsonObjectBody(content);
       if (!body.ok) return body.error;
-      const res = await provider(call, 'regex_update', { characterId: id, ruleId: stripJsonExt(file), patch: body.value });
+      const res = await provider(call, 'regex_update', {
+        characterId: id,
+        ruleId: stripJsonExt(file),
+        patch: body.value,
+      });
       if (!res.ok) return res.error;
       return resultToString(res);
     }

@@ -25,7 +25,10 @@ describe('samplerProfiles ↔ providerParams contract', () => {
     }
     expect(wireNames.size).toBeGreaterThan(0);
     for (const wireName of wireNames) {
-      expect(isDeclaredProviderParamKey(wireName), `${wireName} is not declared in packages/types/src/providerParams.ts`).toBe(true);
+      expect(
+        isDeclaredProviderParamKey(wireName),
+        `${wireName} is not declared in packages/types/src/providerParams.ts`,
+      ).toBe(true);
     }
   });
 });

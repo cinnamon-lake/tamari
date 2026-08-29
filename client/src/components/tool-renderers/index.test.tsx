@@ -53,10 +53,7 @@ describe('tool-renderers', () => {
 
     it('renders provided dice result', () => {
       render(() => (
-        <DiceResult
-          content="Rolled 15"
-          extra={{ diceResult: 15, diceSides: 20, diceCount: 1, diceRolls: [15] }}
-        />
+        <DiceResult content="Rolled 15" extra={{ diceResult: 15, diceSides: 20, diceCount: 1, diceRolls: [15] }} />
       ));
       expect(screen.getByText('15')).toBeInTheDocument();
       expect(screen.getByText('(1d20)')).toBeInTheDocument();
@@ -64,10 +61,7 @@ describe('tool-renderers', () => {
 
     it('renders multiple rolls', () => {
       render(() => (
-        <DiceResult
-          content="Rolled"
-          extra={{ diceResult: 12, diceSides: 6, diceCount: 3, diceRolls: [4, 3, 5] }}
-        />
+        <DiceResult content="Rolled" extra={{ diceResult: 12, diceSides: 6, diceCount: 3, diceRolls: [4, 3, 5] }} />
       ));
       expect(screen.getByText('12')).toBeInTheDocument();
       expect(screen.getByText('4, 3, 5')).toBeInTheDocument();
@@ -75,10 +69,7 @@ describe('tool-renderers', () => {
 
     it('hides rolls list for single roll', () => {
       render(() => (
-        <DiceResult
-          content="Rolled"
-          extra={{ diceResult: 5, diceSides: 6, diceCount: 1, diceRolls: [5] }}
-        />
+        <DiceResult content="Rolled" extra={{ diceResult: 5, diceSides: 6, diceCount: 1, diceRolls: [5] }} />
       ));
       expect(screen.queryByText('5, 5')).not.toBeInTheDocument();
     });

@@ -18,12 +18,24 @@ import type { ServerMessage, ClientMessage, FullState } from '@tamari/types';
 import { ServerMessageSchema } from '@tamari/types';
 import { getLogger } from '../lib/logger.js';
 
-const log = getLogger('bus');
+const log = getLogger('bus/EventBus');
 
 const SENSITIVE_LOG_KEYS = new Set(
-  ['apikey', 'api_key', 'key', 'token', 'secret', 'password', 'auth', 'authorization', 'value', 'access_token', 'refresh_token', 'proxy_password', 'proxypassword'].map((k) =>
-    k.toLowerCase().replace(/[-_.]/g, ''),
-  ),
+  [
+    'apikey',
+    'api_key',
+    'key',
+    'token',
+    'secret',
+    'password',
+    'auth',
+    'authorization',
+    'value',
+    'access_token',
+    'refresh_token',
+    'proxy_password',
+    'proxypassword',
+  ].map((k) => k.toLowerCase().replace(/[-_.]/g, '')),
 );
 
 function isSensitiveLogKey(key: string): boolean {
@@ -108,10 +120,7 @@ export class EventBus {
     try {
       payload = JSON.stringify(enriched);
     } catch (err) {
-      log.error(
-        { type: enriched.type, err },
-        'broadcast: JSON.stringify threw — message NOT sent to any client',
-      );
+      log.error({ type: enriched.type, err }, 'broadcast: JSON.stringify threw — message NOT sent to any client');
       return;
     }
     let count = 0;
@@ -125,10 +134,7 @@ export class EventBus {
           client.ws.send(payload);
           count++;
         } catch (err) {
-          log.error(
-            { clientId: client.id, type: enriched.type, err },
-            'broadcast: ws.send threw for one client',
-          );
+          log.error({ clientId: client.id, type: enriched.type, err }, 'broadcast: ws.send threw for one client');
         }
       }
     }
@@ -147,25 +153,16 @@ export class EventBus {
       try {
         payload = JSON.stringify(msg);
       } catch (err) {
-        log.error(
-          { clientId, type: msg.type, err },
-          'sendTo: JSON.stringify threw — message NOT sent',
-        );
+        log.error({ clientId, type: msg.type, err }, 'sendTo: JSON.stringify threw — message NOT sent');
         return;
       }
       try {
         client.ws.send(payload);
       } catch (err) {
-        log.error(
-          { clientId, type: msg.type, err },
-          'sendTo: ws.send threw',
-        );
+        log.error({ clientId, type: msg.type, err }, 'sendTo: ws.send threw');
         return;
       }
-      log.debug(
-        { client: clientId, type: msg.type },
-        `→ ${clientId} ${msg.type}`,
-      );
+      log.debug({ client: clientId, type: msg.type }, `→ ${clientId} ${msg.type}`);
     }
   }
 

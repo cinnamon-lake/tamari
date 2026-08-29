@@ -15,6 +15,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { getLogger } from '../lib/logger.js';
+import { apiError } from '../middleware/errorHandler.js';
 import type { AuthService } from '../services/AuthService.js';
 import type { Request } from 'express';
 import { extractBearerToken } from '../middleware/auth.js';
@@ -31,48 +32,33 @@ export function createAuthRouter(auth: AuthService): Router {
   // Mounted before the global requireAuth middleware on purpose: this IS the
   // login endpoint. All other /api routes stay behind the global guard.
   router.post('/session', async (req, res) => {
-    try {
-      const parsed = SessionRequestSchema.safeParse(req.body);
-      if (!parsed.success) {
-        res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
-        return;
-      }
-      // Failed exchanges feed the same brute-force bucket as direct bearer use.
-      if (!(await auth.validate(peerOf(req), parsed.data.password))) {
-        res.status(401).json({ error: 'Invalid password' });
-        return;
-      }
-      const issued = await auth.issueSession(parsed.data.password);
-      if (!issued) {
-        res.status(500).json({ error: 'Session store unavailable' });
-        return;
-      }
-      log.info('auth/session: issued');
-      res.json({ token: issued.token, expiresAt: issued.expiresAt });
-    } catch (err) {
-      log.error({ err }, 'auth/session: issue error');
-      res.status(500).json({ error: 'Session creation failed' });
+    const parsed = SessionRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw apiError('INVALID_REQUEST', 'Invalid request body', 400, { details: parsed.error.flatten() });
     }
+    // Failed exchanges feed the same brute-force bucket as direct bearer use.
+    if (!(await auth.validate(peerOf(req), parsed.data.password))) {
+      throw apiError('INVALID_PASSWORD', 'Invalid password', 401);
+    }
+    const issued = await auth.issueSession(parsed.data.password);
+    if (!issued) {
+      throw apiError('SESSION_STORE_UNAVAILABLE', 'Session store unavailable', 500);
+    }
+    log.info('auth/session: issued');
+    res.json({ token: issued.token, expiresAt: issued.expiresAt });
   });
 
   router.delete('/session', async (req, res) => {
-    try {
-      const kind = await auth.classify(peerOf(req), extractBearerToken(req));
-      if (!kind) {
-        res.status(401).json({ error: 'Unauthorized' });
-        return;
-      }
-      const token = extractBearerToken(req);
-      if (kind === 'master') {
-        res.status(400).json({ error: 'Master credentials are not revocable; rotate TAMARI_SECRET instead' });
-        return;
-      }
-      await auth.revokeSession(token);
-      res.json({ ok: true });
-    } catch (err) {
-      log.error({ err }, 'auth/session: revoke error');
-      res.status(500).json({ error: 'Session revocation failed' });
+    const kind = await auth.classify(peerOf(req), extractBearerToken(req));
+    if (!kind) {
+      throw apiError('UNAUTHORIZED', 'Unauthorized', 401);
     }
+    const token = extractBearerToken(req);
+    if (kind === 'master') {
+      throw apiError('MASTER_NOT_REVOCABLE', 'Master credentials are not revocable; rotate TAMARI_SECRET instead', 400);
+    }
+    await auth.revokeSession(token);
+    res.json({ ok: true });
   });
 
   return router;

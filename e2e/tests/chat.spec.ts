@@ -1,12 +1,8 @@
 import { test, expect } from '../fixtures/base.js';
+import { smokeTest } from '../fixtures/smoke.js';
 import { login } from '../helpers/auth.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 test.describe('Chat Flow', () => {
   test.beforeEach(async ({ page }) => {
@@ -79,38 +75,38 @@ test.describe('Chat Flow', () => {
     await expect(sendBtn).toBeVisible();
     await expect(sendBtn).toBeEnabled();
   });
+});
 
-  test('character with no greeting gets an empty timeline and a working composer', async ({ page }) => {
+// This test generates, so it runs on smokeTest (the fixture supplies login,
+// the mock backend, and the App); the two tests above are login-only and stay
+// on the base test with the login-only beforeEach. Kept in its own describe so
+// the login-only hook above doesn't apply to it.
+smokeTest.describe('Chat Flow (mock backend)', () => {
+  smokeTest('character with no greeting gets an empty timeline and a working composer', async ({ page, app }) => {
     const charName = uniqueName('No Greeting Character');
-    await configureMockBackend(page);
-    const app = new App(page);
 
-    try {
-      // Create a character with a description but NO First Message.
-      await page.locator('[title="Create character"]').click();
-      const editor = page.locator('.character-editor-modal');
-      await expect(editor).toBeVisible();
-      await editor.locator('.text-input').first().fill(charName);
-      await editor.locator('.textarea-input').nth(0).fill('A character with no greeting.');
-      await expect(editor.locator('.save-indicator')).toContainText('Saved', { timeout: 3000 });
-      await editor.locator('[title="Close"]').click();
-      await expect(editor).not.toBeVisible();
+    // Create a character with a description but NO First Message.
+    await page.locator('[title="Create character"]').click();
+    const editor = page.locator('.character-editor-modal');
+    await expect(editor).toBeVisible();
+    await editor.locator('.text-input').first().fill(charName);
+    await editor.locator('.textarea-input').nth(0).fill('A character with no greeting.');
+    await expect(editor.locator('.save-indicator')).toContainText('Saved', { timeout: 3000 });
+    await editor.locator('[title="Close"]').click();
+    await expect(editor).not.toBeVisible();
 
-      // Start a chat: the timeline is empty (no virtual greeting bubble).
-      const row = page.locator('.character-list li').filter({
-        has: page.locator('.character-name', { hasText: charName }),
-      });
-      await row.locator('.character-name').click();
-      await row.locator('[title="New chat"]').click();
-      await expect(page.locator('.chat-view')).toBeVisible();
-      await expect(page.locator('.message-bubble')).toHaveCount(0);
+    // Start a chat: the timeline is empty (no virtual greeting bubble).
+    const row = page.locator('.character-list li').filter({
+      has: page.locator('.character-name', { hasText: charName }),
+    });
+    await row.locator('.character-name').click();
+    await row.locator('[title="New chat"]').click();
+    await expect(page.locator('.chat-view')).toBeVisible();
+    await expect(page.locator('.message-bubble')).toHaveCount(0);
 
-      // Regression: Send used to dead-end here (materialize promise never
-      // resolved). Now the message posts and the mock LLM replies.
-      await app.sendUserMessage('seq:Hello there.', { expectReply: true });
-      await app.waitForAssistantText(/Turn \d+/);
-    } finally {
-      await resetBackendConfig(page);
-    }
+    // Regression: Send used to dead-end here (materialize promise never
+    // resolved). Now the message posts and the mock LLM replies.
+    await app.sendUserMessage('seq:Hello there.', { expectReply: true });
+    await app.waitForAssistantText(/Turn \d+/);
   });
 });

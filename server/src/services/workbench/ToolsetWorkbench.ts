@@ -19,6 +19,9 @@ import type { Toolset } from '@tamari/types';
 import type { ToolContext, ToolExecuteResult, ToolTemplate, ToolTemplateDefinition } from '../ToolTemplate.js';
 import type { EventBus } from '../../bus/EventBus.js';
 import type { IToolsetRepository } from '../../repos/ToolsetRepository.js';
+import { getLogger } from '../../lib/logger.js';
+
+const log = getLogger('services/workbench/ToolsetWorkbench');
 
 export interface ToolsetWorkbenchDeps {
   toolsets: IToolsetRepository;
@@ -45,8 +48,10 @@ const ToolsetCreateArgs = z.object({
     .string()
     .describe('Template id: a builtin id (e.g. "workbench") or a Lua template id (a /luatools/<id>/ path).'),
   name: z.string().optional().describe('Toolset name. Defaults to the template name.'),
-  config: z.record(z.string(), z.unknown()).optional().describe('Config values matching the template\'s configSchema.'),
-  toolOverrides: ToolOverridesSchema.optional().describe('Per-tool name/description/parameter-description overrides, keyed by tool name.'),
+  config: z.record(z.string(), z.unknown()).optional().describe("Config values matching the template's configSchema."),
+  toolOverrides: ToolOverridesSchema.optional().describe(
+    'Per-tool name/description/parameter-description overrides, keyed by tool name.',
+  ),
   enabled: z.boolean().optional().describe('Enabled by default; tools go live on the NEXT message after enabling.'),
 });
 
@@ -61,7 +66,6 @@ const ToolsetUpdateArgs = z.object({
 });
 
 export class ToolsetWorkbench {
-
   constructor(private deps: ToolsetWorkbenchDeps) {}
 
   async execute(toolName: string, args: Record<string, unknown>, _context?: ToolContext): Promise<ToolExecuteResult> {
@@ -88,7 +92,8 @@ export class ToolsetWorkbench {
     try {
       const def = await template.getDefinition();
       return def.tools.map((t) => t.name);
-    } catch {
+    } catch (err) {
+      log.debug({ err, templateId }, 'Toolset template definition failed to load; reporting no tools');
       return [];
     }
   }
@@ -138,7 +143,7 @@ export class ToolsetWorkbench {
       templateId,
       name: parsed.data.name ?? template.name,
       config: config ?? {},
-      toolOverrides: (toolOverrides ?? {}),
+      toolOverrides: toolOverrides ?? {},
       enabled: enabled ?? true,
       agentVisible: false,
     });

@@ -3,6 +3,7 @@ import express from 'express';
 import request from 'supertest';
 import { TestHarness } from '../testing/TestHarness.js';
 import { createPersonasRouter } from './personas.js';
+import { errorHandler } from '../middleware/errorHandler.js';
 
 const minimalPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
@@ -17,6 +18,7 @@ function createApp(harness: TestHarness) {
     '/personas',
     createPersonasRouter(harness.deps.personas, harness.deps.storage, harness.bus, AVATAR_MAX_FILE_SIZE_BYTES),
   );
+  app.use(errorHandler);
   return app;
 }
 
@@ -60,10 +62,7 @@ describe('createPersonasRouter', () => {
   it('returns 404 for a missing persona', async () => {
     const broadcast = vi.spyOn(h.bus, 'broadcast');
 
-    await request(app)
-      .post('/personas/nonexistent/avatar')
-      .attach('avatar', minimalPng, 'avatar.png')
-      .expect(404);
+    await request(app).post('/personas/nonexistent/avatar').attach('avatar', minimalPng, 'avatar.png').expect(404);
 
     expect(broadcast).not.toHaveBeenCalled();
   });

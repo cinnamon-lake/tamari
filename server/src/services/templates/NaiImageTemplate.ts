@@ -13,7 +13,7 @@ import { applyRequestScript, RequestScriptError } from '../../backends/RequestSc
 import { getLogger } from '../../lib/logger.js';
 import { str } from '../../lib/coerce.js';
 
-const logger = getLogger('nai-image');
+const logger = getLogger('services/templates/NaiImageTemplate');
 
 /**
  * Arguments the model may pass to `generate_image`. Single source of truth:
@@ -72,7 +72,8 @@ export class NaiImageTemplate implements ToolTemplate {
           apiKey: {
             type: 'string',
             format: 'secret',
-            description: 'NovelAI API key (pst-... token from account settings), or a vault reference (secret:<key>). Required.',
+            description:
+              'NovelAI API key (pst-... token from account settings), or a vault reference (secret:<key>). Required.',
             default: '',
           },
           model: {
@@ -83,7 +84,8 @@ export class NaiImageTemplate implements ToolTemplate {
           },
           baseUrl: {
             type: 'string',
-            description: 'API base URL. Optional — override only for proxies; defaults to the official NovelAI image API.',
+            description:
+              'API base URL. Optional — override only for proxies; defaults to the official NovelAI image API.',
             default: 'https://image.novelai.net',
           },
           requestScript: {
@@ -240,7 +242,12 @@ export class NaiImageTemplate implements ToolTemplate {
 
     let attachment: Attachment;
     try {
-      attachment = await this.deps.attachments.create({ id: attachmentId, messageId: null, mimeType: 'image/png', filePath });
+      attachment = await this.deps.attachments.create({
+        id: attachmentId,
+        messageId: null,
+        mimeType: 'image/png',
+        filePath,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.warn({ err: msg }, 'NaiImageTemplate: failed to create attachment');
@@ -261,7 +268,12 @@ export class NaiImageTemplate implements ToolTemplate {
 
     return {
       content: inlineContent,
-      extra: { attachmentId: attachment.id, attachmentUrl: attachment.url, attachmentMimeType: attachment.mimeType, seed },
+      extra: {
+        attachmentId: attachment.id,
+        attachmentUrl: attachment.url,
+        attachmentMimeType: attachment.mimeType,
+        seed,
+      },
     };
   }
 

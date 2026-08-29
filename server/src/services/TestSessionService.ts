@@ -205,11 +205,14 @@ export class TestSessionService {
       const abs = path.resolve(this.deps.unpackedCards.rootDir, args.folderPath);
       characterId = unpackedCardId(path.basename(abs));
       if (!this.deps.unpackedCards.has(characterId)) {
-        throw new Error(`no active unpacked card at ${args.folderPath} (is unpackedCards.enabled on, and does the folder parse?)`);
+        throw new Error(
+          `no active unpacked card at ${args.folderPath} (is unpackedCards.enabled on, and does the folder parse?)`,
+        );
       }
     }
     const character = characterId !== undefined ? await this.deps.characters.getById(characterId) : undefined;
-    if (!character || characterId === undefined) throw new Error(`character not found: ${characterId ?? args.folderPath}`);
+    if (!character || characterId === undefined)
+      throw new Error(`character not found: ${characterId ?? args.folderPath}`);
 
     // Persona: explicit arg, else the first persona (chatHandlers.ts:115-119).
     let personaId = args.personaId ?? null;
@@ -370,7 +373,8 @@ export class TestSessionService {
   private requireSession(sessionId: string): TestSession {
     this.prune();
     const session = this.sessions.get(sessionId);
-    if (!session) throw new Error(`unknown session: ${sessionId} (sessions expire after ${SESSION_TTL_MS / 60000} min idle)`);
+    if (!session)
+      throw new Error(`unknown session: ${sessionId} (sessions expire after ${SESSION_TTL_MS / 60000} min idle)`);
     session.lastActiveAt = Date.now();
     // Refresh LRU order (Map preserves insertion order).
     this.sessions.delete(sessionId);

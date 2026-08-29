@@ -6,6 +6,7 @@
 import { Router, type RequestHandler } from 'express';
 import type express from 'express';
 import { basename, normalize } from 'node:path';
+import { apiError } from '../middleware/errorHandler.js';
 import type { FileStorage } from '../services/FileStorage.js';
 
 function serveFileRoute(storage: FileStorage, subDir: string) {
@@ -13,26 +14,18 @@ function serveFileRoute(storage: FileStorage, subDir: string) {
     const fileName = Array.isArray(req.params.file) ? req.params.file[0] : req.params.file;
     // Robust path traversal guard: reject parent-dir refs, absolute paths,
     // and any filename that is not a single basename.
-    if (
-      !fileName ||
-      fileName.includes('..') ||
-      basename(fileName) !== fileName ||
-      normalize(fileName) !== fileName
-    ) {
-      res.status(400).json({ error: 'Invalid file name' });
-      return;
+    if (!fileName || fileName.includes('..') || basename(fileName) !== fileName || normalize(fileName) !== fileName) {
+      throw apiError('INVALID_FILE_NAME', 'Invalid file name', 400);
     }
     const filePath = `files/${subDir}/${fileName}`;
     let exists: boolean;
     try {
       exists = storage.exists(filePath);
     } catch {
-      res.status(400).json({ error: 'Invalid file name' });
-      return;
+      throw apiError('INVALID_FILE_NAME', 'Invalid file name', 400);
     }
     if (!exists) {
-      res.status(404).json({ error: 'File not found' });
-      return;
+      throw apiError('NOT_FOUND', 'File not found', 404);
     }
     const ext = fileName.slice(fileName.lastIndexOf('.') + 1).toLowerCase();
     const mimeMap: Record<string, string> = {

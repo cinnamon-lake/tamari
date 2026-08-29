@@ -164,11 +164,11 @@ export class BackendConfigRepository implements IBackendConfigRepository {
     if (patch.instructTemplate !== undefined) add('instruct_template', patch.instructTemplate);
     if (patch.contextLength !== undefined) add('context_length', patch.contextLength);
     if (patch.promptHistoryLimit !== undefined) add('prompt_history_limit', patch.promptHistoryLimit);
-    if (patch.providerParams !== undefined) add('provider_params_json', JSON.stringify(sanitizeProviderParams(patch.providerParams)));
+    if (patch.providerParams !== undefined)
+      add('provider_params_json', JSON.stringify(sanitizeProviderParams(patch.providerParams)));
     if (patch.stopStrings !== undefined) add('stop_strings_json', JSON.stringify(patch.stopStrings));
     if (patch.openrouterProvider !== undefined) add('openrouter_provider', patch.openrouterProvider);
-    if (patch.logitBias !== undefined)
-      add('logit_bias_json', patch.logitBias ? JSON.stringify(patch.logitBias) : null);
+    if (patch.logitBias !== undefined) add('logit_bias_json', patch.logitBias ? JSON.stringify(patch.logitBias) : null);
     if (patch.supportsImages !== undefined) add('supports_images', patch.supportsImages ? 1 : 0);
     if (patch.supportsAudio !== undefined) add('supports_audio', patch.supportsAudio ? 1 : 0);
     if (patch.supportsVideo !== undefined) add('supports_video', patch.supportsVideo ? 1 : 0);

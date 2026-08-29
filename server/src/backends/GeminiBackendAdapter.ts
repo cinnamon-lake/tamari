@@ -30,9 +30,9 @@ import {
   type GeminiGenerateContentRequest,
   type GeminiGenerationConfig,
   type GeminiContent,
-
 } from './types.js';
-import { resolveLocalAttachmentUrl } from './resolveLocalAttachment.js';
+import { resolveLocalAttachmentUrl, parseDataUrl } from './resolveLocalAttachment.js';
+import { readSseEvents } from './sseReader.js';
 
 export interface GeminiAdapterConfig extends BaseAdapterConfig {
   baseUrl: string;
@@ -51,8 +51,6 @@ const FALLBACK_MODELS: ModelInfo[] = [
   { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', contextLength: 1_048_576 },
 ];
 
-
-
 export class GeminiBackendAdapter implements BackendAdapter {
   readonly id = 'gemini';
   readonly supportsStreaming = true;
@@ -70,81 +68,62 @@ export class GeminiBackendAdapter implements BackendAdapter {
     });
     if (!outcome.ok) return outcome.result;
 
-    const reader = outcome.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
     let completionTokens = 0;
     let finishReason: string | null = null;
     let promptTokens = 0;
     let outputTokens = 0;
     const toolCalls: ToolCall[] = [];
 
-    try {
-      while (true) {
-        if (signal.aborted) {
-          return {
-            finishReason: 'error',
-            usage: {
-              promptTokens: promptTokens || prompt.tokenUsage.prompt,
-              completionTokens: outputTokens || completionTokens,
-            },
-            error: 'Aborted',
-          };
-        }
+    for await (const item of readSseEvents(outcome.body, signal)) {
+      if (item.type === 'aborted') {
+        return {
+          finishReason: 'error',
+          usage: {
+            promptTokens: promptTokens || prompt.tokenUsage.prompt,
+            completionTokens: outputTokens || completionTokens,
+          },
+          error: 'Aborted',
+        };
+      }
+      if (item.type === 'done') continue;
 
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data:')) continue;
-          const data = trimmed.slice(5).trimStart();
-
-          try {
-            const raw: unknown = JSON.parse(data);
-              const parsed = GeminiStreamChunkSchema.safeParse(raw);
-              if (!parsed.success) continue;
-              const chunk: GeminiStreamChunk = parsed.data;
-              logDelta(this.id, chunk);
-            const candidate = chunk.candidates?.[0];
-            if (candidate?.content?.parts) {
-              for (const part of candidate.content.parts) {
-                if (part.text) {
-                  // Gemini 2.5+ thinking models may return thoughts with a flag
-                  if (part.thought === true) {
-                    yield { type: 'reasoning', token: part.text };
-                  } else {
-                    yield { type: 'text', token: part.text };
-                    completionTokens++;
-                  }
-                }
-                if (part.functionCall) {
-                  toolCalls.push({
-                    id: part.functionCall.name,
-                    name: part.functionCall.name,
-                    arguments: part.functionCall.args,
-                  });
-                }
+      try {
+        const raw: unknown = JSON.parse(item.data);
+        const parsed = GeminiStreamChunkSchema.safeParse(raw);
+        if (!parsed.success) continue;
+        const chunk: GeminiStreamChunk = parsed.data;
+        logDelta(this.id, chunk);
+        const candidate = chunk.candidates?.[0];
+        if (candidate?.content?.parts) {
+          for (const part of candidate.content.parts) {
+            if (part.text) {
+              // Gemini 2.5+ thinking models may return thoughts with a flag
+              if (part.thought === true) {
+                yield { type: 'reasoning', token: part.text };
+              } else {
+                yield { type: 'text', token: part.text };
+                completionTokens++;
               }
             }
-            if (candidate?.finishReason) {
-              finishReason = candidate.finishReason;
+            if (part.functionCall) {
+              toolCalls.push({
+                id: part.functionCall.name,
+                name: part.functionCall.name,
+                arguments: part.functionCall.args,
+              });
             }
-            if (chunk.usageMetadata) {
-              promptTokens = chunk.usageMetadata.promptTokenCount ?? promptTokens;
-              outputTokens = chunk.usageMetadata.candidatesTokenCount ?? outputTokens;
-            }
-          } catch (err) {
-            logger.debug({ err, line: line.trim() }, 'Malformed SSE line in Gemini stream');
           }
         }
+        if (candidate?.finishReason) {
+          finishReason = candidate.finishReason;
+        }
+        if (chunk.usageMetadata) {
+          promptTokens = chunk.usageMetadata.promptTokenCount ?? promptTokens;
+          outputTokens = chunk.usageMetadata.candidatesTokenCount ?? outputTokens;
+        }
+      } catch (err) {
+        logger.debug({ err, line: item.line }, 'Malformed SSE line in Gemini stream');
       }
-    } finally {
-      reader.releaseLock();
     }
 
     return {
@@ -321,7 +300,8 @@ export class GeminiBackendAdapter implements BackendAdapter {
 
       out.push({
         role: m.role === 'assistant' ? 'model' : 'user',
-        parts: typeof effectiveContent === 'string' ? [{ text: effectiveContent }] : this.convertParts(effectiveContent),
+        parts:
+          typeof effectiveContent === 'string' ? [{ text: effectiveContent }] : this.convertParts(effectiveContent),
       });
     }
 
@@ -340,7 +320,7 @@ export class GeminiBackendAdapter implements BackendAdapter {
           case 'video': {
             const resolved = resolveLocalAttachmentUrl(part.source, part.mimeType);
             if (resolved.startsWith('data:')) {
-              const parsed = this.parseDataUrl(resolved);
+              const parsed = parseDataUrl(resolved);
               if (parsed) {
                 return { inlineData: { mimeType: parsed.mediaType, data: parsed.data } };
               }
@@ -372,14 +352,6 @@ export class GeminiBackendAdapter implements BackendAdapter {
             return part;
         }
       });
-  }
-
-  private parseDataUrl(url: string): { mediaType: string; data: string } | null {
-    const match = /^data:([^;]+);base64,(.+)$/.exec(url);
-    const mediaType = match?.[1];
-    const data = match?.[2];
-    if (mediaType === undefined || data === undefined) return null;
-    return { mediaType, data };
   }
 
   private convertTools(tools: ToolDefinition[]): unknown[] {

@@ -4,18 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-tamari — a ground-up rewrite of the LLM frontend (branch `refactor-v2`, `package.json` version `2.0.0-alpha.0`). It is a TypeScript npm-workspaces monorepo where the **server is the single source of truth** (SQLite + WebSocket event bus) and the client is a thin SolidJS UI. The legacy SillyTavern codebase is not part of this repository or the tamari build.
+tamari — a ground-up rewrite of the LLM frontend (branch `main`, `package.json` version `2.0.0-alpha.0`). It is a TypeScript npm-workspaces monorepo where the **server is the single source of truth** (SQLite + WebSocket event bus) and the client is a thin SolidJS UI. The legacy SillyTavern codebase is not part of this repository or the tamari build.
 
 ## Workspace layout
 
-| Workspace | Package | Role |
-|---|---|---|
-| `packages/types` | `@tamari/types` | Shared Zod schemas, domain types, WS message types. **Consumed via `dist/` — must be built first.** |
-| `server` | `@tamari/server` | Express 5 + `ws`, SQLite (`@libsql/client`), prompt pipeline, backend adapters, Lua runtime. |
-| `client` | `@tamari/client` | SolidJS + Vite SPA. Thin renderer over server state. |
-| `e2e` | `@tamari/e2e` | Playwright browser tests + a mock LLM server. |
+| Workspace        | Package          | Role                                                                                                |
+| ---------------- | ---------------- | --------------------------------------------------------------------------------------------------- |
+| `packages/types` | `@tamari/types`  | Shared Zod schemas, domain types, WS message types. **Consumed via `dist/` — must be built first.** |
+| `server`         | `@tamari/server` | Express 5 + `ws`, SQLite (`@libsql/client`), prompt pipeline, backend adapters, Lua runtime.        |
+| `client`         | `@tamari/client` | SolidJS + Vite SPA. Thin renderer over server state.                                                |
+| `e2e`            | `@tamari/e2e`    | Playwright browser tests + a mock LLM server.                                                       |
 
-`@tamari/types` has a `prepare` lifecycle script, so it builds on `npm install`. When iterating on types while dev servers run, rebuild it (`npm run build --workspace=packages/types`) — the server/client import its compiled `dist/`.
+`@tamari/types` has a `prepare` lifecycle script, but `.npmrc` sets `ignore-scripts=true`, so it does **not** build on `npm install` — build it explicitly with `npm run build --workspace=packages/types`. When iterating on types while dev servers run, rebuild it the same way — the server/client import its compiled `dist/`.
 
 ## Commands
 
@@ -23,7 +23,8 @@ All commands run from repo root unless noted.
 
 ```bash
 # Install
-npm install                          # builds @tamari/types via prepare hook
+npm install                          # does NOT build @tamari/types (.npmrc ignore-scripts=true)
+npm run build --workspace=packages/types   # build types explicitly after install
 
 # Dev (runs server + client watchers together)
 npm run dev
@@ -75,30 +76,36 @@ CI (`.github/workflows/ci.yml`) runs: `npm ci`, `npm audit`, lint for client/ser
 The server owns all shared state; the client only renders server broadcasts. This is the most important thing to internalize before touching state.
 
 ### Mutation flow (the only valid way to change shared state)
+
 ```
 user action → client sends WS message → dispatcher.ts → repository (SQLite)
             → bus.broadcast / bus.sendTo → client serverStore
 ```
+
 - **Never mutate client shared state optimistically.** No `setState` before the server broadcasts.
-- WebSocket mutations go through `bus` (`client/src/bus/WebSocketBus.ts`). HTTP is reserved for file uploads, exports/downloads, stats, secrets, and "data maid" — and any HTTP handler that mutates shared state *must* call `bus.broadcast()` after the DB write.
+- WebSocket mutations go through `bus` (`client/src/bus/WebSocketBus.ts`). HTTP is reserved for file uploads, exports/downloads, stats, secrets, and "data maid" — and any HTTP handler that mutates shared state _must_ call `bus.broadcast()` after the DB write.
 - All WS messages are validated by Zod (`ClientMessageSchema`) at the server boundary in `main.ts`.
 
 ### Client state: two stores, never mixed
+
 - `client/src/stores/serverStore.ts` — synced, persisted, broadcast state. Lists (sidebars) + `activeX` full-object snapshots. Replaced wholesale on broadcast (never merged) — applied via Solid's `reconcile()` so unchanged rows keep their identity and `<For>` doesn't remount editors on every echo; sidebar lists are driven only by `*.listed` rebroadcasts, and per-message updates arrive as full-object `message.snapshot` events (`chat.updated` carries the full `Chat`).
 - `client/src/stores/uiStore.ts` — per-tab ephemeral chrome (which chat is clicked, modal open/close, form buffers, drafts). Never persisted, never broadcast.
 - `client/src/i18n/` — `@solid-primitives/i18n` provider + `useI18n()`; English strings live in per-domain fragments under `i18n/locales/`, language hot-switches via `AppSettings.language` (only `en` ships).
 - Render views from `state.activeChat` / `state.activeCharacter`, **never** from `state.chats.find(...)`.
 
 ### Active Entity pattern
+
 Opening an item for view/edit: client sends `X.select` → server replies with `X.snapshot` (full object) → the modal/component opens itself from a `bus.on` listener that checks `msg.clientId === state.clientId`. No "pending" signals. Reuse for characters, personas, world info, presets, toolsets.
 
 ### Broadcasting rules
+
 - After any list mutation, rebroadcast the **entire list** via `*.listed` (eliminates client-side list-mutation bugs). `.created/.updated/.deleted` still fire for snapshots/active entities.
 - `.created`/`.updated` always carry the **full object**.
 - Client handlers must **silently ignore** broadcasts for entities not in their list (guard before mutating).
 - Server is canonical for all URLs (e.g. `avatar_url`, `export_url`). Client never constructs resource URLs from IDs.
 
 ### Naming boundary
+
 Domain types + Zod API schemas = **camelCase** (`firstMes`, `characterId`). SQLite columns + `XRowSchema` = **snake_case** (`first_mes`, `character_id`). Repositories translate at the DB boundary via `rowToX()` functions. SQL strings always use snake_case.
 
 ## Server subsystems
@@ -115,12 +122,13 @@ Domain types + Zod API schemas = **camelCase** (`firstMes`, `characterId`). SQLi
 - **`db/`** — `@libsql/client` SQLite, WAL mode. Migrations in `db/migrations/`, one append-only numeric sequence tracked by `PRAGMA user_version`: `NNN_name.sql` for schema (transactional) and `NNN_name.ts` for data migrations that need real code (default-export `{ up({ db, dataDir }) }`; must be idempotent, no wrapping transaction; construct repos/services locally). `import-legacy.ts` performs one-time import from SillyTavern's flat-file `data/` (kept as a boot task, not a migration, so a legacy dir dropped in later is still picked up).
 
 ### Tool architecture
+
 Tools are LLM-callable functions organized into **templates** (`ToolTemplate` — built-in TS or Lua script, same interface) with a shared `configSchema` and branch-aware state via `serialize()`/`deserialize()`. Users create **toolsets** (template instances with their own config + per-tool `toolOverrides`). `ToolRegistry` resolves by template ID (built-ins first, then Lua). See AGENTS.md §7.
 
 ## Non-obvious gotchas
 
 - **ESM `.js` import extensions are required** in server + types (tsconfig `module: NodeNext`). Write `import { x } from './foo.js'` even for `.ts` source files. The client (Vite, `moduleResolution: bundler`) uses extensionless imports — match each workspace's convention.
-- **`@tamari/types` must be built** before server/client can resolve it; the `prepare` hook covers `npm install`, but if you edit types during a dev session, rebuild it.
+- **`@tamari/types` must be built** before server/client can resolve it; `npm install` does not build it (`.npmrc` sets `ignore-scripts=true`, which disables the `prepare` hook), so run `npm run build --workspace=packages/types` after install and after any types edit during a dev session.
 - **`noUncheckedIndexedAccess` is on** (both workspaces) — `arr[i]` is `T | undefined`; the compiler will force you to handle it.
 - **Never validate API key formats** (length, prefix, etc.) — users run reverse proxies, local backends, and custom auth. This is an explicit roadmap principle.
 - **Auth**: single shared secret (`TAMARI_SECRET` env, random if unset). Bearer token on WS (`?token=`) and HTTP (`Authorization` / `?token=`). If unset at boot, the server logs a masked random one and warns it won't persist across restarts.
@@ -133,7 +141,7 @@ Tools are LLM-callable functions organized into **templates** (`ToolTemplate` �
 
 - `docs/design/AGENTS.md` — architecture rules (state, mutation flow, broadcasting, active-entity, naming, tools, code style). **The bible.**
 - `docs/design/css-principles.md` (+ `css-audit-plan.md` runbook) — CSS rules every component must follow, and how to audit the client against them.
-- `docs/quality/` — review checklists and plans: `llm-wont-do-checklist.md` (security/a11y/code-quality prompts) and `coverage-improvement-plan.md` (test-coverage targets). Dated audit reports live in `docs/quality/audits/`.
+- `docs/audits/` — dated code-quality and UX audit reports.
 - `docs/roadmap/README.md` — what's done, the tech-stack table, intentional architectural breaks.
 - `docs/roadmap/breaking-changes.md` — SillyTavern→tamari migration paths.
 - `docs/user/macros.md`, `docs/user/lua-scripting.md` — user-facing macro + Lua `st` API reference.

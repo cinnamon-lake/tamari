@@ -19,14 +19,26 @@ function makeMockDeps(): {
       }),
     } as unknown as FileStorage,
     attachments: {
-      create: vi.fn(async ({ id, messageId, mimeType, filePath }: { id: string; messageId: number | null; mimeType: string; filePath: string }) => ({
-        id,
-        messageId,
-        mimeType,
-        filePath,
-        url: `/api/attachments/${id}`,
-        meta: {},
-      })),
+      create: vi.fn(
+        async ({
+          id,
+          messageId,
+          mimeType,
+          filePath,
+        }: {
+          id: string;
+          messageId: number | null;
+          mimeType: string;
+          filePath: string;
+        }) => ({
+          id,
+          messageId,
+          mimeType,
+          filePath,
+          url: `/api/attachments/${id}`,
+          meta: {},
+        }),
+      ),
     } as unknown as IAttachmentRepository,
     secretService: {
       get: vi.fn(async (key: string) => ({ key, value: `vault-value-for-${key}` })),
@@ -47,7 +59,7 @@ function makeZipResponse(payload: Record<string, Uint8Array>): Response {
 
 function textOf(result: { content: unknown }): string {
   const c = result.content;
-  return typeof c === 'string' ? c : (c as Array<{ text?: string }>)[0]?.text ?? '';
+  return typeof c === 'string' ? c : ((c as Array<{ text?: string }>)[0]?.text ?? '');
 }
 
 describe('NaiImageTemplate', () => {
@@ -77,7 +89,11 @@ describe('NaiImageTemplate', () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     global.fetch = vi.fn(async () => makeZipResponse({ 'image_0.png': png }));
 
-    const result = await template.execute('generate_image', { prompt: '1girl, purple hair' }, { config: { apiKey: 'pst-test' } });
+    const result = await template.execute(
+      'generate_image',
+      { prompt: '1girl, purple hair' },
+      { config: { apiKey: 'pst-test' } },
+    );
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
@@ -129,7 +145,11 @@ describe('NaiImageTemplate', () => {
   it('maps landscape orientation to 1216x832', async () => {
     global.fetch = vi.fn(async () => makeZipResponse({ 'image_0.png': new Uint8Array([1]) }));
 
-    await template.execute('generate_image', { prompt: 'a tree', orientation: 'landscape' }, { config: { apiKey: 'k' } });
+    await template.execute(
+      'generate_image',
+      { prompt: 'a tree', orientation: 'landscape' },
+      { config: { apiKey: 'k' } },
+    );
 
     const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const body = JSON.parse(init.body as string);
@@ -140,7 +160,11 @@ describe('NaiImageTemplate', () => {
   it('passes an explicit seed through and reports it', async () => {
     global.fetch = vi.fn(async () => makeZipResponse({ 'image_0.png': new Uint8Array([1]) }));
 
-    const result = await template.execute('generate_image', { prompt: 'a bird', seed: 1234 }, { config: { apiKey: 'k' } });
+    const result = await template.execute(
+      'generate_image',
+      { prompt: 'a bird', seed: 1234 },
+      { config: { apiKey: 'k' } },
+    );
 
     const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const body = JSON.parse(init.body as string);
@@ -188,7 +212,11 @@ describe('NaiImageTemplate', () => {
 
   it('returns error on Lua script error', async () => {
     const script = 'error("bad syntax")';
-    const result = await template.execute('generate_image', { prompt: 'a bird' }, { config: { apiKey: 'k', requestScript: script } });
+    const result = await template.execute(
+      'generate_image',
+      { prompt: 'a bird' },
+      { config: { apiKey: 'k', requestScript: script } },
+    );
     expect(textOf(result)).toContain('Request script error');
   });
 
@@ -202,11 +230,14 @@ describe('NaiImageTemplate', () => {
   });
 
   it('returns error on non-ok response', async () => {
-    global.fetch = vi.fn(async () => ({
-      ok: false,
-      status: 401,
-      text: async () => 'Unauthorized',
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: false,
+          status: 401,
+          text: async () => 'Unauthorized',
+        }) as Response,
+    );
 
     const result = await template.execute('generate_image', { prompt: 'a fish' }, { config: { apiKey: 'bad' } });
     expect(textOf(result)).toContain('NovelAI returned 401');
@@ -221,12 +252,15 @@ describe('NaiImageTemplate', () => {
 
   it('returns error when the response is not a zip', async () => {
     const bytes = new TextEncoder().encode('not a zip').buffer as ArrayBuffer;
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      arrayBuffer: async () => bytes,
-      text: async () => '',
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => bytes,
+          text: async () => '',
+        }) as Response,
+    );
 
     const result = await template.execute('generate_image', { prompt: 'a fish' }, { config: { apiKey: 'k' } });
     expect(textOf(result)).toContain('Failed to unzip NovelAI response');

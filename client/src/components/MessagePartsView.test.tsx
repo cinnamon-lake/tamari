@@ -99,9 +99,7 @@ describe('MessagePartsView', () => {
     ));
     const result = document.querySelector('.tool-result-block');
     expect(result).not.toBeNull();
-    expect(result!.querySelector('.tool-result-content')?.textContent).toBe(
-      'Generated square image (seed 42).',
-    );
+    expect(result!.querySelector('.tool-result-content')?.textContent).toBe('Generated square image (seed 42).');
     const img = result!.querySelector('img.message-inline-img');
     expect(img?.getAttribute('src')).toBe('/api/attachments/abc');
   });
@@ -109,15 +107,18 @@ describe('MessagePartsView', () => {
   it('mounts the registered widget directly for tool_result parts with extra.renderType', () => {
     render(() => (
       <MessagePartsView
-        message={makeMessage([
-          { type: 'text', text: 'pick one' },
-          {
-            type: 'tool_result',
-            toolUseId: 'call-1',
-            content: 'Presented 2 choices',
-            extra: { renderType: 'choices', choicesPrompt: 'Which way?', choices: ['Left', 'Right'] },
-          },
-        ], ['<p>pick one</p>', null])}
+        message={makeMessage(
+          [
+            { type: 'text', text: 'pick one' },
+            {
+              type: 'tool_result',
+              toolUseId: 'call-1',
+              content: 'Presented 2 choices',
+              extra: { renderType: 'choices', choicesPrompt: 'Which way?', choices: ['Left', 'Right'] },
+            },
+          ],
+          ['<p>pick one</p>', null],
+        )}
       />
     ));
     expect(document.querySelector('.choices-result')).not.toBeNull();

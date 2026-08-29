@@ -23,7 +23,10 @@ function fileUrl(filePath: string | null): string | null {
 }
 
 export function toCharacterSummary(
-  char: Pick<Character, 'id' | 'name' | 'tags' | 'avatarPath' | 'avatarThumbnailPath' | 'external' | 'createdAt' | 'updatedAt'>,
+  char: Pick<
+    Character,
+    'id' | 'name' | 'tags' | 'avatarPath' | 'avatarThumbnailPath' | 'external' | 'createdAt' | 'updatedAt'
+  >,
 ): CharacterSummary {
   return {
     id: char.id,
@@ -78,7 +81,10 @@ export function withCharacterAvatar<T extends Character>(char: T): T {
 }
 
 /** Enrich a full Character with its asset list and canonical asset URLs. */
-export function withCharacterAssets<T extends Character>(char: T, assets: CharacterAsset[]): T & { assets: Array<CharacterAsset & { assetUrl: string | null; uri: string | null }> } {
+export function withCharacterAssets<T extends Character>(
+  char: T,
+  assets: CharacterAsset[],
+): T & { assets: Array<CharacterAsset & { assetUrl: string | null; uri: string | null }> } {
   const enrichedAssets = assets.map((a) => ({
     ...a,
     assetUrl: a.filePath ? `/api/characters/${char.id}/assets/${a.id}.${a.ext}` : null,
@@ -90,7 +96,10 @@ export function withCharacterAssets<T extends Character>(char: T, assets: Charac
 }
 
 export function toChatSummary(
-  chat: Pick<Chat, 'id' | 'characterId' | 'name' | 'createdAt' | 'updatedAt' | 'forkedFromChatId' | 'forkedAtMessageId'>,
+  chat: Pick<
+    Chat,
+    'id' | 'characterId' | 'name' | 'createdAt' | 'updatedAt' | 'forkedFromChatId' | 'forkedAtMessageId'
+  >,
 ): ChatSummary {
   return {
     id: chat.id,

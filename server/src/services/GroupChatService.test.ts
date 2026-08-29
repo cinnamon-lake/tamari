@@ -75,7 +75,14 @@ describe('GroupChatService', () => {
     } as unknown as IChatRepository;
 
     autoTrigger = vi.fn();
-    service = new GroupChatService(mockMembers, mockChats, { broadcastChatUpdated: vi.fn() } as unknown as import('./GroupChatService.js').GroupChatService['chatMetaBroadcast'], autoTrigger);
+    service = new GroupChatService(
+      mockMembers,
+      mockChats,
+      {
+        broadcastChatUpdated: vi.fn(),
+      } as unknown as import('./GroupChatService.js').GroupChatService['chatMetaBroadcast'],
+      autoTrigger,
+    );
   });
 
   describe('getSettings / updateSettings', () => {
@@ -216,7 +223,9 @@ describe('GroupChatService', () => {
       const seededService = new GroupChatService(
         mockMembers,
         mockChats,
-        { broadcastChatUpdated: vi.fn() } as unknown as import('./GroupChatService.js').GroupChatService['chatMetaBroadcast'],
+        {
+          broadcastChatUpdated: vi.fn(),
+        } as unknown as import('./GroupChatService.js').GroupChatService['chatMetaBroadcast'],
         autoTrigger,
         deterministicRng([0.5, 0.5]),
       );
@@ -240,7 +249,9 @@ describe('GroupChatService', () => {
       const seededService = new GroupChatService(
         mockMembers,
         mockChats,
-        { broadcastChatUpdated: vi.fn() } as unknown as import('./GroupChatService.js').GroupChatService['chatMetaBroadcast'],
+        {
+          broadcastChatUpdated: vi.fn(),
+        } as unknown as import('./GroupChatService.js').GroupChatService['chatMetaBroadcast'],
         autoTrigger,
         deterministicRng([0.5, 0.00001]),
       );

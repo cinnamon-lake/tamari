@@ -1,13 +1,8 @@
-import { test, expect, type Page } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Page } from '../fixtures/base.js';
 import { resetLlmRequests } from '../helpers/llm.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
 
@@ -53,7 +48,6 @@ async function sendThenGenerate(page: Page, chatId: string, content: string): Pr
         let sentMessage = false;
 
         const lastText = (messages: unknown): string => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const arr = (messages as any[]) ?? [];
           const last = arr[arr.length - 1];
           const parts = (last?.extra?.parts ?? []) as Array<{ type: string; text?: string }>;
@@ -88,7 +82,7 @@ async function sendThenGenerate(page: Page, chatId: string, content: string): Pr
               reject(new Error(msg.message ?? 'sendThenGenerate failed'));
             }
           } catch (err) {
-            reject(err);
+            reject(err instanceof Error ? err : new Error(String(err)));
           }
         };
 
@@ -106,21 +100,17 @@ async function sendThenGenerate(page: Page, chatId: string, content: string): Pr
 test.describe('Agent / Workbench / Forge Templates', () => {
   const toolsetIds: string[] = [];
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     for (const id of toolsetIds.splice(0)) {
       await deleteToolset(page, id);
     }
   });
 
-  test('run_agent delegates the prompt to the chat backend and returns its reply', async ({ page }) => {
-    const app = new App(page);
+  test('run_agent delegates the prompt to the chat backend and returns its reply', async ({ page, app }) => {
     toolsetIds.push(await enableBuiltinToolset(page, 'agent'));
 
     await app.createCharacterAndChat({ name: uniqueName('Agent Host'), firstMes: 'Ready.' });
@@ -138,8 +128,7 @@ test.describe('Agent / Workbench / Forge Templates', () => {
     await expect(result).toContainText('agent says hi');
   });
 
-  test('chat_workbench adds, lists, and removes a group-chat member', async ({ page }) => {
-    const app = new App(page);
+  test('chat_workbench adds, lists, and removes a group-chat member', async ({ page, app }) => {
     const baseName = uniqueName('CW Base');
     const memberName = uniqueName('CW Tool Member');
     const groupName = uniqueName('CW Group');
@@ -217,8 +206,7 @@ test.describe('Agent / Workbench / Forge Templates', () => {
     await panel.locator('[aria-label="Close"]').click();
   });
 
-  test('forge_image generate_image posts txt2img to the configured Forge URL', async ({ page }) => {
-    const app = new App(page);
+  test('forge_image generate_image posts txt2img to the configured Forge URL', async ({ page, app }) => {
     toolsetIds.push(await enableBuiltinToolset(page, 'forge_image', { url: MOCK_URL }));
 
     await app.createCharacterAndChat({ name: uniqueName('Forge Host'), firstMes: 'Ready.' });
@@ -247,8 +235,7 @@ test.describe('Agent / Workbench / Forge Templates', () => {
     expect(body['height']).toBe(1024);
   });
 
-  test('forge_image surfaces the Forge HTTP error in the tool result', async ({ page }) => {
-    const app = new App(page);
+  test('forge_image surfaces the Forge HTTP error in the tool result', async ({ page, app }) => {
     // Points at a route the mock 404s, so execute() hits the !response.ok branch.
     toolsetIds.push(await enableBuiltinToolset(page, 'forge_image', { url: `${MOCK_URL}/nope` }));
 

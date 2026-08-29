@@ -1,4 +1,5 @@
 export * from './TtsAdapter.js';
+export * from './BaseTtsAdapter.js';
 export * from './FishAudioS2Adapter.js';
 export * from './KokoroFastApiAdapter.js';
 export * from './ElevenLabsAdapter.js';

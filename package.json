@@ -2,14 +2,14 @@
   "name": "tamari",
   "version": "2.0.0-alpha.0",
   "type": "module",
-  "license": "AGPL-3.0",
+  "license": "GPL-3.0-only",
   "private": true,
   "repository": {
     "type": "git",
     "url": "https://github.com/cinnamon-lake/tamari.git"
   },
   "engines": {
-    "node": ">= 24"
+    "node": ">= 26"
   },
   "overrides": {
     "uuid": "^14.0.0",
@@ -40,14 +40,16 @@
     "test:e2e:journeys": "npm run build && npm run test:journeys --workspace=e2e",
     "test:e2e:local": "npm run build && npm run test:local --workspace=e2e",
     "test:e2e:coverage": "rm -rf e2e/.coverage e2e/coverage && E2E_COVERAGE=1 npm run build && E2E_COVERAGE=1 npm run test --workspace=e2e",
-    "lint:css": "node audit_css_hooks.cjs"
+    "lint:css": "node audit_css_hooks.cjs",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@typescript-eslint/eslint-plugin": "8.59.4",
-    "@typescript-eslint/parser": "8.59.4",
-    "eslint": "^10.8.0",
-    "globals": "^17.8.0",
-    "typescript-eslint": "8.59.4"
+    "@typescript-eslint/eslint-plugin": "8.67.0",
+    "@typescript-eslint/parser": "8.67.0",
+    "eslint": "^10.9.0",
+    "globals": "^17.11.0",
+    "prettier": "^3.9.6",
+    "typescript-eslint": "8.67.0"
   }
 }

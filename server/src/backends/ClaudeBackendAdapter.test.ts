@@ -45,10 +45,12 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Hello' }], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Hello' }], tokenUsage: { prompt: 10, completion: 100 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -82,16 +84,18 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          { role: 'system', content: 'Be helpful.' },
-          { role: 'user', content: 'Hello' },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            { role: 'system', content: 'Be helpful.' },
+            { role: 'user', content: 'Hello' },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -117,14 +121,16 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [{ role: 'user', content: 'Hello' }],
-        tokenUsage: { prompt: 10, completion: 100 },
-        systemPrompt: 'You are a wizard.',
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [{ role: 'user', content: 'Hello' }],
+          tokenUsage: { prompt: 10, completion: 100 },
+          systemPrompt: 'You are a wizard.',
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -159,10 +165,9 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
     const emitted = items.filter((i) => i.type === 'text').map((i) => i.token);
 
     expect(emitted).toEqual(['Hello', ' world']);
@@ -204,10 +209,9 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 5, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 5, completion: 100 } }, new AbortController().signal),
+    );
     const emitted = items.filter((i) => i.type === 'text').map((i) => i.token);
     expect(result.finishReason).toBe('stop');
 
@@ -233,22 +237,24 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Describe this:' },
-              { type: 'image', source: 'data:image/png;base64,ABC123', mimeType: 'image/png' },
-              { type: 'image', source: 'https://example.com/img.png' },
-            ],
-          },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Describe this:' },
+                { type: 'image', source: 'data:image/png;base64,ABC123', mimeType: 'image/png' },
+                { type: 'image', source: 'https://example.com/img.png' },
+              ],
+            },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -277,23 +283,25 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [],
-        tokenUsage: { prompt: 10, completion: 100 },
-        tools: [
-          {
-            type: 'function',
-            function: {
-              name: 'get_weather',
-              description: 'Get weather',
-              parameters: { type: 'object', properties: { city: { type: 'string' } } },
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [],
+          tokenUsage: { prompt: 10, completion: 100 },
+          tools: [
+            {
+              type: 'function',
+              function: {
+                name: 'get_weather',
+                description: 'Get weather',
+                parameters: { type: 'object', properties: { city: { type: 'string' } } },
+              },
             },
-          },
-        ],
-      },
-      new AbortController().signal,
-    ));
+          ],
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -324,22 +332,24 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          {
-            role: 'assistant',
-            content: [{ type: 'tool_use', id: 'tu_1', name: 'get_weather', input: { city: 'Paris' } }],
-          },
-          {
-            role: 'user',
-            content: [{ type: 'tool_result', toolUseId: 'tu_1', content: 'Sunny', isError: false }],
-          },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: [{ type: 'tool_use', id: 'tu_1', name: 'get_weather', input: { city: 'Paris' } }],
+            },
+            {
+              role: 'user',
+              content: [{ type: 'tool_result', toolUseId: 'tu_1', content: 'Sunny', isError: false }],
+            },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -368,10 +378,12 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 }, params: { temperature: 0.8, topK: 5 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [], tokenUsage: { prompt: 10, completion: 100 }, params: { temperature: 0.8, topK: 5 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -397,15 +409,17 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [],
-        tokenUsage: { prompt: 10, completion: 100 },
-        // minP has no Claude wire field: dropped, not dumped onto the body.
-        params: { stop: ['###'], minP: 0.05 },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [],
+          tokenUsage: { prompt: 10, completion: 100 },
+          // minP has no Claude wire field: dropped, not dumped onto the body.
+          params: { stop: ['###'], minP: 0.05 },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -432,14 +446,16 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [],
-        tokenUsage: { prompt: 10, completion: 100 },
-        responseFormat: { type: 'json_schema', schema: { type: 'object', properties: { name: { type: 'string' } } } },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [],
+          tokenUsage: { prompt: 10, completion: 100 },
+          responseFormat: { type: 'json_schema', schema: { type: 'object', properties: { name: { type: 'string' } } } },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -466,20 +482,22 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [],
-        tokenUsage: { prompt: 10, completion: 100 },
-        tools: [
-          {
-            type: 'function',
-            function: { name: 'get_weather', description: 'Get weather', parameters: { type: 'object' } },
-          },
-        ],
-        params: { strictTools: true },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [],
+          tokenUsage: { prompt: 10, completion: 100 },
+          tools: [
+            {
+              type: 'function',
+              function: { name: 'get_weather', description: 'Get weather', parameters: { type: 'object' } },
+            },
+          ],
+          params: { strictTools: true },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -502,10 +520,9 @@ describe('ClaudeBackendAdapter', () => {
       text: async () => 'Invalid API key',
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('401');
@@ -528,18 +545,20 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          { role: 'user', content: 'Hello' },
-          { role: 'assistant', content: 'Hi there' },
-          { role: 'user', content: 'How are you?' },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-        cacheDepth: 0,
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            { role: 'user', content: 'Hello' },
+            { role: 'assistant', content: 'Hi there' },
+            { role: 'user', content: 'How are you?' },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+          cacheDepth: 0,
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -571,21 +590,23 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [{ role: 'user', content: 'Hello' }],
-        tokenUsage: { prompt: 10, completion: 100 },
-        systemPrompt: 'You are a wizard.',
-        cacheDepth: 0,
-        tools: [
-          {
-            type: 'function',
-            function: { name: 'cast_spell', description: 'Cast a spell', parameters: { type: 'object' } },
-          },
-        ],
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [{ role: 'user', content: 'Hello' }],
+          tokenUsage: { prompt: 10, completion: 100 },
+          systemPrompt: 'You are a wizard.',
+          cacheDepth: 0,
+          tools: [
+            {
+              type: 'function',
+              function: { name: 'cast_spell', description: 'Cast a spell', parameters: { type: 'object' } },
+            },
+          ],
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -621,21 +642,23 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [{ role: 'user', content: 'Hello' }],
-        tokenUsage: { prompt: 10, completion: 100 },
-        systemPrompt: 'You are a wizard.',
-        cacheDepth: 0,
-        tools: [
-          {
-            type: 'function',
-            function: { name: 'cast_spell', description: 'Cast a spell', parameters: { type: 'object' } },
-          },
-        ],
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [{ role: 'user', content: 'Hello' }],
+          tokenUsage: { prompt: 10, completion: 100 },
+          systemPrompt: 'You are a wizard.',
+          cacheDepth: 0,
+          tools: [
+            {
+              type: 'function',
+              function: { name: 'cast_spell', description: 'Cast a spell', parameters: { type: 'object' } },
+            },
+          ],
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -675,10 +698,9 @@ describe('ClaudeBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     expect(result.finishReason).toBe('stop');
     expect(result.toolCalls).toHaveLength(1);

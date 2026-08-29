@@ -40,10 +40,12 @@ describe('TextCompletionBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Once upon a time' }], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Once upon a time' }], tokenUsage: { prompt: 10, completion: 100 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -76,10 +78,12 @@ describe('TextCompletionBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Say hello' }], tokenUsage: { prompt: 5, completion: 50 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Say hello' }], tokenUsage: { prompt: 5, completion: 50 } },
+        new AbortController().signal,
+      ),
+    );
     const tokens = items.filter((i) => i.type === 'text').map((i) => i.token);
 
     expect(tokens).toEqual(['Hello', ' world', '!']);
@@ -103,10 +107,12 @@ describe('TextCompletionBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Greet me' }], tokenUsage: { prompt: 5, completion: 50 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Greet me' }], tokenUsage: { prompt: 5, completion: 50 } },
+        new AbortController().signal,
+      ),
+    );
     const tokens = items.filter((i) => i.type === 'text').map((i) => i.token);
 
     expect(tokens).toEqual(['Hi', ' there']);
@@ -126,10 +132,12 @@ describe('TextCompletionBackendAdapter', () => {
       text: async () => 'Internal Server Error',
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
 
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('500');
@@ -177,10 +185,12 @@ describe('TextCompletionBackendAdapter', () => {
       body: null,
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('No response body');
   });
@@ -196,10 +206,12 @@ describe('TextCompletionBackendAdapter', () => {
       requestScript: 'request.url = "http://10.0.0.5/internal"',
     });
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('Request script error');
   });
@@ -225,10 +237,12 @@ describe('TextCompletionBackendAdapter', () => {
       } as Response;
     });
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      controller.signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        controller.signal,
+      ),
+    );
     expect(result.finishReason).toBe('error');
     expect(result.error).toBe('Aborted');
   });
@@ -250,10 +264,12 @@ describe('TextCompletionBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
     expect(items.filter((i) => i.type === 'text').map((i) => i.token)).toEqual(['ok']);
     expect(result.finishReason).toBe('stop');
   });
@@ -265,18 +281,22 @@ describe('TextCompletionBackendAdapter', () => {
       model: 'test-model',
     });
 
-    for (const [raw, expected] of [['length', 'length'], ['content_filter', 'content_filter'], ['unknown', 'error']] as const) {
+    for (const [raw, expected] of [
+      ['length', 'length'],
+      ['content_filter', 'content_filter'],
+      ['unknown', 'error'],
+    ] as const) {
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        body: createMockStream([
-          `data: {"choices":[{"text":"x","finish_reason":"${raw}"}]}`,
-        ]),
+        body: createMockStream([`data: {"choices":[{"text":"x","finish_reason":"${raw}"}]}`]),
       } as Response);
 
-      const { result } = await consumeStream(adapter.stream(
-        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-        new AbortController().signal,
-      ));
+      const { result } = await consumeStream(
+        adapter.stream(
+          { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+          new AbortController().signal,
+        ),
+      );
       expect(result.finishReason).toBe(expected);
     }
   });
@@ -294,10 +314,12 @@ describe('TextCompletionBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];

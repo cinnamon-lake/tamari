@@ -222,9 +222,7 @@ export class WorldInfoInjector {
   }
 
   /** Read _wiActivations from message extras to build a branch-local activation timeline. */
-  private buildActivationHistory(
-    messages: Message[],
-  ): Array<{ index: number; entryIds: string[] }> {
+  private buildActivationHistory(messages: Message[]): Array<{ index: number; entryIds: string[] }> {
     const history: Array<{ index: number; entryIds: string[] }> = [];
     for (const [i, message] of messages.entries()) {
       const entryIds = message.extra._wiActivations;
@@ -236,10 +234,7 @@ export class WorldInfoInjector {
   }
 
   /** Find the most recent message index where the given entry was activated. */
-  private findLastActivation(
-    history: Array<{ index: number; entryIds: string[] }>,
-    entryId: string,
-  ): number | null {
+  private findLastActivation(history: Array<{ index: number; entryIds: string[] }>, entryId: string): number | null {
     for (let i = history.length - 1; i >= 0; i--) {
       const activation = history[i];
       if (activation?.entryIds.includes(entryId)) {

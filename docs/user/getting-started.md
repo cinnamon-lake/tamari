@@ -56,7 +56,7 @@ Where the token comes from:
   Password saved to /path/to/tamari/.env — it will be picked up on every restart.
   ```
 
-  The password is written to `.env` in the working directory (created with owner-only permissions if it doesn't exist) and loaded automatically from then on. That password *is* your login token.
+  The password is written to `.env` in the working directory (created with owner-only permissions if it doesn't exist) and loaded automatically from then on. That password _is_ your login token.
 
 - **Or set `TAMARI_SECRET` yourself.** Any long random string in the environment works and takes precedence over `.env`:
 
@@ -89,21 +89,21 @@ The token is checked against `TAMARI_SECRET` with a timing-safe comparison, and 
 
 Everything is configured with environment variables (or a `.env` file in the working directory — see above). These are the defaults from the server (`server/src/config.ts`):
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `8000` | HTTP server port |
-| `HOST` | `::` | HTTP server bind address (all interfaces, IPv4 + IPv6) |
-| `DATA_DIR` | `./data-v2` | Path to the SQLite database (`tamari.db`) and file storage, relative to the working directory |
-| `LOG_LEVEL` | `info` | Server log level: `debug`, `info`, `warn`, `error` |
-| `TAMARI_SECRET` | *(prompted on first run)* | Shared auth secret for bearer tokens; also keys the secrets vault. Random per boot only on non-interactive runs with nothing set |
-| `DISABLE_CSRF` | `false` | When `true`, allows WebSocket connections from any `localhost`/`127.0.0.1` port (dev mode) |
-| `WS_ORIGINS` | *(empty)* | Comma-separated list of additional allowed WebSocket origins, e.g. `http://myhost:3000,https://myhost` |
-| `HTTP_JSON_LIMIT` | `5mb` | Max body size for JSON HTTP requests |
-| `WS_MAX_PAYLOAD_BYTES` | `1048576` | Max WebSocket message payload in bytes (1 MB) |
-| `AVATAR_MAX_FILE_SIZE_BYTES` | `52428800` | Max persona avatar upload file size in bytes (50 MB) |
-| `WS_AUTH_REJECTION_MS` | `500` | Delay before closing an unauthenticated WebSocket connection |
-| `SHUTDOWN_TIMEOUT_MS` | `5000` | Graceful shutdown timeout before force-exit |
-| `MAX_TOOL_ROUNDS` | `100` | Tool-call rounds allowed per generation before the loop stops (see [Tools](./tools.md)) |
+| Variable                     | Default                   | Description                                                                                                                      |
+| ---------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                       | `8000`                    | HTTP server port                                                                                                                 |
+| `HOST`                       | `::`                      | HTTP server bind address (all interfaces, IPv4 + IPv6)                                                                           |
+| `DATA_DIR`                   | `./data-v2`               | Path to the SQLite database (`tamari.db`) and file storage, relative to the working directory                                    |
+| `LOG_LEVEL`                  | `info`                    | Server log level: `debug`, `info`, `warn`, `error`                                                                               |
+| `TAMARI_SECRET`              | _(prompted on first run)_ | Shared auth secret for bearer tokens; also keys the secrets vault. Random per boot only on non-interactive runs with nothing set |
+| `DISABLE_CSRF`               | `false`                   | When `true`, allows WebSocket connections from any `localhost`/`127.0.0.1` port (dev mode)                                       |
+| `WS_ORIGINS`                 | _(empty)_                 | Comma-separated list of additional allowed WebSocket origins, e.g. `http://myhost:3000,https://myhost`                           |
+| `HTTP_JSON_LIMIT`            | `5mb`                     | Max body size for JSON HTTP requests                                                                                             |
+| `WS_MAX_PAYLOAD_BYTES`       | `1048576`                 | Max WebSocket message payload in bytes (1 MB)                                                                                    |
+| `AVATAR_MAX_FILE_SIZE_BYTES` | `52428800`                | Max persona avatar upload file size in bytes (50 MB)                                                                             |
+| `WS_AUTH_REJECTION_MS`       | `500`                     | Delay before closing an unauthenticated WebSocket connection                                                                     |
+| `SHUTDOWN_TIMEOUT_MS`        | `5000`                    | Graceful shutdown timeout before force-exit                                                                                      |
+| `MAX_TOOL_ROUNDS`            | `100`                     | Tool-call rounds allowed per generation before the loop stops (see [Tools](./tools.md))                                          |
 
 WebSocket origin checks always allow `localhost`/`127.0.0.1` (any scheme, no port) plus whatever you add in `WS_ORIGINS`; `DISABLE_CSRF=true` widens that to any localhost port, which is meant for development only.
 
@@ -132,7 +132,7 @@ In the sidebar's **Characters** section, click the **+** button (**Create charac
 
 At minimum, give the character a **Name** and a **First Message** — that's the opening message of every new chat. Description, personality, scenario, and the rest are covered in [Characters](./characters.md).
 
-Optionally, open **Personas** in the sidebar footer and click **New Persona** to set who *you* are — the persona name fills the `{{user}}` macro (see [Personas](./personas.md) and [Macro System](./macros.md)).
+Optionally, open **Personas** in the sidebar footer and click **New Persona** to set who _you_ are — the persona name fills the `{{user}}` macro (see [Personas](./personas.md) and [Macro System](./macros.md)).
 
 ### 3. Start chatting
 

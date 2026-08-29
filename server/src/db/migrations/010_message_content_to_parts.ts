@@ -10,13 +10,11 @@ import { str } from '../../lib/coerce.js';
 import { getLogger } from '../../lib/logger.js';
 import type { Migration } from '../runMigrations.js';
 
-const log = getLogger('db');
+const log = getLogger('db/migrations/010_message_content_to_parts');
 
 const migration: Migration = {
   async up({ db }) {
-    const rs = await db.execute(
-      "SELECT id, content, extra FROM messages WHERE content != '' AND content IS NOT NULL",
-    );
+    const rs = await db.execute("SELECT id, content, extra FROM messages WHERE content != '' AND content IS NOT NULL");
     let migrated = 0;
     for (const row of rs.rows) {
       const id = Number(row.id);

@@ -1,4 +1,18 @@
 import { Page } from '@playwright/test';
+import { wsRpc } from './ws.js';
+
+/**
+ * Resolve the active backend config id via settings.get over the app's
+ * WebSocket bus. Returns '' when no active config is set.
+ */
+async function getActiveBackendConfigId(page: Page): Promise<string> {
+  const loaded = await wsRpc<{ settings?: { activeBackendConfigId?: string } }>(
+    page,
+    { type: 'settings.get' },
+    'settings.loaded',
+  );
+  return String(loaded?.settings?.activeBackendConfigId ?? '');
+}
 
 /**
  * Send a partial `backendConfig.update` patch for the active config over the
@@ -10,68 +24,15 @@ import { Page } from '@playwright/test';
  * callers that only want to tweak one advanced knob must include the others
  * they care about.
  */
-export async function patchActiveBackendConfig(
-  page: Page,
-  patch: Record<string, unknown>,
-): Promise<void> {
-  await page.evaluate(
-    (patch) => {
-      return new Promise<void>((resolve, reject) => {
-        const token = localStorage.getItem('st_auth_token') ?? '';
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`);
-        let snapshotReceived = false;
-
-        ws.onopen = () => {
-          ws.send(JSON.stringify({ type: 'auth' }));
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const msg = JSON.parse(event.data as string);
-
-            if (msg.type === 'snapshot') {
-              snapshotReceived = true;
-              const activeId = msg.state?.settings?.activeBackendConfigId;
-              if (!activeId) {
-                reject(new Error('No active backend config in snapshot'));
-                return;
-              }
-              ws.send(
-                JSON.stringify({
-                  type: 'backendConfig.update',
-                  backendConfigId: activeId,
-                  patch,
-                }),
-              );
-            }
-
-            if (msg.type === 'backendConfig.updated' || msg.type === 'backendConfig.snapshot') {
-              ws.close();
-              resolve();
-            }
-
-            if (msg.type === 'error') {
-              ws.close();
-              reject(new Error(msg.message ?? 'Backend config update failed'));
-            }
-          } catch (err) {
-            reject(err);
-          }
-        };
-
-        ws.onerror = (err) => {
-          reject(new Error(`WebSocket error: ${err.type}`));
-        };
-
-        setTimeout(() => {
-          ws.close();
-          reject(new Error(`patchActiveBackendConfig timed out (snapshotReceived=${snapshotReceived})`));
-        }, 10000);
-      });
-    },
-    patch,
-  );
+export async function patchActiveBackendConfig(page: Page, patch: Record<string, unknown>): Promise<void> {
+  const activeId = await getActiveBackendConfigId(page);
+  if (!activeId) {
+    throw new Error('No active backend config in snapshot');
+  }
+  await wsRpc(page, { type: 'backendConfig.update', backendConfigId: activeId, patch }, [
+    'backendConfig.updated',
+    'backendConfig.snapshot',
+  ]);
 }
 
 /**
@@ -97,66 +58,21 @@ export async function configureMockBackend(page: Page): Promise<void> {
  * other tests do not trigger unexpected generation against the mock server.
  */
 export async function resetBackendConfig(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    return new Promise<void>((resolve, reject) => {
-      const token = localStorage.getItem('st_auth_token') ?? '';
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`);
-      let snapshotReceived = false;
-
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'auth' }));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data as string);
-
-          if (msg.type === 'snapshot') {
-            snapshotReceived = true;
-            const activeId = msg.state?.settings?.activeBackendConfigId;
-            if (!activeId) {
-              ws.close();
-              resolve();
-              return;
-            }
-            ws.send(
-              JSON.stringify({
-                type: 'backendConfig.update',
-                backendConfigId: activeId,
-                patch: {
-                  backendProvider: 'openai',
-                  generationMode: 'chat',
-                  model: 'gpt-4-turbo',
-                  apiUrl: null,
-                  apiKey: null,
-                },
-              }),
-            );
-          }
-
-          if (msg.type === 'backendConfig.updated' || msg.type === 'backendConfig.snapshot') {
-            ws.close();
-            resolve();
-          }
-
-          if (msg.type === 'error') {
-            ws.close();
-            reject(new Error(msg.message ?? 'Backend config reset failed'));
-          }
-        } catch (err) {
-          reject(err);
-        }
-      };
-
-      ws.onerror = (err) => {
-        reject(new Error(`WebSocket error: ${err.type}`));
-      };
-
-      setTimeout(() => {
-        ws.close();
-        reject(new Error(`resetBackendConfig timed out (snapshotReceived=${snapshotReceived})`));
-      }, 10000);
-    });
-  });
+  const activeId = await getActiveBackendConfigId(page);
+  if (!activeId) return;
+  await wsRpc(
+    page,
+    {
+      type: 'backendConfig.update',
+      backendConfigId: activeId,
+      patch: {
+        backendProvider: 'openai',
+        generationMode: 'chat',
+        model: 'gpt-4-turbo',
+        apiUrl: null,
+        apiKey: null,
+      },
+    },
+    ['backendConfig.updated', 'backendConfig.snapshot'],
+  );
 }

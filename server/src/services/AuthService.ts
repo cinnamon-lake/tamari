@@ -150,10 +150,7 @@ export class AuthService {
     // Fixed-width hex digests — safe for timingSafeEqual's raw byte compare.
     // A malformed row (tampered DB) must read as "invalid", not throw.
     try {
-      if (!timingSafeEqual(
-        Buffer.from(hashSecretPart(parsed.secretPart)),
-        Buffer.from(row.tokenHash),
-      )) return null;
+      if (!timingSafeEqual(Buffer.from(hashSecretPart(parsed.secretPart)), Buffer.from(row.tokenHash))) return null;
     } catch {
       return null;
     }

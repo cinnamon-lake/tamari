@@ -17,27 +17,27 @@ Lua scripts run in an isolated sandbox with the following restrictions:
 - Execution budgets: a compute-burst limit and a total-time wall ceiling (see [Execution limits](#execution-limits))
 - Request scripts have additional SSRF protection (cannot request private IPs or non-HTTP(S) URLs; loopback is allowed when the configured backend is itself loopback, e.g. a local llama.cpp)
 
-**Per-template sandbox flags:** DB-stored *Lua Tool Templates* (not `run_lua`, not Quick Replies) can individually re-enable `io`, `os`, `debug`, and `require`/`package` via the checkboxes in the template editor. Two further flags unlock media/API tooling:
+**Per-template sandbox flags:** DB-stored _Lua Tool Templates_ (not `run_lua`, not Quick Replies) can individually re-enable `io`, `os`, `debug`, and `require`/`package` via the checkboxes in the template editor. Two further flags unlock media/API tooling:
 
 - **`allowNet`** — exposes an async `fetch(url, opts?)` global (`opts`: `method`, `headers`, `body`). Await it with wasmoon's promise support: `local res = fetch(url):await()`. Returns `{ status, headers, body, bodyBase64 }` — `body` is the UTF-8 text (or `null` for binary), `bodyBase64` always holds the raw bytes. Requests are SSRF-guarded: loopback is allowed (local media servers like Forge/Silero are the point), other private/LAN ranges are blocked. 30s timeout, 25MB body cap.
 - **`allowFiles`** — exposes `attachments.create(base64Data, mimeType)`, awaited the same way: `local att = attachments.create(b64, "image/png"):await()` → `{ id, url, mimeType }`. Saves the file under `files/attachments/` and registers it as a chat attachment.
-- **`allowSt`** — exposes a **curated subset of the `st` API** (the same API Quick Reply scripts get) as the global `st`. One rule: *queries, entity writes, variables/state, settings, quiet generation, and utilities are in; chat actions are out.* Concretely: `st.get_messages`, `st.create_character`, `st.update_character`, `st.setvar`/`st.getvar`, `st.set_state`/`st.get_state`, `st.wi_add`/`st.wi_list`/`st.wi_get`/`st.wi_remove`, `st.get_setting`/`st.set_setting`, `st.get_model`/`st.set_model`, `st.generate`/`st.genraw`/`st.ask`/`st.sysgen` (quiet one-shot generation), `st.toast`, `st.token_count`, `st.substitute_macros`, and the string/math helpers are available. Excluded: anything that mutates the running chat's message history or drives generation flow (`st.send`, `st.trigger`, `st.regenerate`, `st.continue`, `st.impersonate`, `st.stop`, `st.edit`, `st.cut`, `st.swipe`, `st.add_swipe`, `st.comment`, `st.send_as`, `st.send_narrator`, …) and chat lifecycle (`st.branch`, `st.checkpoint`, `st.hard_fork`, `st.new_chat`, `st.delete_chat`, `st.reset_chat`) — a tool runs *inside* an active generation, which owns the chat during its turn. Async functions return promises — await them with `st.await(...)` (or `promise:await()`); `st.sleep` and `st.generate` are pre-wrapped. `st` is only available when the tool executes in a real chat context — which includes `luatool_test`, so you can iterate on st-enabled templates live.
+- **`allowSt`** — exposes a **curated subset of the `st` API** (the same API Quick Reply scripts get) as the global `st`. One rule: _queries, entity writes, variables/state, settings, quiet generation, and utilities are in; chat actions are out._ Concretely: `st.get_messages`, `st.create_character`, `st.update_character`, `st.setvar`/`st.getvar`, `st.set_state`/`st.get_state`, `st.wi_add`/`st.wi_list`/`st.wi_get`/`st.wi_remove`, `st.get_setting`/`st.set_setting`, `st.get_model`/`st.set_model`, `st.generate`/`st.genraw`/`st.ask`/`st.sysgen` (quiet one-shot generation), `st.toast`, `st.token_count`, `st.substitute_macros`, and the string/math helpers are available. Excluded: anything that mutates the running chat's message history or drives generation flow (`st.send`, `st.trigger`, `st.regenerate`, `st.continue`, `st.impersonate`, `st.stop`, `st.edit`, `st.cut`, `st.swipe`, `st.add_swipe`, `st.comment`, `st.send_as`, `st.send_narrator`, …) and chat lifecycle (`st.branch`, `st.checkpoint`, `st.hard_fork`, `st.new_chat`, `st.delete_chat`, `st.reset_chat`) — a tool runs _inside_ an active generation, which owns the chat during its turn. Async functions return promises — await them with `st.await(...)` (or `promise:await()`); `st.sleep` and `st.generate` are pre-wrapped. `st` is only available when the tool executes in a real chat context — which includes `luatool_test`, so you can iterate on st-enabled templates live.
 
 ### Execution limits
 
 Every script runs under one **wall ceiling**: an absolute cap on its total life, from state creation to teardown — **waits included**. Within that ceiling, awaiting host calls (`st.generate`, `fetch`, `sleep`, …) is effectively free: suspending on a promise consumes no execution budget, so scripts can await slow LLM calls or media APIs without fear. The legacy flat "5 seconds" used to abort exactly those pipelines mid-run; the ceilings below are sized for what each surface legitimately does:
 
-| Surface | Wall ceiling |
-|---|---|
-| Quick Reply Scripts | 60 s |
-| Lua Tool Templates | 5 min |
-| Backend request scripts | 5 s |
+| Surface                                      | Wall ceiling  |
+| -------------------------------------------- | ------------- |
+| Quick Reply Scripts                          | 60 s          |
+| Lua Tool Templates                           | 5 min         |
+| Backend request scripts                      | 5 s           |
 | Custom backends (`generate` / `list_models`) | 10 min / 10 s |
-| `run_lua` tool | 5 s |
+| `run_lua` tool                               | 5 s           |
 
 Two enforcement notes worth knowing as an author:
 
-- **Pure-Lua busy loops are still killed hard.** Tight zero-await loops (the classic `while true do end`) are caught by the instruction-count hook and die mid-loop with *"script timed out (Ns execution limit)"*.
+- **Pure-Lua busy loops are still killed hard.** Tight zero-await loops (the classic `while true do end`) are caught by the instruction-count hook and die mid-loop with _"script timed out (Ns execution limit)"_.
 - **Resumed tails should stay small.** The hook samples in batches; a script whose continuation after a long await does only trivial work always survives, but heavy sustained computation well past the ceiling can still trip it and surface as the same timeout message.
 
 Pipelines needing more room than these ceilings belong in a **custom backend** (`generate()` gets 10 minutes).
@@ -50,7 +50,7 @@ Notes on what you get (wasmoon, not native Lua):
 - `base64.encode` / `base64.decode` are always available (no flag needed), like `json` — Lua strings are byte strings, so binary round-trips safely.
 - `json.encode(value)` / `json.decode(text)` are always available. `json.decode` throws on invalid input; `json.parse_result(text)` is the non-throwing variant — it returns `{ value = <decoded> }` on success and `{ error = <message> }` on failure, so scripts can pattern-match instead of `pcall`ing (handy when consuming structured LLM output, which is often malformed).
 - One exception to the stripped `require`: **card-coupled backend scripts** (Type B custom backends) get a sandboxed `require` that resolves against the card's own virtual filesystem (`backend_logic/` in the workbench) — see [Custom Backends](./custom-backends.md). Everywhere else `require` stays removed.
-- These flags exist so *you* can give *your own* templates more power. The AI cannot set them; `run_lua` (where the AI writes the code) always runs fully sandboxed.
+- These flags exist so _you_ can give _your own_ templates more power. The AI cannot set them; `run_lua` (where the AI writes the code) always runs fully sandboxed.
 
 ### Returning media from a tool
 
@@ -111,12 +111,12 @@ Every backend adapter (OpenAI, Claude, Gemini, Llama.cpp, etc.) supports an opti
 
 The script receives a global `request` table with these fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `request.url` | string | The full request URL |
-| `request.method` | string | HTTP method (usually `POST`) |
-| `request.headers` | table | Request headers |
-| `request.body` | table | The JSON body as a Lua table |
+| Field             | Type   | Description                  |
+| ----------------- | ------ | ---------------------------- |
+| `request.url`     | string | The full request URL         |
+| `request.method`  | string | HTTP method (usually `POST`) |
+| `request.headers` | table  | Request headers              |
+| `request.body`    | table  | The JSON body as a Lua table |
 
 ### Example: Custom Header
 
@@ -174,73 +174,74 @@ All Quick Reply scripts have access to the global `st` table. Functions are cate
 
 ### Chat Actions
 
-| Function | Description |
-|----------|-------------|
-| `st.send(text)` ⏳ | Send a user message in the current chat |
-| `st.continue()` ⏳ | Continue the last assistant message |
-| `st.impersonate()` ⏳ | Generate text as the user |
-| `st.regenerate()` ⏳ | Regenerate the last assistant message |
-| `st.swipe("left" \| "right")` ⏳ | Switch to previous/next swipe |
-| `st.cut(count)` ⏳ | Delete the last N messages |
-| `st.stop()` ⏳ | Stop the active generation |
-| `st.reset_chat()` ⏳ | Delete all messages in the current chat |
-| `st.trigger()` ⏳ | Trigger the AI to generate a response |
-| `st.delay(ms)` ⏳ | Wait for N milliseconds (clamped to 30,000 ms; aborts when generation is stopped) |
-| `st.rename_chat(name)` ⏳ | Rename the current chat |
-| `st.delete_chat()` ⏳ | Delete the current chat |
-| `st.new_chat(name?)` ⏳ | Create a new chat with the same character |
-| `st.temp_chat(name?)` ⏳ | Create a temporary empty chat |
-| `st.branch(messageId, name?)` ⏳ | Soft-fork the chat at a message (new chat, shared history) |
-| `st.checkpoint(name?)` ⏳ | Soft-fork at the current head |
-| `st.hard_fork(messageId, name?)` ⏳ | Hard-fork the chat (copies history) |
+| Function                            | Description                                                                       |
+| ----------------------------------- | --------------------------------------------------------------------------------- |
+| `st.send(text)` ⏳                  | Send a user message in the current chat                                           |
+| `st.continue()` ⏳                  | Continue the last assistant message                                               |
+| `st.impersonate()` ⏳               | Generate text as the user                                                         |
+| `st.regenerate()` ⏳                | Regenerate the last assistant message                                             |
+| `st.swipe("left" \| "right")` ⏳    | Switch to previous/next swipe                                                     |
+| `st.cut(count)` ⏳                  | Delete the last N messages                                                        |
+| `st.stop()` ⏳                      | Stop the active generation                                                        |
+| `st.reset_chat()` ⏳                | Delete all messages in the current chat                                           |
+| `st.trigger()` ⏳                   | Trigger the AI to generate a response                                             |
+| `st.delay(ms)` ⏳                   | Wait for N milliseconds (clamped to 30,000 ms; aborts when generation is stopped) |
+| `st.rename_chat(name)` ⏳           | Rename the current chat                                                           |
+| `st.delete_chat()` ⏳               | Delete the current chat                                                           |
+| `st.new_chat(name?)` ⏳             | Create a new chat with the same character                                         |
+| `st.temp_chat(name?)` ⏳            | Create a temporary empty chat                                                     |
+| `st.branch(messageId, name?)` ⏳    | Soft-fork the chat at a message (new chat, shared history)                        |
+| `st.checkpoint(name?)` ⏳           | Soft-fork at the current head                                                     |
+| `st.hard_fork(messageId, name?)` ⏳ | Hard-fork the chat (copies history)                                               |
 
 ### Sending Messages As Other Roles
 
-| Function | Description |
-|----------|-------------|
-| `st.send_as(name, content)` ⏳ | Send a message as a specific character |
-| `st.send_narrator(name, content)` ⏳ | Send a narrator/system message |
-| `st.send_narrator(content)` ⏳ | Send as "Narrator" |
-| `st.comment(content)` ⏳ | Add a hidden comment message |
+| Function                             | Description                            |
+| ------------------------------------ | -------------------------------------- |
+| `st.send_as(name, content)` ⏳       | Send a message as a specific character |
+| `st.send_narrator(name, content)` ⏳ | Send a narrator/system message         |
+| `st.send_narrator(content)` ⏳       | Send as "Narrator"                     |
+| `st.comment(content)` ⏳             | Add a hidden comment message           |
 
 ### Message Editing
 
-| Function | Description |
-|----------|-------------|
-| `st.edit(messageId, content)` ⏳ | Edit a message's content |
-| `st.delete(messageId)` ⏳ | Delete a message |
-| `st.hide(messageId)` ⏳ | Hide a message from the UI |
-| `st.unhide(messageId)` ⏳ | Unhide a message |
-| `st.set_message_role(messageId, role)` ⏳ | Change role (`user`, `assistant`, `system`) |
-| `st.add_swipe(content, switchTo?)` ⏳ | Add a swipe to the active assistant message |
-| `st.set_active_child(messageId)` ⏳ | Switch to a different swipe |
-| `st.set_message_extra(messageId, key, value)` ⏳ | Set a key in message.extra |
-| `st.get_message_extra(messageId, key)` ⏳ | Get a value from message.extra |
+| Function                                         | Description                                 |
+| ------------------------------------------------ | ------------------------------------------- |
+| `st.edit(messageId, content)` ⏳                 | Edit a message's content                    |
+| `st.delete(messageId)` ⏳                        | Delete a message                            |
+| `st.hide(messageId)` ⏳                          | Hide a message from the UI                  |
+| `st.unhide(messageId)` ⏳                        | Unhide a message                            |
+| `st.set_message_role(messageId, role)` ⏳        | Change role (`user`, `assistant`, `system`) |
+| `st.add_swipe(content, switchTo?)` ⏳            | Add a swipe to the active assistant message |
+| `st.set_active_child(messageId)` ⏳              | Switch to a different swipe                 |
+| `st.set_message_extra(messageId, key, value)` ⏳ | Set a key in message.extra                  |
+| `st.get_message_extra(messageId, key)` ⏳        | Get a value from message.extra              |
 
 ### Queries
 
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `st.get_messages(limit?)` ⏳ | `Message[]` | Get messages in the active branch |
-| `st.get_chat()` ⏳ | `Chat` | Get current chat info |
-| `st.get_chat_name()` ⏳ | `string` | Get chat name |
-| `st.get_message_by_id(id)` ⏳ | `Message \| null` | Get a specific message |
-| `st.get_message_count()` ⏳ | `number` | Total messages in active branch |
-| `st.get_last_message()` ⏳ | `Message \| null` | The most recent message |
-| `st.get_head()` ⏳ | `Message \| null` | The root message |
-| `st.get_active_child()` ⏳ | `Message \| null` | The current active message (swipe) |
-| `st.get_children(messageId)` ⏳ | `Message[]` | Child messages (swipes/alternatives) |
-| `st.get_siblings(messageId)` ⏳ | `Message[]` | Sibling messages |
-| `st.get_message_chain(messageId)` ⏳ | `Message[]` | Full parent chain up to root |
-| `st.get_swipes()` ⏳ | `Message[]` | All swipes for the current head |
-| `st.get_message_at(index)` ⏳ | `Message \| null` | Message by index (negative = from end) |
-| `st.get_message_index(messageId)` ⏳ | `number \| null` | Index of a message |
-| `st.find_message_by_content(search)` ⏳ | `Message \| null` | Find first matching message |
-| `st.find_messages_by_role(role)` ⏳ | `Message[]` | All messages with role |
-| `st.messages_as_text(separator?)` ⏳ | `string` | All messages formatted as text |
-| `st.get_message_texts()` ⏳ | `string[]` | Just the content strings |
+| Function                                | Returns           | Description                            |
+| --------------------------------------- | ----------------- | -------------------------------------- |
+| `st.get_messages(limit?)` ⏳            | `Message[]`       | Get messages in the active branch      |
+| `st.get_chat()` ⏳                      | `Chat`            | Get current chat info                  |
+| `st.get_chat_name()` ⏳                 | `string`          | Get chat name                          |
+| `st.get_message_by_id(id)` ⏳           | `Message \| null` | Get a specific message                 |
+| `st.get_message_count()` ⏳             | `number`          | Total messages in active branch        |
+| `st.get_last_message()` ⏳              | `Message \| null` | The most recent message                |
+| `st.get_head()` ⏳                      | `Message \| null` | The root message                       |
+| `st.get_active_child()` ⏳              | `Message \| null` | The current active message (swipe)     |
+| `st.get_children(messageId)` ⏳         | `Message[]`       | Child messages (swipes/alternatives)   |
+| `st.get_siblings(messageId)` ⏳         | `Message[]`       | Sibling messages                       |
+| `st.get_message_chain(messageId)` ⏳    | `Message[]`       | Full parent chain up to root           |
+| `st.get_swipes()` ⏳                    | `Message[]`       | All swipes for the current head        |
+| `st.get_message_at(index)` ⏳           | `Message \| null` | Message by index (negative = from end) |
+| `st.get_message_index(messageId)` ⏳    | `number \| null`  | Index of a message                     |
+| `st.find_message_by_content(search)` ⏳ | `Message \| null` | Find first matching message            |
+| `st.find_messages_by_role(role)` ⏳     | `Message[]`       | All messages with role                 |
+| `st.messages_as_text(separator?)` ⏳    | `string`          | All messages formatted as text         |
+| `st.get_message_texts()` ⏳             | `string[]`        | Just the content strings               |
 
 **Message object shape:**
+
 ```lua
 {
   id = 123,
@@ -254,26 +255,27 @@ All Quick Reply scripts have access to the global `st` table. Functions are cate
 
 ### Character & Persona
 
-| Function | Description |
-|----------|-------------|
-| `st.get_characters()` ⏳ | List all characters |
-| `st.find_character(name)` ⏳ | Find a character by name |
-| `st.get_character(id)` ⏳ | Get full character data |
-| `st.get_character_id()` ⏳ | Current chat's character ID (`st.get_characterId()` is a deprecated alias) |
-| `st.get_character_name()` ⏳ | Current chat's character name (`st.get_characterName()` is a deprecated alias) |
-| `st.set_character(id)` ⏳ | Change the chat's character |
-| `st.get_personas()` ⏳ | List all personas |
-| `st.get_persona(id)` ⏳ | Get a persona |
-| `st.set_persona(id)` ⏳ | Change the active persona |
-| `st.get_persona_id()` ⏳ | Current chat's persona ID (`st.get_personaId()` is a deprecated alias) |
-| `st.set_system_prompt(characterId, text)` ⏳ | Set a character's system prompt (`st.set_systemPrompt()` is a deprecated alias) |
-| `st.get_system_prompt(characterId)` ⏳ | Get a character's system prompt (`st.get_systemPrompt()` is a deprecated alias) |
-| `st.create_character(data)` ⏳ | Create a character. `data.name` required; optional fields: `description`, `personality`, `scenario`, `firstMes`, `mesExample`, `tags`, `systemPrompt`, `postHistoryInstructions`, `creatorNotes`. Throws if the name already exists. Returns `{ id, name }` |
-| `st.update_character(characterId, patch)` ⏳ | Patch a character (same field whitelist as `create_character`, plus `name` to rename — fails if another character already has that name) |
-| `st.add_chat_member(characterId)` ⏳ | Add a character to the current group chat (throws in a single-character chat) |
-| `st.remove_chat_member(characterId)` ⏳ | Remove a character from the current group chat |
+| Function                                     | Description                                                                                                                                                                                                                                                 |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `st.get_characters()` ⏳                     | List all characters                                                                                                                                                                                                                                         |
+| `st.find_character(name)` ⏳                 | Find a character by name                                                                                                                                                                                                                                    |
+| `st.get_character(id)` ⏳                    | Get full character data                                                                                                                                                                                                                                     |
+| `st.get_character_id()` ⏳                   | Current chat's character ID (`st.get_characterId()` is a deprecated alias)                                                                                                                                                                                  |
+| `st.get_character_name()` ⏳                 | Current chat's character name (`st.get_characterName()` is a deprecated alias)                                                                                                                                                                              |
+| `st.set_character(id)` ⏳                    | Change the chat's character                                                                                                                                                                                                                                 |
+| `st.get_personas()` ⏳                       | List all personas                                                                                                                                                                                                                                           |
+| `st.get_persona(id)` ⏳                      | Get a persona                                                                                                                                                                                                                                               |
+| `st.set_persona(id)` ⏳                      | Change the active persona                                                                                                                                                                                                                                   |
+| `st.get_persona_id()` ⏳                     | Current chat's persona ID (`st.get_personaId()` is a deprecated alias)                                                                                                                                                                                      |
+| `st.set_system_prompt(characterId, text)` ⏳ | Set a character's system prompt (`st.set_systemPrompt()` is a deprecated alias)                                                                                                                                                                             |
+| `st.get_system_prompt(characterId)` ⏳       | Get a character's system prompt (`st.get_systemPrompt()` is a deprecated alias)                                                                                                                                                                             |
+| `st.create_character(data)` ⏳               | Create a character. `data.name` required; optional fields: `description`, `personality`, `scenario`, `firstMes`, `mesExample`, `tags`, `systemPrompt`, `postHistoryInstructions`, `creatorNotes`. Throws if the name already exists. Returns `{ id, name }` |
+| `st.update_character(characterId, patch)` ⏳ | Patch a character (same field whitelist as `create_character`, plus `name` to rename — fails if another character already has that name)                                                                                                                    |
+| `st.add_chat_member(characterId)` ⏳         | Add a character to the current group chat (throws in a single-character chat)                                                                                                                                                                               |
+| `st.remove_chat_member(characterId)` ⏳      | Remove a character from the current group chat                                                                                                                                                                                                              |
 
 **Character object shape:**
+
 ```lua
 {
   id = "uuid",
@@ -292,66 +294,67 @@ All Quick Reply scripts have access to the global `st` table. Functions are cate
 
 ### Tags
 
-| Function | Description |
-|----------|-------------|
-| `st.tag_add(characterId, tag)` ⏳ | Add a tag to a character |
-| `st.tag_remove(characterId, tag)` ⏳ | Remove a tag |
-| `st.tag_list(characterId)` ⏳ | Get all tags for a character |
+| Function                             | Description                  |
+| ------------------------------------ | ---------------------------- |
+| `st.tag_add(characterId, tag)` ⏳    | Add a tag to a character     |
+| `st.tag_remove(characterId, tag)` ⏳ | Remove a tag                 |
+| `st.tag_list(characterId)` ⏳        | Get all tags for a character |
 
 ### Settings & Presets
 
-| Function | Description |
-|----------|-------------|
-| `st.get_setting(key)` ⏳ | Get a setting value |
-| `st.set_setting(key, value)` ⏳ | Set a setting value |
-| `st.get_settings()` ⏳ | Get all settings as a table |
-| `st.get_presets()` ⏳ | List all presets |
-| `st.get_preset(id)` ⏳ | Get preset details |
-| `st.set_preset(id)` ⏳ | Activate a preset |
-| `st.get_model()` ⏳ | Get current model name |
-| `st.set_model(name)` ⏳ | Set model name |
-| `st.get_apiUrl()` ⏳ | Get API URL |
-| `st.set_apiUrl(url)` ⏳ | Set API URL |
-| `st.get_temperature()` ⏳ | Get temperature of the active backend config (falls back to the legacy `temperature` setting when no config is active) |
-| `st.set_temperature(value)` ⏳ | Set temperature on the active backend config (writes the legacy `temperature` setting only when no config is active) |
-| `st.get_maxTokens()` ⏳ | Get max tokens |
-| `st.set_maxTokens(value)` ⏳ | Set max tokens |
-| `st.get_contextLength()` ⏳ | Get context length of the active backend config (4096 when unset) |
-| `st.set_contextLength(value)` ⏳ | Set context length on the active backend config (throws when no config is active) |
-| `st.get_backend()` ⏳ | Get backend provider ID |
-| `st.set_backend(provider)` ⏳ | Set backend provider |
+| Function                         | Description                                                                                                            |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `st.get_setting(key)` ⏳         | Get a setting value                                                                                                    |
+| `st.set_setting(key, value)` ⏳  | Set a setting value                                                                                                    |
+| `st.get_settings()` ⏳           | Get all settings as a table                                                                                            |
+| `st.get_presets()` ⏳            | List all presets                                                                                                       |
+| `st.get_preset(id)` ⏳           | Get preset details                                                                                                     |
+| `st.set_preset(id)` ⏳           | Activate a preset                                                                                                      |
+| `st.get_model()` ⏳              | Get current model name                                                                                                 |
+| `st.set_model(name)` ⏳          | Set model name                                                                                                         |
+| `st.get_apiUrl()` ⏳             | Get API URL                                                                                                            |
+| `st.set_apiUrl(url)` ⏳          | Set API URL                                                                                                            |
+| `st.get_temperature()` ⏳        | Get temperature of the active backend config (falls back to the legacy `temperature` setting when no config is active) |
+| `st.set_temperature(value)` ⏳   | Set temperature on the active backend config (writes the legacy `temperature` setting only when no config is active)   |
+| `st.get_maxTokens()` ⏳          | Get max tokens                                                                                                         |
+| `st.set_maxTokens(value)` ⏳     | Set max tokens                                                                                                         |
+| `st.get_contextLength()` ⏳      | Get context length of the active backend config (4096 when unset)                                                      |
+| `st.set_contextLength(value)` ⏳ | Set context length on the active backend config (throws when no config is active)                                      |
+| `st.get_backend()` ⏳            | Get backend provider ID                                                                                                |
+| `st.set_backend(provider)` ⏳    | Set backend provider                                                                                                   |
 
 ### Variables
 
 Variables are chat-scoped and persisted in the database.
 
-| Function | Description |
-|----------|-------------|
-| `st.setvar(name, value)` ⏳ | Set a variable |
-| `st.getvar(name)` ⏳ | Get a variable (returns `nil` if not set) |
-| `st.clear_variables()` ⏳ | Delete all variables for this chat |
-| `st.get_variables()` ⏳ | Get all variables as a table |
+| Function                    | Description                               |
+| --------------------------- | ----------------------------------------- |
+| `st.setvar(name, value)` ⏳ | Set a variable                            |
+| `st.getvar(name)` ⏳        | Get a variable (returns `nil` if not set) |
+| `st.clear_variables()` ⏳   | Delete all variables for this chat        |
+| `st.get_variables()` ⏳     | Get all variables as a table              |
 
 #### Meta state
 
-Meta state is **out-of-fiction** storage backed by the `extension_data` table. Unlike `setvar`/`getvar` and tool `_toolState` — which live in the message tree and **fork with branches/swipes** — meta state does *not* fork: it is scoped to the chat (or globally) and is shared by every branch of that chat. Use it only for out-of-fiction data (UI preferences, cross-route unlocks, bookkeeping), never for world state that should follow the parallel-universe semantics of swipes and branches. No broadcasts are sent on mutation (no client consumes it); scripts needing reactivity should use `st.set_chat_metadata` instead.
+Meta state is **out-of-fiction** storage backed by the `extension_data` table. Unlike `setvar`/`getvar` and tool `_toolState` — which live in the message tree and **fork with branches/swipes** — meta state does _not_ fork: it is scoped to the chat (or globally) and is shared by every branch of that chat. Use it only for out-of-fiction data (UI preferences, cross-route unlocks, bookkeeping), never for world state that should follow the parallel-universe semantics of swipes and branches. No broadcasts are sent on mutation (no client consumes it); scripts needing reactivity should use `st.set_chat_metadata` instead.
 
-| Function | Description |
-|----------|-------------|
-| `st.set_state(namespace, data)` ⏳ | Store a table under a namespace (non-empty string, max 100 chars), scoped to the current chat. Max 64 KB serialized |
-| `st.get_state(namespace)` ⏳ | Get chat-scoped meta state (returns `nil` if not set) |
-| `st.delete_state(namespace)` ⏳ | Delete chat-scoped meta state |
-| `st.set_global_state(namespace, data)` ⏳ | Store meta state globally (shared across all chats) |
-| `st.get_global_state(namespace)` ⏳ | Get global meta state (returns `nil` if not set) |
+| Function                                  | Description                                                                                                         |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `st.set_state(namespace, data)` ⏳        | Store a table under a namespace (non-empty string, max 100 chars), scoped to the current chat. Max 64 KB serialized |
+| `st.get_state(namespace)` ⏳              | Get chat-scoped meta state (returns `nil` if not set)                                                               |
+| `st.delete_state(namespace)` ⏳           | Delete chat-scoped meta state                                                                                       |
+| `st.set_global_state(namespace, data)` ⏳ | Store meta state globally (shared across all chats)                                                                 |
+| `st.get_global_state(namespace)` ⏳       | Get global meta state (returns `nil` if not set)                                                                    |
 
 ### Author's Note
 
-| Function | Description |
-|----------|-------------|
-| `st.set_author_note(content, opts?)` ⏳ | Set Author's Note |
-| `st.get_author_note()` ⏳ | Get Author's Note config |
+| Function                                | Description              |
+| --------------------------------------- | ------------------------ |
+| `st.set_author_note(content, opts?)` ⏳ | Set Author's Note        |
+| `st.get_author_note()` ⏳               | Get Author's Note config |
 
 `opts` is optional and can contain:
+
 - `depth` (number, default 4) — how many messages back to inject
 - `interval` (number, default 1) — how often to inject (1 = every turn)
 - `position` (string, default `"in_chat"`) — `"before_prompt"`, `"after_prompt"`, or `"in_chat"`
@@ -359,39 +362,40 @@ Meta state is **out-of-fiction** storage backed by the `extension_data` table. U
 
 ### Chat Metadata
 
-| Function | Description |
-|----------|-------------|
-| `st.set_chat_metadata(key, value)` ⏳ | Store arbitrary data on the chat |
-| `st.get_chat_metadata(key)` ⏳ | Retrieve chat metadata |
-| `st.get_chats(characterId?)` ⏳ | List chats (optionally filtered by character) |
+| Function                              | Description                                   |
+| ------------------------------------- | --------------------------------------------- |
+| `st.set_chat_metadata(key, value)` ⏳ | Store arbitrary data on the chat              |
+| `st.get_chat_metadata(key)` ⏳        | Retrieve chat metadata                        |
+| `st.get_chats(characterId?)` ⏳       | List chats (optionally filtered by character) |
 
 ### Reasoning
 
-| Function | Description |
-|----------|-------------|
-| `st.get_reasoning(messageId)` ⏳ | Get reasoning text for a message |
-| `st.set_reasoning(messageId, text)` ⏳ | Set reasoning text |
-| `st.clear_reasoning(messageId)` ⏳ | Remove reasoning |
+| Function                               | Description                                                                                                                                                 |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `st.get_reasoning(messageId)` ⏳       | Get reasoning text for a message                                                                                                                            |
+| `st.set_reasoning(messageId, text)` ⏳ | Set reasoning text                                                                                                                                          |
+| `st.clear_reasoning(messageId)` ⏳     | Remove reasoning                                                                                                                                            |
 | `st.get_generation_info(messageId)` ⏳ | Get model, token count, generation time. Returns `{ model, token_count, generation_time, api }` plus camelCase duplicates `tokenCount` and `generationTime` |
 
 ### World Info
 
 Operates on the lorebook linked to the current chat's character.
 
-| Function | Description |
-|----------|-------------|
-| `st.wi_list()` ⏳ | List all entries |
-| `st.wi_get(key)` ⏳ | Find entry by key (case-insensitive) |
+| Function                      | Description                                 |
+| ----------------------------- | ------------------------------------------- |
+| `st.wi_list()` ⏳             | List all entries                            |
+| `st.wi_get(key)` ⏳           | Find entry by key (case-insensitive)        |
 | `st.wi_add(keys, content)` ⏳ | Add a new entry (`keys` is comma-separated) |
-| `st.wi_remove(key)` ⏳ | Remove entry by key |
+| `st.wi_remove(key)` ⏳        | Remove entry by key                         |
 
 ### Macros
 
-| Function | Description |
-|----------|-------------|
+| Function                        | Description                                                     |
+| ------------------------------- | --------------------------------------------------------------- |
 | `st.substitute_macros(text)` ⏳ | Resolve `{{...}}` macros in a string using current chat context |
 
 Example:
+
 ```lua
 local greeting = st.substitute_macros("Hello {{user}}, I am {{char}}!")
 -- greeting == "Hello Alice, I am Seraphina!"
@@ -399,52 +403,53 @@ local greeting = st.substitute_macros("Hello {{user}}, I am {{char}}!")
 
 ### UI
 
-| Function | Description |
-|----------|-------------|
+| Function                    | Description               |
+| --------------------------- | ------------------------- |
 | `st.toast(message, level?)` | Show a toast notification |
 
 Levels: `info`, `success`, `error`, `warning`. Default is `info`.
 
 Example:
+
 ```lua
 st.toast("Script finished!", "success")
 ```
 
 ### Text Utilities
 
-| Function | Description |
-|----------|-------------|
-| `st.token_count(text)` | Count tokens in text |
-| `st.count_tokens(text)` | Alias for `token_count` |
-| `st.trim_tokens(text, limit)` | Trim text to fit within token limit |
-| `st.upper(text)` | Uppercase |
-| `st.lower(text)` | Lowercase |
-| `st.replace(text, search, replacement)` | String replacement |
-| `st.replace_regex(text, pattern, replacement)` | Regex replacement (global) |
-| `st.match(text, pattern)` | Regex match, returns array of matches |
-| `st.test(text, pattern)` | Regex test, returns boolean |
-| `st.substring(text, start, end?)` | Substring extraction |
-| `st.trim_start(text)` | Trim to first sentence-ending punctuation |
-| `st.trim_end(text)` | Trim after last sentence-ending punctuation |
-| `st.random(min?, max?)` | Random integer (default 0–100) |
-| `st.now()` | Current Unix timestamp |
-| `st.join(array, separator?)` | Join array (default `,`) |
-| `st.split(text, separator?)` | Split string (default `,`) |
-| `st.includes(text, search)` | Contains check |
-| `st.starts_with(text, prefix)` | Starts with check |
-| `st.ends_with(text, suffix)` | Ends with check |
-| `st.json_encode(value)` | JSON encode |
-| `st.json_decode(text)` | JSON decode |
-| `st.abs(n)` | Absolute value |
-| `st.floor(n)` | Floor |
-| `st.ceil(n)` | Ceiling |
-| `st.round(n)` | Round |
-| `st.clamp(n, min, max)` | Clamp between min and max |
-| `st.array_wrap(value)` | Wrap value in array `{value}` |
-| `st.array_unwrap(array)` | Get first element |
-| `st.pass(value)` | Identity function |
-| `st.is_empty(value)` | Check if nil, empty string, empty array, or empty object |
-| `st.len(value)` | Length of string or array |
+| Function                                       | Description                                              |
+| ---------------------------------------------- | -------------------------------------------------------- |
+| `st.token_count(text)`                         | Count tokens in text                                     |
+| `st.count_tokens(text)`                        | Alias for `token_count`                                  |
+| `st.trim_tokens(text, limit)`                  | Trim text to fit within token limit                      |
+| `st.upper(text)`                               | Uppercase                                                |
+| `st.lower(text)`                               | Lowercase                                                |
+| `st.replace(text, search, replacement)`        | String replacement                                       |
+| `st.replace_regex(text, pattern, replacement)` | Regex replacement (global)                               |
+| `st.match(text, pattern)`                      | Regex match, returns array of matches                    |
+| `st.test(text, pattern)`                       | Regex test, returns boolean                              |
+| `st.substring(text, start, end?)`              | Substring extraction                                     |
+| `st.trim_start(text)`                          | Trim to first sentence-ending punctuation                |
+| `st.trim_end(text)`                            | Trim after last sentence-ending punctuation              |
+| `st.random(min?, max?)`                        | Random integer (default 0–100)                           |
+| `st.now()`                                     | Current Unix timestamp                                   |
+| `st.join(array, separator?)`                   | Join array (default `,`)                                 |
+| `st.split(text, separator?)`                   | Split string (default `,`)                               |
+| `st.includes(text, search)`                    | Contains check                                           |
+| `st.starts_with(text, prefix)`                 | Starts with check                                        |
+| `st.ends_with(text, suffix)`                   | Ends with check                                          |
+| `st.json_encode(value)`                        | JSON encode                                              |
+| `st.json_decode(text)`                         | JSON decode                                              |
+| `st.abs(n)`                                    | Absolute value                                           |
+| `st.floor(n)`                                  | Floor                                                    |
+| `st.ceil(n)`                                   | Ceiling                                                  |
+| `st.round(n)`                                  | Round                                                    |
+| `st.clamp(n, min, max)`                        | Clamp between min and max                                |
+| `st.array_wrap(value)`                         | Wrap value in array `{value}`                            |
+| `st.array_unwrap(array)`                       | Get first element                                        |
+| `st.pass(value)`                               | Identity function                                        |
+| `st.is_empty(value)`                           | Check if nil, empty string, empty array, or empty object |
+| `st.len(value)`                                | Length of string or array                                |
 
 ## Examples
 
@@ -590,23 +595,23 @@ return Tool
 
 ### Key Concepts
 
-| Concept | Description |
-|---------|-------------|
-| `stateKey` | A unique identifier for this template's shared state. All tools in the same template share the same state object. |
-| `configSchema` | JSON Schema for global configuration (e.g., API keys, default values). Shown as a form when creating a toolset. |
-| `tools` | Array of tool definitions. Each has `name`, `description`, and optional `parameters` (JSON Schema). Each may also set `endsTurn = true` to end the generation turn after that tool executes successfully — no follow-up generation round runs, so the tool result (e.g. the `lua_choices` choice buttons) is the last word of the turn. The result is still saved and rendered normally. |
-| `execute(args, context, toolName)` | Called when the AI invokes any tool in this template. `toolName` tells you which one. |
-| `serialize()` / `deserialize(raw)` | Persist/restore `Tool.state` across invocations. State is stored in message history, so it's branch-aware. |
+| Concept                            | Description                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stateKey`                         | A unique identifier for this template's shared state. All tools in the same template share the same state object.                                                                                                                                                                                                                                                                        |
+| `configSchema`                     | JSON Schema for global configuration (e.g., API keys, default values). Shown as a form when creating a toolset.                                                                                                                                                                                                                                                                          |
+| `tools`                            | Array of tool definitions. Each has `name`, `description`, and optional `parameters` (JSON Schema). Each may also set `endsTurn = true` to end the generation turn after that tool executes successfully — no follow-up generation round runs, so the tool result (e.g. the `lua_choices` choice buttons) is the last word of the turn. The result is still saved and rendered normally. |
+| `execute(args, context, toolName)` | Called when the AI invokes any tool in this template. `toolName` tells you which one.                                                                                                                                                                                                                                                                                                    |
+| `serialize()` / `deserialize(raw)` | Persist/restore `Tool.state` across invocations. State is stored in message history, so it's branch-aware.                                                                                                                                                                                                                                                                               |
 
 ### `context` Table
 
 The `context` argument passed to `execute()` contains:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `context.chatId` | `string` | The current chat ID |
-| `context.config` | `table` | The toolset's global config values (from `configSchema`) |
-| `context.messages` | `table` | Recent message history (for state scanning) |
+| Field              | Type     | Description                                              |
+| ------------------ | -------- | -------------------------------------------------------- |
+| `context.chatId`   | `string` | The current chat ID                                      |
+| `context.config`   | `table`  | The toolset's global config values (from `configSchema`) |
+| `context.messages` | `table`  | Recent message history (for state scanning)              |
 
 ### State Persistence
 
@@ -635,19 +640,19 @@ When the AI is given access to the `run_lua` tool (via **Tools** in the sidebar)
 
 `run_lua` is a single built-in tool that executes arbitrary Lua. It is **not** the same as a Lua Tool Template:
 
-| | Lua Tool Template | `run_lua` tool |
-|---|---|---|
-| **Purpose** | Define a reusable set of related tools with shared state | One-off arbitrary script execution |
-| **Defines tools** | Yes (`getDefinition().tools`) | No — it's a single tool |
-| **Shared state** | Yes (`serialize()` / `deserialize()`) | No — stateless |
-| **`st` API** | ❌ Not available | ❌ Not available |
-| `math`, `string`, `table` | ✅ | ✅ |
-| `io`, `os`, `debug` | ⚠️ Stripped by default; per-template opt-in via sandbox flags | ❌ Stripped |
-| `fetch` (network) | ⚠️ Per-template opt-in (`allowNet`), SSRF-guarded | ❌ Not available |
-| `attachments.create` (files) | ⚠️ Per-template opt-in (`allowFiles`) | ❌ Not available |
-| `st` API | ⚠️ Per-template opt-in (`allowSt`) — curated subset, chat actions excluded | ❌ Not available |
-| Timeout | 5 min wall ceiling | 5 s total (static) |
-| Trigger | AI calls any tool from the template | AI calls `run_lua` specifically |
+|                              | Lua Tool Template                                                          | `run_lua` tool                     |
+| ---------------------------- | -------------------------------------------------------------------------- | ---------------------------------- |
+| **Purpose**                  | Define a reusable set of related tools with shared state                   | One-off arbitrary script execution |
+| **Defines tools**            | Yes (`getDefinition().tools`)                                              | No — it's a single tool            |
+| **Shared state**             | Yes (`serialize()` / `deserialize()`)                                      | No — stateless                     |
+| **`st` API**                 | ❌ Not available                                                           | ❌ Not available                   |
+| `math`, `string`, `table`    | ✅                                                                         | ✅                                 |
+| `io`, `os`, `debug`          | ⚠️ Stripped by default; per-template opt-in via sandbox flags              | ❌ Stripped                        |
+| `fetch` (network)            | ⚠️ Per-template opt-in (`allowNet`), SSRF-guarded                          | ❌ Not available                   |
+| `attachments.create` (files) | ⚠️ Per-template opt-in (`allowFiles`)                                      | ❌ Not available                   |
+| `st` API                     | ⚠️ Per-template opt-in (`allowSt`) — curated subset, chat actions excluded | ❌ Not available                   |
+| Timeout                      | 5 min wall ceiling                                                         | 5 s total (static)                 |
+| Trigger                      | AI calls any tool from the template                                        | AI calls `run_lua` specifically    |
 
 ### Example: What the AI Might Send
 

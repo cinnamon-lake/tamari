@@ -1,5 +1,6 @@
 import { Show, For, createSignal, onMount, onCleanup } from 'solid-js';
 import { popups, resolvePopup, dismissPopup } from '../stores/popupStore.js';
+import { registerModal, unregisterModal } from '../stores/modalStore.js';
 import { useI18n } from '../i18n/index.js';
 import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
 import './PopupContainer.css';
@@ -17,10 +18,14 @@ export function PopupContainer() {
             );
 
             let inputRef: HTMLInputElement | HTMLTextAreaElement | undefined;
+            let instanceId = -1;
 
             onMount(() => {
               // Capture the trigger before autofocus so we can restore to it on close.
               saveFocus();
+              // Join the modal stack so Escape while a popup is open dismisses the
+              // popup (via its own keydown handler), not a modal beneath it.
+              instanceId = registerModal(() => dismissPopup(popup.id), false);
               if (inputRef && 'focus' in inputRef) {
                 inputRef.focus();
                 if (inputRef instanceof HTMLInputElement && inputRef.type === 'text') {
@@ -29,7 +34,10 @@ export function PopupContainer() {
               }
             });
             // Restore focus when the popup is dismissed/resolved and Solid disposes it.
-            onCleanup(() => restoreFocus());
+            onCleanup(() => {
+              unregisterModal(instanceId);
+              restoreFocus();
+            });
 
             let modalRef: HTMLDivElement | undefined;
 
@@ -57,8 +65,20 @@ export function PopupContainer() {
             };
 
             return (
-              <div id={String(popup.id)} class="popup-backdrop" onClick={() => dismissPopup(popup.id)} onKeyDown={handleKeyDown}>
-                <div ref={modalRef} class={modalClass()} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={config.title ?? t('popups.defaultTitle')}>
+              <div
+                id={String(popup.id)}
+                class="popup-backdrop"
+                onClick={() => dismissPopup(popup.id)}
+                onKeyDown={handleKeyDown}
+              >
+                <div
+                  ref={modalRef}
+                  class={modalClass()}
+                  onClick={(e) => e.stopPropagation()}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={config.title ?? t('popups.defaultTitle')}
+                >
                   <Show when={config.title}>
                     <h3 class="popup-title">{config.title}</h3>
                   </Show>
@@ -132,6 +152,7 @@ export function PopupContainer() {
                       <button
                         type="button"
                         class="btn btn-primary primary"
+                        data-testid="popup-confirm"
                         onClick={() => {
                           if (config.type === 'confirm') {
                             resolvePopup(popup.id, true);

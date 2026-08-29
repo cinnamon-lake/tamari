@@ -37,7 +37,10 @@ function parseRisuDefaultVariables(raw: unknown): Record<string, string> {
   return vars;
 }
 
-function buildAssetMap(character: Character, assetList: Array<{ name: string; id: string; ext: string }>): Record<string, string> {
+function buildAssetMap(
+  character: Character,
+  assetList: Array<{ name: string; id: string; ext: string }>,
+): Record<string, string> {
   const map: Record<string, string> = {};
   for (const asset of assetList) {
     if (asset.name) {
@@ -118,7 +121,11 @@ export async function materializeGreetings(
 
   const msg = await chats.appendMessage(chatId, {
     role: 'assistant',
-    extra: { characterId: character.id, macroVars: greetingVariables, parts: [{ type: 'text', text: selectedGreeting }] },
+    extra: {
+      characterId: character.id,
+      macroVars: greetingVariables,
+      parts: [{ type: 'text', text: selectedGreeting }],
+    },
     parentId: null,
   });
 

@@ -13,7 +13,7 @@ import { getLogger } from '../../lib/logger.js';
 import { BackendConfigRepository } from '../../repos/BackendConfigRepository.js';
 import type { Migration } from '../runMigrations.js';
 
-const log = getLogger('db');
+const log = getLogger('db/migrations/013_sanitize_provider_params');
 
 const migration: Migration = {
   async up({ db }) {

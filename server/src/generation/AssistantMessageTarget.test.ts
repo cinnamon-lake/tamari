@@ -24,7 +24,10 @@ describe('streaming flush part.snapshot invariant', () => {
     // text keeps streaming past 1s so the flush fires mid-stream with both
     // parts dirty (min 0, max 1).
     const backend = new TrivialBackendAdapter([
-      [{ type: 'thinking', content: 'abc' }, { type: 'content', content: 'x'.repeat(1500) }],
+      [
+        { type: 'thinking', content: 'abc' },
+        { type: 'content', content: 'x'.repeat(1500) },
+      ],
     ]);
     h = new TestHarness({ backendFactory: { create: async () => backend } });
     await h.initSchema();

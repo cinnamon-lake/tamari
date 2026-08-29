@@ -40,7 +40,7 @@ import { parseCardFolder, type ParsedCard } from './cardFolderParser.js';
 import { overlayCharacter, overlayCharacterSummary } from './overlay.js';
 import { isUnpackedCardId, unpackedCardId, unpackedWorldInfoId } from './unpackedIds.js';
 
-const log = getLogger('unpacked-cards');
+const log = getLogger('services/unpacked/UnpackedCardService');
 
 export const UNPACKED_CARDS_DIRNAME = 'unpacked-cards';
 const WATCH_DEBOUNCE_MS = 300;
@@ -263,7 +263,10 @@ export class UnpackedCardService implements UnpackedCardRegistry {
         await this.broadcastSnapshot(cardId, effective);
         await this.broadcastList();
       }
-      log.warn({ dir, incumbentDir: incumbent.dir, cardId }, 'unpacked card: duplicate meta.id — keeping the first folder');
+      log.warn(
+        { dir, incumbentDir: incumbent.dir, cardId },
+        'unpacked card: duplicate meta.id — keeping the first folder',
+      );
       return;
     }
 
@@ -271,8 +274,14 @@ export class UnpackedCardService implements UnpackedCardRegistry {
     const byDir = this.findByDir(dir);
     if (byDir && byDir.cardId !== cardId) await this.removeFolder(byDir.cardId);
 
-    const state: RegistryState =
-      this.registry.get(cardId) ?? { parsed, dir, notices: [], avatarMtimeMs: null, lorebookSignature: '', signature: '' };
+    const state: RegistryState = this.registry.get(cardId) ?? {
+      parsed,
+      dir,
+      notices: [],
+      avatarMtimeMs: null,
+      lorebookSignature: '',
+      signature: '',
+    };
     state.parsed = parsed;
     state.dir = dir;
     this.registry.set(cardId, state);

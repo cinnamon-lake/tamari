@@ -22,7 +22,7 @@ describe('repository coverage gaps', () => {
     it('softFork links existing messages and preserves the source chat', async () => {
       // Seed a chat with a user message and an assistant reply
       const chatId = crypto.randomUUID();
-      const chat = await h.deps.chats.createChat(chatId, {
+      await h.deps.chats.createChat(chatId, {
         characterId: null,
         personaId: null,
         name: 'Source Chat',

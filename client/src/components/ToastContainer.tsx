@@ -15,10 +15,7 @@ const TOAST_ICON: Record<Toast['type'], string> = {
 
 export function ToastContainer() {
   const { t } = useI18n();
-  const position = createMemo(
-    () =>
-      (state.settings['toastPosition']) ?? 'top-right',
-  );
+  const position = createMemo(() => state.settings['toastPosition'] ?? 'top-right');
 
   const typeLabel = (type: Toast['type']): string =>
     type === 'success'
@@ -47,7 +44,12 @@ export function ToastContainer() {
             <i class={`bi bi-${TOAST_ICON[toast.type]} toast-icon`} aria-hidden="true" />
             <span class="sr-only">{typeLabel(toast.type)}</span>
             <span class="toast-message">{toast.message}</span>
-            <button class="toast-close" onClick={() => removeToast(toast.id)} type="button" aria-label={t('toasts.dismiss')}>
+            <button
+              class="toast-close"
+              onClick={() => removeToast(toast.id)}
+              type="button"
+              aria-label={t('toasts.dismiss')}
+            >
               <i class="bi bi-x-lg" />
             </button>
           </div>

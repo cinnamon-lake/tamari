@@ -36,10 +36,7 @@ describe('createAuthMiddleware', () => {
   });
 
   it('accepts the master secret as Bearer and records the credential kind', async () => {
-    const res = await request(app)
-      .get('/api/protected')
-      .set('Authorization', `Bearer ${SECRET}`)
-      .expect(200);
+    const res = await request(app).get('/api/protected').set('Authorization', `Bearer ${SECRET}`).expect(200);
     expect(res.body).toEqual({ ok: true, kind: 'master' });
   });
 
@@ -63,15 +60,14 @@ describe('createAuthMiddleware', () => {
   });
 
   it('accepts a valid token from the query string', async () => {
-    const res = await request(app).get(`/api/protected?token=${encodeURIComponent(SECRET)}`).expect(200);
+    const res = await request(app)
+      .get(`/api/protected?token=${encodeURIComponent(SECRET)}`)
+      .expect(200);
     expect(res.body).toEqual({ ok: true, kind: 'master' });
   });
 
   it('rejects an invalid token', async () => {
-    const res = await request(app)
-      .get('/api/protected')
-      .set('Authorization', 'Bearer bad-token')
-      .expect(401);
+    const res = await request(app).get('/api/protected').set('Authorization', 'Bearer bad-token').expect(401);
     expect(res.body).toEqual({ error: 'Unauthorized' });
   });
 
@@ -88,6 +84,8 @@ describe('createAuthMiddleware', () => {
       await request(app).get(`/api/protected?token=wrong-${i}`).expect(401);
     }
     // Even the CORRECT password is refused while locked out.
-    await request(app).get(`/api/protected?token=${encodeURIComponent(SECRET)}`).expect(401);
+    await request(app)
+      .get(`/api/protected?token=${encodeURIComponent(SECRET)}`)
+      .expect(401);
   });
 });

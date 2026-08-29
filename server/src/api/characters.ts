@@ -9,6 +9,7 @@
 import { Router } from 'express';
 import { getLogger } from '../lib/logger.js';
 import { str } from '../lib/coerce.js';
+import { apiError, ApiError } from '../middleware/errorHandler.js';
 
 const log = getLogger('api/characters');
 import multer from 'multer';
@@ -103,11 +104,15 @@ export function v3EntryToWorldInfoEntry(e: unknown, index: number): WorldInfoEnt
     content: typeof obj.content === 'string' ? obj.content : '',
     comment: typeof obj.comment === 'string' ? obj.comment : '',
     order: typeof obj.insertion_order === 'number' ? obj.insertion_order : 100,
-    position: validPositions.has(position as WorldInfoEntry['position']) ? (position as WorldInfoEntry['position']) : 'before_char',
+    position: validPositions.has(position as WorldInfoEntry['position'])
+      ? (position as WorldInfoEntry['position'])
+      : 'before_char',
     probability: 100,
     constant: Boolean(obj.constant),
     selective: Boolean(obj.selective),
-    secondaryKeys: Array.isArray(obj.secondaryKeys) ? obj.secondaryKeys.filter((k): k is string => typeof k === 'string') : [],
+    secondaryKeys: Array.isArray(obj.secondaryKeys)
+      ? obj.secondaryKeys.filter((k): k is string => typeof k === 'string')
+      : [],
     addMemo: false,
     disable: obj.enabled === false,
     regex: Boolean(obj.use_regex),
@@ -160,7 +165,16 @@ function normalizeCharacterFields(raw: unknown): z.infer<typeof cardDataSchema> 
     }
   }
 
-  const textFields = ['description', 'personality', 'scenario', 'firstMes', 'mesExample', 'creatorNotes', 'systemPrompt', 'postHistoryInstructions'] as const;
+  const textFields = [
+    'description',
+    'personality',
+    'scenario',
+    'firstMes',
+    'mesExample',
+    'creatorNotes',
+    'systemPrompt',
+    'postHistoryInstructions',
+  ] as const;
   for (const key of textFields) {
     if (typeof normalized[key] === 'string') {
       (normalized as Record<string, unknown>)[key] = normalizeRisuMacros(normalized[key]);
@@ -276,68 +290,56 @@ export function createCharacterRouter(
 
   // ---------- Avatar ----------
 
-  router.post('/:id/avatar', upload.single('avatar'), (async (req, res) => {
-    try {
-      const character = await characters.getById(req.params.id as string);
-      if (!character) {
-        res.status(404).json({ error: 'Character not found' });
-        return;
-      }
-      if (!req.file) {
-        res.status(400).json({ error: 'No file uploaded' });
-        return;
-      }
-
-      await setCharacterAvatarFromBuffer({ characters, characterAssets: assets, storage, bus }, character, req.file.buffer);
-      res.json({ success: true });
-    } catch (err) {
-      log.error({ err }, 'avatar upload error');
-      res.status(500).json({ error: 'Upload failed' });
+  router.post('/:id/avatar', upload.single('avatar'), async (req, res) => {
+    const character = await characters.getById(req.params.id as string);
+    if (!character) {
+      throw apiError('NOT_FOUND', 'Character not found', 404);
     }
-  }));
+    if (!req.file) {
+      throw apiError('NO_FILE', 'No file uploaded', 400);
+    }
 
-
+    await setCharacterAvatarFromBuffer(
+      { characters, characterAssets: assets, storage, bus },
+      character,
+      req.file.buffer,
+    );
+    res.json({ success: true });
+  });
 
   // ---------- Assets ----------
 
-  router.get('/:id/assets/:assetId', (async (req, res) => {
-    try {
-      // Fast path: serve directly from disk when the URL includes the file extension.
-      const directPath = `files/character_assets/${req.params.id}/${req.params.assetId}`;
-      if (storage.exists(directPath)) {
-        const contentType = mime.lookup(req.params.assetId) || 'application/octet-stream';
-        res.set('Content-Type', contentType);
-        res.set('Cache-Control', 'public, max-age=86400');
-        // dotfiles: 'allow' — see attachments route in main.ts.
-        res.sendFile(storage.resolve(directPath), { dotfiles: 'allow' });
-        return;
-      }
-
-      // Fallback: DB lookup for legacy extension-less URLs.
-      const asset = await assets.getById(req.params.assetId);
-      if (!asset || !asset.filePath) {
-        res.status(404).json({ error: 'Asset not found' });
-        return;
-      }
-
-      const contentType = mime.lookup(asset.ext) || 'application/octet-stream';
+  router.get('/:id/assets/:assetId', async (req, res) => {
+    // Fast path: serve directly from disk when the URL includes the file extension.
+    const directPath = `files/character_assets/${req.params.id}/${req.params.assetId}`;
+    if (storage.exists(directPath)) {
+      const contentType = mime.lookup(req.params.assetId) || 'application/octet-stream';
       res.set('Content-Type', contentType);
       res.set('Cache-Control', 'public, max-age=86400');
       // dotfiles: 'allow' — see attachments route in main.ts.
-      res.sendFile(storage.resolve(asset.filePath), { dotfiles: 'allow' });
-    } catch (err) {
-      log.error({ err }, 'asset serve error');
-      res.status(500).json({ error: 'Failed to serve asset' });
+      res.sendFile(storage.resolve(directPath), { dotfiles: 'allow' });
+      return;
     }
-  }));
+
+    // Fallback: DB lookup for legacy extension-less URLs.
+    const asset = await assets.getById(req.params.assetId);
+    if (!asset || !asset.filePath) {
+      throw apiError('NOT_FOUND', 'Asset not found', 404);
+    }
+
+    const contentType = mime.lookup(asset.ext) || 'application/octet-stream';
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'public, max-age=86400');
+    // dotfiles: 'allow' — see attachments route in main.ts.
+    res.sendFile(storage.resolve(asset.filePath), { dotfiles: 'allow' });
+  });
 
   // ---------- Import V2/V3/CharX Card ----------
 
-  router.post('/import', upload.single('file'), (async (req, res) => {
+  router.post('/import', upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
-        res.status(400).json({ error: 'No file uploaded' });
-        return;
+        throw apiError('NO_FILE', 'No file uploaded', 400);
       }
 
       const fileType = detectFileType(req.file.buffer);
@@ -361,16 +363,17 @@ export function createCharacterRouter(
         return;
       }
 
-      res.status(400).json({ error: 'Unsupported file format. Upload a PNG, CharX, or JSON card.' });
+      throw apiError('UNSUPPORTED_FORMAT', 'Unsupported file format. Upload a PNG, CharX, or JSON card.', 400);
     } catch (err) {
-      log.error({ err }, 'import error');
+      // Zod schema failures are client errors with field details; everything
+      // else forwards to the central handler (logged there).
+      if (err instanceof ApiError) throw err;
       if (err instanceof z.ZodError) {
-        res.status(400).json({ error: 'Invalid card schema', details: err.issues });
-        return;
+        throw apiError('INVALID_CARD', 'Invalid card schema', 400, { details: err.issues, cause: err });
       }
-      res.status(500).json({ error: err instanceof Error ? err.message : 'Import failed' });
+      throw err;
     }
-  }));
+  });
 
   // ---------- Export V3/CharX Card ----------
 
@@ -378,206 +381,171 @@ export function createCharacterRouter(
 
   // Read endpoints — the frontend porting surface (module viewer). List returns
   // metadata only; section reads load the raw module JSON from FileStorage.
-  router.get('/:id/risu-modules', (async (req, res) => {
-    try {
-      const character = await characters.getById(req.params.id);
-      if (!character) {
-        res.status(404).json({ error: 'Character not found' });
-        return;
-      }
-      const metas = listRisuModuleMeta(character);
-      res.json({ total: metas.length, modules: metas });
-    } catch (err) {
-      log.error({ err }, 'risu-module list error');
-      res.status(500).json({ error: err instanceof Error ? err.message : 'List failed' });
+  router.get('/:id/risu-modules', async (req, res) => {
+    const character = await characters.getById(req.params.id);
+    if (!character) {
+      throw apiError('NOT_FOUND', 'Character not found', 404);
     }
-  }));
+    const metas = listRisuModuleMeta(character);
+    res.json({ total: metas.length, modules: metas });
+  });
 
-  router.get('/:id/risu-modules/:moduleId', (async (req, res) => {
-    try {
-      const character = await characters.getById(req.params.id);
-      if (!character) {
-        res.status(404).json({ error: 'Character not found' });
-        return;
-      }
-      const meta = listRisuModuleMeta(character).find((m) => m.id === req.params.moduleId);
-      if (!meta) {
-        res.status(404).json({ error: 'Module not found' });
-        return;
-      }
-      const sectionParam = typeof req.query['section'] === 'string' ? req.query['section'] : 'info';
-      if (!RISU_MODULE_SECTIONS.includes(sectionParam as RisuModuleSection)) {
-        res.status(400).json({ error: `Unknown section "${sectionParam}" (expected one of ${RISU_MODULE_SECTIONS.join(', ')})` });
-        return;
-      }
-      const module = loadRisuModule(storage, meta);
-      if (!module) {
-        res.status(404).json({ error: 'Stored module data is missing on disk' });
-        return;
-      }
-      const indexParam = typeof req.query['index'] === 'string' ? Number.parseInt(req.query['index'], 10) : undefined;
-      const result = getRisuModuleSection(
-        module,
-        sectionParam as RisuModuleSection,
-        indexParam !== undefined && Number.isInteger(indexParam) ? indexParam : undefined,
+  router.get('/:id/risu-modules/:moduleId', async (req, res) => {
+    const character = await characters.getById(req.params.id);
+    if (!character) {
+      throw apiError('NOT_FOUND', 'Character not found', 404);
+    }
+    const meta = listRisuModuleMeta(character).find((m) => m.id === req.params.moduleId);
+    if (!meta) {
+      throw apiError('NOT_FOUND', 'Module not found', 404);
+    }
+    const sectionParam = typeof req.query['section'] === 'string' ? req.query['section'] : 'info';
+    if (!RISU_MODULE_SECTIONS.includes(sectionParam as RisuModuleSection)) {
+      throw apiError(
+        'UNKNOWN_SECTION',
+        `Unknown section "${sectionParam}" (expected one of ${RISU_MODULE_SECTIONS.join(', ')})`,
+        400,
       );
-      if (!result.ok) {
-        res.status(400).json({ error: result.error });
-        return;
-      }
-      res.json(result.data);
-    } catch (err) {
-      log.error({ err }, 'risu-module section error');
-      res.status(500).json({ error: err instanceof Error ? err.message : 'Read failed' });
     }
-  }));
+    const module = loadRisuModule(storage, meta);
+    if (!module) {
+      throw apiError('NOT_FOUND', 'Stored module data is missing on disk', 404);
+    }
+    const indexParam = typeof req.query['index'] === 'string' ? Number.parseInt(req.query['index'], 10) : undefined;
+    const result = getRisuModuleSection(
+      module,
+      sectionParam as RisuModuleSection,
+      indexParam !== undefined && Number.isInteger(indexParam) ? indexParam : undefined,
+    );
+    if (!result.ok) {
+      throw apiError('INVALID_SECTION_REQUEST', result.error, 400);
+    }
+    res.json(result.data);
+  });
 
-  router.post('/:id/risu-module', upload.single('file'), (async (req, res) => {
+  router.post('/:id/risu-module', upload.single('file'), async (req, res) => {
+    const character = await characters.getById(req.params.id as string);
+    if (!character) {
+      throw apiError('NOT_FOUND', 'Character not found', 404);
+    }
+    if (!req.file) {
+      throw apiError('NO_FILE', 'No file uploaded', 400);
+    }
+
+    let parsed;
     try {
-      const character = await characters.getById(req.params.id as string);
-      if (!character) {
-        res.status(404).json({ error: 'Character not found' });
-        return;
-      }
-      if (!req.file) {
-        res.status(400).json({ error: 'No file uploaded' });
-        return;
-      }
-
-      let parsed;
-      try {
-        parsed = parseRisum(req.file.buffer);
-      } catch (err) {
-        if (err instanceof RisumParseError) {
-          res.status(400).json({ error: err.message });
-          return;
-        }
-        throw err;
-      }
-
-      const meta = storeRisuModule(storage, character.id, parsed.module, 'attached');
-      // Asset payloads land as ordinary character assets (servable/exportable);
-      // asset packs (Lightboard Music/NSFW-style modules) are the main case.
-      const assetsStored = await storeRisuModuleAssets(
-        storage,
-        assets,
-        character.id,
-        parsed.module,
-        parsed.assets,
-        meta.id,
-      );
-      const metas = [...listRisuModuleMeta(character), meta];
-      const updated = await characters.update(character.id, {
-        extensions: { ...character.extensions, [CHARACTER_RISU_MODULES_EXTENSION_KEY]: metas },
-      });
-      bus.broadcast({ type: 'character.updated', character: withCharacterAvatar(updated) });
-      bus.broadcast({ type: 'character.snapshot', character: withCharacterAvatar(updated) });
-      const list = await characters.listSummaries();
-      bus.broadcast({ type: 'character.listed', characters: list.items.map(toCharacterSummary) });
-      res.json({ success: true, module: meta, assetsStored });
+      parsed = parseRisum(req.file.buffer);
     } catch (err) {
-      log.error({ err }, 'risu-module attach error');
-      res.status(500).json({ error: err instanceof Error ? err.message : 'Attach failed' });
+      if (err instanceof RisumParseError) {
+        throw apiError('INVALID_RISUM', err.message, 400, { cause: err });
+      }
+      throw err;
     }
-  }));
 
-  router.delete('/:id/risu-module/:moduleId', (async (req, res) => {
-    try {
-      const character = await characters.getById(req.params.id);
-      if (!character) {
-        res.status(404).json({ error: 'Character not found' });
-        return;
-      }
-      const moduleId = req.params.moduleId;
-      const metas = listRisuModuleMeta(character);
-      if (!metas.some((m) => m.id === moduleId)) {
-        res.status(404).json({ error: 'Module not found' });
-        return;
-      }
-      const remaining = removeRisuModule(storage, character, moduleId);
-      const updated = await characters.update(character.id, {
-        extensions: { ...character.extensions, [CHARACTER_RISU_MODULES_EXTENSION_KEY]: remaining },
-      });
-      bus.broadcast({ type: 'character.updated', character: withCharacterAvatar(updated) });
-      bus.broadcast({ type: 'character.snapshot', character: withCharacterAvatar(updated) });
-      const list = await characters.listSummaries();
-      bus.broadcast({ type: 'character.listed', characters: list.items.map(toCharacterSummary) });
-      res.json({ success: true, removed: moduleId });
-    } catch (err) {
-      log.error({ err }, 'risu-module delete error');
-      res.status(500).json({ error: err instanceof Error ? err.message : 'Delete failed' });
+    const meta = storeRisuModule(storage, character.id, parsed.module, 'attached');
+    // Asset payloads land as ordinary character assets (servable/exportable);
+    // asset packs (Lightboard Music/NSFW-style modules) are the main case.
+    const assetsStored = await storeRisuModuleAssets(
+      storage,
+      assets,
+      character.id,
+      parsed.module,
+      parsed.assets,
+      meta.id,
+    );
+    const metas = [...listRisuModuleMeta(character), meta];
+    const updated = await characters.update(character.id, {
+      extensions: { ...character.extensions, [CHARACTER_RISU_MODULES_EXTENSION_KEY]: metas },
+    });
+    bus.broadcast({ type: 'character.updated', character: withCharacterAvatar(updated) });
+    bus.broadcast({ type: 'character.snapshot', character: withCharacterAvatar(updated) });
+    const list = await characters.listSummaries();
+    bus.broadcast({ type: 'character.listed', characters: list.items.map(toCharacterSummary) });
+    res.json({ success: true, module: meta, assetsStored });
+  });
+
+  router.delete('/:id/risu-module/:moduleId', async (req, res) => {
+    const character = await characters.getById(req.params.id);
+    if (!character) {
+      throw apiError('NOT_FOUND', 'Character not found', 404);
     }
-  }));
+    const moduleId = req.params.moduleId;
+    const metas = listRisuModuleMeta(character);
+    if (!metas.some((m) => m.id === moduleId)) {
+      throw apiError('NOT_FOUND', 'Module not found', 404);
+    }
+    const remaining = removeRisuModule(storage, character, moduleId);
+    const updated = await characters.update(character.id, {
+      extensions: { ...character.extensions, [CHARACTER_RISU_MODULES_EXTENSION_KEY]: remaining },
+    });
+    bus.broadcast({ type: 'character.updated', character: withCharacterAvatar(updated) });
+    bus.broadcast({ type: 'character.snapshot', character: withCharacterAvatar(updated) });
+    const list = await characters.listSummaries();
+    bus.broadcast({ type: 'character.listed', characters: list.items.map(toCharacterSummary) });
+    res.json({ success: true, removed: moduleId });
+  });
 
-  router.get('/:id/export', (async (req, res) => {
-    try {
-      const character = await characters.getById(req.params.id);
-      if (!character) {
-        res.status(404).json({ error: 'Character not found' });
-        return;
+  router.get('/:id/export', async (req, res) => {
+    const character = await characters.getById(req.params.id);
+    if (!character) {
+      throw apiError('NOT_FOUND', 'Character not found', 404);
+    }
+
+    const format = req.query.format === 'v2' ? 'v2' : req.query.format === 'charx' ? 'charx' : 'v3';
+    const safeName = character.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+    let characterBook: BuildCardOptions['characterBook'] | undefined;
+    if (character.worldInfoId) {
+      const book = await worldInfo.getById(character.worldInfoId);
+      if (book && book.entries.length > 0) {
+        characterBook = { name: book.name, entries: book.entries };
       }
+    }
 
-      const format = req.query.format === 'v2' ? 'v2' : req.query.format === 'charx' ? 'charx' : 'v3';
-      const safeName = character.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    if (format === 'charx') {
+      const assetList = await assets.listForCharacter(character.id);
+      const cardOpts: BuildCardOptions = {
+        format: 'v3',
+        assets: assetList.map((a) => ({
+          name: a.name,
+          type: a.type,
+          ext: a.ext,
+          uri: buildAssetUri(`${a.type}s/${a.name}.${a.ext}`),
+        })),
+        characterBook,
+      };
+      const card = buildCardJson(character, cardOpts);
+      const cardJson = JSON.stringify(card);
 
-      let characterBook: BuildCardOptions['characterBook'] | undefined;
-      if (character.worldInfoId) {
-        const book = await worldInfo.getById(character.worldInfoId);
-        if (book && book.entries.length > 0) {
-          characterBook = { name: book.name, entries: book.entries };
+      const zipFiles: Record<string, Uint8Array> = {
+        'card.json': new Uint8Array(Buffer.from(cardJson)),
+      };
+
+      for (const asset of assetList) {
+        if (asset.filePath && storage.exists(asset.filePath)) {
+          const data = storage.read(asset.filePath);
+          const zipPath = `${asset.type}s/${sanitizeAssetName(asset.name)}.${asset.ext}`;
+          zipFiles[zipPath] = new Uint8Array(data);
         }
       }
 
-      if (format === 'charx') {
-        const assetList = await assets.listForCharacter(character.id);
-        const cardOpts: BuildCardOptions = {
-          format: 'v3',
-          assets: assetList.map((a) => ({
-            name: a.name,
-            type: a.type,
-            ext: a.ext,
-            uri: buildAssetUri(`${a.type}s/${a.name}.${a.ext}`),
-          })),
-          characterBook,
-        };
-        const card = buildCardJson(character, cardOpts);
-        const cardJson = JSON.stringify(card);
-
-        const zipFiles: Record<string, Uint8Array> = {
-          'card.json': new Uint8Array(Buffer.from(cardJson)),
-        };
-
-        for (const asset of assetList) {
-          if (asset.filePath && storage.exists(asset.filePath)) {
-            const data = storage.read(asset.filePath);
-            const zipPath = `${asset.type}s/${sanitizeAssetName(asset.name)}.${asset.ext}`;
-            zipFiles[zipPath] = new Uint8Array(data);
-          }
-        }
-
-        const zipBuffer = Buffer.from(zipSync(zipFiles, { level: 6 }));
-        res.set('Content-Type', 'application/zip');
-        res.set('Content-Disposition', `attachment; filename="${safeName}.charx"`);
-        res.send(zipBuffer);
-        return;
-      }
-
-      const card = buildCardJson(character, { format, characterBook });
-      const json = JSON.stringify(card);
-
-      const avatarBuffer = character.avatarPath ? storage.read(character.avatarPath) : null;
-      const pngBuffer = avatarBuffer
-        ? embedPngMetadata(avatarBuffer, json, format)
-        : createPngWithMetadata(json, format);
-
-      res.set('Content-Type', 'image/png');
-      res.set('Content-Disposition', `attachment; filename="${safeName}.png"`);
-      res.send(pngBuffer);
-    } catch (err) {
-      log.error({ err }, 'export error');
-      res.status(500).json({ error: 'Export failed' });
+      const zipBuffer = Buffer.from(zipSync(zipFiles, { level: 6 }));
+      res.set('Content-Type', 'application/zip');
+      res.set('Content-Disposition', `attachment; filename="${safeName}.charx"`);
+      res.send(zipBuffer);
+      return;
     }
-  }));
+
+    const card = buildCardJson(character, { format, characterBook });
+    const json = JSON.stringify(card);
+
+    const avatarBuffer = character.avatarPath ? storage.read(character.avatarPath) : null;
+    const pngBuffer = avatarBuffer ? embedPngMetadata(avatarBuffer, json, format) : createPngWithMetadata(json, format);
+
+    res.set('Content-Type', 'image/png');
+    res.set('Content-Disposition', `attachment; filename="${safeName}.png"`);
+    res.send(pngBuffer);
+  });
 
   return router;
 }
@@ -656,13 +624,7 @@ async function importPngCard(
     log.warn({ err }, 'thumbnail generation failed for PNG import');
   }
 
-  const worldInfoId = await importCharacterBook(
-    data.character_book,
-    id,
-    parsed.name,
-    worldInfo,
-    bus,
-  );
+  const worldInfoId = await importCharacterBook(data.character_book, id, parsed.name, worldInfo, bus);
 
   const character = await characters.create(id, {
     name: parsed.name,
@@ -707,13 +669,7 @@ async function importJsonCard(
   const parsed = normalizeCharacterFields(data);
 
   const id = randomUUID();
-  const worldInfoId = await importCharacterBook(
-    data.character_book,
-    id,
-    parsed.name,
-    worldInfo,
-    bus,
-  );
+  const worldInfoId = await importCharacterBook(data.character_book, id, parsed.name, worldInfo, bus);
 
   const character = await characters.create(id, {
     name: parsed.name,
@@ -806,13 +762,7 @@ async function importCharXCard(
     }
   }
 
-  const worldInfoId = await importCharacterBook(
-    data.character_book,
-    id,
-    parsed.name,
-    worldInfo,
-    bus,
-  );
+  const worldInfoId = await importCharacterBook(data.character_book, id, parsed.name, worldInfo, bus);
 
   const character = await characters.create(id, {
     name: parsed.name,

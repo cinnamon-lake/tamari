@@ -80,10 +80,7 @@ export class DataMaid {
     let deletedFiles = 0;
 
     // SQL orphans — batch by table
-    const attachmentIds = [
-      ...report.sqlOrphans.unlinkedAttachments,
-      ...report.sqlOrphans.danglingAttachments,
-    ];
+    const attachmentIds = [...report.sqlOrphans.unlinkedAttachments, ...report.sqlOrphans.danglingAttachments];
     if (attachmentIds.length > 0) {
       const placeholders = attachmentIds.map(() => '?').join(',');
       await this.client.execute({
@@ -93,10 +90,7 @@ export class DataMaid {
       deletedSql += attachmentIds.length;
     }
 
-    const generationIds = [
-      ...report.sqlOrphans.danglingGenerations,
-      ...report.sqlOrphans.staleGenerations,
-    ];
+    const generationIds = [...report.sqlOrphans.danglingGenerations, ...report.sqlOrphans.staleGenerations];
     if (generationIds.length > 0) {
       const placeholders = generationIds.map(() => '?').join(',');
       await this.client.execute({

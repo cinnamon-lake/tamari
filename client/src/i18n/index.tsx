@@ -1,12 +1,5 @@
 import * as i18n from '@solid-primitives/i18n';
-import {
-  createContext,
-  createEffect,
-  createResource,
-  Suspense,
-  useContext,
-  type JSX,
-} from 'solid-js';
+import { createContext, createEffect, createResource, Suspense, useContext, type JSX } from 'solid-js';
 import { state } from '../stores/serverStore.js';
 import { bus } from '../bus/WebSocketBus.js';
 import { dict as enDict } from './locales/en/index.js';

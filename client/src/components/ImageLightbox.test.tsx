@@ -52,7 +52,6 @@ describe('ImageLightbox', () => {
     expect(document.querySelector('.lightbox-overlay')).not.toBeInTheDocument();
   });
 
-
   it('clicking close button closes lightbox', () => {
     openLightbox('http://example.com/img.png');
     render(() => <ImageLightbox />);

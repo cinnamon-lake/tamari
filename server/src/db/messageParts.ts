@@ -15,7 +15,7 @@ import type { ContentPart, MessageExtra } from '@tamari/types';
 import { str } from '../lib/coerce.js';
 import { getLogger } from '../lib/logger.js';
 
-const log = getLogger('db');
+const log = getLogger('db/messageParts');
 
 /** Minimal executor satisfied by both libsql Client and Transaction. */
 export interface SqlExecutor {
@@ -35,11 +35,7 @@ export function splitExtraParts(extra: MessageExtra): { extraJson: string; parts
 }
 
 /** Insert one row per part. Caller is responsible for any surrounding transaction. */
-export async function insertMessageParts(
-  q: SqlExecutor,
-  messageId: number,
-  parts: ContentPart[],
-): Promise<void> {
+export async function insertMessageParts(q: SqlExecutor, messageId: number, parts: ContentPart[]): Promise<void> {
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!;
     await q.execute({
@@ -50,11 +46,7 @@ export async function insertMessageParts(
 }
 
 /** Replace all part rows for a message with the given parts. */
-export async function replaceMessageParts(
-  q: SqlExecutor,
-  messageId: number,
-  parts: ContentPart[],
-): Promise<void> {
+export async function replaceMessageParts(q: SqlExecutor, messageId: number, parts: ContentPart[]): Promise<void> {
   await q.execute({ sql: 'DELETE FROM message_parts WHERE message_id = ?', args: [messageId] });
   await insertMessageParts(q, messageId, parts);
 }
@@ -66,10 +58,7 @@ const PARTS_BATCH = 999; // SQLite host parameter limit
  * Returns a map message_id → ordered parts. Messages without rows are absent
  * from the map. Malformed rows are skipped (logged), never fatal.
  */
-export async function fetchPartsByMessageId(
-  q: SqlExecutor,
-  messageIds: number[],
-): Promise<Map<number, ContentPart[]>> {
+export async function fetchPartsByMessageId(q: SqlExecutor, messageIds: number[]): Promise<Map<number, ContentPart[]>> {
   const byId = new Map<number, ContentPart[]>();
   if (messageIds.length === 0) return byId;
 

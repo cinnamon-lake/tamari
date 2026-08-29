@@ -57,11 +57,13 @@ describe('QuickReplyBar', () => {
     setState('quickReplies', [makeQR({ id: 'qr1', label: 'Hi', scope: 'global', scopeId: '' })]);
     render(() => <QuickReplyBar />);
     screen.getByText('Hi').click();
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'quickreply.execute',
-      id: 'qr1',
-      chatId: 'chat-1',
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'quickreply.execute',
+        id: 'qr1',
+        chatId: 'chat-1',
+      }),
+    );
   });
 
   it('right-click opens editor', () => {
@@ -85,7 +87,9 @@ describe('QuickReplyBar', () => {
   });
 
   it('shows legacy warning for non-lua QRs', () => {
-    setState('quickReplies', [makeQR({ id: 'qr1', label: 'Old', language: 'javascript', scope: 'global', scopeId: '' })]);
+    setState('quickReplies', [
+      makeQR({ id: 'qr1', label: 'Old', language: 'javascript', scope: 'global', scopeId: '' }),
+    ]);
     render(() => <QuickReplyBar />);
     expect(screen.getByText('⚠')).toBeInTheDocument();
   });

@@ -5,25 +5,12 @@
  * ChatView.css) and killed scrolling entirely — these assertions lock in the
  * scroller's overflow, manual scroll, and the scroll-to-bottom affordance.
  */
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
-import { App } from '../helpers/app.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 
 test.describe('Chat scrolling', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('message list scrolls, pins to bottom on new replies, and scroll-to-bottom works', async ({ page }) => {
+  test('message list scrolls, pins to bottom on new replies, and scroll-to-bottom works', async ({ page, app }) => {
     // Short viewport so a handful of exchanges overflow the list.
     await page.setViewportSize({ width: 1280, height: 500 });
-    const app = new App(page);
     const charName = `Scroll Tester ${Date.now()}`;
     await app.createCharacterAndChat({
       name: charName,

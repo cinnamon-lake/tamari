@@ -17,6 +17,7 @@ import { uploadAttachments } from './lib/uploadAttachments.js';
 import { deriveScene } from './lib/sceneState.js';
 import { appendPendingAttachments } from './stores/dndStore.js';
 import { state } from './stores/serverStore.js';
+import { modalStack } from './stores/modalStore.js';
 import { useI18n } from './i18n/index.js';
 
 const App: Component = () => {
@@ -33,9 +34,7 @@ const App: Component = () => {
     const chat = state.activeChat;
     if (!chat) return null;
     const bulk = state.messages[chat.id] ?? [];
-    const child = chat.activeChildId
-      ? state.swipes[chat.id]?.find((m) => m.id === chat.activeChildId)
-      : undefined;
+    const child = chat.activeChildId ? state.swipes[chat.id]?.find((m) => m.id === chat.activeChildId) : undefined;
     const messages = child && !bulk.some((m) => m.id === child.id) ? [...bulk, child] : bulk;
     return deriveScene(messages);
   });
@@ -75,36 +74,25 @@ const App: Component = () => {
     }
   };
 
-  // Global Escape: close the topmost modal overlay if one is open.
-  // Individual modals that handle Escape themselves (PopupContainer, ContextMenu)
-  // call e.stopPropagation() so this fallback doesn't fire.
-  const handleGlobalEscape = (e: KeyboardEvent) => {
-    if (e.key !== 'Escape') return;
-    const overlays = document.querySelectorAll('.modal-overlay');
-    if (overlays.length === 0) return;
-    const topOverlay = overlays[overlays.length - 1] as HTMLElement;
-    topOverlay.click();
-  };
+  // Global Escape is handled per-modal by the Modal shell (stores/modalStore.ts
+  // stack — topmost only). Popups/context menus stop propagation themselves.
 
   // While a modal dialog is open, mark the app background `inert` so background
   // content is removed from the tab order and the accessibility tree.
   // Sidebar-mounted dialogs (Settings, CharacterEditor, …) are DOM siblings of
   // <main>, so <main> + <aside> are safe to inert. But GroupChatPanel and
   // CheckpointsPanel mount inside <main> (via ChatHeader) — inerting <main>
-  // then would inert the dialog itself. So <main> is inerted only when the
-  // open dialog lives elsewhere; <aside> (never a dialog host) is always inerted.
-  const DIALOG_SELECTOR = '[role="dialog"][aria-modal="true"]';
-  const syncBackgroundInert = () => {
-    const hasDialog = document.querySelector(DIALOG_SELECTOR) !== null;
+  // then would inert the dialog itself. So <main> is inerted only when no open
+  // dialog lives inside it; <aside> (never a dialog host) is always inerted.
+  createEffect(() => {
+    const stack = modalStack();
+    const hasModal = stack.length > 0;
     const sidebar = document.querySelector<HTMLElement>('aside.sidebar');
     const main = document.getElementById('main-panel');
-    const dialogInsideMain = !!main?.querySelector(DIALOG_SELECTOR);
-    if (sidebar) sidebar.inert = hasDialog;
-    if (main) main.inert = hasDialog && !dialogInsideMain;
-  };
-  const isDialogMutation = (node: Node): boolean =>
-    node instanceof HTMLElement &&
-    (!!node.matches?.(DIALOG_SELECTOR) || !!node.querySelector?.(DIALOG_SELECTOR));
+    const dialogInsideMain = stack.some((m) => m.insideMain);
+    if (sidebar) sidebar.inert = hasModal;
+    if (main) main.inert = hasModal && !dialogInsideMain;
+  });
 
   // Mobile keyboards shrink the visual viewport *after* a field gets focus.
   // Bottom-sheet modals resize with it (85vh of the smaller viewport) and the
@@ -125,22 +113,9 @@ const App: Component = () => {
   };
 
   onMount(() => {
-    document.addEventListener('keydown', handleGlobalEscape);
     window.visualViewport?.addEventListener('resize', keepFocusedFieldVisible);
-    syncBackgroundInert();
-    const observer = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        if ([...m.addedNodes, ...m.removedNodes].some(isDialogMutation)) {
-          syncBackgroundInert();
-          break;
-        }
-      }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-    onCleanup(() => observer.disconnect());
   });
   onCleanup(() => {
-    document.removeEventListener('keydown', handleGlobalEscape);
     window.visualViewport?.removeEventListener('resize', keepFocusedFieldVisible);
   });
 
@@ -170,40 +145,44 @@ const App: Component = () => {
 
   return (
     <AuthGate>
-    <a href="#main-panel" class="skip-link">{t('app.skipToMainContent')}</a>
-    <div class="sr-only" role="status" aria-live="polite">{announcement()}</div>
-    <div class="app-shell">
-      <Sidebar />
-      <main
-        id="main-panel"
-        class="main-panel"
-        tabindex="-1"
-        onDragEnter={handleDragEnter}
-        onDragLeave={handleDragLeave}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-      >
-        <HotswapBar />
-        <ChatHeader />
-        <SceneStage scene={currentScene()} />
-        <ChatView />
-        <MessageInput />
-        <Show when={dragOver()}>
-          <div class="drag-drop-overlay">
-            <div class="drag-drop-content">
-              <i class="bi bi-cloud-upload text-3xl" />
-              <span class="drag-drop-hint">{t('app.dropFilesToAttach')}</span>
+      <a href="#main-panel" class="skip-link">
+        {t('app.skipToMainContent')}
+      </a>
+      <div class="sr-only" role="status" aria-live="polite">
+        {announcement()}
+      </div>
+      <div class="app-shell">
+        <Sidebar />
+        <main
+          id="main-panel"
+          class="main-panel"
+          tabindex="-1"
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          <HotswapBar />
+          <ChatHeader />
+          <SceneStage scene={currentScene()} />
+          <ChatView />
+          <MessageInput />
+          <Show when={dragOver()}>
+            <div class="drag-drop-overlay">
+              <div class="drag-drop-content">
+                <i class="bi bi-cloud-upload text-3xl" />
+                <span class="drag-drop-hint">{t('app.dropFilesToAttach')}</span>
+              </div>
             </div>
-          </div>
-        </Show>
-      </main>
-      <ToastContainer />
-      <PopupContainer />
-      <ThemeInjector />
-      <BackgroundInjector />
-      <DesignTokenInjector />
-      <ImageLightbox />
-    </div>
+          </Show>
+        </main>
+        <ToastContainer />
+        <PopupContainer />
+        <ThemeInjector />
+        <BackgroundInjector />
+        <DesignTokenInjector />
+        <ImageLightbox />
+      </div>
     </AuthGate>
   );
 };

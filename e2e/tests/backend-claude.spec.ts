@@ -21,22 +21,19 @@
  * (GET /last-request?route=/messages), which records the LAST request per
  * route with body + headers.
  */
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { authHeaders } from '../helpers/auth.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { resetLlmRequests } from '../helpers/llm.js';
 import { setSetting } from '../helpers/settings.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
 
 /** The e2e webServer pins TAMARI_SECRET to this value (playwright.config.ts). */
-const AUTH = { Authorization: 'Bearer e2e-test-secret' };
 
 /** Minimal 1x1 transparent PNG (same fixture as attachments.spec.ts). */
-const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 interface RouteCapture {
   route: string;
@@ -67,7 +64,10 @@ async function waitForRouteCapture(routePrefix: string, timeout = 10000): Promis
 type CapturedMessage = { role: string; content: unknown };
 
 /** Collect every content part of `type` across all captured messages. */
-function collectParts(messages: CapturedMessage[], type: string): Array<{ role: string; part: Record<string, unknown> }> {
+function collectParts(
+  messages: CapturedMessage[],
+  type: string,
+): Array<{ role: string; part: Record<string, unknown> }> {
   const out: Array<{ role: string; part: Record<string, unknown> }> = [];
   for (const m of messages) {
     if (!Array.isArray(m.content)) continue;
@@ -89,9 +89,7 @@ test.describe('Claude backend adapter', () => {
 
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async ({ app: _app, page }) => {
     // Keep the mock URL/key, switch the provider + model to Claude.
     await patchActiveBackendConfig(page, {
       backendProvider: 'claude',
@@ -111,13 +109,11 @@ test.describe('Claude backend adapter', () => {
     // Caching knobs are per-config (providerParams) — clear the blob so they
     // don't leak into other specs.
     await patchActiveBackendConfig(page, { providerParams: {} });
-    await resetBackendConfig(page);
   });
 
-  test('streams a basic reply and sends an Anthropic-shaped request', async ({ page }) => {
+  test('streams a basic reply and sends an Anthropic-shaped request', async ({ page, app }) => {
     await setSetting(page, 'customStoppingStrings', ['CLAUDESTOP']);
 
-    const app = new App(page);
     const charName = `Claude Basic ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -153,12 +149,11 @@ test.describe('Claude backend adapter', () => {
     expect(cap.headers['anthropic-version']).toBe('2023-06-01');
   });
 
-  test('streams a thinking block and re-sends it signed on the next turn', async ({ page }) => {
+  test('streams a thinking block and re-sends it signed on the next turn', async ({ page, app }) => {
     // Keep reasoning blocks in the prompt so the second turn exercises the
     // adapter's reasoning-part conversion (signature → thinking block).
     await setSetting(page, 'reasoningAddToPrompts', true);
 
-    const app = new App(page);
     const charName = `Claude Think ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -190,10 +185,9 @@ test.describe('Claude backend adapter', () => {
     });
   });
 
-  test('converts tools and interleaves tool_use/tool_result across the loop', async ({ page }) => {
+  test('converts tools and interleaves tool_use/tool_result across the loop', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'lua_dice');
 
-    const app = new App(page);
     const charName = `Claude Tools ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -235,13 +229,12 @@ test.describe('Claude backend adapter', () => {
     expect(toolResults[0]!.part['content']).toContain('Rolled 1d6');
   });
 
-  test('injects cache_control breakpoints and prompt-caching beta headers', async ({ page }) => {
+  test('injects cache_control breakpoints and prompt-caching beta headers', async ({ page, app }) => {
     // Prompt caching is per-backend config (providerParams.cacheMode/cacheDepth/cacheTTL).
     await patchActiveBackendConfig(page, {
       providerParams: { cacheMode: 'manual', cacheDepth: 1, cacheTTL: '1h' },
     });
 
-    const app = new App(page);
     const charName = `Claude Cache ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: 'A cacheable greeting.' });
 
@@ -282,8 +275,7 @@ test.describe('Claude backend adapter', () => {
     expect(beta).toContain('extended-cache-ttl-2025-04-11');
   });
 
-  test('maps a max_tokens stop to a length finish', async ({ page }) => {
-    const app = new App(page);
+  test('maps a max_tokens stop to a length finish', async ({ app }) => {
     const charName = `Claude Length ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -300,7 +292,7 @@ test.describe('Claude backend adapter', () => {
   test('lists models via the Anthropic model-list shape', async ({ request }) => {
     // The mock returns the Claude shape at GET /models when x-api-key is sent
     // (the adapter's listModels authenticates that way, unlike OpenAI).
-    const res = await request.get('/api/models', { headers: AUTH });
+    const res = await request.get('/api/models', { headers: authHeaders() });
     expect(res.ok()).toBe(true);
     const data = (await res.json()) as { items: Array<{ id: string; name: string; contextLength?: number }> };
     const mock = data.items.find((m) => m.id === 'mock-claude');
@@ -309,8 +301,7 @@ test.describe('Claude backend adapter', () => {
     expect(mock!.contextLength).toBe(200000);
   });
 
-  test('converts an uploaded image to a base64 image block', async ({ page }) => {
-    const app = new App(page);
+  test('converts an uploaded image to a base64 image block', async ({ page, app }) => {
     const charName = `Claude Image ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 

@@ -38,7 +38,6 @@ test.describe('Character Lifecycle Journey', () => {
     });
 
     await test.step('rename it and export a PNG (capturing the download)', async () => {
-      await app.revealHoverButtons();
       await app.characterRow(name).locator('[title="Edit character"]').click();
       const editor = page.locator('.character-editor-modal');
       await expect(editor).toBeVisible();
@@ -67,7 +66,6 @@ test.describe('Character Lifecycle Journey', () => {
     });
 
     await test.step('delete one copy via the editor', async () => {
-      await app.revealHoverButtons();
       await app.characterRow(renamed).first().locator('[title="Edit character"]').click();
       const editor = page.locator('.character-editor-modal');
       await expect(editor).toBeVisible();

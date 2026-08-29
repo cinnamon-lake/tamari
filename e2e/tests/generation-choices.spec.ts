@@ -1,33 +1,20 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
 import { getLastLlmRequest, resetLlmRequests } from '../helpers/llm.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 test.describe('Choices Widget', () => {
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     if (toolsetId) {
       await deleteToolset(page, toolsetId);
       toolsetId = undefined;
     }
   });
 
-  test('renders present_choices as clickable buttons and clicking one replies', async ({ page }) => {
-    const app = new App(page);
+  test('renders present_choices as clickable buttons and clicking one replies', async ({ page, app }) => {
     await resetLlmRequests();
     toolsetId = await enableBuiltinToolset(page, 'lua_choices');
 

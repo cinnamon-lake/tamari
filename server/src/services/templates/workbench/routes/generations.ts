@@ -24,7 +24,10 @@ import {
   type RouteError,
 } from '../router.js';
 
-async function getGeneration(call: RouteCall, id: string): Promise<{ ok: true; record: Generation } | { ok: false; error: string }> {
+async function getGeneration(
+  call: RouteCall,
+  id: string,
+): Promise<{ ok: true; record: Generation } | { ok: false; error: string }> {
   const repo = call.providers.generations;
   if (!repo) return { ok: false, error: err('generation records are not available in this context') };
   const record = await repo.getById(id);

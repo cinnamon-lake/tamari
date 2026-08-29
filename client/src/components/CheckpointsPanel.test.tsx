@@ -56,12 +56,14 @@ describe('CheckpointsPanel', () => {
     const sendSpy = vi.spyOn(bus, 'send');
     render(() => <CheckpointsPanel open={true} onClose={() => {}} />);
     screen.getByText('Create Checkpoint').click();
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'chat.softFork',
-      chatId: 'chat-1',
-      messageId: 5,
-      name: 'Main Chat (checkpoint)',
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'chat.softFork',
+        chatId: 'chat-1',
+        messageId: 5,
+        name: 'Main Chat (checkpoint)',
+      }),
+    );
   });
 
   it('restore checkpoint sends chat.select', () => {
@@ -72,11 +74,13 @@ describe('CheckpointsPanel', () => {
     ]);
     render(() => <CheckpointsPanel open={true} onClose={onClose} />);
     screen.getByTitle('Restore').click();
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'chat.select',
-      chatId: 'cp-1',
-      limit: 30,
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'chat.select',
+        chatId: 'cp-1',
+        limit: 30,
+      }),
+    );
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -90,10 +94,12 @@ describe('CheckpointsPanel', () => {
     screen.getByTitle('Delete').click();
     // Wait for async confirmPopup mock
     await new Promise((r) => setTimeout(r, 10));
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'chat.delete',
-      chatId: 'cp-1',
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'chat.delete',
+        chatId: 'cp-1',
+      }),
+    );
   });
 
   it('calls onClose when close button clicked', () => {

@@ -33,10 +33,12 @@ test.describe('Long Conversation & Pagination Journey', () => {
       await app.selectChatById(chatId as string);
 
       // The oldest messages are paginated out and a Load-more control is shown.
-      await expect.poll(async () => await page.locator('.message-bubble').count(), {
-        timeout: 10000,
-        message: 'oldest messages were paginated out',
-      }).toBeLessThan(total);
+      await expect
+        .poll(async () => await page.locator('.message-bubble').count(), {
+          timeout: 10000,
+          message: 'oldest messages were paginated out',
+        })
+        .toBeLessThan(total);
       await expect(page.locator('.load-more-btn')).toBeVisible();
     });
 

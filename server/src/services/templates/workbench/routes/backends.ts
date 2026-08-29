@@ -35,7 +35,12 @@ async function read(call: RouteCall): Promise<string | RouteError> {
   const [file] = call.segs;
   if (file === undefined) return { error: err(`is a directory (use ls): ${call.path}`) };
   if (isNewSegment(file) || !isJson(file)) return { error: err(`no such file: ${call.path}`) };
-  const res = await callProvider(call.providers.backendWorkbench, 'backend_get', { configId: configId(file) }, call.context);
+  const res = await callProvider(
+    call.providers.backendWorkbench,
+    'backend_get',
+    { configId: configId(file) },
+    call.context,
+  );
   if (!res.ok) return { error: res.error };
   return resultToString(res);
 }
@@ -66,7 +71,9 @@ async function write(call: RouteCall, content: string): Promise<string> {
 async function rm(call: RouteCall): Promise<string> {
   const [file] = call.segs;
   if (file === undefined) return err(`is a directory: ${call.path}`);
-  return err(`cannot remove ${call.path} — backend configs have no delete; overwrite with write or switch the active config`);
+  return err(
+    `cannot remove ${call.path} — backend configs have no delete; overwrite with write or switch the active config`,
+  );
 }
 
 export const backendsRoute: DomainRoute = { ls, read, write, rm };

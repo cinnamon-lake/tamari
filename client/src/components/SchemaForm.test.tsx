@@ -197,7 +197,7 @@ describe('SchemaForm', () => {
         vi.fn().mockResolvedValue({
           ok: true,
           json: vi.fn().mockResolvedValue([{ key: 'openai-key', value: 'sk-x', label: 'OpenAI' }]),
-        })
+        }),
       );
       const { onChange } = renderForm(schema);
       fireEvent.click(screen.getByRole('button', { name: 'Use vault secret' }));

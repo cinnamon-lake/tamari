@@ -28,7 +28,10 @@ describe('ChoicesResult', () => {
 
   it('renders without a prompt when choicesPrompt is empty', () => {
     render(() => (
-      <ChoicesResult content="Presented 2 choices" extra={{ renderType: 'choices', choicesPrompt: '', choices: ['Left', 'Right'] }} />
+      <ChoicesResult
+        content="Presented 2 choices"
+        extra={{ renderType: 'choices', choicesPrompt: '', choices: ['Left', 'Right'] }}
+      />
     ));
     expect(document.querySelector('.choices-prompt')).not.toBeInTheDocument();
     expect(document.querySelectorAll('.choice-btn')).toHaveLength(2);
@@ -70,7 +73,10 @@ describe('ChoicesResult', () => {
 
   it('falls back to plain content when choices are malformed', () => {
     render(() => (
-      <ChoicesResult content="Presented 2 choices: Left, Right" extra={{ renderType: 'choices', choices: ['Left', ''] }} />
+      <ChoicesResult
+        content="Presented 2 choices: Left, Right"
+        extra={{ renderType: 'choices', choices: ['Left', ''] }}
+      />
     ));
     expect(document.querySelectorAll('.choice-btn')).toHaveLength(0);
     expect(screen.getByText('Presented 2 choices: Left, Right')).toBeInTheDocument();

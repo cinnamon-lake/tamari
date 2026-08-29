@@ -1,9 +1,6 @@
 import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 test.describe('Keyboard Accessibility', () => {
   test.beforeEach(async ({ page }) => {
@@ -116,14 +113,16 @@ test.describe('Keyboard Accessibility', () => {
     // defers the focus call until after the dialog unmounts and the background
     // is un-inerted (otherwise focusing the still-inert trigger is a no-op).
     // Poll briefly for focus to leave <body>.
-    await expect.poll(
-      async () =>
-        page.evaluate(() => {
-          const el = document.activeElement;
-          if (!el || el === document.body) return 'body';
-          return el.tagName;
-        }),
-      { timeout: 2000, intervals: [50, 100, 200] },
-    ).not.toBe('body');
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const el = document.activeElement;
+            if (!el || el === document.body) return 'body';
+            return el.tagName;
+          }),
+        { timeout: 2000, intervals: [50, 100, 200] },
+      )
+      .not.toBe('body');
   });
 });

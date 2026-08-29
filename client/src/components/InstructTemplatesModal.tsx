@@ -4,8 +4,7 @@ import { bus } from '../bus/WebSocketBus.js';
 import { confirmPopup, alertPopup } from '../stores/popupStore.js';
 import { useI18n } from '../i18n/index.js';
 import { str } from '../lib/coerce.js';
-import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
-import { createBackdropDismiss } from '../lib/backdropDismiss.js';
+import { Modal } from './Modal.js';
 import './InstructTemplatesModal.css';
 
 interface InstructTemplateDef {
@@ -65,12 +64,7 @@ export function InstructTemplatesModal(props: { onClose: () => void }) {
   const s = state.settings;
   const { t } = useI18n();
 
-  saveFocus();
-
-  const close = () => {
-    restoreFocus();
-    props.onClose();
-  };
+  const close = () => props.onClose();
 
   const sendSetting = (key: string, value: unknown) => {
     bus.send({ type: 'settings.set', key, value });
@@ -132,176 +126,198 @@ export function InstructTemplatesModal(props: { onClose: () => void }) {
   };
 
   return (
-    <div class="modal-overlay" {...createBackdropDismiss(close)}>
-      <div class="modal instruct-templates-modal" role="dialog" aria-modal="true" aria-label={t('settings.templates.heading')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
-        <div class="modal-header-row">
-          <h2 class="modal-title">{t('settings.templates.heading')}</h2>
-          <button class="icon-btn" onClick={close} title={t('common.close')} aria-label={t('common.close')} type="button">
-            <i class="bi bi-x-lg" />
-          </button>
-        </div>
+    <Modal
+      title={t('settings.templates.heading')}
+      onClose={close}
+      class="modal instruct-templates-modal"
+      ariaLabel={t('settings.templates.heading')}
+      showCloseButton
+    >
+      <p class="text-sm text-muted">{t('settings.templates.description')}</p>
 
-        <p class="text-sm text-muted">
-          {t('settings.templates.description')}
-        </p>
-
-        <div class="worldinfo-list">
-          <For each={templates()}>
-            {(tpl) => (
-              <div class="selectable-item worldinfo-item" id={tpl.id}>
-                <div class="block">
-                  <div class="worldinfo-name">{tpl.name}</div>
-                  <div class="worldinfo-meta">{t('settings.templates.idLabel', { id: tpl.id })}</div>
-                </div>
-                <div class="section-actions">
-                  <button class="icon-btn small" onClick={() => startEditTemplate(tpl)} title={t('common.edit')} aria-label={t('common.edit')} type="button">
-                    <i class="bi bi-pencil" />
-                  </button>
-                  <button
-                    class="icon-btn small danger"
-                    onClick={() => deleteTemplate(tpl.id)}
-                    title={t('common.delete')} aria-label={t('common.delete')}
-                    type="button"
-                  >
-                    <i class="bi bi-trash" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </For>
-        </div>
-
-        <button class="btn btn-primary primary-btn" onClick={startNewTemplate} type="button">
-          <i class="bi bi-plus-lg" /> {t('settings.templates.new')}
-        </button>
-
-        <Show when={editingTemplate()}>
+      <div class="worldinfo-list">
+        <For each={templates()}>
           {(tpl) => (
-            <div class="flex-col-sm mt-md">
-              <h4 class="text-base">{templates().some((x) => x.id === tpl().id) ? t('settings.templates.editTitle') : t('settings.templates.new')}</h4>
-              <div class="row-equal">
-                <label class="field-label">
-                  {t('settings.templates.idField')}
-                  <input
-                    value={tpl().id}
-                    onInput={(e) => updateEditingField('id', e.currentTarget.value)}
-                    placeholder={t('settings.templates.idPlaceholder')}
-                    class="input"
-                  />
-                </label>
-                <label class="field-label">
-                  {t('settings.templates.nameField')}
-                  <input
-                    value={tpl().name}
-                    onInput={(e) => updateEditingField('name', e.currentTarget.value)}
-                    placeholder={t('settings.templates.namePlaceholder')}
-                    class="input"
-                  />
-                </label>
+            <div class="selectable-item worldinfo-item" id={tpl.id}>
+              <div class="block">
+                <div class="worldinfo-name">{tpl.name}</div>
+                <div class="worldinfo-meta">{t('settings.templates.idLabel', { id: tpl.id })}</div>
               </div>
-              <div class="row-equal">
-                <label class="field-label">
-                  {t('settings.templates.bosField')}
-                  <input
-                    value={tpl().bos ?? ''}
-                    onInput={(e) => updateEditingField('bos', e.currentTarget.value)}
-                    placeholder="&lt;s&gt;"
-                    class="input"
-                  />
-                </label>
-                <label class="field-label">
-                  {t('settings.templates.eosField')}
-                  <input
-                    value={tpl().eos ?? ''}
-                    onInput={(e) => updateEditingField('eos', e.currentTarget.value)}
-                    placeholder="&lt;/s&gt;"
-                    class="input"
-                  />
-                </label>
-              </div>
-              <label class="field-label">
-                {t('settings.templates.separatorField')}
-                <input
-                  value={tpl().separator ?? ''}
-                  onInput={(e) => updateEditingField('separator', e.currentTarget.value)}
-                  placeholder="\\n\\n"
-                  class="input"
-                />
-              </label>
-              <div class="row-equal">
-                <label class="field-label">
-                  {t('settings.templates.systemPrefixField')}
-                  <input
-                    value={tpl().systemPrefix ?? ''}
-                    onInput={(e) => updateEditingField('systemPrefix', e.currentTarget.value)}
-                    class="input"
-                  />
-                </label>
-                <label class="field-label">
-                  {t('settings.templates.systemSuffixField')}
-                  <input
-                    value={tpl().systemSuffix ?? ''}
-                    onInput={(e) => updateEditingField('systemSuffix', e.currentTarget.value)}
-                    class="input"
-                  />
-                </label>
-              </div>
-              <div class="row-equal">
-                <label class="field-label">
-                  {t('settings.templates.userPrefixField')}
-                  <input
-                    value={tpl().userPrefix ?? ''}
-                    onInput={(e) => updateEditingField('userPrefix', e.currentTarget.value)}
-                    class="input"
-                  />
-                </label>
-                <label class="field-label">
-                  {t('settings.templates.userSuffixField')}
-                  <input
-                    value={tpl().userSuffix ?? ''}
-                    onInput={(e) => updateEditingField('userSuffix', e.currentTarget.value)}
-                    class="input"
-                  />
-                </label>
-              </div>
-              <div class="row-equal">
-                <label class="field-label">
-                  {t('settings.templates.assistantPrefixField')}
-                  <input
-                    value={tpl().assistantPrefix ?? ''}
-                    onInput={(e) => updateEditingField('assistantPrefix', e.currentTarget.value)}
-                    class="input"
-                  />
-                </label>
-                <label class="field-label">
-                  {t('settings.templates.assistantSuffixField')}
-                  <input
-                    value={tpl().assistantSuffix ?? ''}
-                    onInput={(e) => updateEditingField('assistantSuffix', e.currentTarget.value)}
-                    class="input"
-                  />
-                </label>
-              </div>
-              <label class="field-label">
-                {t('settings.templates.responsePrefixField')}
-                <input
-                  value={tpl().responsePrefix ?? ''}
-                  onInput={(e) => updateEditingField('responsePrefix', e.currentTarget.value)}
-                  class="input"
-                />
-              </label>
-              <div class="edit-actions">
-                <button type="button" onClick={() => setEditingTemplate(null)} class="btn">
-                  {t('common.cancel')}
+              <div class="section-actions">
+                <button
+                  class="icon-btn small"
+                  data-testid="instruct-template-edit"
+                  onClick={() => startEditTemplate(tpl)}
+                  title={t('common.edit')}
+                  aria-label={t('common.edit')}
+                  type="button"
+                >
+                  <i class="bi bi-pencil" />
                 </button>
-                <button class="btn" type="button" onClick={saveTemplateEdit}>
-                  {t('settings.templates.saveTemplate')}
+                <button
+                  class="icon-btn small danger"
+                  data-testid="instruct-template-delete"
+                  onClick={() => deleteTemplate(tpl.id)}
+                  title={t('common.delete')}
+                  aria-label={t('common.delete')}
+                  type="button"
+                >
+                  <i class="bi bi-trash" />
                 </button>
               </div>
             </div>
           )}
-        </Show>
+        </For>
       </div>
-    </div>
+
+      <button
+        class="btn btn-primary primary-btn"
+        data-testid="instruct-template-new"
+        onClick={startNewTemplate}
+        type="button"
+      >
+        <i class="bi bi-plus-lg" /> {t('settings.templates.new')}
+      </button>
+
+      <Show when={editingTemplate()}>
+        {(tpl) => (
+          <div class="flex-col-sm mt-md">
+            <h4 class="text-base">
+              {templates().some((x) => x.id === tpl().id)
+                ? t('settings.templates.editTitle')
+                : t('settings.templates.new')}
+            </h4>
+            <div class="row-equal">
+              <label class="field-label">
+                {t('settings.templates.idField')}
+                <input
+                  data-testid="instruct-template-id"
+                  value={tpl().id}
+                  onInput={(e) => updateEditingField('id', e.currentTarget.value)}
+                  placeholder={t('settings.templates.idPlaceholder')}
+                  class="input"
+                />
+              </label>
+              <label class="field-label">
+                {t('settings.templates.nameField')}
+                <input
+                  data-testid="instruct-template-name"
+                  value={tpl().name}
+                  onInput={(e) => updateEditingField('name', e.currentTarget.value)}
+                  placeholder={t('settings.templates.namePlaceholder')}
+                  class="input"
+                />
+              </label>
+            </div>
+            <div class="row-equal">
+              <label class="field-label">
+                {t('settings.templates.bosField')}
+                <input
+                  value={tpl().bos ?? ''}
+                  onInput={(e) => updateEditingField('bos', e.currentTarget.value)}
+                  placeholder="&lt;s&gt;"
+                  class="input"
+                />
+              </label>
+              <label class="field-label">
+                {t('settings.templates.eosField')}
+                <input
+                  value={tpl().eos ?? ''}
+                  onInput={(e) => updateEditingField('eos', e.currentTarget.value)}
+                  placeholder="&lt;/s&gt;"
+                  class="input"
+                />
+              </label>
+            </div>
+            <label class="field-label">
+              {t('settings.templates.separatorField')}
+              <input
+                value={tpl().separator ?? ''}
+                onInput={(e) => updateEditingField('separator', e.currentTarget.value)}
+                placeholder="\\n\\n"
+                class="input"
+              />
+            </label>
+            <div class="row-equal">
+              <label class="field-label">
+                {t('settings.templates.systemPrefixField')}
+                <input
+                  data-testid="instruct-template-system-prefix"
+                  value={tpl().systemPrefix ?? ''}
+                  onInput={(e) => updateEditingField('systemPrefix', e.currentTarget.value)}
+                  class="input"
+                />
+              </label>
+              <label class="field-label">
+                {t('settings.templates.systemSuffixField')}
+                <input
+                  value={tpl().systemSuffix ?? ''}
+                  onInput={(e) => updateEditingField('systemSuffix', e.currentTarget.value)}
+                  class="input"
+                />
+              </label>
+            </div>
+            <div class="row-equal">
+              <label class="field-label">
+                {t('settings.templates.userPrefixField')}
+                <input
+                  data-testid="instruct-template-user-prefix"
+                  value={tpl().userPrefix ?? ''}
+                  onInput={(e) => updateEditingField('userPrefix', e.currentTarget.value)}
+                  class="input"
+                />
+              </label>
+              <label class="field-label">
+                {t('settings.templates.userSuffixField')}
+                <input
+                  value={tpl().userSuffix ?? ''}
+                  onInput={(e) => updateEditingField('userSuffix', e.currentTarget.value)}
+                  class="input"
+                />
+              </label>
+            </div>
+            <div class="row-equal">
+              <label class="field-label">
+                {t('settings.templates.assistantPrefixField')}
+                <input
+                  value={tpl().assistantPrefix ?? ''}
+                  onInput={(e) => updateEditingField('assistantPrefix', e.currentTarget.value)}
+                  class="input"
+                />
+              </label>
+              <label class="field-label">
+                {t('settings.templates.assistantSuffixField')}
+                <input
+                  value={tpl().assistantSuffix ?? ''}
+                  onInput={(e) => updateEditingField('assistantSuffix', e.currentTarget.value)}
+                  class="input"
+                />
+              </label>
+            </div>
+            <label class="field-label">
+              {t('settings.templates.responsePrefixField')}
+              <input
+                value={tpl().responsePrefix ?? ''}
+                onInput={(e) => updateEditingField('responsePrefix', e.currentTarget.value)}
+                class="input"
+              />
+            </label>
+            <div class="edit-actions">
+              <button
+                type="button"
+                data-testid="instruct-template-cancel"
+                onClick={() => setEditingTemplate(null)}
+                class="btn"
+              >
+                {t('common.cancel')}
+              </button>
+              <button class="btn" type="button" data-testid="instruct-template-save" onClick={saveTemplateEdit}>
+                {t('settings.templates.saveTemplate')}
+              </button>
+            </div>
+          </div>
+        )}
+      </Show>
+    </Modal>
   );
 }

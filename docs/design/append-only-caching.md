@@ -7,9 +7,9 @@
 
 Two families exist in the wild; from the outside they are indistinguishable (same `cached_tokens` usage fields), so we design for the worse one.
 
-**Lenient — block/radix prefix caches.** vLLM APC (16-token blocks, `hash(parent, tokens)` chaining), SGLang RadixAttention (radix tree, longest-prefix walk), DeepSeek disk cache (64-token units), OpenAI automatic caching (≥1024 tokens). Every computed block is indexed, so a request that diverges mid-history still gets credit for the prefix *above* the divergence. Floating injections cost only what's below their position (~1 exchange/turn for a depth-1 note). No write premium — misses are free.
+**Lenient — block/radix prefix caches.** vLLM APC (16-token blocks, `hash(parent, tokens)` chaining), SGLang RadixAttention (radix tree, longest-prefix walk), DeepSeek disk cache (64-token units), OpenAI automatic caching (≥1024 tokens). Every computed block is indexed, so a request that diverges mid-history still gets credit for the prefix _above_ the divergence. Floating injections cost only what's below their position (~1 exchange/turn for a depth-1 note). No write premium — misses are free.
 
-**Antagonistic — snapshot caches.** Explicit-breakpoint systems (Anthropic `cache_control`: reads resolve only at markers, writes cost 1.25×) and per-request stores (hit = a stored full-context snapshot is a *verbatim prefix* of the request; the rational minimal implementation for append-only coding traffic). Here, content that moves position between turns poisons every snapshot it appears in: **a floating injection at any depth yields zero reads, every turn, while still paying write premiums where those exist.**
+**Antagonistic — snapshot caches.** Explicit-breakpoint systems (Anthropic `cache_control`: reads resolve only at markers, writes cost 1.25×) and per-request stores (hit = a stored full-context snapshot is a _verbatim prefix_ of the request; the rational minimal implementation for append-only coding traffic). Here, content that moves position between turns poisons every snapshot it appears in: **a floating injection at any depth yields zero reads, every turn, while still paying write premiums where those exist.**
 
 The purist append-only layout is optimal under both families, so it is the target.
 
@@ -35,9 +35,9 @@ All overrides below are applied **at assembly time** — stored user settings ar
 
 1. **Depth injections of any kind.** No author's-note splice, no WI atDepth, no absolute-depth preset prompts mid-history. History renders verbatim.
 2. **Non-constant lorebook entries vanish.** Keyword-triggered entries change the rendered bytes whenever the keyword set shifts — under snapshot semantics that is a full miss, so they are simply not rendered. `constant` entries keep their static head positions; constant atDepth entries hoist to the pinned block (rule 8).
-3. **The macro system is off entirely.** History must be verbatim because model output can contain arbitrary macros — re-resolving `{{roll:d20}}` (or even `{{char}}` after a rename) in an old assistant message drifts already-sent bytes. Rather than adjudicate which positions are safe, resolution is disabled wholesale: `{{char}}` in a card field renders *literally*. This is the harshest break and it is intentional — cards that rely on macros are incompatible with the mode.
+3. **The macro system is off entirely.** History must be verbatim because model output can contain arbitrary macros — re-resolving `{{roll:d20}}` (or even `{{char}}` after a rename) in an old assistant message drifts already-sent bytes. Rather than adjudicate which positions are safe, resolution is disabled wholesale: `{{char}}` in a card field renders _literally_. This is the harshest break and it is intentional — cards that rely on macros are incompatible with the mode.
 4. **Prompt-side regex rules are not applied** (global rules and character `extensions.regexScripts` with `prompt: true`). `aiOutput` rules are likewise not applied to persisted content — they would rewrite the provider's exact streamed bytes, and the next request would diverge from the provider-side snapshot. Display-only rules (`display: true`) are unaffected; they never reach the prompt.
-5. **Response post-processing is forced off** — `trimSentences`, `removeXML`, `singleLine`, and `whitespaceMode` pinned to `'none'`: persisted assistant text must be the raw provider stream, byte for byte. The pin covers **both** whitespace passes — output at stream settle and *input* on user-message send (`GenerationService.handleSend`): rewriting outgoing user text would desync persisted text from already-sent prompt bytes.
+5. **Response post-processing is forced off** — `trimSentences`, `removeXML`, `singleLine`, and `whitespaceMode` pinned to `'none'`: persisted assistant text must be the raw provider stream, byte for byte. The pin covers **both** whitespace passes — output at stream settle and _input_ on user-message send (`GenerationService.handleSend`): rewriting outgoing user text would desync persisted text from already-sent prompt bytes.
 6. **`reasoningAddToPrompts` is forced ON** — the provider's snapshot includes the reasoning it generated; stripping it from re-sent history diverges from that snapshot just as surely as editing the text would. Replay everything the provider produced, verbatim.
 7. **Memory summaries are off.** A rolling summary prepended before history rewrites already-sent bytes on every update interval — the summary is neither used nor refreshed while the mode is on (`ChatPromptAssembly` skips `MemoryService.ensureSummaryUpdated` entirely).
 8. **Non-deterministic macros** — moot given rule 3, but the existing `hasNondeterministicMacros` scan still runs and trace-notes findings (belt and suspenders for future sources).
@@ -52,7 +52,7 @@ All overrides below are applied **at assembly time** — stored user settings ar
 
 ## Accepted losses (documented, not fixed here)
 
-- **Front truncation at the context cap** — the sliding window shifts the prefix and zeroes every snapshot, every turn, exactly when contexts are big. The largest remaining leak; *deliberately parked* — stable-cut/chunked truncation belongs to the summarization conversation.
+- **Front truncation at the context cap** — the sliding window shifts the prefix and zeroes every snapshot, every turn, exactly when contexts are big. The largest remaining leak; _deliberately parked_ — stable-cut/chunked truncation belongs to the summarization conversation.
 - **Message edits / regenerates** — the user's own purchase; swipes keep the prefix up to the fork.
 - **Continue** is safe: the partial message is a prefix of the prior snapshot (one caveat: whether a provider's snapshot end-token serialization matches a re-sent message is empirical per provider — docs note, not a blocker).
 - **Group chats** — head content (active character card) changes per speaker; append-only is unattainable. Out of scope; the mode simply degrades there.
@@ -67,7 +67,7 @@ All overrides below are applied **at assembly time** — stored user settings ar
 
 ## Testing
 
-- **The property test:** append a message to the log, re-render, assert turn N's serialized request is a byte-prefix of turn N+1's (unchanged inputs). This *is* the feature; test it directly (`PromptBuilder.test.ts` + golden snapshots, mode on vs off).
+- **The property test:** append a message to the log, re-render, assert turn N's serialized request is a byte-prefix of turn N+1's (unchanged inputs). This _is_ the feature; test it directly (`PromptBuilder.test.ts` + golden snapshots, mode on vs off).
 - Unit: `{{char}}` in model output stays literal; non-constant WI absent while constant entries render; prompt/aiOutput regex not applied; `trimSentences` override; hoist ordering determinism.
 - E2E (Playwright): setting persists across reload (settings-behavior pattern); a generation with an author's note at depth + a keyword WI entry renders the note in the top block and the WI entry nowhere (mock-LLM request capture, assert message order/content).
 

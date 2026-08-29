@@ -13,7 +13,10 @@ export interface MemoryToolTemplateDeps {
   memoryService: MemoryService;
 }
 
-export function registerMemoryToolTemplate(registry: { registerTemplate(template: ToolTemplate): void }, deps: MemoryToolTemplateDeps): void {
+export function registerMemoryToolTemplate(
+  registry: { registerTemplate(template: ToolTemplate): void },
+  deps: MemoryToolTemplateDeps,
+): void {
   registry.registerTemplate(new MemoryToolTemplate(deps));
 }
 

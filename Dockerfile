@@ -36,6 +36,9 @@ RUN mkdir -p /app/data-v2
 
 EXPOSE 8000
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- "http://127.0.0.1:${PORT}/health" > /dev/null 2>&1 || exit 1
+
 ENTRYPOINT ["tini", "--"]
 # See start.sh: --no-wasm-tier-up works around a V8/wasm teardown crash
 # triggered by wasmoon's per-callback module churn.

@@ -5,11 +5,11 @@ Workbench. tamari deliberately does **not** execute RisuAI triggerscripts, low-l
 Lua, or CBS (`{{getvar::…}}`, `{{#if …}}`) — porting means re-expressing those
 behaviors with three mechanisms:
 
-| Mechanism | What it can do |
-|---|---|
+| Mechanism                          | What it can do                                                                                                                                                                                                              |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `backend_logic` (card-coupled Lua) | Transform the outgoing prompt and pass through (`return { __passthrough = true, prompt = p }`), delegate generation (`backends.generate(p):await()`), post-process returned text, keep per-chat `state` (branch-persisted). |
-| Regex rules (incl. `replaceLua`) | Static/dynamic find-replace on the prompt (`prompt=true`) and on rendered messages (`display=true`), role-filterable. `replaceLua` gets only `(match, captures)` — **no state, no message index**. |
-| Native lorebook entries | `keys[]`/`secondaryKeys`/`selective`/`constant`/`order`/probability/sticky/cooldown/delay. |
+| Regex rules (incl. `replaceLua`)   | Static/dynamic find-replace on the prompt (`prompt=true`) and on rendered messages (`display=true`), role-filterable. `replaceLua` gets only `(match, captures)` — **no state, no message index**.                          |
+| Native lorebook entries            | `keys[]`/`secondaryKeys`/`selective`/`constant`/`order`/probability/sticky/cooldown/delay.                                                                                                                                  |
 
 Hard boundaries (anything needing these is a redesign, not a transliteration):
 no chat-history mutation, no UI (buttons, alerts, popovers), no events other
@@ -26,7 +26,7 @@ reads from Lua, no asset playback.
 - Attach any standalone `.risum` files in the character editor (module viewer →
   "Attach .risum…"). Standalone-module asset payloads are imported as ordinary
   character assets tagged `origin: 'risu-module'` + `moduleId`. (Deliberate
-  asymmetry: module *behavior* stays sealed and inert in the raw module, but
+  asymmetry: module _behavior_ stays sealed and inert in the raw module, but
   asset payloads flatten into the card's store — bytes tamari can serve, code it
   cannot run. Removing the module later keeps the assets.)
 
@@ -69,7 +69,7 @@ card fields. **Regex `type` is load-bearing** — RisuAI stages map as:
    (`/…/g`, add `i` if the original was case-insensitive). `$1` backrefs carry
    over. Replacements containing CBS or `risu-btn`/`risu-trigger` attributes
    must be rewritten (static HTML) or moved to backend_logic.
-4. **Assets**: already on the card from Phase 0. When porting *between* cards:
+4. **Assets**: already on the card from Phase 0. When porting _between_ cards:
    `character_asset_copy` / `character_assets_copy` /
    `risu_module_assets_copy`. Set the avatar with `character_set_avatar`
    (attachment or `sourceCharacterId`).
@@ -156,6 +156,7 @@ RPack/TLV decoder; verified against these exact files).
 ### Target architecture per card
 
 **Touhou** — one backend_logic script combining all three patterns:
+
 - `state` seeded from `defaultVariables` (note `year = {{time::YYYY}}` →
   `tonumber(os.date("%Y"))`); chat commands replace the 54 toggle buttons.
 - Pattern A injects the active "Settings" blocks (futa/gl/yandere/horror/…,
@@ -190,7 +191,7 @@ recency gating of display rules, `depth_prompt`/`sdData`/`vits`.
 ### Traps found while checking this bundle
 
 1. **State flows through chat text** — `ModifyMap` and `Year Change` write
-   vars via `{{setvar}}` inside regex *replacement output*. Treating regexes
+   vars via `{{setvar}}` inside regex _replacement output_. Treating regexes
    as display sugar silently breaks the map/year mechanics. Port these first.
 2. **Upstream bugs — do not replicate**: Kakashi's Lua is byte-identical to
    Bunbunmaru's (wrong title/ids, strips the wrong tag); Gensonet's renderer

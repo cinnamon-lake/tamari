@@ -41,8 +41,7 @@ export interface ExecuteRequestOptions {
 }
 
 export type ExecuteRequestOutcome =
-  | { ok: true; body: ReadableStream<Uint8Array> }
-  | { ok: false; result: GenerationResult };
+  { ok: true; body: ReadableStream<Uint8Array> } | { ok: false; result: GenerationResult };
 
 /**
  * Run the shared request prologue: apply the request script, log, fetch, and
@@ -84,9 +83,13 @@ export async function executeRequest(options: ExecuteRequestOptions): Promise<Ex
     if (requestScript) {
       // Script-guarded surface: redirects are followed hop-by-hop through the
       // SSRF guard (the script's effective loopback allowance carries over).
-      response = await safeFetch(finalUrl, { ...finalInit, signal }, {
-        allowLocalhost: guardAllowLocalhost,
-      });
+      response = await safeFetch(
+        finalUrl,
+        { ...finalInit, signal },
+        {
+          allowLocalhost: guardAllowLocalhost,
+        },
+      );
     } else {
       // Unguarded operator-configured URL — unchanged plain fetch semantics.
       response = await fetch(finalUrl, { ...finalInit, signal });

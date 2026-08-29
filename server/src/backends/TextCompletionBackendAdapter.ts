@@ -25,7 +25,6 @@ import {
   OpenAIModelListSchema,
   type TextCompletionStreamChunk,
   type TextCompletionRequest,
-
   INTERNAL_PARAM_KEYS,
 } from './types.js';
 
@@ -38,8 +37,6 @@ export interface TextCompletionAdapterConfig extends BaseAdapterConfig {
   /** Inline past reasoning blocks into the flat prompt (template delimiters). */
   includeReasoning?: boolean;
 }
-
-
 
 export class TextCompletionBackendAdapter implements BackendAdapter {
   readonly id = 'text-completion';

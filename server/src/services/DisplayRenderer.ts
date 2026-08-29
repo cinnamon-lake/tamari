@@ -49,11 +49,7 @@ DOMPurify.addHook('uponSanitizeAttribute', (_node, data) => {
 // survives DOMPurify's permissive tag list and materializes as hundreds of
 // live DOM elements inside the bubble, instead of inert text in one <pre>.
 const escapeHtml = (s: string) =>
-  s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const renderer = new marked.Renderer();
 renderer.code = ({ text, lang }: { text: string; lang?: string }) => {
   return `<pre><code class="hljs language-${escapeHtml(lang ?? 'plaintext')}">${escapeHtml(text)}</code></pre>`;
@@ -66,14 +62,51 @@ marked.setOptions({
 
 const permissiveConfig = {
   ALLOWED_TAGS: [
-    'p', 'br', 'strong', 'em', 'u', 's', 'del', 'ins',
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'a', 'img',
-    'audio', 'video', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-    'hr', 'details', 'summary', 'span',
-    'div', 'button',
-    'form', 'input', 'select', 'option', 'optgroup', 'textarea',
-    'label', 'fieldset', 'legend',
+    'p',
+    'br',
+    'strong',
+    'em',
+    'u',
+    's',
+    'del',
+    'ins',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'ul',
+    'ol',
+    'li',
+    'blockquote',
+    'pre',
+    'code',
+    'a',
+    'img',
+    'audio',
+    'video',
+    'table',
+    'thead',
+    'tbody',
+    'tr',
+    'th',
+    'td',
+    'hr',
+    'details',
+    'summary',
+    'span',
+    'div',
+    'button',
+    'form',
+    'input',
+    'select',
+    'option',
+    'optgroup',
+    'textarea',
+    'label',
+    'fieldset',
+    'legend',
   ],
   // data-post-response: the Layer-3 interaction protocol
   // (docs/design/scriptable-layers.md §4) — <button data-post-response="attack">
@@ -86,9 +119,23 @@ const permissiveConfig = {
   // config — the former client-side mirror (client markdown.ts) was removed
   // when rendering moved fully server-side.
   ALLOWED_ATTR: [
-    'href', 'title', 'src', 'alt', 'class', 'style', 'controls', 'preload',
+    'href',
+    'title',
+    'src',
+    'alt',
+    'class',
+    'style',
+    'controls',
+    'preload',
     'data-post-response',
-    'name', 'type', 'value', 'placeholder', 'checked', 'selected', 'for', 'rows',
+    'name',
+    'type',
+    'value',
+    'placeholder',
+    'checked',
+    'selected',
+    'for',
+    'rows',
   ],
   ALLOW_DATA_ATTR: false,
   // Field names are the form protocol's payload keys, and natural RPG names
@@ -181,7 +228,11 @@ export async function renderTextPartHtml(text: string, ctx: DisplayRenderContext
 
   // 3. Resolve embedded URIs
   if (ctx.character && ctx.characterAssets) {
-    resolved = resolveHtmlImages(resolved, ctx.characterAssets as import('@tamari/types').CharacterAsset[], ctx.character.id);
+    resolved = resolveHtmlImages(
+      resolved,
+      ctx.characterAssets as import('@tamari/types').CharacterAsset[],
+      ctx.character.id,
+    );
   }
 
   // 4. Markdown to HTML

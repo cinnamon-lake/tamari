@@ -5,10 +5,12 @@ import { TestHarness } from '../testing/TestHarness.js';
 import { GenerationRepository } from '../repos/GenerationRepository.js';
 import type { GenerationInsert } from '@tamari/types';
 import { createChatsRouter } from './chats.js';
+import { errorHandler } from '../middleware/errorHandler.js';
 
 function createApp(harness: TestHarness) {
   const app = express();
   app.use('/chats', createChatsRouter(harness.deps.chats, new GenerationRepository(harness.db)));
+  app.use(errorHandler);
   return app;
 }
 
@@ -113,7 +115,10 @@ describe('createChatsRouter', () => {
 
       // Newest first (created_at DESC): backdate the parent so the order is
       // deterministic — same-second ties break on the random id.
-      await h.db.execute({ sql: 'UPDATE generations SET created_at = created_at - 60 WHERE id = ?', args: ['gen-parent'] });
+      await h.db.execute({
+        sql: 'UPDATE generations SET created_at = created_at - 60 WHERE id = ?',
+        args: ['gen-parent'],
+      });
 
       const res = await request(app).get(`/chats/${chatId}/generations`).expect(200);
       const items = res.body.items as Array<Record<string, unknown>>;

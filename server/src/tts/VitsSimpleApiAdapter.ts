@@ -13,7 +13,7 @@
  */
 
 import { logger } from '../lib/logger.js';
-import { applyRequestScript } from '../backends/RequestScript.js';
+import { BaseTtsAdapter } from './BaseTtsAdapter.js';
 import type { TtsAdapter, TtsVoice, TtsGenerateOptions, TtsResult } from './TtsAdapter.js';
 
 export interface VitsSimpleConfig {
@@ -24,25 +24,14 @@ export interface VitsSimpleConfig {
 
 type SpeakerEntry = { id: number; name?: string; lang?: string[] };
 
-export class VitsSimpleApiAdapter implements TtsAdapter {
+export class VitsSimpleApiAdapter extends BaseTtsAdapter<VitsSimpleConfig> implements TtsAdapter {
   readonly id = 'vits';
   readonly name = 'VITS (simple-api)';
 
-  constructor(private config: VitsSimpleConfig) {}
-
-  private get baseUrl(): string {
-    return this.config.baseUrl.replace(/\/$/, '');
-  }
-
-  private get headers(): Record<string, string> {
+  protected override get headers(): Record<string, string> {
     const h: Record<string, string> = { 'Content-Type': 'application/json' };
     if (this.config.apiKey) h['X-API-KEY'] = this.config.apiKey;
     return h;
-  }
-
-  private async applyScript(url: string, init: RequestInit): Promise<{ url: string; init: RequestInit }> {
-    if (!this.config.requestScript) return { url, init };
-    return applyRequestScript(url, init, this.config.requestScript);
   }
 
   async healthCheck(signal?: AbortSignal): Promise<boolean> {
@@ -63,7 +52,10 @@ export class VitsSimpleApiAdapter implements TtsAdapter {
     });
     const res = await fetch(url, init);
     if (!res.ok) {
-      const text = await res.text().catch((err) => { logger.debug({ err }, 'TTS error body read failed'); return 'Unknown error'; });
+      const text = await res.text().catch((err) => {
+        logger.debug({ err }, 'TTS error body read failed');
+        return 'Unknown error';
+      });
       throw new Error(`Failed to list voices: HTTP ${res.status} - ${text}`);
     }
     // Response is keyed by model type (VITS, BERT-VITS2, ...); flatten into one list.
@@ -99,7 +91,10 @@ export class VitsSimpleApiAdapter implements TtsAdapter {
     });
     const res = await fetch(url, init);
     if (!res.ok) {
-      const t = await res.text().catch((err) => { logger.debug({ err }, 'TTS error body read failed'); return 'Unknown error'; });
+      const t = await res.text().catch((err) => {
+        logger.debug({ err }, 'TTS error body read failed');
+        return 'Unknown error';
+      });
       throw new Error(`TTS generation failed: HTTP ${res.status} - ${t}`);
     }
     const contentType = res.headers.get('content-type') ?? 'audio/wav';

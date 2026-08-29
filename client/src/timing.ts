@@ -7,8 +7,7 @@
  * human-typing pause is dead time there. Unit tests (jsdom) and real browsers
  * keep the production value.
  */
-const fastTimers =
-  typeof localStorage !== 'undefined' && localStorage.getItem('st_fast_timers') === '1';
+const fastTimers = typeof localStorage !== 'undefined' && localStorage.getItem('st_fast_timers') === '1';
 
 /** Idle delay before an editor field auto-saves. */
 export const AUTOSAVE_DEBOUNCE_MS = fastTimers ? 50 : 600;

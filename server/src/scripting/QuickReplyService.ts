@@ -5,7 +5,7 @@
 import type { EventBus } from '../bus/EventBus.js';
 import { getLogger } from '../lib/logger.js';
 
-const log = getLogger('QuickReplyService');
+const log = getLogger('scripting/QuickReplyService');
 import type { ScriptGenerationApi } from './ScriptGenerationApi.js';
 import type { IChatRepository } from '../repos/ChatRepository.js';
 import type { ICharacterRepository } from '../repos/CharacterRepository.js';
@@ -47,7 +47,12 @@ export class QuickReplyService {
     this.luaRuntime = new LuaRuntime();
   }
 
-  async executeById(id: string, chatId: string, clientId: string, budget: ExecutionBudget = QUICK_REPLY_BUDGET): Promise<void> {
+  async executeById(
+    id: string,
+    chatId: string,
+    clientId: string,
+    budget: ExecutionBudget = QUICK_REPLY_BUDGET,
+  ): Promise<void> {
     const qr = await this.deps.quickReplies.getById(id);
     if (!qr) {
       this.deps.bus.sendTo(clientId, {

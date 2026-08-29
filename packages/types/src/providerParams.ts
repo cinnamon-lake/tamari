@@ -39,21 +39,43 @@ export const PROVIDER_PARAMS_STRUCTURAL_KEYS: readonly string[] = [
 
 export const ADVANCED_SAMPLER_WIRE_NAMES: readonly string[] = [
   // Mirostat
-  'mirostat_mode', 'mirostat', 'mirostat_tau', 'mirostat_eta',
+  'mirostat_mode',
+  'mirostat',
+  'mirostat_tau',
+  'mirostat_eta',
   // Alternative samplers
-  'typical_p', 'typical', 'tfs_z', 'tfs', 'penalty_alpha',
+  'typical_p',
+  'typical',
+  'tfs_z',
+  'tfs',
+  'penalty_alpha',
   // DRY
-  'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n', 'dry_sequence_breakers',
+  'dry_multiplier',
+  'dry_base',
+  'dry_allowed_length',
+  'dry_penalty_last_n',
+  'dry_sequence_breakers',
   // XTC
-  'xtc_threshold', 'xtc_probability',
+  'xtc_threshold',
+  'xtc_probability',
   // Smoothing
-  'smoothing_factor', 'smoothing_curve',
+  'smoothing_factor',
+  'smoothing_curve',
   // Dynamic temperature
-  'dynatemp', 'min_temp', 'max_temp', 'dynatemp_exponent',
+  'dynatemp',
+  'min_temp',
+  'max_temp',
+  'dynatemp_exponent',
   // Decoding
-  'seed', 'sampler_seed', 'ban_eos_token', 'skip_special_tokens', 'add_bos_token', 'banned_tokens',
+  'seed',
+  'sampler_seed',
+  'ban_eos_token',
+  'skip_special_tokens',
+  'add_bos_token',
+  'banned_tokens',
   // Grammar
-  'grammar', 'grammar_string',
+  'grammar',
+  'grammar_string',
 ];
 
 export const ADAPTER_PARAM_KEYS: readonly string[] = ['cacheTTL', 'strictTools'];

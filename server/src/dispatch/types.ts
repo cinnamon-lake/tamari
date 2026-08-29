@@ -72,10 +72,7 @@ export interface DispatcherDeps {
   chatMetaBroadcast: ChatMetaBroadcastService;
 }
 
-export type MessageHandler<M extends ClientMessage> = (
-  client: ClientConnection,
-  msg: M,
-) => Promise<void>;
+export type MessageHandler<M extends ClientMessage> = (client: ClientConnection, msg: M) => Promise<void>;
 
 /** One handler per ClientMessage type — the compile-time exhaustiveness guarantee. */
 export type HandlerMap = {

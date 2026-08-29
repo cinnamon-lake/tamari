@@ -915,7 +915,17 @@ return Tool
 `,
 };
 
-const SEEDS = [memoryTemplate, todoTemplate, diceTemplate, choicesTemplate, timeTemplate, encouragementTemplate, npcRegistryTemplate, mapTemplate, forgeImageTemplate];
+const SEEDS = [
+  memoryTemplate,
+  todoTemplate,
+  diceTemplate,
+  choicesTemplate,
+  timeTemplate,
+  encouragementTemplate,
+  npcRegistryTemplate,
+  mapTemplate,
+  forgeImageTemplate,
+];
 
 export async function seedToolTemplates(repo: IToolTemplateRepository): Promise<void> {
   const existing = await repo.list();

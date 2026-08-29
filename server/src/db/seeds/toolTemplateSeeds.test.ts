@@ -63,7 +63,17 @@ afterAll(() => {
 
 describe('toolTemplateSeeds definitions', () => {
   it('exports nine well-formed built-in Lua templates', () => {
-    const seeds = [memoryTemplate, todoTemplate, diceTemplate, choicesTemplate, timeTemplate, encouragementTemplate, npcRegistryTemplate, mapTemplate, forgeImageTemplate];
+    const seeds = [
+      memoryTemplate,
+      todoTemplate,
+      diceTemplate,
+      choicesTemplate,
+      timeTemplate,
+      encouragementTemplate,
+      npcRegistryTemplate,
+      mapTemplate,
+      forgeImageTemplate,
+    ];
     expect(seeds.map((s) => s.name).sort()).toEqual(EXPECTED_NAMES);
     for (const seed of seeds) {
       expect(seed.configSchema).toEqual({});
@@ -147,7 +157,14 @@ describe('lua_npc_registry template', () => {
         role: 'assistant',
         content: '',
         extra: {
-          parts: [{ type: 'tool_result' as const, toolUseId: 'call-1', content: '', extra: { _toolState: { npc_registry: raw } } }],
+          parts: [
+            {
+              type: 'tool_result' as const,
+              toolUseId: 'call-1',
+              content: '',
+              extra: { _toolState: { npc_registry: raw } },
+            },
+          ],
         },
       },
     ];
@@ -352,7 +369,9 @@ describe('lua_map template', () => {
         role: 'assistant',
         content: '',
         extra: {
-          parts: [{ type: 'tool_result' as const, toolUseId: 'call-1', content: '', extra: { _toolState: { map: raw } } }],
+          parts: [
+            { type: 'tool_result' as const, toolUseId: 'call-1', content: '', extra: { _toolState: { map: raw } } },
+          ],
         },
       },
     ];
@@ -403,7 +422,12 @@ describe('lua_map template', () => {
     expect(badFill.content).toContain("unknown terrain 'lava'");
     expect(badFill.extra?.renderType).toBeUndefined();
 
-    const badStart = await executor.execute(mapTemplate.code, 'map_create', { width: 4, height: 4, startX: 4, startY: 0 });
+    const badStart = await executor.execute(mapTemplate.code, 'map_create', {
+      width: 4,
+      height: 4,
+      startX: 4,
+      startY: 0,
+    });
     expect(badStart.content).toContain('outside a 4x4 map');
     expect(badStart.extra?.renderType).toBeUndefined();
   });
@@ -420,7 +444,12 @@ describe('lua_map template', () => {
     expect(set.extra?.renderType).toBe('map');
     expect(payloadOf(set).grid[2]![3]).toEqual({ t: 'forest', l: 'Darkwood' });
 
-    const repaint = await executor.execute(mapTemplate.code, 'map_set_tile', { x: 3, y: 2, terrain: 'road' }, stateOf(set));
+    const repaint = await executor.execute(
+      mapTemplate.code,
+      'map_set_tile',
+      { x: 3, y: 2, terrain: 'road' },
+      stateOf(set),
+    );
     expect(payloadOf(repaint).grid[2]![3]).toEqual({ t: 'road', l: 'Darkwood' });
   });
 
@@ -527,12 +556,7 @@ describe('lua_map template', () => {
     const moved = await executor.execute(mapTemplate.code, 'map_move', { direction: 'south' }, stateOf(created));
     const toolState = (moved.extra!._toolState as Record<string, string>).map!;
 
-    const restored = await executor.execute(
-      mapTemplate.code,
-      'map_get',
-      {},
-      { messages: stateMessages(toolState) },
-    );
+    const restored = await executor.execute(mapTemplate.code, 'map_get', {}, { messages: stateMessages(toolState) });
     expect(restored.content).toContain('The party is at (0,1): grass.');
   });
 });

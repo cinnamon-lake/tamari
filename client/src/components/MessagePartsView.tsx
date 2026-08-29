@@ -82,9 +82,7 @@ export function MessagePartsView(props: MessagePartsViewProps) {
     return -1;
   });
   const collapsedParts = createMemo(() => parts().slice(0, Math.max(lastTextIndex(), 0)));
-  const visibleParts = createMemo(() =>
-    lastTextIndex() >= 0 ? parts().slice(lastTextIndex()) : parts(),
-  );
+  const visibleParts = createMemo(() => (lastTextIndex() >= 0 ? parts().slice(lastTextIndex()) : parts()));
   // Keep the dropdown open when the part being edited lives inside it.
   const editingCollapsedPart = createMemo(
     () => props.editingPartIndex != null && props.editingPartIndex < collapsedParts().length,
@@ -107,7 +105,9 @@ export function MessagePartsView(props: MessagePartsViewProps) {
         return (
           <Show
             when={props.editingPartIndex === index() && props.renderEditArea !== undefined}
-            fallback={<div class="message-part-text" ref={bindTokenedMedia} innerHTML={renderedHtml()[index()] ?? ''} />}
+            fallback={
+              <div class="message-part-text" ref={bindTokenedMedia} innerHTML={renderedHtml()[index()] ?? ''} />
+            }
           >
             {props.renderEditArea!(index(), part.text)}
           </Show>
@@ -172,7 +172,8 @@ export function MessagePartsView(props: MessagePartsViewProps) {
         return (
           <div class={`tool-result-block${isError ? ' error' : ''}`}>
             <div class="tool-result-header">
-              <i class={`bi ${isError ? 'bi-exclamation-triangle' : 'bi-check-circle'}`} /> {isError ? 'Error' : 'Result'}
+              <i class={`bi ${isError ? 'bi-exclamation-triangle' : 'bi-check-circle'}`} />{' '}
+              {isError ? 'Error' : 'Result'}
             </div>
             <pre class="tool-result-content">{toolResultText(part)}</pre>
             <For each={toolResultMedia(part)}>{(item) => renderInlineMedia(item)}</For>
@@ -215,9 +216,7 @@ export function MessagePartsView(props: MessagePartsViewProps) {
             </div>
           </details>
         </Show>
-        <For each={visibleParts()}>
-          {(part, index) => renderEntry(part, index, collapsedParts().length)}
-        </For>
+        <For each={visibleParts()}>{(part, index) => renderEntry(part, index, collapsedParts().length)}</For>
       </Show>
       {/* Editing a message that has no text part: the edit area appends one
           (editingPartIndex === parts.length). */}

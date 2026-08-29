@@ -30,11 +30,7 @@ import type { ISettingsRepository } from '../repos/SettingsRepository.js';
 import { buildBackendSettings } from './buildBackendSettings.js';
 import { str } from '../lib/coerce.js';
 import { validateVfsPath } from '../scripting/LuaVfs.js';
-import {
-  LuaBackendAdapter,
-  runAdapterBlocking,
-  type CustomBackendDelegate,
-} from './LuaBackendAdapter.js';
+import { LuaBackendAdapter, runAdapterBlocking, type CustomBackendDelegate } from './LuaBackendAdapter.js';
 
 export const MAX_CUSTOM_BACKEND_DEPTH = 4;
 
@@ -72,7 +68,9 @@ export async function createCustomBackendAdapter(
   depth = 0,
 ): Promise<LuaBackendAdapter> {
   if (depth > MAX_CUSTOM_BACKEND_DEPTH) {
-    throw new Error(`custom backend delegation depth exceeded (max ${MAX_CUSTOM_BACKEND_DEPTH}) — check for delegation cycles`);
+    throw new Error(
+      `custom backend delegation depth exceeded (max ${MAX_CUSTOM_BACKEND_DEPTH}) — check for delegation cycles`,
+    );
   }
   const customBackend = await deps.customBackends.getById(customBackendId);
   if (!customBackend) {
@@ -96,7 +94,9 @@ async function adapterForConfig(
   if (config.backendProvider === 'custom') {
     const id = str(config.providerParams['customBackendId']);
     if (!id) {
-      throw new Error(`backend config "${config.name}" uses provider "custom" but has no providerParams.customBackendId`);
+      throw new Error(
+        `backend config "${config.name}" uses provider "custom" but has no providerParams.customBackendId`,
+      );
     }
     const delegateId = str(config.providerParams['delegateConfigId']) || null;
     return createCustomBackendAdapter(deps, id, delegateId, depth + 1);

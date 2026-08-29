@@ -1,15 +1,19 @@
 # Character Card V2: Explainer
 
 **UPDATE June 22th 2023:**
+
 - `{{original}}` placeholder in `system_prompt` and `post_history_instructions` added to the [V2 spec](./spec_v2.md).
 
 **UPDATE June 4th 2023:**
+
 - Utility library released: [lib](https://www.npmjs.com/package/character-card-utils), [docs](https://malfoyslastname.github.io/chara-card-utils-docs/modules.html), [demo (with online validator/parser and other utilities)](https://malfoyslastname.github.io/chara-card-utils-web/)
 
 **UPDATE May 17th 2023:**
+
 - Spec approved.
 
 **UPDATE May 8th 2023:**
+
 - New fields added: spec version, tags, creator, character version, extensions.
 - [V2 spec](./spec_v2.md) written. It is much more concise than the explainer.
 
@@ -25,18 +29,18 @@
 
 - [Introduction](#introduction)
 - [Proposed fields](#proposed-fields)
-  * [`spec`](#spec)
-  * [`creator_notes`](#creator_notes)
-  * [`system_prompt`](#system_prompt)
-  * [`post_history_instructions`](#post_history_instructions)
-  * [`alternate_greetings`](#alternate_greetings)
-  * [`character_book`](#character_book)
+  - [`spec`](#spec)
+  - [`creator_notes`](#creator_notes)
+  - [`system_prompt`](#system_prompt)
+  - [`post_history_instructions`](#post_history_instructions)
+  - [`alternate_greetings`](#alternate_greetings)
+  - [`character_book`](#character_book)
 - [More proposed fields as of May 8th 2023](#more-proposed-fields-as-of-may-8th-2023)
-  * [`spec_version`](#spec_version)
-  * [`tags`](#tags)
-  * [`creator`](#creator)
-  * [`character_version`](#character_version)
-  * [`extensions`](#extensions)
+  - [`spec_version`](#spec_version)
+  - [`tags`](#tags)
+  - [`creator`](#creator)
+  - [`character_version`](#character_version)
+  - [`extensions`](#extensions)
 
 ## Introduction
 
@@ -51,7 +55,7 @@ The Character Card V2 Specification is a proposal for a new format for character
   - [RisuAI](https://github.com/kwaroran/RisuAI)
 - Standalone "V1" card editors:
   - [ZoltanAI](https://zoltanai.github.io/character-editor/)
- 
+
 If your project has been omitted, please get in contact via the [General discussion issue](https://github.com/malfoyslastname/character-card-spec-v2/issues/1).
 
 **Note:** The main Tavern branch and their character repository Characloud has already drifted from this ecosystem, so although we aim to remain compatible with their ecosystem, consensus between the above-mentioned projects is the main priority.
@@ -71,43 +75,43 @@ The V1 (current) spec can be described with this TypeScript definition:
 
 ```ts
 type TavernCardV1 = {
-  name: string
-  description: string
-  personality: string
-  scenario: string
-  first_mes: string
-  mes_example: string
-}
+  name: string;
+  description: string;
+  personality: string;
+  scenario: string;
+  first_mes: string;
+  mes_example: string;
+};
 ```
 
 The V2 spec can be described with:
 
 ```ts
 type TavernCardV2 = {
-  spec: 'chara_card_v2'
-  spec_version: '2.0' // May 8th addition
+  spec: 'chara_card_v2';
+  spec_version: '2.0'; // May 8th addition
   data: {
-    name: string
-    description: string
-    personality: string
-    scenario: string
-    first_mes: string
-    mes_example: string
+    name: string;
+    description: string;
+    personality: string;
+    scenario: string;
+    first_mes: string;
+    mes_example: string;
 
     // New fields start here
-    creator_notes: string
-    system_prompt: string
-    post_history_instructions: string
-    alternate_greetings: Array<string>
-    character_book?: CharacterBook
+    creator_notes: string;
+    system_prompt: string;
+    post_history_instructions: string;
+    alternate_greetings: Array<string>;
+    character_book?: CharacterBook;
 
     // May 8th additions
-    tags: Array<string>
-    creator: string
-    character_version: string
-    extensions: Record<string, any> // see details for explanation
-  }
-}
+    tags: Array<string>;
+    creator: string;
+    character_version: string;
+    extensions: Record<string, any>; // see details for explanation
+  };
+};
 
 /**
  * ? as in `name?: string` means the `name` property may be absent from the JSON
@@ -122,39 +126,39 @@ type TavernCardV2 = {
  * each entry.
  **/
 type CharacterBook = {
-  name?: string
-  description?: string
-  scan_depth?: number // agnai: "Memory: Chat History Depth"
-  token_budget?: number // agnai: "Memory: Context Limit"
-  recursive_scanning?: boolean // no agnai equivalent. whether entry content can trigger other entries
-  extensions: Record<string, any>
+  name?: string;
+  description?: string;
+  scan_depth?: number; // agnai: "Memory: Chat History Depth"
+  token_budget?: number; // agnai: "Memory: Context Limit"
+  recursive_scanning?: boolean; // no agnai equivalent. whether entry content can trigger other entries
+  extensions: Record<string, any>;
   entries: Array<{
-    keys: Array<string>
-    content: string
-    extensions: Record<string, any>
-    enabled: boolean
-    insertion_order: number // if two entries inserted, lower "insertion order" = inserted higher
-    case_sensitive?: boolean
+    keys: Array<string>;
+    content: string;
+    extensions: Record<string, any>;
+    enabled: boolean;
+    insertion_order: number; // if two entries inserted, lower "insertion order" = inserted higher
+    case_sensitive?: boolean;
 
     // FIELDS WITH NO CURRENT EQUIVALENT IN SILLY
-    name?: string // not used in prompt engineering
-    priority?: number // if token budget reached, lower priority value = discarded first
+    name?: string; // not used in prompt engineering
+    priority?: number; // if token budget reached, lower priority value = discarded first
 
     // FIELDS WITH NO CURRENT EQUIVALENT IN AGNAI
-    id?: number // not used in prompt engineering
-    comment?: string // not used in prompt engineering
-    selective?: boolean // if `true`, require a key from both `keys` and `secondary_keys` to trigger the entry
-    secondary_keys?: Array<string> // see field `selective`. ignored if selective == false
-    constant?: boolean // if true, always inserted in the prompt (within budget limit)
-    position?: 'before_char' | 'after_char' // whether the entry is placed before or after the character defs
-  }>
-}
+    id?: number; // not used in prompt engineering
+    comment?: string; // not used in prompt engineering
+    selective?: boolean; // if `true`, require a key from both `keys` and `secondary_keys` to trigger the entry
+    secondary_keys?: Array<string>; // see field `selective`. ignored if selective == false
+    constant?: boolean; // if true, always inserted in the prompt (within budget limit)
+    position?: 'before_char' | 'after_char'; // whether the entry is placed before or after the character defs
+  }>;
+};
 ```
 
 A frontend supporting both V1 and V2 would hence use a type looking like:
 
 ```ts
-type TavernCard = TavernCardV1 | TavernCardV2
+type TavernCard = TavernCardV1 | TavernCardV2;
 ```
 
 What this means in plain JavaScript terms is that given a card named `chara`:
@@ -229,7 +233,7 @@ Frontends may, if they want, create a setting for a text that is appended or pre
 
 ### `post_history_instructions`
 
-It was discovered recently (months later than the invention of Tavern cards) that system instructions written *after* the conversation history have a much stronger weight on current models' generations than instructions written *before* the conversation history (specifically, the system prompt and [the `description` field](./spec_v1.md#description)).
+It was discovered recently (months later than the invention of Tavern cards) that system instructions written _after_ the conversation history have a much stronger weight on current models' generations than instructions written _before_ the conversation history (specifically, the system prompt and [the `description` field](./spec_v1.md#description)).
 
 This has been implemented for users to exploit in certain frontends as a user
 setting. In Agnai, it's called "UJB" (ultimate jailbreak). In Silly, it's called
@@ -258,13 +262,13 @@ The expected UX for this field is similar to the current "swiping" mechanisms Ag
 First, let's define some terms we'll use:
 
 - **Lorebook**: An object containing entries which are included in the prompt when
-    specified keywords are found in the conversation history. Term coined by
-    Novel.AI. Named Memory Book in Agnai and World Info in Silly.
-- **World book**: A *kind* of lorebook which is not tied to any character card,
-    and applies to all of the user's chat. This is also what Agnai's Memory Book
-    and Silly's World Info are.
-- **Character book**: A proposed new *kind* of lorebook which would be embedded
-    into character cards, and only be applied for that character's chats.
+  specified keywords are found in the conversation history. Term coined by
+  Novel.AI. Named Memory Book in Agnai and World Info in Silly.
+- **World book**: A _kind_ of lorebook which is not tied to any character card,
+  and applies to all of the user's chat. This is also what Agnai's Memory Book
+  and Silly's World Info are.
+- **Character book**: A proposed new _kind_ of lorebook which would be embedded
+  into character cards, and only be applied for that character's chats.
 
 It has become very common for character cards to be meant to be used in
 combination with a specific World book. However, botmakers are not confident

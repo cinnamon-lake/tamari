@@ -3,8 +3,7 @@ import { str } from '../lib/coerce.js';
 import { state } from '../stores/serverStore.js';
 import { bus } from '../bus/WebSocketBus.js';
 import { useI18n } from '../i18n/index.js';
-import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
-import { createBackdropDismiss } from '../lib/backdropDismiss.js';
+import { Modal } from './Modal.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 
 export interface AuthorsNotePanelProps {
@@ -73,19 +72,7 @@ export function AuthorsNotePanel(props: AuthorsNotePanelProps) {
     }
   });
 
-  // Capture the element that had focus before the panel opened so it can be
-  // restored on close. Only saves on the closed→open transition.
-  let wasOpen = false;
-  createEffect(() => {
-    const nowOpen = props.open;
-    if (nowOpen && !wasOpen) saveFocus();
-    wasOpen = nowOpen;
-  });
-
-  const close = () => {
-    restoreFocus();
-    props.onClose();
-  };
+  const close = () => props.onClose();
 
   const doSave = () => {
     const chat = activeChat();
@@ -119,101 +106,117 @@ export function AuthorsNotePanel(props: AuthorsNotePanelProps) {
 
   return (
     <Show when={props.open}>
-      <div class="modal-overlay" {...createBackdropDismiss(close)}>
-        <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="authors-note-title" onKeyDown={(e) => trapFocus(e.currentTarget, e)}>
-          <h2 class="authors-note-title" id="authors-note-title">
+      <Modal
+        title={
+          <>
             <i class="bi bi-journal-text" /> {t('authorsNote.title')}
-          </h2>
+          </>
+        }
+        onClose={close}
+        class="modal settings-modal"
+        titleClass="authors-note-title"
+        titleId="authors-note-title"
+      >
+        <label class="authors-note-content-label">
+          {t('authorsNote.contentLabel')}
+          <textarea
+            class="authors-note-content-input"
+            rows={6}
+            value={content()}
+            onInput={(e) => {
+              setContent(e.currentTarget.value);
+              scheduleAutoSave();
+            }}
+            placeholder={t('authorsNote.contentPlaceholder')}
+          />
+        </label>
 
-          <label class="authors-note-content-label">
-            {t('authorsNote.contentLabel')}
-            <textarea
-              class="authors-note-content-input"
-              rows={6}
-              value={content()}
-              onInput={(e) => {
-                setContent(e.currentTarget.value);
-                scheduleAutoSave();
-              }}
-              placeholder={t('authorsNote.contentPlaceholder')}
-            />
-          </label>
+        <label class="authors-note-position-label">
+          {t('authorsNote.positionLabel')}
+          <select
+            class="select"
+            value={position()}
+            onChange={(e) => {
+              setPosition(e.currentTarget.value as AuthorsNoteData['position']);
+              scheduleAutoSave();
+            }}
+          >
+            <option class="authors-note-position-option" value="before_prompt">
+              {t('authorsNote.positionBeforePrompt')}
+            </option>
+            <option class="authors-note-position-option" value="after_prompt">
+              {t('authorsNote.positionAfterPrompt')}
+            </option>
+            <option class="authors-note-position-option" value="in_chat">
+              {t('authorsNote.positionInChat')}
+            </option>
+          </select>
+        </label>
 
-          <label class="authors-note-position-label">
-            {t('authorsNote.positionLabel')}
-            <select
-              class="select"
-              value={position()}
-              onChange={(e) => {
-                setPosition(e.currentTarget.value as AuthorsNoteData['position']);
-                scheduleAutoSave();
-              }}
-            >
-              <option class="authors-note-position-option" value="before_prompt">{t('authorsNote.positionBeforePrompt')}</option>
-              <option class="authors-note-position-option" value="after_prompt">{t('authorsNote.positionAfterPrompt')}</option>
-              <option class="authors-note-position-option" value="in_chat">{t('authorsNote.positionInChat')}</option>
-            </select>
-          </label>
-
-          <Show when={position() === 'in_chat'}>
-            <div class="row-equal gap-md">
-              <label class="authors-note-depth-label">
-                {t('authorsNote.depthLabel')}
-                <input
-                  class="authors-note-depth-input"
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={depth()}
-                  onInput={(e) => {
-                    setDepth(Math.max(0, parseInt(e.currentTarget.value, 10) || 0));
-                    scheduleAutoSave();
-                  }}
-                />
-              </label>
-              <label class="authors-note-role-label">
-                {t('authorsNote.roleLabel')}
-                <select
-                  class="select"
-                  value={role()}
-                  onChange={(e) => {
-                    setRole(e.currentTarget.value as AuthorsNoteData['role']);
-                    scheduleAutoSave();
-                  }}
-                >
-                  <option class="authors-note-role-option" value="system">{t('authorsNote.roleSystem')}</option>
-                  <option class="authors-note-role-option" value="user">{t('authorsNote.roleUser')}</option>
-                  <option class="authors-note-role-option" value="assistant">{t('authorsNote.roleAssistant')}</option>
-                </select>
-              </label>
-            </div>
-          </Show>
-
-          <label class="authors-note-interval-label">
-            {t('authorsNote.intervalLabel')}
-            <input
-              class="authors-note-interval-input"
-              type="number"
-              min={0}
-              max={100}
-              value={interval()}
-              onInput={(e) => {
-                setInterval(Math.max(0, parseInt(e.currentTarget.value, 10) || 0));
-                scheduleAutoSave();
-              }}
-            />
-          </label>
-
-          <div class="modal-actions">
-            <button class="authors-note-close-btn" type="button" onClick={close}>
-              {t('common.close')}
-            </button>
-            <Show when={savedIndicator()}>
-              <span class="save-indicator">{t('authorsNote.saved')}</span>
-            </Show>
+        <Show when={position() === 'in_chat'}>
+          <div class="row-equal gap-md">
+            <label class="authors-note-depth-label">
+              {t('authorsNote.depthLabel')}
+              <input
+                class="authors-note-depth-input"
+                type="number"
+                min={0}
+                max={100}
+                value={depth()}
+                onInput={(e) => {
+                  setDepth(Math.max(0, parseInt(e.currentTarget.value, 10) || 0));
+                  scheduleAutoSave();
+                }}
+              />
+            </label>
+            <label class="authors-note-role-label">
+              {t('authorsNote.roleLabel')}
+              <select
+                class="select"
+                value={role()}
+                onChange={(e) => {
+                  setRole(e.currentTarget.value as AuthorsNoteData['role']);
+                  scheduleAutoSave();
+                }}
+              >
+                <option class="authors-note-role-option" value="system">
+                  {t('authorsNote.roleSystem')}
+                </option>
+                <option class="authors-note-role-option" value="user">
+                  {t('authorsNote.roleUser')}
+                </option>
+                <option class="authors-note-role-option" value="assistant">
+                  {t('authorsNote.roleAssistant')}
+                </option>
+              </select>
+            </label>
           </div>
+        </Show>
+
+        <label class="authors-note-interval-label">
+          {t('authorsNote.intervalLabel')}
+          <input
+            class="authors-note-interval-input"
+            type="number"
+            min={0}
+            max={100}
+            value={interval()}
+            onInput={(e) => {
+              setInterval(Math.max(0, parseInt(e.currentTarget.value, 10) || 0));
+              scheduleAutoSave();
+            }}
+          />
+        </label>
+
+        <div class="modal-actions">
+          <button class="authors-note-close-btn" type="button" onClick={close}>
+            {t('common.close')}
+          </button>
+          <Show when={savedIndicator()}>
+            <span class="save-indicator">{t('authorsNote.saved')}</span>
+          </Show>
         </div>
-      </div>
+      </Modal>
     </Show>
   );
 }

@@ -26,9 +26,7 @@ import baseConfig from './playwright.config';
 const nixosChromium = '/run/current-system/sw/bin/chromium-browser';
 const chromeLaunch = {
   ...devices['Desktop Chrome'],
-  ...(existsSync(nixosChromium)
-    ? { launchOptions: { executablePath: nixosChromium } }
-    : {}),
+  ...(existsSync(nixosChromium) ? { launchOptions: { executablePath: nixosChromium } } : {}),
 };
 
 export default defineConfig({

@@ -33,19 +33,19 @@ tools; no MCP tool writes card or config data.
 
 ## Tools (11, fixed whitelist — no mutation verbs)
 
-| Tool | What it does |
-|---|---|
-| `test_card` | Scripted multi-turn card test: `{ characterId? \| folderPath?, turns: string[] (1–20), keepChat?, backendConfigId?, timeoutMs? }`. Real generation path in an in-memory test session. Session kept by default (returns `sessionId`); `keepChat: false` ends it immediately. |
-| `test_session_start` | Open an interactive test session: `{ characterId? \| folderPath?, personaId?, greetingIndex?, backendConfigId? }` → `{ sessionId, greeting }`. |
-| `test_session_message` | One user message + one generation: `{ sessionId, content, timeoutMs? }` → `{ reply, generationId, finishReason, scriptState?, debug? }`. |
-| `test_session_state` | Inspect a session: chain, generations (no prompts), latest Lua `scriptState`. `generationId` opts into the full record incl. captured round prompts. |
-| `test_session_end` | End a session early (aborts in-flight generation, drops state). |
-| `test_backend_logic` | Dry-run a card's `backend_logic.lua` against a recording delegate — no real backend calls. |
-| `test_regex` | Preview merged regex rules (global + character-scoped) against sample text. |
-| `test_luatool` | Run a Lua tool (stored template id or ad-hoc `code`). |
-| `test_custom_backend` | Dry-run a custom-backend script against a recording delegate. |
-| `test_backend` | Dry/live-test a backend config (`configId` defaults to active; `patch` is in-memory only). Dry-run redacts sensitive request fields (`[REDACTED]`). |
-| `read_generation` | Read a generation debug trace: `/generations/<id>/{meta.json, error.txt, prompt.json, prompts.json}`. Prompt files only exist when prompt capture was on. |
+| Tool                   | What it does                                                                                                                                                                                                                                                                |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test_card`            | Scripted multi-turn card test: `{ characterId? \| folderPath?, turns: string[] (1–20), keepChat?, backendConfigId?, timeoutMs? }`. Real generation path in an in-memory test session. Session kept by default (returns `sessionId`); `keepChat: false` ends it immediately. |
+| `test_session_start`   | Open an interactive test session: `{ characterId? \| folderPath?, personaId?, greetingIndex?, backendConfigId? }` → `{ sessionId, greeting }`.                                                                                                                              |
+| `test_session_message` | One user message + one generation: `{ sessionId, content, timeoutMs? }` → `{ reply, generationId, finishReason, scriptState?, debug? }`.                                                                                                                                    |
+| `test_session_state`   | Inspect a session: chain, generations (no prompts), latest Lua `scriptState`. `generationId` opts into the full record incl. captured round prompts.                                                                                                                        |
+| `test_session_end`     | End a session early (aborts in-flight generation, drops state).                                                                                                                                                                                                             |
+| `test_backend_logic`   | Dry-run a card's `backend_logic.lua` against a recording delegate — no real backend calls.                                                                                                                                                                                  |
+| `test_regex`           | Preview merged regex rules (global + character-scoped) against sample text.                                                                                                                                                                                                 |
+| `test_luatool`         | Run a Lua tool (stored template id or ad-hoc `code`).                                                                                                                                                                                                                       |
+| `test_custom_backend`  | Dry-run a custom-backend script against a recording delegate.                                                                                                                                                                                                               |
+| `test_backend`         | Dry/live-test a backend config (`configId` defaults to active; `patch` is in-memory only). Dry-run redacts sensitive request fields (`[REDACTED]`).                                                                                                                         |
+| `read_generation`      | Read a generation debug trace: `/generations/<id>/{meta.json, error.txt, prompt.json, prompts.json}`. Prompt files only exist when prompt capture was on.                                                                                                                   |
 
 Sessions expire after **30 min idle**. Test generations run against the
 ACTIVE backend config by default (real LLM, real cost) — pass

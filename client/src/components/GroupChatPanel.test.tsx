@@ -30,7 +30,19 @@ describe('GroupChatPanel', () => {
   }
 
   function makeChar(id: string, name: string) {
-    return { id, name, tags: [], avatarPath: null, avatarThumbnailPath: null, avatarUrl: `/api/characters/${id}/avatar`, thumbnailUrl: undefined, firstMes: '', alternateGreetings: [], createdAt: Date.now(), updatedAt: Date.now() };
+    return {
+      id,
+      name,
+      tags: [],
+      avatarPath: null,
+      avatarThumbnailPath: null,
+      avatarUrl: `/api/characters/${id}/avatar`,
+      thumbnailUrl: undefined,
+      firstMes: '',
+      alternateGreetings: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
   }
 
   it('renders empty state when no members', () => {
@@ -41,7 +53,9 @@ describe('GroupChatPanel', () => {
 
   it('renders member list with character info', () => {
     setState('chatMembers', {
-      [chatId]: [{ ...makeMember('m1', 'char-1', true, 1.0, 'Alice'), characterThumbnailUrl: '/files/char1-thumb.png' }],
+      [chatId]: [
+        { ...makeMember('m1', 'char-1', true, 1.0, 'Alice'), characterThumbnailUrl: '/files/char1-thumb.png' },
+      ],
     });
     render(() => <GroupChatPanel chatId={chatId} onClose={() => {}} />);
 
@@ -64,12 +78,14 @@ describe('GroupChatPanel', () => {
     const checkbox = document.querySelector('input[type="checkbox"]') as HTMLInputElement;
     checkbox.click();
 
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'group.member.update',
-      chatId,
-      characterId: 'char-1',
-      patch: { enabled: false },
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'group.member.update',
+        chatId,
+        characterId: 'char-1',
+        patch: { enabled: false },
+      }),
+    );
   });
 
   it('updates talkativeness', () => {
@@ -81,12 +97,14 @@ describe('GroupChatPanel', () => {
     const range = document.querySelector('input[type="range"]') as HTMLInputElement;
     fireEvent.change(range, { target: { value: '2.5' } });
 
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'group.member.update',
-      chatId,
-      characterId: 'char-1',
-      patch: { talkativeness: 2.5 },
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'group.member.update',
+        chatId,
+        characterId: 'char-1',
+        patch: { talkativeness: 2.5 },
+      }),
+    );
   });
 
   it('removes member when confirmed', async () => {
@@ -99,11 +117,13 @@ describe('GroupChatPanel', () => {
     screen.getByTitle('Remove member').click();
     await new Promise((r) => setTimeout(r, 10));
 
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'group.member.remove',
-      chatId,
-      characterId: 'char-1',
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'group.member.remove',
+        chatId,
+        characterId: 'char-1',
+      }),
+    );
   });
 
   it('does not remove member when cancelled', async () => {
@@ -130,11 +150,13 @@ describe('GroupChatPanel', () => {
     addSelect.value = 'char-1';
     fireEvent.change(addSelect, { target: { value: 'char-1' } });
 
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'group.member.add',
-      chatId,
-      characterId: 'char-1',
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'group.member.add',
+        chatId,
+        characterId: 'char-1',
+      }),
+    );
   });
 
   it('updates activation strategy', () => {
@@ -147,20 +169,22 @@ describe('GroupChatPanel', () => {
 
     const selects = document.querySelectorAll('select');
     const strategySelect = Array.from(selects).find((s) =>
-      s.querySelector('option[value="NATURAL"]')
+      s.querySelector('option[value="NATURAL"]'),
     ) as HTMLSelectElement;
 
     fireEvent.change(strategySelect, { target: { value: 'MANUAL' } });
 
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'chat.update',
-      chatId,
-      patch: expect.objectContaining({
-        metadata: expect.objectContaining({
-          groupChatSettings: expect.objectContaining({ activationStrategy: 'MANUAL' }),
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'chat.update',
+        chatId,
+        patch: expect.objectContaining({
+          metadata: expect.objectContaining({
+            groupChatSettings: expect.objectContaining({ activationStrategy: 'MANUAL' }),
+          }),
         }),
       }),
-    }));
+    );
   });
 
   it('calls onClose when close button clicked', () => {

@@ -20,10 +20,7 @@ export function ImageLightbox() {
   return (
     <Show when={lightboxSrc()}>
       {(src) => (
-        <div
-          class="lightbox-overlay"
-          {...createBackdropDismiss(closeLightbox)}
-        >
+        <div class="lightbox-overlay" {...createBackdropDismiss(closeLightbox)}>
           <img class="lightbox-img" src={src()} alt="" />
           <button class="lightbox-close" onClick={closeLightbox} type="button" aria-label={t('common.close')}>
             <i class="bi bi-x-lg" />

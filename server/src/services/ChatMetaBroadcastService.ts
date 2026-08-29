@@ -27,69 +27,27 @@ export class ChatMetaBroadcastService {
     this.deps.bus.broadcast({ type: 'chat.deleted', chatId }, excludeClientId);
   }
 
-  broadcastMessageDeleted(
-    chatId: string,
-    messageId: number,
-    excludeClientId?: string,
-  ): void {
-    this.deps.bus.broadcast(
-      { type: 'message.deleted', chatId, messageId },
-      excludeClientId,
-    );
+  broadcastMessageDeleted(chatId: string, messageId: number, excludeClientId?: string): void {
+    this.deps.bus.broadcast({ type: 'message.deleted', chatId, messageId }, excludeClientId);
   }
 
-  broadcastMessagesLoaded(
-    chatId: string,
-    messages: Message[],
-    excludeClientId?: string,
-  ): void {
-    this.deps.bus.broadcast(
-      { type: 'messages.loaded', chatId, messages },
-      excludeClientId,
-    );
+  broadcastMessagesLoaded(chatId: string, messages: Message[], excludeClientId?: string): void {
+    this.deps.bus.broadcast({ type: 'messages.loaded', chatId, messages }, excludeClientId);
   }
 
-  broadcastGroupMembers(
-    chatId: string,
-    members: ChatMemberSummary[],
-    excludeClientId?: string,
-  ): void {
-    this.deps.bus.broadcast(
-      { type: 'group.members', chatId, members },
-      excludeClientId,
-    );
+  broadcastGroupMembers(chatId: string, members: ChatMemberSummary[], excludeClientId?: string): void {
+    this.deps.bus.broadcast({ type: 'group.members', chatId, members }, excludeClientId);
   }
 
-  broadcastGroupMemberAdded(
-    chatId: string,
-    member: ChatMemberSummary,
-    excludeClientId?: string,
-  ): void {
-    this.deps.bus.broadcast(
-      { type: 'group.member.added', chatId, member },
-      excludeClientId,
-    );
+  broadcastGroupMemberAdded(chatId: string, member: ChatMemberSummary, excludeClientId?: string): void {
+    this.deps.bus.broadcast({ type: 'group.member.added', chatId, member }, excludeClientId);
   }
 
-  broadcastGroupMemberRemoved(
-    chatId: string,
-    characterId: string,
-    excludeClientId?: string,
-  ): void {
-    this.deps.bus.broadcast(
-      { type: 'group.member.removed', chatId, characterId },
-      excludeClientId,
-    );
+  broadcastGroupMemberRemoved(chatId: string, characterId: string, excludeClientId?: string): void {
+    this.deps.bus.broadcast({ type: 'group.member.removed', chatId, characterId }, excludeClientId);
   }
 
-  broadcastGroupMemberUpdated(
-    chatId: string,
-    member: ChatMemberSummary,
-    excludeClientId?: string,
-  ): void {
-    this.deps.bus.broadcast(
-      { type: 'group.member.updated', chatId, member },
-      excludeClientId,
-    );
+  broadcastGroupMemberUpdated(chatId: string, member: ChatMemberSummary, excludeClientId?: string): void {
+    this.deps.bus.broadcast({ type: 'group.member.updated', chatId, member }, excludeClientId);
   }
 }

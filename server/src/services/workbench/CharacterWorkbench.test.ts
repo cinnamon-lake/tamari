@@ -3,7 +3,16 @@ import { CharacterWorkbench } from './CharacterWorkbench.js';
 import { LuaRuntime } from '../../scripting/LuaRuntime.js';
 import { storeRisuModule, CHARACTER_RISU_MODULES_EXTENSION_KEY } from '../characterRisuModules.js';
 import type { RisuModuleData } from '../../lib/risum.js';
-import type { Attachment, Character, CharacterInsert, CharacterUpdate, WorldInfo, WorldInfoEntry, WorldInfoInsert, WorldInfoUpdate } from '@tamari/types';
+import type {
+  Attachment,
+  Character,
+  CharacterInsert,
+  CharacterUpdate,
+  WorldInfo,
+  WorldInfoEntry,
+  WorldInfoInsert,
+  WorldInfoUpdate,
+} from '@tamari/types';
 import type { EventBus } from '../../bus/EventBus.js';
 import type { ICharacterRepository } from '../../repos/CharacterRepository.js';
 import type { IWorldInfoRepository } from '../../repos/WorldInfoRepository.js';
@@ -79,7 +88,14 @@ function makeBook(overrides: Partial<WorldInfo> = {}): WorldInfo {
   };
 }
 
-function makeTemplate(opts: { characters?: Character[]; books?: WorldInfo[]; globalRegexRules?: unknown[]; attachments?: Attachment[] } = {}) {
+function makeTemplate(
+  opts: {
+    characters?: Character[];
+    books?: WorldInfo[];
+    globalRegexRules?: unknown[];
+    attachments?: Attachment[];
+  } = {},
+) {
   const charStore = new Map((opts.characters ?? []).map((c) => [c.id, c]));
   const characters = {
     getById: async (id: string) => charStore.get(id),
@@ -307,7 +323,15 @@ describe('CharacterWorkbench', () => {
       });
       storageFiles.set('files/avatars/orig.png', TINY_PNG);
       storageFiles.set('files/avatars/thumbs/orig.png', TINY_PNG);
-      assetStore.set('a1', { id: 'a1', characterId: 'char1', name: 'cover', ext: 'png', type: 'image', filePath: 'files/character_assets/char1/a1.png', meta: { origin: 'card' } });
+      assetStore.set('a1', {
+        id: 'a1',
+        characterId: 'char1',
+        name: 'cover',
+        ext: 'png',
+        type: 'image',
+        filePath: 'files/character_assets/char1/a1.png',
+        meta: { origin: 'card' },
+      });
       storageFiles.set('files/character_assets/char1/a1.png', TINY_PNG);
       // Seed a raw module file + meta.
       const moduleMeta = { id: 'm1', name: 'Mod', filePath: 'files/character_modules/char1/m1.json' };
@@ -318,7 +342,13 @@ describe('CharacterWorkbench', () => {
       storageFiles.set('files/character_modules/char1/m1.json', Buffer.from('{"name":"Mod"}'));
 
       const res = await template.execute('character_clone', { sourceCharacterId: 'char1' });
-      const parsed = JSON.parse(res.content as string) as { id: string; name: string; lorebookEntries: number; assetsCopied: number; modulesCopied: number };
+      const parsed = JSON.parse(res.content as string) as {
+        id: string;
+        name: string;
+        lorebookEntries: number;
+        assetsCopied: number;
+        modulesCopied: number;
+      };
       expect(parsed.name).toBe('Test Character (Copy)');
       expect(parsed.lorebookEntries).toBe(1);
       expect(parsed.assetsCopied).toBe(1);
@@ -382,7 +412,7 @@ describe('CharacterWorkbench', () => {
   });
 
   describe('lorebook_get', () => {
-    it('returns the linked book\'s name and entries', async () => {
+    it("returns the linked book's name and entries", async () => {
       const { template } = makeTemplate({ characters: [makeCharacter({ worldInfoId: 'book1' })], books: [makeBook()] });
       const res = await template.execute('lorebook_get', { characterId: 'char1' });
       const parsed = JSON.parse(res.content as string) as { name: string; entries: WorldInfoEntry[] };
@@ -583,7 +613,10 @@ describe('CharacterWorkbench', () => {
 
     it('rejects a bare (undelimited) pattern without saving', async () => {
       const { template, charStore } = makeTemplate({ characters: [makeCharacter()] });
-      const res = await template.execute('regex_add', { characterId: 'char1', rule: { ...ruleInput, findRegex: 'hello' } });
+      const res = await template.execute('regex_add', {
+        characterId: 'char1',
+        rule: { ...ruleInput, findRegex: 'hello' },
+      });
       expect(res.content).toContain('Error: invalid findRegex');
       expect(charStore.get('char1')?.extensions['regexScripts'] ?? []).toHaveLength(0);
     });
@@ -611,7 +644,11 @@ describe('CharacterWorkbench', () => {
       const add = await template.execute('regex_add', { characterId: 'char1', rule: { ...ruleInput, findRegex: '' } });
       const created = JSON.parse(add.content as string) as { id: string; findRegex: string };
       expect(created.findRegex).toBe('');
-      const upd = await template.execute('regex_update', { characterId: 'char1', ruleId: created.id, patch: { findRegex: '' } });
+      const upd = await template.execute('regex_update', {
+        characterId: 'char1',
+        ruleId: created.id,
+        patch: { findRegex: '' },
+      });
       expect(JSON.parse(upd.content as string)).toMatchObject({ findRegex: '' });
     });
 
@@ -619,7 +656,11 @@ describe('CharacterWorkbench', () => {
       const { template } = makeTemplate({ characters: [makeCharacter()] });
       const add = await template.execute('regex_add', { characterId: 'char1', rule: ruleInput });
       const created = JSON.parse(add.content as string) as { id: string };
-      const res = await template.execute('regex_update', { characterId: 'char1', ruleId: created.id, patch: { findRegex: 'hello' } });
+      const res = await template.execute('regex_update', {
+        characterId: 'char1',
+        ruleId: created.id,
+        patch: { findRegex: 'hello' },
+      });
       expect(res.content).toContain('Error: invalid findRegex');
     });
 
@@ -647,7 +688,11 @@ describe('CharacterWorkbench', () => {
         ruleId: created.id,
         patch: { replaceString: 'HI', display: false },
       });
-      const updated = JSON.parse(upd.content as string) as { replaceString: string; display: boolean; findRegex: string };
+      const updated = JSON.parse(upd.content as string) as {
+        replaceString: string;
+        display: boolean;
+        findRegex: string;
+      };
       expect(updated.replaceString).toBe('HI');
       expect(updated.display).toBe(false);
       expect(updated.findRegex).toBe('/hello/gi');
@@ -678,14 +723,21 @@ describe('CharacterWorkbench', () => {
         characters: [
           makeCharacter({
             extensions: {
-              regexScripts: [{ id: 's1', findRegex: '/world/g', replaceString: 'Mocktopia', prompt: true, display: true }],
+              regexScripts: [
+                { id: 's1', findRegex: '/world/g', replaceString: 'Mocktopia', prompt: true, display: true },
+              ],
             },
           }),
         ],
         globalRegexRules: [{ id: 'g1', findRegex: '/hello/g', replaceString: 'hail', prompt: true, display: false }],
       });
       const res = await template.execute('regex_test', { characterId: 'char1', text: 'hello world' });
-      const parsed = JSON.parse(res.content as string) as { role: string; ruleCount: number; prompt: string; display: string };
+      const parsed = JSON.parse(res.content as string) as {
+        role: string;
+        ruleCount: number;
+        prompt: string;
+        display: string;
+      };
       expect(parsed.ruleCount).toBe(2);
       // prompt: global (prompt) + scoped (prompt) both apply
       expect(parsed.prompt).toBe('hail Mocktopia');
@@ -718,11 +770,17 @@ describe('CharacterWorkbench', () => {
 
     it('respects role filtering', async () => {
       const { template } = makeTemplate({
-        globalRegexRules: [{ id: 'g1', findRegex: '/x/g', replaceString: 'y', prompt: true, display: true, userInput: true }],
+        globalRegexRules: [
+          { id: 'g1', findRegex: '/x/g', replaceString: 'y', prompt: true, display: true, userInput: true },
+        ],
       });
-      const asUser = JSON.parse((await template.execute('regex_test', { text: 'x', role: 'user' })).content as string) as { display: string };
+      const asUser = JSON.parse(
+        (await template.execute('regex_test', { text: 'x', role: 'user' })).content as string,
+      ) as { display: string };
       expect(asUser.display).toBe('y');
-      const asAssistant = JSON.parse((await template.execute('regex_test', { text: 'x', role: 'assistant' })).content as string) as { display: string };
+      const asAssistant = JSON.parse(
+        (await template.execute('regex_test', { text: 'x', role: 'assistant' })).content as string,
+      ) as { display: string };
       expect(asAssistant.display).toBe('x');
     });
 
@@ -765,7 +823,11 @@ describe('CharacterWorkbench', () => {
       storageFiles.set('files/attachments/att1', TINY_PNG);
 
       const res = await template.execute('character_set_avatar', { characterId: 'char1', attachmentId: 'att1' });
-      const parsed = JSON.parse(res.content as string) as { id: string; avatarUrl: string | null; thumbnailUrl: string | null };
+      const parsed = JSON.parse(res.content as string) as {
+        id: string;
+        avatarUrl: string | null;
+        thumbnailUrl: string | null;
+      };
       expect(parsed.id).toBe('char1');
       expect(parsed.avatarUrl).toContain('files/avatars/');
       expect(parsed.thumbnailUrl).toContain('files/avatars/thumbs/');
@@ -774,7 +836,12 @@ describe('CharacterWorkbench', () => {
     });
 
     it('copies the avatar from another character', async () => {
-      const source = makeCharacter({ id: 'char2', name: 'Source', avatarPath: 'files/avatars/source.png', avatarThumbnailPath: 'files/avatars/thumbs/source.png' });
+      const source = makeCharacter({
+        id: 'char2',
+        name: 'Source',
+        avatarPath: 'files/avatars/source.png',
+        avatarThumbnailPath: 'files/avatars/thumbs/source.png',
+      });
       const { template, charStore, storageFiles } = makeTemplate({ characters: [makeCharacter(), source] });
       storageFiles.set('files/avatars/source.png', TINY_PNG);
 
@@ -788,14 +855,20 @@ describe('CharacterWorkbench', () => {
     });
 
     it('errors when the source character has no avatar', async () => {
-      const { template } = makeTemplate({ characters: [makeCharacter(), makeCharacter({ id: 'char2', name: 'Source' })] });
+      const { template } = makeTemplate({
+        characters: [makeCharacter(), makeCharacter({ id: 'char2', name: 'Source' })],
+      });
       const res = await template.execute('character_set_avatar', { characterId: 'char1', sourceCharacterId: 'char2' });
       expect(res.content).toBe('Error: character "char2" has no avatar to copy');
     });
 
     it('requires exactly one of attachmentId / sourceCharacterId', async () => {
       const { template } = makeTemplate({ characters: [makeCharacter()] });
-      const both = await template.execute('character_set_avatar', { characterId: 'char1', attachmentId: 'a', sourceCharacterId: 'b' });
+      const both = await template.execute('character_set_avatar', {
+        characterId: 'char1',
+        attachmentId: 'a',
+        sourceCharacterId: 'b',
+      });
       expect(both.content).toBe('Error: pass exactly one of attachmentId or sourceCharacterId');
       const neither = await template.execute('character_set_avatar', { characterId: 'char1' });
       expect(neither.content).toBe('Error: pass exactly one of attachmentId or sourceCharacterId');
@@ -824,8 +897,22 @@ describe('CharacterWorkbench', () => {
     it('character_asset_list lists imported assets', async () => {
       const { template, assetStore } = makeTemplate({ characters: [makeCharacter()] });
       // Seed as risu_module_attach / the REST route would have (origin: risu-module).
-      assetStore.set('a1', { id: 'a1', characterId: 'char1', name: 'bgm', ext: 'mp3', type: 'other', meta: { origin: 'risu-module' } });
-      assetStore.set('a2', { id: 'a2', characterId: 'char1', name: 'cover', ext: 'png', type: 'other', meta: { origin: 'risu-module' } });
+      assetStore.set('a1', {
+        id: 'a1',
+        characterId: 'char1',
+        name: 'bgm',
+        ext: 'mp3',
+        type: 'other',
+        meta: { origin: 'risu-module' },
+      });
+      assetStore.set('a2', {
+        id: 'a2',
+        characterId: 'char1',
+        name: 'cover',
+        ext: 'png',
+        type: 'other',
+        meta: { origin: 'risu-module' },
+      });
 
       const res = await template.execute('character_asset_list', { characterId: 'char1' });
       const parsed = JSON.parse(res.content as string) as {
@@ -838,12 +925,33 @@ describe('CharacterWorkbench', () => {
     });
 
     it('character_asset_add imports an attachment as a character asset', async () => {
-      const attachment: Attachment = { id: 'att1', messageId: null, mimeType: 'image/png', filePath: 'files/attachments/att1', meta: {}, url: '/api/attachments/att1' };
-      const { template, bus, assetStore, storageFiles } = makeTemplate({ characters: [makeCharacter()], attachments: [attachment] });
+      const attachment: Attachment = {
+        id: 'att1',
+        messageId: null,
+        mimeType: 'image/png',
+        filePath: 'files/attachments/att1',
+        meta: {},
+        url: '/api/attachments/att1',
+      };
+      const { template, bus, assetStore, storageFiles } = makeTemplate({
+        characters: [makeCharacter()],
+        attachments: [attachment],
+      });
       storageFiles.set('files/attachments/att1', TINY_PNG);
 
-      const res = await template.execute('character_asset_add', { characterId: 'char1', attachmentId: 'att1', name: 'portrait' });
-      const parsed = JSON.parse(res.content as string) as { id: string; name: string; type: string; ext: string; assetUrl: string; origin: string };
+      const res = await template.execute('character_asset_add', {
+        characterId: 'char1',
+        attachmentId: 'att1',
+        name: 'portrait',
+      });
+      const parsed = JSON.parse(res.content as string) as {
+        id: string;
+        name: string;
+        type: string;
+        ext: string;
+        assetUrl: string;
+        origin: string;
+      };
       expect(parsed.name).toBe('portrait');
       expect(parsed.type).toBe('image');
       expect(parsed.ext).toBe('png');
@@ -855,7 +963,14 @@ describe('CharacterWorkbench', () => {
     });
 
     it('character_asset_add derives type/extension from the MIME type', async () => {
-      const attachment: Attachment = { id: 'att2', messageId: null, mimeType: 'audio/mpeg', filePath: 'files/attachments/att2', meta: {}, url: '/api/attachments/att2' };
+      const attachment: Attachment = {
+        id: 'att2',
+        messageId: null,
+        mimeType: 'audio/mpeg',
+        filePath: 'files/attachments/att2',
+        meta: {},
+        url: '/api/attachments/att2',
+      };
       const { template, storageFiles } = makeTemplate({ characters: [makeCharacter()], attachments: [attachment] });
       storageFiles.set('files/attachments/att2', Buffer.from('ID3'));
 
@@ -878,7 +993,15 @@ describe('CharacterWorkbench', () => {
 
     it('character_asset_remove deletes the record and the stored file', async () => {
       const { template, assetStore, storageFiles } = makeTemplate({ characters: [makeCharacter()] });
-      assetStore.set('a1', { id: 'a1', characterId: 'char1', name: 'cover', ext: 'png', type: 'image', filePath: 'files/character_assets/char1/a1.png', meta: {} });
+      assetStore.set('a1', {
+        id: 'a1',
+        characterId: 'char1',
+        name: 'cover',
+        ext: 'png',
+        type: 'image',
+        filePath: 'files/character_assets/char1/a1.png',
+        meta: {},
+      });
       storageFiles.set('files/character_assets/char1/a1.png', TINY_PNG);
 
       const res = await template.execute('character_asset_remove', { characterId: 'char1', assetId: 'a1' });
@@ -888,8 +1011,18 @@ describe('CharacterWorkbench', () => {
     });
 
     it('character_asset_remove rejects assets of another character', async () => {
-      const { template, assetStore } = makeTemplate({ characters: [makeCharacter(), makeCharacter({ id: 'char2', name: 'Other' })] });
-      assetStore.set('a1', { id: 'a1', characterId: 'char2', name: 'cover', ext: 'png', type: 'image', filePath: null, meta: {} });
+      const { template, assetStore } = makeTemplate({
+        characters: [makeCharacter(), makeCharacter({ id: 'char2', name: 'Other' })],
+      });
+      assetStore.set('a1', {
+        id: 'a1',
+        characterId: 'char2',
+        name: 'cover',
+        ext: 'png',
+        type: 'image',
+        filePath: null,
+        meta: {},
+      });
 
       const res = await template.execute('character_asset_remove', { characterId: 'char1', assetId: 'a1' });
       expect(res.content).toBe('Error: asset "a1" not found on character "char1"');
@@ -911,8 +1044,18 @@ describe('CharacterWorkbench', () => {
       });
       storageFiles.set('files/character_assets/char2/a1.mp3', Buffer.from('ID3'));
 
-      const res = await template.execute('character_asset_copy', { characterId: 'char1', sourceCharacterId: 'char2', assetId: 'a1' });
-      const parsed = JSON.parse(res.content as string) as { id: string; name: string; ext: string; origin: string; assetUrl: string };
+      const res = await template.execute('character_asset_copy', {
+        characterId: 'char1',
+        sourceCharacterId: 'char2',
+        assetId: 'a1',
+      });
+      const parsed = JSON.parse(res.content as string) as {
+        id: string;
+        name: string;
+        ext: string;
+        origin: string;
+        assetUrl: string;
+      };
       expect(parsed.id).not.toBe('a1');
       expect(parsed.name).toBe('bgm');
       expect(parsed.ext).toBe('mp3');
@@ -932,16 +1075,36 @@ describe('CharacterWorkbench', () => {
       const { template, assetStore } = makeTemplate({
         characters: [makeCharacter(), makeCharacter({ id: 'char2', name: 'Source' })],
       });
-      assetStore.set('a1', { id: 'a1', characterId: 'char1', name: 'x', ext: 'png', type: 'image', filePath: null, meta: {} });
+      assetStore.set('a1', {
+        id: 'a1',
+        characterId: 'char1',
+        name: 'x',
+        ext: 'png',
+        type: 'image',
+        filePath: null,
+        meta: {},
+      });
 
-      const self = await template.execute('character_asset_copy', { characterId: 'char1', sourceCharacterId: 'char1', assetId: 'a1' });
+      const self = await template.execute('character_asset_copy', {
+        characterId: 'char1',
+        sourceCharacterId: 'char1',
+        assetId: 'a1',
+      });
       expect(self.content).toBe('Error: source and target character are the same');
 
-      const noTarget = await template.execute('character_asset_copy', { characterId: 'nope', sourceCharacterId: 'char2', assetId: 'a1' });
+      const noTarget = await template.execute('character_asset_copy', {
+        characterId: 'nope',
+        sourceCharacterId: 'char2',
+        assetId: 'a1',
+      });
       expect(noTarget.content).toBe('Error: character "nope" not found');
 
       // a1 belongs to char1, not to the stated source char2.
-      const foreign = await template.execute('character_asset_copy', { characterId: 'char2', sourceCharacterId: 'char1', assetId: 'nope' });
+      const foreign = await template.execute('character_asset_copy', {
+        characterId: 'char2',
+        sourceCharacterId: 'char1',
+        assetId: 'nope',
+      });
       expect(foreign.content).toBe('Error: asset "nope" not found on character "char1"');
     });
 
@@ -949,12 +1112,32 @@ describe('CharacterWorkbench', () => {
       const { template, assetStore, storageFiles } = makeTemplate({
         characters: [makeCharacter(), makeCharacter({ id: 'char2', name: 'Source' })],
       });
-      assetStore.set('a1', { id: 'a1', characterId: 'char2', name: 'one', ext: 'png', type: 'image', filePath: 'files/character_assets/char2/a1.png', meta: {} });
-      assetStore.set('a2', { id: 'a2', characterId: 'char2', name: 'two', ext: 'png', type: 'image', filePath: null, meta: {} });
+      assetStore.set('a1', {
+        id: 'a1',
+        characterId: 'char2',
+        name: 'one',
+        ext: 'png',
+        type: 'image',
+        filePath: 'files/character_assets/char2/a1.png',
+        meta: {},
+      });
+      assetStore.set('a2', {
+        id: 'a2',
+        characterId: 'char2',
+        name: 'two',
+        ext: 'png',
+        type: 'image',
+        filePath: null,
+        meta: {},
+      });
       storageFiles.set('files/character_assets/char2/a1.png', TINY_PNG);
 
       const res = await template.execute('character_assets_copy', { characterId: 'char1', sourceCharacterId: 'char2' });
-      const parsed = JSON.parse(res.content as string) as { copied: number; skipped: number; assets: Array<{ id: string; name: string }> };
+      const parsed = JSON.parse(res.content as string) as {
+        copied: number;
+        skipped: number;
+        assets: Array<{ id: string; name: string }>;
+      };
       expect(parsed.copied).toBe(1);
       expect(parsed.skipped).toBe(1);
       expect(parsed.assets).toHaveLength(1);
@@ -964,7 +1147,9 @@ describe('CharacterWorkbench', () => {
     });
 
     it('character_assets_copy errors when the source has no assets', async () => {
-      const { template } = makeTemplate({ characters: [makeCharacter(), makeCharacter({ id: 'char2', name: 'Source' })] });
+      const { template } = makeTemplate({
+        characters: [makeCharacter(), makeCharacter({ id: 'char2', name: 'Source' })],
+      });
       const res = await template.execute('character_assets_copy', { characterId: 'char1', sourceCharacterId: 'char2' });
       expect(res.content).toBe('Error: character "char2" has no assets to copy');
     });
@@ -973,12 +1158,40 @@ describe('CharacterWorkbench', () => {
       const moduleMeta = { id: 'm1', name: 'Music Pack', filePath: 'files/character_modules/char2/m1.json' };
       const source = makeCharacter({ id: 'char2', name: 'Source', extensions: { risuModules: [moduleMeta] } });
       const { template, assetStore, storageFiles } = makeTemplate({ characters: [makeCharacter(), source] });
-      assetStore.set('a1', { id: 'a1', characterId: 'char2', name: 'bgm', ext: 'mp3', type: 'other', filePath: 'files/character_assets/char2/a1.mp3', meta: { origin: 'risu-module', moduleId: 'm1' } });
-      assetStore.set('a2', { id: 'a2', characterId: 'char2', name: 'other-mod', ext: 'mp3', type: 'other', filePath: 'files/character_assets/char2/a2.mp3', meta: { origin: 'risu-module', moduleId: 'm2' } });
-      assetStore.set('a3', { id: 'a3', characterId: 'char2', name: 'card', ext: 'png', type: 'image', filePath: 'files/character_assets/char2/a3.png', meta: {} });
+      assetStore.set('a1', {
+        id: 'a1',
+        characterId: 'char2',
+        name: 'bgm',
+        ext: 'mp3',
+        type: 'other',
+        filePath: 'files/character_assets/char2/a1.mp3',
+        meta: { origin: 'risu-module', moduleId: 'm1' },
+      });
+      assetStore.set('a2', {
+        id: 'a2',
+        characterId: 'char2',
+        name: 'other-mod',
+        ext: 'mp3',
+        type: 'other',
+        filePath: 'files/character_assets/char2/a2.mp3',
+        meta: { origin: 'risu-module', moduleId: 'm2' },
+      });
+      assetStore.set('a3', {
+        id: 'a3',
+        characterId: 'char2',
+        name: 'card',
+        ext: 'png',
+        type: 'image',
+        filePath: 'files/character_assets/char2/a3.png',
+        meta: {},
+      });
       storageFiles.set('files/character_assets/char2/a1.mp3', Buffer.from('ID3'));
 
-      const res = await template.execute('risu_module_assets_copy', { characterId: 'char1', sourceCharacterId: 'char2', moduleId: 'm1' });
+      const res = await template.execute('risu_module_assets_copy', {
+        characterId: 'char1',
+        sourceCharacterId: 'char2',
+        moduleId: 'm1',
+      });
       const parsed = JSON.parse(res.content as string) as { copied: number; assets: Array<{ name: string }> };
       expect(parsed.copied).toBe(1);
       expect(parsed.assets.map((a) => a.name)).toEqual(['bgm']);
@@ -988,16 +1201,34 @@ describe('CharacterWorkbench', () => {
       const moduleMeta = { id: 'm1', name: 'Embedded Mod', filePath: 'files/character_modules/char2/m1.json' };
       const source = makeCharacter({ id: 'char2', name: 'Source', extensions: { risuModules: [moduleMeta] } });
       const { template, assetStore } = makeTemplate({ characters: [makeCharacter(), source] });
-      assetStore.set('a3', { id: 'a3', characterId: 'char2', name: 'card', ext: 'png', type: 'image', filePath: null, meta: {} });
+      assetStore.set('a3', {
+        id: 'a3',
+        characterId: 'char2',
+        name: 'card',
+        ext: 'png',
+        type: 'image',
+        filePath: null,
+        meta: {},
+      });
 
-      const res = await template.execute('risu_module_assets_copy', { characterId: 'char1', sourceCharacterId: 'char2', moduleId: 'm1' });
+      const res = await template.execute('risu_module_assets_copy', {
+        characterId: 'char1',
+        sourceCharacterId: 'char2',
+        moduleId: 'm1',
+      });
       expect(res.content).toContain('no separately-stored assets for module "Embedded Mod"');
       expect(res.content).toContain('character_assets_copy');
     });
 
     it('risu_module_assets_copy errors for an unknown module', async () => {
-      const { template } = makeTemplate({ characters: [makeCharacter(), makeCharacter({ id: 'char2', name: 'Source' })] });
-      const res = await template.execute('risu_module_assets_copy', { characterId: 'char1', sourceCharacterId: 'char2', moduleId: 'nope' });
+      const { template } = makeTemplate({
+        characters: [makeCharacter(), makeCharacter({ id: 'char2', name: 'Source' })],
+      });
+      const res = await template.execute('risu_module_assets_copy', {
+        characterId: 'char1',
+        sourceCharacterId: 'char2',
+        moduleId: 'nope',
+      });
       expect(res.content).toBe('Error: risu module "nope" not found on character "char2"');
     });
   });
@@ -1064,24 +1295,47 @@ describe('CharacterWorkbench', () => {
       const meta = seedModule(storageFiles, charStore, 'char1');
       const moduleId = meta.id;
 
-      const info = JSON.parse((await template.execute('risu_module_get', { characterId: 'char1', moduleId, section: 'info' })).content as string);
-      expect(info).toMatchObject({ name: 'Port Me', namespace: 'portme', customModuleToggle: '=portme=group', lowLevelAccess: true });
+      const info = JSON.parse(
+        (await template.execute('risu_module_get', { characterId: 'char1', moduleId, section: 'info' }))
+          .content as string,
+      );
+      expect(info).toMatchObject({
+        name: 'Port Me',
+        namespace: 'portme',
+        customModuleToggle: '=portme=group',
+        lowLevelAccess: true,
+      });
 
-      const triggers = JSON.parse((await template.execute('risu_module_get', { characterId: 'char1', moduleId, section: 'triggers' })).content as string);
+      const triggers = JSON.parse(
+        (await template.execute('risu_module_get', { characterId: 'char1', moduleId, section: 'triggers' }))
+          .content as string,
+      );
       expect(triggers).toHaveLength(2);
       expect(triggers[0]).toMatchObject({ index: 0, type: 'start', hasLua: true });
       expect(triggers[1]).toMatchObject({ index: 1, type: 'manual', comment: 'Toggle', hasLua: false });
 
-      const trigger = JSON.parse((await template.execute('risu_module_get', { characterId: 'char1', moduleId, section: 'trigger', index: 0 })).content as string);
+      const trigger = JSON.parse(
+        (await template.execute('risu_module_get', { characterId: 'char1', moduleId, section: 'trigger', index: 0 }))
+          .content as string,
+      );
       expect(trigger.effect[0].code).toBe('print("backend")');
 
-      const regex = JSON.parse((await template.execute('risu_module_get', { characterId: 'char1', moduleId, section: 'regex' })).content as string);
+      const regex = JSON.parse(
+        (await template.execute('risu_module_get', { characterId: 'char1', moduleId, section: 'regex' }))
+          .content as string,
+      );
       expect(regex).toEqual([{ comment: 'typo', in: 'teh', out: 'the', type: 'edittrans' }]);
 
-      const lorebook = JSON.parse((await template.execute('risu_module_get', { characterId: 'char1', moduleId, section: 'lorebook' })).content as string);
+      const lorebook = JSON.parse(
+        (await template.execute('risu_module_get', { characterId: 'char1', moduleId, section: 'lorebook' }))
+          .content as string,
+      );
       expect(lorebook).toEqual([{ key: 'reimu', content: 'Shrine maiden.' }]);
 
-      const assets = JSON.parse((await template.execute('risu_module_get', { characterId: 'char1', moduleId, section: 'assets' })).content as string);
+      const assets = JSON.parse(
+        (await template.execute('risu_module_get', { characterId: 'char1', moduleId, section: 'assets' }))
+          .content as string,
+      );
       expect(assets).toEqual([['song', '', 'mp3']]);
     });
 
@@ -1089,12 +1343,24 @@ describe('CharacterWorkbench', () => {
       const { template, storageFiles, charStore } = makeTemplate({ characters: [makeCharacter()] });
       const meta = seedModule(storageFiles, charStore, 'char1');
 
-      expect((await template.execute('risu_module_get', { characterId: 'char1', moduleId: meta.id, section: 'trigger' })).content)
-        .toContain('requires an index');
-      expect((await template.execute('risu_module_get', { characterId: 'char1', moduleId: meta.id, section: 'trigger', index: 99 })).content)
-        .toContain('out of range');
-      expect((await template.execute('risu_module_get', { characterId: 'char1', moduleId: 'nope', section: 'info' })).content)
-        .toContain('not found');
+      expect(
+        (await template.execute('risu_module_get', { characterId: 'char1', moduleId: meta.id, section: 'trigger' }))
+          .content,
+      ).toContain('requires an index');
+      expect(
+        (
+          await template.execute('risu_module_get', {
+            characterId: 'char1',
+            moduleId: meta.id,
+            section: 'trigger',
+            index: 99,
+          })
+        ).content,
+      ).toContain('out of range');
+      expect(
+        (await template.execute('risu_module_get', { characterId: 'char1', moduleId: 'nope', section: 'info' }))
+          .content,
+      ).toContain('not found');
     });
 
     it('risu_module_remove deletes the module and broadcasts', async () => {
@@ -1141,9 +1407,15 @@ describe('CharacterWorkbench', () => {
 
     it('backend_logic_set toggles enabled and preserves the script', async () => {
       const { template, charStore, bus } = makeTemplate({ characters: [makeCharacter()] });
-      await template.execute('backend_logic_set', { characterId: 'char1', luaSource: 'function generate(p, c) return "x" end' });
+      await template.execute('backend_logic_set', {
+        characterId: 'char1',
+        luaSource: 'function generate(p, c) return "x" end',
+      });
       const res = await template.execute('backend_logic_set', { characterId: 'char1', enabled: true });
-      expect(JSON.parse(res.content as string)).toEqual({ enabled: true, luaSource: 'function generate(p, c) return "x" end' });
+      expect(JSON.parse(res.content as string)).toEqual({
+        enabled: true,
+        luaSource: 'function generate(p, c) return "x" end',
+      });
       const ext = charStore.get('char1')!.extensions['contextualBackend'] as Record<string, unknown>;
       expect(ext['enabled']).toBe(true);
       const types = broadcastTypes(bus);
@@ -1154,10 +1426,15 @@ describe('CharacterWorkbench', () => {
     it('backend_logic_set and backend_logic_edit preserve the files module map', async () => {
       const files = { 'lib/utils.lua': 'return { x = 1 }' };
       const { template, charStore } = makeTemplate({
-        characters: [makeCharacter({ extensions: { contextualBackend: { enabled: true, luaSource: 'return 1', files } } })],
+        characters: [
+          makeCharacter({ extensions: { contextualBackend: { enabled: true, luaSource: 'return 1', files } } }),
+        ],
       });
 
-      await template.execute('backend_logic_set', { characterId: 'char1', luaSource: 'function generate(p, c) return "y" end' });
+      await template.execute('backend_logic_set', {
+        characterId: 'char1',
+        luaSource: 'function generate(p, c) return "y" end',
+      });
       let ext = charStore.get('char1')!.extensions['contextualBackend'] as Record<string, unknown>;
       expect(ext['files']).toEqual(files);
       expect(ext['luaSource']).toBe('function generate(p, c) return "y" end');
@@ -1175,7 +1452,13 @@ describe('CharacterWorkbench', () => {
     it('validates main.lua against the module map: top-level require works on write and edit', async () => {
       const files = { 'lib/answer.lua': 'return 42' };
       const { template } = makeTemplate({
-        characters: [makeCharacter({ extensions: { contextualBackend: { enabled: false, luaSource: 'function generate(p, c) return "a" end', files } } })],
+        characters: [
+          makeCharacter({
+            extensions: {
+              contextualBackend: { enabled: false, luaSource: 'function generate(p, c) return "a" end', files },
+            },
+          }),
+        ],
       });
       const src = 'local answer = require("lib/answer")\nfunction generate(p, c) return tostring(answer) end';
       const setRes = await template.execute('backend_logic_set', { characterId: 'char1', luaSource: src });
@@ -1237,7 +1520,12 @@ describe('CharacterWorkbench', () => {
         luaSource: '-- one\n-- two\n-- three\nfunction generate(p, c) return "x" end',
       });
       const res = await template.execute('backend_logic_get', { characterId: 'char1', offset: 2, limit: 2 });
-      const out = JSON.parse(res.content as string) as { enabled: boolean; totalLines: number; offset: number; luaSource: string };
+      const out = JSON.parse(res.content as string) as {
+        enabled: boolean;
+        totalLines: number;
+        offset: number;
+        luaSource: string;
+      };
       expect(out.totalLines).toBe(4);
       expect(out.offset).toBe(2);
       expect(out.luaSource).toBe('2\t-- two\n3\t-- three');
@@ -1450,11 +1738,18 @@ describe('CharacterWorkbench', () => {
         path: 'lib/wrap.lua',
         luaSource: 'return function(t) return "[" .. t .. "]" end',
       });
-      const res = await template.execute('backend_logic_test', { characterId: 'char1', input: 'hi', delegateResponse: 'CANNED' });
+      const res = await template.execute('backend_logic_test', {
+        characterId: 'char1',
+        input: 'hi',
+        delegateResponse: 'CANNED',
+      });
       const outcome = JSON.parse(res.content as string) as Record<string, unknown>;
       expect(outcome['ok']).toBe(true);
       expect(outcome['text']).toBe('[CANNED]');
-      const trace = outcome['trace'] as { delegations: Array<{ layer: string; error?: string }>; modulesLoaded: string[] };
+      const trace = outcome['trace'] as {
+        delegations: Array<{ layer: string; error?: string }>;
+        modulesLoaded: string[];
+      };
       expect(trace.delegations).toEqual([{ layer: 'default' }]);
       expect(trace.modulesLoaded).toEqual(['lib/wrap.lua']);
     });
@@ -1519,14 +1814,19 @@ describe('CharacterWorkbench', () => {
       const ext = charStore.get('char1')!.extensions['contextualBackend'] as Record<string, unknown>;
       expect(ext['enabled']).toBeUndefined(); // vendoring never activates the card logic
       expect(Object.keys(ext['files'] as Record<string, string>)).toHaveLength(12);
-      expect((await template.execute('backend_logic_add_game_lib', { characterId: 'nope' })).content).toContain('not found');
+      expect((await template.execute('backend_logic_add_game_lib', { characterId: 'nope' })).content).toContain(
+        'not found',
+      );
     });
-
 
     it('backend_file_set/get/remove round-trips a module', async () => {
       const { template } = makeTemplate({ characters: [makeCharacter()] });
 
-      const setRes = await template.execute('backend_file_set', { characterId: 'char1', path: 'lib/utils.lua', luaSource: MODULE });
+      const setRes = await template.execute('backend_file_set', {
+        characterId: 'char1',
+        path: 'lib/utils.lua',
+        luaSource: MODULE,
+      });
       expect(JSON.parse(setRes.content as string)).toEqual({ path: 'lib/utils.lua', lines: 3 });
 
       // list sorts the keys; the .lua extension is appended when omitted.
@@ -1553,7 +1853,11 @@ describe('CharacterWorkbench', () => {
 
     it('backend_file_set rejects modules that fail to load (NOT saved)', async () => {
       const { template } = makeTemplate({ characters: [makeCharacter()] });
-      const res = await template.execute('backend_file_set', { characterId: 'char1', path: 'bad.lua', luaSource: 'function (' });
+      const res = await template.execute('backend_file_set', {
+        characterId: 'char1',
+        path: 'bad.lua',
+        luaSource: 'function (',
+      });
       expect(res.content).toContain('write rejected');
       const getRes = await template.execute('backend_file_get', { characterId: 'char1', path: 'bad.lua' });
       expect(getRes.content).toContain('no such module');
@@ -1596,7 +1900,10 @@ describe('CharacterWorkbench', () => {
     it('module map survives backend_logic_set (files preserved)', async () => {
       const { template, charStore } = makeTemplate({ characters: [makeCharacter()] });
       await template.execute('backend_file_set', { characterId: 'char1', path: 'lib/utils.lua', luaSource: MODULE });
-      await template.execute('backend_logic_set', { characterId: 'char1', luaSource: 'function generate(p, c) return "x" end' });
+      await template.execute('backend_logic_set', {
+        characterId: 'char1',
+        luaSource: 'function generate(p, c) return "x" end',
+      });
       const ext = charStore.get('char1')!.extensions['contextualBackend'] as Record<string, unknown>;
       expect(ext['files']).toEqual({ 'lib/utils.lua': MODULE });
     });

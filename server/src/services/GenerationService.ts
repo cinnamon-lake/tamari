@@ -18,7 +18,7 @@
 import { getLogger } from '../lib/logger.js';
 import { str } from '../lib/coerce.js';
 
-const log = getLogger('GenerationService');
+const log = getLogger('services/GenerationService');
 import type { EventBus } from '../bus/EventBus.js';
 import type { IChatRepository } from '../repos/ChatRepository.js';
 import type { ICharacterRepository } from '../repos/CharacterRepository.js';
@@ -103,8 +103,28 @@ export class GenerationService {
   }
 
   private assistantTargetDeps(): AssistantMessageTargetDeps {
-    const { chats, characters, chatMembers, personas, settings, backendConfigs, chatBroadcast, generationBroadcast, assembly } = this.deps;
-    return { chats, characters, chatMembers, personas, settings, backendConfigs, chatBroadcast, generationBroadcast, assembly };
+    const {
+      chats,
+      characters,
+      chatMembers,
+      personas,
+      settings,
+      backendConfigs,
+      chatBroadcast,
+      generationBroadcast,
+      assembly,
+    } = this.deps;
+    return {
+      chats,
+      characters,
+      chatMembers,
+      personas,
+      settings,
+      backendConfigs,
+      chatBroadcast,
+      generationBroadcast,
+      assembly,
+    };
   }
 
   private draftTargetDeps(): DraftTargetDeps {
@@ -143,85 +163,85 @@ export class GenerationService {
     if (!held) await this.deps.runner.acquireChat(chatId);
 
     try {
-    const chat = await chats.getChatById(chatId);
-    // Resolve persona name and description from chat
-    const persona = chat?.personaId ? await personas.getById(chat.personaId) : null;
-    const character = chat?.characterId ? await this.deps.characters.getById(chat.characterId) : null;
+      const chat = await chats.getChatById(chatId);
+      // Resolve persona name and description from chat
+      const persona = chat?.personaId ? await personas.getById(chat.personaId) : null;
+      const character = chat?.characterId ? await this.deps.characters.getById(chat.characterId) : null;
 
-    // Build extra metadata
-    const extra: MessageExtra = {};
-    if (persona) {
-      extra.personaId = persona.id;
-    }
-    if (attachmentRefs && attachmentRefs.length > 0) {
-      extra.attachments = attachmentRefs;
-    }
+      // Build extra metadata
+      const extra: MessageExtra = {};
+      if (persona) {
+        extra.personaId = persona.id;
+      }
+      if (attachmentRefs && attachmentRefs.length > 0) {
+        extra.attachments = attachmentRefs;
+      }
 
-    const appSettings = await this.deps.settings.getTyped();
-    let processedContent = content;
+      const appSettings = await this.deps.settings.getTyped();
+      let processedContent = content;
 
-    // Apply whitespace trimming to user messages. Read through the append-only
-    // lock resolver: under append-only this is locked to 'none' (any input
-    // mutation would desync persisted text from already-sent prompt bytes).
-    processedContent = applyInputWhitespace(processedContent, resolveEffectiveSettings(appSettings).whitespaceMode);
+      // Apply whitespace trimming to user messages. Read through the append-only
+      // lock resolver: under append-only this is locked to 'none' (any input
+      // mutation would desync persisted text from already-sent prompt bytes).
+      processedContent = applyInputWhitespace(processedContent, resolveEffectiveSettings(appSettings).whitespaceMode);
 
-    // Resolve model for accurate token counting
-    const backendConfig = appSettings.activeBackendConfigId
-      ? await this.deps.backendConfigs.getById(appSettings.activeBackendConfigId)
-      : null;
-    const model = backendConfig?.model ?? appSettings.model;
+      // Resolve model for accurate token counting
+      const backendConfig = appSettings.activeBackendConfigId
+        ? await this.deps.backendConfigs.getById(appSettings.activeBackendConfigId)
+        : null;
+      const model = backendConfig?.model ?? appSettings.model;
 
-    // Resolve storage macros before saving
-    const lastMessageId = chat?.activeChildId ?? chat?.headMessageId;
-    const lastMessage = lastMessageId ? await chats.getMessageById(lastMessageId) : null;
-    const previousVars = lastMessage?.extra.macroVars ?? {};
-    const { messages } = await getChatSnapshotMessages(chats, chatId, 100);
-    const storageResolver = MacroResolver.createStorageResolver();
-    const userName = persona?.name || appSettings.userName || 'User';
-    const macroCtx = {
-      userName,
-      charName: character?.name ?? 'Character',
-      description: character?.description,
-      personality: character?.personality,
-      scenario: character?.scenario,
-      persona: persona?.description,
-      model,
-      now: new Date(),
-      messages: messages.map((m) => ({ id: m.id, role: m.role, content: getMessageText(m.extra.parts) })),
-      macroVars: { ...previousVars },
-    };
-    processedContent = storageResolver.resolve(processedContent, macroCtx);
-    const newVars = { ...macroCtx.macroVars };
-    extra.macroVars = { ...previousVars, ...newVars };
+      // Resolve storage macros before saving
+      const lastMessageId = chat?.activeChildId ?? chat?.headMessageId;
+      const lastMessage = lastMessageId ? await chats.getMessageById(lastMessageId) : null;
+      const previousVars = lastMessage?.extra.macroVars ?? {};
+      const { messages } = await getChatSnapshotMessages(chats, chatId, 100);
+      const storageResolver = MacroResolver.createStorageResolver();
+      const userName = persona?.name || appSettings.userName || 'User';
+      const macroCtx = {
+        userName,
+        charName: character?.name ?? 'Character',
+        description: character?.description,
+        personality: character?.personality,
+        scenario: character?.scenario,
+        persona: persona?.description,
+        model,
+        now: new Date(),
+        messages: messages.map((m) => ({ id: m.id, role: m.role, content: getMessageText(m.extra.parts) })),
+        macroVars: { ...previousVars },
+      };
+      processedContent = storageResolver.resolve(processedContent, macroCtx);
+      const newVars = { ...macroCtx.macroVars };
+      extra.macroVars = { ...previousVars, ...newVars };
 
-    // Count tokens for the user message
-    extra.tokenCount = tokenCounterProvider.provideTokenCounter(model).count(processedContent);
+      // Count tokens for the user message
+      extra.tokenCount = tokenCounterProvider.provideTokenCounter(model).count(processedContent);
 
-    // 1. Append user message
-    extra.parts = [{ type: 'text', text: processedContent }];
-    const userMsg = await chats.appendMessage(chatId, {
-      role: 'user',
-      extra,
-    });
+      // 1. Append user message
+      extra.parts = [{ type: 'text', text: processedContent }];
+      const userMsg = await chats.appendMessage(chatId, {
+        role: 'user',
+        extra,
+      });
 
-    // Link uploaded attachments to this message
-    if (attachmentRefs && attachmentRefs.length > 0) {
-      for (const ref of attachmentRefs) {
-        try {
-          await attachments.linkToMessage(ref.id, userMsg.id);
-        } catch (err) {
-          log.debug({ err, attachmentId: ref.id, messageId: userMsg.id }, 'attachment link failed');
+      // Link uploaded attachments to this message
+      if (attachmentRefs && attachmentRefs.length > 0) {
+        for (const ref of attachmentRefs) {
+          try {
+            await attachments.linkToMessage(ref.id, userMsg.id);
+          } catch (err) {
+            log.debug({ err, attachmentId: ref.id, messageId: userMsg.id }, 'attachment link failed');
+          }
         }
       }
-    }
 
-    if (userMsg.id) {
-      await this.deps.chatBroadcast.broadcastMessageAppended(chatId, userMsg.id);
-    }
-    const updatedChat = await chats.getChatById(chatId);
-    if (updatedChat) {
-      await this.deps.chatBroadcast.broadcastSnapshot(chatId, 10000);
-    }
+      if (userMsg.id) {
+        await this.deps.chatBroadcast.broadcastMessageAppended(chatId, userMsg.id);
+      }
+      const updatedChat = await chats.getChatById(chatId);
+      if (updatedChat) {
+        await this.deps.chatBroadcast.broadcastSnapshot(chatId, 10000);
+      }
     } finally {
       if (!held) this.deps.runner.unlockChat(chatId);
     }
@@ -269,7 +289,7 @@ export class GenerationService {
         // Chain from the current leaf — re-read inside the tenure (the caller's
         // chat snapshot predates the lock).
         const fresh = await chats.getChatById(chatId);
-        let lastParentId = (fresh?.activeChildId ?? fresh?.headMessageId) ?? lastMessageId;
+        let lastParentId = fresh?.activeChildId ?? fresh?.headMessageId ?? lastMessageId;
         for (const characterId of activatedMembers) {
           const character = charMap.get(characterId);
           if (!character) continue;
@@ -295,7 +315,10 @@ export class GenerationService {
     // Single-character chat: create assistant child of current head and generate
     const character = chat.characterId ? await this.deps.characters.getById(chat.characterId) : null;
     await this.deps.runner.run(
-      AssistantMessageTarget.forNewMessage({ chatId, clientId, character: character ?? null }, this.assistantTargetDeps()),
+      AssistantMessageTarget.forNewMessage(
+        { chatId, clientId, character: character ?? null },
+        this.assistantTargetDeps(),
+      ),
       lock,
     );
   }
@@ -459,7 +482,12 @@ export class GenerationService {
         lock,
       );
       if (outcome.error) {
-        return { error: outcome.error === 'NO_BACKEND' ? 'No backend configured. Set API key and model in settings.' : outcome.error };
+        return {
+          error:
+            outcome.error === 'NO_BACKEND'
+              ? 'No backend configured. Set API key and model in settings.'
+              : outcome.error,
+        };
       }
       return { text: outcome.text, finishReason: outcome.finishReason };
     } catch (err) {
@@ -518,8 +546,7 @@ export class GenerationService {
    * Used to replay streaming state to reconnecting clients.
    */
   getActiveGeneration():
-    | { id: string; chatId: string; messageId: number; text: string; reasoning?: string }
-    | undefined {
+    { id: string; chatId: string; messageId: number; text: string; reasoning?: string } | undefined {
     return this.deps.runner.getActiveGeneration();
   }
 
@@ -595,12 +622,19 @@ export class GenerationService {
    * Appends the user message, then generates using the override character's
    * persona/description via a per-character target (the group-chat mechanism).
    */
-  async handleAsk(chatId: string, characterName: string, content: string, clientId?: string, lock?: ChatLock): Promise<void> {
+  async handleAsk(
+    chatId: string,
+    characterName: string,
+    content: string,
+    clientId?: string,
+    lock?: ChatLock,
+  ): Promise<void> {
     const { characters, chats, bus } = this.deps;
 
     const character = await characters.getByName(characterName);
     if (!character) {
-      if (clientId) bus.sendTo(clientId, { type: 'error', message: `Character not found: ${characterName}`, code: 'NOT_FOUND' });
+      if (clientId)
+        bus.sendTo(clientId, { type: 'error', message: `Character not found: ${characterName}`, code: 'NOT_FOUND' });
       return;
     }
 

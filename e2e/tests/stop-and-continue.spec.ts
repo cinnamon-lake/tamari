@@ -12,43 +12,37 @@
  *   length:<text>      -> reply with a 'length' finish reason
  *   respond:<text>     -> fixed reply
  */
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { setSetting } from '../helpers/settings.js';
 import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 test.describe('Stop and Continue', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
+  // Requests `app` so the fixture's login runs before the settings writes.
+  test.beforeEach(async ({ app: _app, page }) => {
     // The e2e server is shared across specs — pin the settings these tests
     // depend on to a known state before touching anything else.
     await setSetting(page, 'autoContinueEnabled', false);
     await setSetting(page, 'quickContinue', false);
     await setSetting(page, 'quickImpersonate', false);
-    await configureMockBackend(page);
   });
 
   test.afterEach(async ({ page }) => {
     await setSetting(page, 'autoContinueEnabled', false);
     await setSetting(page, 'quickContinue', false);
     await setSetting(page, 'quickImpersonate', false);
-    await resetBackendConfig(page);
   });
 
-  test('stop mid-stream halts generation, keeps partial text, releases the lock', async ({ page }) => {
-    const app = new App(page);
+  test('stop mid-stream halts generation, keeps partial text, releases the lock', async ({ page, app }) => {
     const charName = uniqueName('Stop Character');
-    await app.createCharacterAndChat({ name: charName, description: 'Stop test character.', firstMes: 'Hello from Stop !' });
+    await app.createCharacterAndChat({
+      name: charName,
+      description: 'Stop test character.',
+      firstMes: 'Hello from Stop !',
+    });
 
     // ~100 chars at 150ms/char => ~15s of streaming; plenty of time to stop.
-    const fullText =
-      'streamed partial reply that keeps going and going with a long deterministic tail ENDMARKER';
+    const fullText = 'streamed partial reply that keeps going and going with a long deterministic tail ENDMARKER';
     await app.sendUserMessage(`slow:150:${fullText}`);
 
     // The send button swaps to a danger Stop button while streaming.
@@ -76,10 +70,13 @@ test.describe('Stop and Continue', () => {
     await app.waitForAssistantText('lock released');
   });
 
-  test('auto-continue fires extra LLM requests for a short length-finished reply', async ({ page }) => {
-    const app = new App(page);
+  test('auto-continue fires extra LLM requests for a short length-finished reply', async ({ page, app }) => {
     const charName = uniqueName('AutoContinue Character');
-    await app.createCharacterAndChat({ name: charName, description: 'Auto-continue test character.', firstMes: 'Hello from Auto-continue !' });
+    await app.createCharacterAndChat({
+      name: charName,
+      description: 'Auto-continue test character.',
+      firstMes: 'Hello from Auto-continue !',
+    });
 
     await setSetting(page, 'autoContinueEnabled', true);
     await setSetting(page, 'autoContinueTargetLength', 400);
@@ -106,10 +103,13 @@ test.describe('Stop and Continue', () => {
     await expect(page.locator('.toast-error')).toHaveCount(0);
   });
 
-  test('quick continue sends an assistant prefill and extends the same bubble', async ({ page }) => {
-    const app = new App(page);
+  test('quick continue sends an assistant prefill and extends the same bubble', async ({ page, app }) => {
     const charName = uniqueName('QuickContinue Character');
-    await app.createCharacterAndChat({ name: charName, description: 'Quick continue test character.', firstMes: 'Hello from Quick continue !' });
+    await app.createCharacterAndChat({
+      name: charName,
+      description: 'Quick continue test character.',
+      firstMes: 'Hello from Quick continue !',
+    });
 
     await setSetting(page, 'quickContinue', true);
 
@@ -136,10 +136,13 @@ test.describe('Stop and Continue', () => {
     await expect(page.locator('.message-bubble.assistant')).toHaveCount(2);
   });
 
-  test('quick impersonate fills the composer with the generated draft', async ({ page }) => {
-    const app = new App(page);
+  test('quick impersonate fills the composer with the generated draft', async ({ page, app }) => {
     const charName = uniqueName('QuickImpersonate Character');
-    await app.createCharacterAndChat({ name: charName, description: 'Quick impersonate test character.', firstMes: 'Hello from Quick impersonate !' });
+    await app.createCharacterAndChat({
+      name: charName,
+      description: 'Quick impersonate test character.',
+      firstMes: 'Hello from Quick impersonate !',
+    });
 
     await setSetting(page, 'quickImpersonate', true);
 

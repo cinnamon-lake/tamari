@@ -16,9 +16,9 @@ const FOCUSABLE_SELECTOR =
  */
 export function trapFocus(container: HTMLElement, e: KeyboardEvent): void {
   if (e.key !== 'Tab') return;
-  const focusable = Array.from(
-    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-  ).filter((el) => el.offsetParent !== null && !el.hasAttribute('disabled'));
+  const focusable = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (el) => el.offsetParent !== null && !el.hasAttribute('disabled'),
+  );
   if (focusable.length === 0) return;
   const first = focusable[0]!;
   const last = focusable[focusable.length - 1]!;
@@ -68,12 +68,4 @@ export function onEnterActivate(e: KeyboardEvent): void {
     e.preventDefault();
     (e.currentTarget as HTMLElement).click();
   }
-}
-
-/**
- * Focus the first focusable element inside a container (for modal autofocus).
- */
-export function focusFirst(container: HTMLElement): void {
-  const first = container.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
-  if (first) first.focus();
 }

@@ -59,7 +59,8 @@ class ChatWorkbenchTemplate implements ToolTemplate {
         },
         {
           name: 'chat_add_member',
-          description: 'Add a character to a group chat (defaults to the current chat). The chat must be a group chat, not a single-character chat.',
+          description:
+            'Add a character to a group chat (defaults to the current chat). The chat must be a group chat, not a single-character chat.',
           parameters: z.toJSONSchema(ChatMemberArgs) as Record<string, unknown>,
         },
         {
@@ -133,6 +134,8 @@ class ChatWorkbenchTemplate implements ToolTemplate {
     }
   }
 
-  serialize(): string { return ''; }
+  serialize(): string {
+    return '';
+  }
   deserialize(_raw: string): void {}
 }

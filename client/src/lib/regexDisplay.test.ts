@@ -78,50 +78,130 @@ describe('compileRule', () => {
 describe('applyDisplayRules', () => {
   it('applies matching rule', () => {
     const rules: RegexRule[] = [
-      { id: 'r1', name: '', findRegex: '/hello/g', replaceString: 'hi', display: true, disabled: false, userInput: false, aiOutput: false, prompt: false },
+      {
+        id: 'r1',
+        name: '',
+        findRegex: '/hello/g',
+        replaceString: 'hi',
+        display: true,
+        disabled: false,
+        userInput: false,
+        aiOutput: false,
+        prompt: false,
+      },
     ];
     expect(applyDisplayRules('hello world', rules)).toBe('hi world');
   });
 
   it('applies multiple rules in order', () => {
     const rules: RegexRule[] = [
-      { id: 'r1', name: '', findRegex: '/hello/g', replaceString: 'hi', display: true, disabled: false, userInput: false, aiOutput: false, prompt: false },
-      { id: 'r2', name: '', findRegex: '/world/g', replaceString: 'earth', display: true, disabled: false, userInput: false, aiOutput: false, prompt: false },
+      {
+        id: 'r1',
+        name: '',
+        findRegex: '/hello/g',
+        replaceString: 'hi',
+        display: true,
+        disabled: false,
+        userInput: false,
+        aiOutput: false,
+        prompt: false,
+      },
+      {
+        id: 'r2',
+        name: '',
+        findRegex: '/world/g',
+        replaceString: 'earth',
+        display: true,
+        disabled: false,
+        userInput: false,
+        aiOutput: false,
+        prompt: false,
+      },
     ];
     expect(applyDisplayRules('hello world', rules)).toBe('hi earth');
   });
 
   it('skips disabled rules', () => {
     const rules: RegexRule[] = [
-      { id: 'r1', name: '', findRegex: '/hello/g', replaceString: 'hi', display: true, disabled: true, userInput: false, aiOutput: false, prompt: false },
+      {
+        id: 'r1',
+        name: '',
+        findRegex: '/hello/g',
+        replaceString: 'hi',
+        display: true,
+        disabled: true,
+        userInput: false,
+        aiOutput: false,
+        prompt: false,
+      },
     ];
     expect(applyDisplayRules('hello world', rules)).toBe('hello world');
   });
 
   it('skips rules with display=false', () => {
     const rules: RegexRule[] = [
-      { id: 'r1', name: '', findRegex: '/hello/g', replaceString: 'hi', display: false, disabled: false, userInput: false, aiOutput: false, prompt: false },
+      {
+        id: 'r1',
+        name: '',
+        findRegex: '/hello/g',
+        replaceString: 'hi',
+        display: false,
+        disabled: false,
+        userInput: false,
+        aiOutput: false,
+        prompt: false,
+      },
     ];
     expect(applyDisplayRules('hello world', rules)).toBe('hello world');
   });
 
   it('skips rules that fail to compile', () => {
     const rules: RegexRule[] = [
-      { id: 'r1', name: '', findRegex: '/[invalid/g', replaceString: '', display: true, disabled: false, userInput: false, aiOutput: false, prompt: false },
+      {
+        id: 'r1',
+        name: '',
+        findRegex: '/[invalid/g',
+        replaceString: '',
+        display: true,
+        disabled: false,
+        userInput: false,
+        aiOutput: false,
+        prompt: false,
+      },
     ];
     expect(applyDisplayRules('hello world', rules)).toBe('hello world');
   });
 
   it('skips bare patterns', () => {
     const rules: RegexRule[] = [
-      { id: 'r1', name: '', findRegex: 'hello', replaceString: 'hi', display: true, disabled: false, userInput: false, aiOutput: false, prompt: false },
+      {
+        id: 'r1',
+        name: '',
+        findRegex: 'hello',
+        replaceString: 'hi',
+        display: true,
+        disabled: false,
+        userInput: false,
+        aiOutput: false,
+        prompt: false,
+      },
     ];
     expect(applyDisplayRules('hello world', rules)).toBe('hello world');
   });
 
   it('handles global replacement', () => {
     const rules: RegexRule[] = [
-      { id: 'r1', name: '', findRegex: '/a/g', replaceString: 'b', display: true, disabled: false, userInput: false, aiOutput: false, prompt: false },
+      {
+        id: 'r1',
+        name: '',
+        findRegex: '/a/g',
+        replaceString: 'b',
+        display: true,
+        disabled: false,
+        userInput: false,
+        aiOutput: false,
+        prompt: false,
+      },
     ];
     expect(applyDisplayRules('aaa', rules)).toBe('bbb');
   });

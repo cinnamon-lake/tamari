@@ -1,6 +1,7 @@
 import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
+import { uniqueName } from '../helpers/names.js';
 
 /**
  * Dedicated a11y gate. `expectNoAxeViolations` enforces the `color-contrast`
@@ -11,10 +12,6 @@ import { expectNoAxeViolations } from '../helpers/a11y.js';
  * without entity setup; setup-heavy views (group panel, checkpoints, message
  * actions) are scanned by their own feature specs.
  */
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
 
 test.describe('Accessibility', () => {
   test.beforeEach(async ({ page }) => {

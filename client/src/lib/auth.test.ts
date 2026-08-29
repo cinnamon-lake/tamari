@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getAuthToken, setAuthToken, clearAuthToken, isAuthenticated, authToken } from './auth.js';
+import { getAuthToken, setAuthToken, clearAuthToken, authToken } from './auth.js';
 
 describe('auth', () => {
   beforeEach(() => {
@@ -24,14 +24,6 @@ describe('auth', () => {
     expect(localStorage.getItem('st_auth_token')).toBeNull();
     expect(getAuthToken()).toBeNull();
     expect(authToken()).toBeNull();
-  });
-
-  it('isAuthenticated follows token state', () => {
-    expect(isAuthenticated()).toBe(false);
-    setAuthToken('token');
-    expect(isAuthenticated()).toBe(true);
-    clearAuthToken();
-    expect(isAuthenticated()).toBe(false);
   });
 
   it('overwrites existing token', () => {

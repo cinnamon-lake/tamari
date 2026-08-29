@@ -30,9 +30,7 @@ describe('parseCharX', () => {
       spec_version: '3.0',
       data: {
         name: 'Test Char',
-        assets: [
-          { type: 'icon', name: 'main', ext: 'png', uri: 'embeded://assets/icon/image/main.png' },
-        ],
+        assets: [{ type: 'icon', name: 'main', ext: 'png', uri: 'embeded://assets/icon/image/main.png' }],
       },
     };
     const buf = makeCharXCard({
@@ -80,9 +78,7 @@ describe('parseCharX', () => {
       spec: 'chara_card_v3',
       data: {
         name: 'Correct Spelling',
-        assets: [
-          { type: 'background', name: 'bg', ext: 'jpg', uri: 'embedded://assets/background/bg.jpg' },
-        ],
+        assets: [{ type: 'background', name: 'bg', ext: 'jpg', uri: 'embedded://assets/background/bg.jpg' }],
       },
     };
     const buf = makeCharXCard({ card });
@@ -97,9 +93,7 @@ describe('parseCharX', () => {
       spec: 'chara_card_v3',
       data: {
         name: 'Asset Prefix',
-        assets: [
-          { type: 'emotion', name: 'happy', ext: 'png', uri: '__asset:expressions/happy.png' },
-        ],
+        assets: [{ type: 'emotion', name: 'happy', ext: 'png', uri: '__asset:expressions/happy.png' }],
       },
     };
     const buf = makeCharXCard({ card });
@@ -210,9 +204,7 @@ describe('extractCharXAssets', () => {
       },
     });
 
-    const defs: CharXAssetDef[] = [
-      { zipPath: 'icon.png', type: 'icon', name: 'main', ext: 'png' },
-    ];
+    const defs: CharXAssetDef[] = [{ zipPath: 'icon.png', type: 'icon', name: 'main', ext: 'png' }];
     const extracted = extractCharXAssets(buf, defs);
     expect(extracted.size).toBe(1);
     expect(extracted.get('icon.png')?.toString('hex')).toBe('010203');

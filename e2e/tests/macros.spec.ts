@@ -1,12 +1,6 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { getLastLlmRequest, resetLlmRequests, waitForNextLlmRequest } from '../helpers/llm.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 function promptText(captured: { body: unknown }): string {
   const body = captured.body as Record<string, unknown>;
@@ -15,18 +9,11 @@ function promptText(captured: { body: unknown }): string {
 }
 
 test.describe('Macro Resolution', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('{{char}} and {{user}} resolve to real names in the prompt', async ({ page }) => {
-    const app = new App(page);
+  test('{{char}} and {{user}} resolve to real names in the prompt', async ({ app }) => {
     const charName = uniqueName('Macro Char');
     await app.createCharacterAndChat({
       name: charName,
@@ -41,8 +28,7 @@ test.describe('Macro Resolution', () => {
     expect(all).not.toContain('{{user}}');
   });
 
-  test('{{setvar}} in one turn feeds {{getvar}} in the next', async ({ page }) => {
-    const app = new App(page);
+  test('{{setvar}} in one turn feeds {{getvar}} in the next', async ({ app }) => {
     await app.createCharacterAndChat({
       name: uniqueName('Var Char'),
       description: 'The user feels {{getvar::mood}}.',
@@ -61,8 +47,7 @@ test.describe('Macro Resolution', () => {
     expect(all).not.toContain('{{getvar');
   });
 
-  test('{{roll:2d6}} resolves to a number, not the macro text', async ({ page }) => {
-    const app = new App(page);
+  test('{{roll:2d6}} resolves to a number, not the macro text', async ({ app }) => {
     await app.createCharacterAndChat({
       name: uniqueName('Dice Char'),
       description: 'Roll: {{roll::2d6}}',

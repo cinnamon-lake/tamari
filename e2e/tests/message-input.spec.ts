@@ -1,31 +1,14 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { App } from '../helpers/app.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { setSetting } from '../helpers/settings.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // Minimal 1x1 transparent PNG (same fixture as attachments.spec.ts).
-const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 test.describe('Message Input', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('slash command autocomplete filters, inserts, and closes', async ({ page }) => {
-    const app = new App(page);
+  test('slash command autocomplete filters, inserts, and closes', async ({ page, app }) => {
     const name = uniqueName('MsgInputSlash');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 
@@ -59,8 +42,7 @@ test.describe('Message Input', () => {
     await expect(page.locator('.slash-autocomplete')).toHaveCount(0);
   });
 
-  test('macro autocomplete opens on {{, inserts on click, closes on Escape', async ({ page }) => {
-    const app = new App(page);
+  test('macro autocomplete opens on {{, inserts on click, closes on Escape', async ({ page, app }) => {
     const name = uniqueName('MsgInputMacro');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 
@@ -89,8 +71,7 @@ test.describe('Message Input', () => {
     await expect(input).toHaveValue('{{');
   });
 
-  test('Ctrl+B and Ctrl+I wrap the selection in markdown markers', async ({ page }) => {
-    const app = new App(page);
+  test('Ctrl+B and Ctrl+I wrap the selection in markdown markers', async ({ page, app }) => {
     const name = uniqueName('MsgInputWrap');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 
@@ -109,9 +90,8 @@ test.describe('Message Input', () => {
     await expect(input).toHaveValue('hello *world*');
   });
 
-  test('pasting an image file attaches it and sends it with the message', async ({ page }) => {
+  test('pasting an image file attaches it and sends it with the message', async ({ page, app }) => {
     test.setTimeout(90000);
-    const app = new App(page);
     const name = uniqueName('MsgInputPaste');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 
@@ -146,9 +126,8 @@ test.describe('Message Input', () => {
     await expect(preview).toHaveCount(0);
   });
 
-  test('draft behaviors: Enter newline when send-on-enter disabled, send button state', async ({ page }) => {
+  test('draft behaviors: Enter newline when send-on-enter disabled, send button state', async ({ page, app }) => {
     test.setTimeout(90000);
-    const app = new App(page);
     const name = uniqueName('MsgInputDraft');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 

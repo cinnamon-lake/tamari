@@ -35,8 +35,4 @@ export function clearAuthToken(): void {
   setAuthTokenSignal(null);
 }
 
-export function isAuthenticated(): boolean {
-  return !!authToken();
-}
-
 export { authToken };

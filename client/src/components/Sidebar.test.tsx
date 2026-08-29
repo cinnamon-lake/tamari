@@ -3,29 +3,29 @@ import { render, screen, fireEvent } from '@solidjs/testing-library';
 import { Sidebar } from './Sidebar.js';
 import { setState } from '../stores/serverStore.js';
 import { bus } from '../bus/WebSocketBus.js';
-import {
-  setActiveChatId,
-  setSelectedCharacterId,
-  selectedCharacterId,
-} from '../stores/uiStore.js';
+import { setActiveChatId, setSelectedCharacterId, selectedCharacterId } from '../stores/uiStore.js';
 import * as popupStore from '../stores/popupStore.js';
 
 describe('Sidebar', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        totalCharacters: 0,
-        totalChats: 0,
-        totalMessages: 0,
-        totalGenerations: 0,
-        totalPromptTokens: 0,
-        totalCompletionTokens: 0,
-        chats: [],
-        characters: [],
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            totalCharacters: 0,
+            totalChats: 0,
+            totalMessages: 0,
+            totalGenerations: 0,
+            totalPromptTokens: 0,
+            totalCompletionTokens: 0,
+            chats: [],
+            characters: [],
+          }),
       }),
-    }));
+    );
     setState('characters', []);
     setState('chats', []);
     setState('activeChat', null);
@@ -35,11 +35,34 @@ describe('Sidebar', () => {
   });
 
   function makeChar(id: string, name: string, tags: string[] = []) {
-    return { id, name, tags, avatarPath: null, avatarThumbnailPath: null, avatarUrl: `/api/characters/${id}/avatar`, firstMes: '', alternateGreetings: [], updatedAt: Date.now(), createdAt: Date.now() };
+    return {
+      id,
+      name,
+      tags,
+      avatarPath: null,
+      avatarThumbnailPath: null,
+      avatarUrl: `/api/characters/${id}/avatar`,
+      firstMes: '',
+      alternateGreetings: [],
+      updatedAt: Date.now(),
+      createdAt: Date.now(),
+    };
   }
 
   function makeChat(id: string, name: string, characterId: string | null, updatedAt = Date.now()) {
-    return { id, name, characterId: characterId, personaId: null, headMessageId: null, activeChildId: null, createdAt: updatedAt, updatedAt: updatedAt, metadata: {}, forkedFromChatId: null, forkedAtMessageId: null };
+    return {
+      id,
+      name,
+      characterId: characterId,
+      personaId: null,
+      headMessageId: null,
+      activeChildId: null,
+      createdAt: updatedAt,
+      updatedAt: updatedAt,
+      metadata: {},
+      forkedFromChatId: null,
+      forkedAtMessageId: null,
+    };
   }
 
   it('renders logo', () => {
@@ -64,10 +87,7 @@ describe('Sidebar', () => {
   });
 
   it('filters characters by tag', () => {
-    setState('characters', [
-      makeChar('c1', 'Alice', ['magic']),
-      makeChar('c2', 'Bob', ['tech']),
-    ]);
+    setState('characters', [makeChar('c1', 'Alice', ['magic']), makeChar('c2', 'Bob', ['tech'])]);
     render(() => <Sidebar />);
     screen.getByText('magic').click();
     expect(screen.getByText('Alice')).toBeInTheDocument();
@@ -75,10 +95,7 @@ describe('Sidebar', () => {
   });
 
   it('clears tag filters', () => {
-    setState('characters', [
-      makeChar('c1', 'Alice', ['magic']),
-      makeChar('c2', 'Bob', ['tech']),
-    ]);
+    setState('characters', [makeChar('c1', 'Alice', ['magic']), makeChar('c2', 'Bob', ['tech'])]);
     render(() => <Sidebar />);
     screen.getByText('magic').click();
     expect(screen.queryByText('Bob')).not.toBeInTheDocument();
@@ -223,10 +240,12 @@ describe('Sidebar', () => {
     screen.getByText('Alice').click();
     screen.getByTitle('Delete').click();
     await new Promise((r) => setTimeout(r, 10));
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'chat.delete',
-      chatId: 'ch1',
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'chat.delete',
+        chatId: 'ch1',
+      }),
+    );
   });
 
   it('renames chat on enter', () => {
@@ -239,11 +258,13 @@ describe('Sidebar', () => {
     const renameInput = document.querySelector('.chat-rename-input') as HTMLInputElement;
     fireEvent.input(renameInput, { target: { value: 'New Name' } });
     fireEvent.keyDown(renameInput, { key: 'Enter' });
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'chat.update',
-      chatId: 'ch1',
-      patch: { name: 'New Name' },
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'chat.update',
+        chatId: 'ch1',
+        patch: { name: 'New Name' },
+      }),
+    );
   });
 
   it('creates group chat', async () => {
@@ -252,10 +273,12 @@ describe('Sidebar', () => {
     render(() => <Sidebar />);
     screen.getByTitle('New group chat').click();
     await new Promise((r) => setTimeout(r, 10));
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'chat.create',
-      data: expect.objectContaining({ characterId: null, name: 'Group Chat' }),
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'chat.create',
+        data: expect.objectContaining({ characterId: null, name: 'Group Chat' }),
+      }),
+    );
   });
 
   it('opens character context menu on right-click', () => {

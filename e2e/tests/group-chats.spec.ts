@@ -1,10 +1,7 @@
 import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 async function createCharacter(page: any, charName: string) {
   await page.locator('[title="Create character"]').click();

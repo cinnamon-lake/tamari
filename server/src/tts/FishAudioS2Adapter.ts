@@ -7,7 +7,7 @@
  */
 
 import { logger } from '../lib/logger.js';
-import { applyRequestScript } from '../backends/RequestScript.js';
+import { BaseTtsAdapter } from './BaseTtsAdapter.js';
 import type { TtsAdapter, TtsVoice, TtsGenerateOptions, TtsResult, TtsVoiceCloneInput } from './TtsAdapter.js';
 
 export interface FishAudioS2Config {
@@ -16,28 +16,9 @@ export interface FishAudioS2Config {
   requestScript?: string;
 }
 
-export class FishAudioS2Adapter implements TtsAdapter {
+export class FishAudioS2Adapter extends BaseTtsAdapter<FishAudioS2Config> implements TtsAdapter {
   readonly id = 'fishaudio';
   readonly name = 'Fish Audio S2 Pro';
-
-  constructor(private config: FishAudioS2Config) {}
-
-  private get baseUrl(): string {
-    return this.config.baseUrl.replace(/\/$/, '');
-  }
-
-  private get headers(): Record<string, string> {
-    const h: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (this.config.apiKey) {
-      h['Authorization'] = `Bearer ${this.config.apiKey}`;
-    }
-    return h;
-  }
-
-  private async applyScript(url: string, init: RequestInit): Promise<{ url: string; init: RequestInit }> {
-    if (!this.config.requestScript) return { url, init };
-    return applyRequestScript(url, init, this.config.requestScript);
-  }
 
   async healthCheck(signal?: AbortSignal): Promise<boolean> {
     try {
@@ -62,7 +43,10 @@ export class FishAudioS2Adapter implements TtsAdapter {
     });
     const res = await fetch(url, init);
     if (!res.ok) {
-      const text = await res.text().catch((err) => { logger.debug({ err }, 'TTS error body read failed'); return 'Unknown error'; });
+      const text = await res.text().catch((err) => {
+        logger.debug({ err }, 'TTS error body read failed');
+        return 'Unknown error';
+      });
       throw new Error(`Failed to list voices: HTTP ${res.status} - ${text}`);
     }
     const data = (await res.json()) as { reference_ids?: string[] };
@@ -107,7 +91,10 @@ export class FishAudioS2Adapter implements TtsAdapter {
     const res = await fetch(url, init);
 
     if (!res.ok) {
-      const text = await res.text().catch((err) => { logger.debug({ err }, 'TTS error body read failed'); return 'Unknown error'; });
+      const text = await res.text().catch((err) => {
+        logger.debug({ err }, 'TTS error body read failed');
+        return 'Unknown error';
+      });
       throw new Error(`TTS generation failed: HTTP ${res.status} - ${text}`);
     }
 
@@ -137,7 +124,10 @@ export class FishAudioS2Adapter implements TtsAdapter {
     });
 
     if (!res.ok) {
-      const text = await res.text().catch((err) => { logger.debug({ err }, 'TTS error body read failed'); return 'Unknown error'; });
+      const text = await res.text().catch((err) => {
+        logger.debug({ err }, 'TTS error body read failed');
+        return 'Unknown error';
+      });
       throw new Error(`Failed to add voice: HTTP ${res.status} - ${text}`);
     }
 
@@ -157,7 +147,10 @@ export class FishAudioS2Adapter implements TtsAdapter {
     const res = await fetch(url, init);
 
     if (!res.ok) {
-      const text = await res.text().catch((err) => { logger.debug({ err }, 'TTS error body read failed'); return 'Unknown error'; });
+      const text = await res.text().catch((err) => {
+        logger.debug({ err }, 'TTS error body read failed');
+        return 'Unknown error';
+      });
       throw new Error(`Failed to delete voice: HTTP ${res.status} - ${text}`);
     }
   }

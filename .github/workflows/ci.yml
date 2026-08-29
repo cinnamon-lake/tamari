@@ -39,8 +39,26 @@ jobs:
       - name: Lint packages/types
         run: npm run lint --workspace=packages/types
 
+      - name: Lint e2e
+        run: npm run lint --workspace=e2e
+
       - name: Lint CSS (§16 hookable elements)
         run: npm run lint:css
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Typecheck server
+        run: npx tsc --noEmit -p server
+
+      - name: Typecheck client
+        run: npx tsc --noEmit -p client
+
+      - name: Typecheck packages/types
+        run: npx tsc --noEmit -p packages/types
+
+      - name: Typecheck e2e
+        run: npx tsc --noEmit -p e2e
 
       - name: Test client
         run: npm run test --workspace=client

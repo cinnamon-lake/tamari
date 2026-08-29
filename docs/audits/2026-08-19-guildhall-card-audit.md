@@ -12,10 +12,10 @@ Findings are ordered roughly by severity.
 
 `planFloor` returns the planner's raw final text as the player-visible reply (`main.lua:692-695`), on the assumption that "the reply is just the entrance narration". Nothing enforces that. Reproduced in both live runs:
 
-- Run 1: the reply dumped the full design doc — every section theme, every room, the complete monster roster, and all interactables *with their rewards and locations*: "r6 The Deeper Tally — a scribe's stolen best: **Greenblade + 20g**", under the heading "best hoards in the dead ends".
+- Run 1: the reply dumped the full design doc — every section theme, every room, the complete monster roster, and all interactables _with their rewards and locations_: "r6 The Deeper Tally — a scribe's stolen best: **Greenblade + 20g**", under the heading "best hoards in the dead ends".
 - Run 2: "**3 interactables** at the dead ends (r2 scroll, r5 socket, r6 urn) + 6 ambient lines. **A plot debt filed**" — even the ledger machinery leaked.
 
-This guts the fog-of-war design the card is built around (maptag carefully hides unvisited rooms, then the delve reply spoils them). Fix direction: make the planner end with a tool call (`finish_floor(intro)`) and serve that field, or serve `draft.description` and discard `res.text`. As a bonus, the leaked numbers were *wrong* anyway — the helmet's "8g" had been clamped to 5 by the depth budget, so the dump leaks mechanics that don't even match what's filed.
+This guts the fog-of-war design the card is built around (maptag carefully hides unvisited rooms, then the delve reply spoils them). Fix direction: make the planner end with a tool call (`finish_floor(intro)`) and serve that field, or serve `draft.description` and discard `res.text`. As a bonus, the leaked numbers were _wrong_ anyway — the helmet's "8g" had been clamped to 5 by the depth budget, so the dump leaks mechanics that don't even match what's filed.
 
 ### 1b. Dice internals leak through the DM
 
@@ -27,7 +27,7 @@ This guts the fog-of-war design the card is built around (maptag carefully hides
 
 ## 2. Real bug, reproduced live: `/leave` bricks the branch
 
-`lib/events.lua:285-309` — `E.finalize` runs `loop.run(sub, res, ts:exec(), 4)`. In the live session the finalizer called `close_event` **successfully** (gist filed, takes filed, `state.event.closed` set), then kept re-calling it; `closeEvent` answered "already closing: e2", the model retried, the loop hit the 4-round cap, `loop.run` threw, and the card's pcall bricked the branch — *after all the work had already succeeded*. Every subsequent input returned the bricked message. There is no swipe in an MCP session, but even in the UI this is a coin-flip on weaker models.
+`lib/events.lua:285-309` — `E.finalize` runs `loop.run(sub, res, ts:exec(), 4)`. In the live session the finalizer called `close_event` **successfully** (gist filed, takes filed, `state.event.closed` set), then kept re-calling it; `closeEvent` answered "already closing: e2", the model retried, the loop hit the 4-round cap, `loop.run` threw, and the card's pcall bricked the branch — _after all the work had already succeeded_. Every subsequent input returned the bricked message. There is no swipe in an MCP session, but even in the UI this is a coin-flip on weaker models.
 
 Two compounding design errors:
 
@@ -49,7 +49,7 @@ The comment in `events.lua` only anticipates the opposite failure (model never c
 
 - **`lib/events.lua`** — the `/leave` bug above is the headline. Also `RESERVED` field checks (`digest`/`dossier`/`older_takes`) only run when `def.fields` is declared, not when a roster is injected — the injected-roster path (which this card uses) skips the guard.
 - **`lib/loop.lua`** — throwing on the round cap is right for planning, but it's the same hammer that bricked `/leave`. The cap semantics deserve a softer mode for "the work may already be done" loops. (Its interleaved `tool_result`-inside-assistant-message shape is unusual, but `ClaudeBackendAdapter.ts:330-358` and the OpenAI adapter both split it into proper turns, so it's fine in practice.)
-- **`lib/registry.lua`** — every read re-fetches and re-parses the pack blob: one serve turn's `floorPack()` does 4+ `store.getJson` round-trips on the *same* pack, and `R.get` calls `resolvePartition` twice. Correctness is fine; it's pure waste on the "free" path, and a per-turn memo would kill it. Also `loadPackBlob`/`fetch`-style "missing blob is a bug" throws mean any store hiccup bricks the branch mid-serve — loud by design, but the blast radius is the whole save.
+- **`lib/registry.lua`** — every read re-fetches and re-parses the pack blob: one serve turn's `floorPack()` does 4+ `store.getJson` round-trips on the _same_ pack, and `R.get` calls `resolvePartition` twice. Correctness is fine; it's pure waste on the "free" path, and a per-turn memo would kill it. Also `loadPackBlob`/`fetch`-style "missing blob is a bug" throws mean any store hiccup bricks the branch mid-serve — loud by design, but the blast radius is the whole save.
 - **Vendoring drift.** `lib/maptag.lua` has already diverged from `docs/design/examples/game-lib` (grid support), and `lib/layout.lua` exists only in the card. Two copies of the same lib with no sync mechanism will keep drifting; the header comment "vendored as backend_logic/lib/*.lua" doesn't say which direction is canonical.
 - **`lib/chrome.lua`** — `clean()` strips `[HUD…]` but not `[MAP…]`, despite the comment claiming it's "the deterministic cleaning every delegate view shares". Latent inconsistency; harmless in this card only because no delegate ever sees transcript text.
 - **`lib/sanitize.lua`** — arrays are rebuilt, maps are mutated in place; the mixed aliasing semantics are undocumented and surprising.

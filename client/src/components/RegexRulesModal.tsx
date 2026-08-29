@@ -6,8 +6,7 @@ import { useI18n } from '../i18n/index.js';
 import type { RegexRule } from '@tamari/types';
 import { applyDisplayRules, parseRegexString } from '../lib/regexDisplay.js';
 import { str } from '../lib/coerce.js';
-import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
-import { createBackdropDismiss } from '../lib/backdropDismiss.js';
+import { Modal } from './Modal.js';
 import './RegexRulesModal.css';
 
 function parseRegexRules(raw: unknown): RegexRule[] {
@@ -47,12 +46,7 @@ export function RegexRulesModal(props: { onClose: () => void }) {
   const s = state.settings;
   const { t } = useI18n();
 
-  saveFocus();
-
-  const close = () => {
-    restoreFocus();
-    props.onClose();
-  };
+  const close = () => props.onClose();
 
   const sendSetting = (key: string, value: unknown) => {
     bus.send({ type: 'settings.set', key, value });
@@ -65,7 +59,10 @@ export function RegexRulesModal(props: { onClose: () => void }) {
   const appendOnlyLayout = () => Boolean(state.settings['appendOnlyPromptLayout']);
 
   const startNewRegex = () => {
-    setEditingRegex({ ...emptyRegexRule(), id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}` });
+    setEditingRegex({
+      ...emptyRegexRule(),
+      id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    });
     setRegexTestInput('');
   };
 
@@ -138,222 +135,240 @@ export function RegexRulesModal(props: { onClose: () => void }) {
   };
 
   return (
-    <div class="modal-overlay" {...createBackdropDismiss(close)}>
-      <div class="modal regex-rules-modal" role="dialog" aria-modal="true" aria-label={t('settings.regex.heading')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
-        <div class="modal-header-row">
-          <h2 class="modal-title">{t('settings.regex.heading')}</h2>
-          <button class="icon-btn" onClick={close} title={t('common.close')} aria-label={t('common.close')} type="button">
-            <i class="bi bi-x-lg" />
-          </button>
-        </div>
+    <Modal
+      title={t('settings.regex.heading')}
+      onClose={close}
+      class="modal regex-rules-modal"
+      ariaLabel={t('settings.regex.heading')}
+      showCloseButton
+    >
+      <p class="text-sm text-muted">{t('settings.regex.description')}</p>
 
-        <p class="text-sm text-muted">
-          {t('settings.regex.description')}
-        </p>
-
-        <div class="worldinfo-list">
-          <For each={regexRules()}>
-            {(r) => (
-              <div class="selectable-item worldinfo-item" id={r.id}>
-                <div class="block">
-                  <div class="worldinfo-name">
-                    {r.name} {r.disabled && <span class="text-danger">{t('settings.regex.disabledLabel')}</span>}
-                  </div>
-                  <div class="worldinfo-meta">
-                    {r.findRegex} → {r.replaceLua?.trim() ? t('settings.regex.luaBadge') : r.replaceString || t('settings.regex.emptyLabel')}
-                  </div>
-                  <div class="worldinfo-meta">
-                    {[
-                      r.userInput && t('settings.regex.placementUserInput'),
-                      r.aiOutput && t('settings.regex.placementAiOutput'),
-                      r.prompt && t('settings.regex.placementPrompt'),
-                      r.display && t('settings.regex.placementDisplay'),
-                    ]
-                      .filter(Boolean)
-                      .join(' • ') || t('settings.regex.noPlacement')}
-                  </div>
-                </div>
-                <div class="section-actions">
-                  <button class="icon-btn small" onClick={() => startEditRegex(r)} title={t('common.edit')} aria-label={t('common.edit')} type="button">
-                    <i class="bi bi-pencil" />
-                  </button>
-                  <button
-                    class="icon-btn small danger"
-                    onClick={() => deleteRegex(r.id)}
-                    title={t('common.delete')} aria-label={t('common.delete')}
-                    type="button"
-                  >
-                    <i class="bi bi-trash" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </For>
-        </div>
-
-        <button class="btn btn-primary primary-btn" onClick={startNewRegex} type="button">
-          <i class="bi bi-plus-lg" /> {t('settings.regex.new')}
-        </button>
-
-        <Show when={editingRegex()}>
+      <div class="worldinfo-list">
+        <For each={regexRules()}>
           {(r) => (
-            <div class="flex-col-sm mt-md">
-              <h4 class="text-base">
-                {regexRules().some((x) => x.id === r().id) ? t('settings.regex.editTitle') : t('settings.regex.new')}
-              </h4>
-              <label class="field-label">
-                {t('common.name')}
-                <input
-                  value={r().name}
-                  onInput={(e) => updateRegexField('name', e.currentTarget.value)}
-                  placeholder={t('settings.regex.namePlaceholder')}
-                  class="input"
-                />
-              </label>
-              <label class="field-label">
-                {t('settings.regex.findField')}
-                <input
-                  value={r().findRegex}
-                  onInput={(e) => updateRegexField('findRegex', e.currentTarget.value)}
-                  placeholder={t('settings.regex.findPlaceholder')}
-                  class="input"
-                />
-              </label>
-              <fieldset class="settings-radio-group">
-                <legend class="settings-radio-label">{t('settings.regex.replaceTypeLegend')}</legend>
-                <label class="radio-row">
-                  <input
-                    type="radio"
-                    name="regexReplaceType"
-                    checked={!r().replaceLua?.trim()}
-                    onChange={() => updateRegexField('replaceLua', undefined)}
-                    class="radio"
-                  />
-                  {t('settings.regex.replaceTypeText')}
-                </label>
-                <label class="radio-row">
-                  <input
-                    type="radio"
-                    name="regexReplaceType"
-                    checked={Boolean(r().replaceLua?.trim())}
-                    onChange={() => {
-                      if (!r().replaceLua?.trim()) {
-                        updateRegexField('replaceLua', 'function replace(match, captures)\n  return match\nend');
-                      }
-                    }}
-                    class="radio"
-                  />
-                  {t('settings.regex.replaceTypeLua')}
-                </label>
-              </fieldset>
-              <Show
-                when={r().replaceLua?.trim()}
-                fallback={
-                  <label class="field-label">
-                    {t('settings.regex.replaceField')}
-                    <textarea
-                      rows={2}
-                      value={r().replaceString}
-                      onInput={(e) => updateRegexField('replaceString', e.currentTarget.value)}
-                      placeholder={t('settings.regex.replacePlaceholder')}
-                      class="textarea"
-                    />
-                  </label>
-                }
-              >
-                <label class="field-label">
-                  {t('settings.regex.luaReplaceField')}
-                  <textarea
-                    rows={6}
-                    value={r().replaceLua}
-                    onInput={(e) => updateRegexField('replaceLua', e.currentTarget.value)}
-                    placeholder={t('settings.regex.luaReplacePlaceholder')}
-                    class="textarea font-mono"
-                  />
-                  <span class="hint-text">{t('settings.regex.luaReplaceHint')}</span>
-                </label>
-              </Show>
-              <div class="flex-between">
-                <label class="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={r().prompt}
-                    onChange={(e) => updateRegexField('prompt', e.currentTarget.checked)}
-                    class="checkbox"
-                  />
-                  {t('settings.regex.placementPrompt')}
-                </label>
-                <label class="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={r().display}
-                    onChange={(e) => updateRegexField('display', e.currentTarget.checked)}
-                    class="checkbox"
-                  />
-                  {t('settings.regex.placementDisplay')}
-                </label>
-                <label class="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={r().disabled}
-                    onChange={(e) => updateRegexField('disabled', e.currentTarget.checked)}
-                    class="checkbox"
-                  />
-                  {t('settings.regex.disabledCheckbox')}
-                </label>
+            <div class="selectable-item worldinfo-item" id={r.id}>
+              <div class="block">
+                <div class="worldinfo-name">
+                  {r.name} {r.disabled && <span class="text-danger">{t('settings.regex.disabledLabel')}</span>}
+                </div>
+                <div class="worldinfo-meta">
+                  {r.findRegex} →{' '}
+                  {r.replaceLua?.trim()
+                    ? t('settings.regex.luaBadge')
+                    : r.replaceString || t('settings.regex.emptyLabel')}
+                </div>
+                <div class="worldinfo-meta">
+                  {[
+                    r.userInput && t('settings.regex.placementUserInput'),
+                    r.aiOutput && t('settings.regex.placementAiOutput'),
+                    r.prompt && t('settings.regex.placementPrompt'),
+                    r.display && t('settings.regex.placementDisplay'),
+                  ]
+                    .filter(Boolean)
+                    .join(' • ') || t('settings.regex.noPlacement')}
+                </div>
               </div>
-              <Show when={appendOnlyLayout() && r().prompt}>
-                <span class="hint-text">{t('settings.regex.appendOnlyPromptNote')}</span>
-              </Show>
-              <div class="flex-between">
-                <label class="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={r().userInput}
-                    onChange={(e) => updateRegexField('userInput', e.currentTarget.checked)}
-                    class="checkbox"
-                  />
-                  {t('settings.regex.placementUserInput')}
-                </label>
-                <label class="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={r().aiOutput}
-                    onChange={(e) => updateRegexField('aiOutput', e.currentTarget.checked)}
-                    class="checkbox"
-                  />
-                  {t('settings.regex.placementAiOutput')}
-                </label>
-              </div>
-
-              {/* Test area */}
-              <label class="field-label mt-sm">
-                {t('settings.regex.testInput')}
-                <textarea
-                  rows={3}
-                  value={regexTestInput()}
-                  onInput={(e) => setRegexTestInput(e.currentTarget.value)}
-                  placeholder={t('settings.regex.testInputPlaceholder')}
-                  class="textarea"
-                />
-              </label>
-              <label class="field-label">
-                {t('settings.regex.testOutput')}
-                <textarea rows={3} value={regexTestOutput()} readOnly class="bg-secondary" />
-              </label>
-
-              <div class="edit-actions">
-                <button type="button" onClick={() => setEditingRegex(null)} class="btn">
-                  {t('common.cancel')}
+              <div class="section-actions">
+                <button
+                  class="icon-btn small"
+                  data-testid="regex-rule-edit"
+                  onClick={() => startEditRegex(r)}
+                  title={t('common.edit')}
+                  aria-label={t('common.edit')}
+                  type="button"
+                >
+                  <i class="bi bi-pencil" />
                 </button>
-                <button class="btn" type="button" onClick={saveRegexEdit}>
-                  {t('settings.regex.saveRule')}
+                <button
+                  class="icon-btn small danger"
+                  data-testid="regex-rule-delete"
+                  onClick={() => deleteRegex(r.id)}
+                  title={t('common.delete')}
+                  aria-label={t('common.delete')}
+                  type="button"
+                >
+                  <i class="bi bi-trash" />
                 </button>
               </div>
             </div>
           )}
-        </Show>
+        </For>
       </div>
-    </div>
+
+      <button class="btn btn-primary primary-btn" data-testid="regex-rule-new" onClick={startNewRegex} type="button">
+        <i class="bi bi-plus-lg" /> {t('settings.regex.new')}
+      </button>
+
+      <Show when={editingRegex()}>
+        {(r) => (
+          <div class="flex-col-sm mt-md">
+            <h4 class="text-base">
+              {regexRules().some((x) => x.id === r().id) ? t('settings.regex.editTitle') : t('settings.regex.new')}
+            </h4>
+            <label class="field-label">
+              {t('common.name')}
+              <input
+                data-testid="regex-rule-name"
+                value={r().name}
+                onInput={(e) => updateRegexField('name', e.currentTarget.value)}
+                placeholder={t('settings.regex.namePlaceholder')}
+                class="input"
+              />
+            </label>
+            <label class="field-label">
+              {t('settings.regex.findField')}
+              <input
+                data-testid="regex-rule-find"
+                value={r().findRegex}
+                onInput={(e) => updateRegexField('findRegex', e.currentTarget.value)}
+                placeholder={t('settings.regex.findPlaceholder')}
+                class="input"
+              />
+            </label>
+            <fieldset class="settings-radio-group">
+              <legend class="settings-radio-label">{t('settings.regex.replaceTypeLegend')}</legend>
+              <label class="radio-row">
+                <input
+                  type="radio"
+                  name="regexReplaceType"
+                  checked={!r().replaceLua?.trim()}
+                  onChange={() => updateRegexField('replaceLua', undefined)}
+                  class="radio"
+                />
+                {t('settings.regex.replaceTypeText')}
+              </label>
+              <label class="radio-row">
+                <input
+                  type="radio"
+                  name="regexReplaceType"
+                  checked={Boolean(r().replaceLua?.trim())}
+                  onChange={() => {
+                    if (!r().replaceLua?.trim()) {
+                      updateRegexField('replaceLua', 'function replace(match, captures)\n  return match\nend');
+                    }
+                  }}
+                  class="radio"
+                />
+                {t('settings.regex.replaceTypeLua')}
+              </label>
+            </fieldset>
+            <Show
+              when={r().replaceLua?.trim()}
+              fallback={
+                <label class="field-label">
+                  {t('settings.regex.replaceField')}
+                  <textarea
+                    data-testid="regex-rule-replace"
+                    rows={2}
+                    value={r().replaceString}
+                    onInput={(e) => updateRegexField('replaceString', e.currentTarget.value)}
+                    placeholder={t('settings.regex.replacePlaceholder')}
+                    class="textarea"
+                  />
+                </label>
+              }
+            >
+              <label class="field-label">
+                {t('settings.regex.luaReplaceField')}
+                <textarea
+                  rows={6}
+                  value={r().replaceLua}
+                  onInput={(e) => updateRegexField('replaceLua', e.currentTarget.value)}
+                  placeholder={t('settings.regex.luaReplacePlaceholder')}
+                  class="textarea font-mono"
+                />
+                <span class="hint-text">{t('settings.regex.luaReplaceHint')}</span>
+              </label>
+            </Show>
+            <div class="flex-between">
+              <label class="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={r().prompt}
+                  onChange={(e) => updateRegexField('prompt', e.currentTarget.checked)}
+                  class="checkbox"
+                />
+                {t('settings.regex.placementPrompt')}
+              </label>
+              <label class="checkbox-row">
+                <input
+                  type="checkbox"
+                  data-testid="regex-rule-display"
+                  checked={r().display}
+                  onChange={(e) => updateRegexField('display', e.currentTarget.checked)}
+                  class="checkbox"
+                />
+                {t('settings.regex.placementDisplay')}
+              </label>
+              <label class="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={r().disabled}
+                  onChange={(e) => updateRegexField('disabled', e.currentTarget.checked)}
+                  class="checkbox"
+                />
+                {t('settings.regex.disabledCheckbox')}
+              </label>
+            </div>
+            <Show when={appendOnlyLayout() && r().prompt}>
+              <span class="hint-text">{t('settings.regex.appendOnlyPromptNote')}</span>
+            </Show>
+            <div class="flex-between">
+              <label class="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={r().userInput}
+                  onChange={(e) => updateRegexField('userInput', e.currentTarget.checked)}
+                  class="checkbox"
+                />
+                {t('settings.regex.placementUserInput')}
+              </label>
+              <label class="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={r().aiOutput}
+                  onChange={(e) => updateRegexField('aiOutput', e.currentTarget.checked)}
+                  class="checkbox"
+                />
+                {t('settings.regex.placementAiOutput')}
+              </label>
+            </div>
+
+            {/* Test area */}
+            <label class="field-label mt-sm">
+              {t('settings.regex.testInput')}
+              <textarea
+                data-testid="regex-test-input"
+                rows={3}
+                value={regexTestInput()}
+                onInput={(e) => setRegexTestInput(e.currentTarget.value)}
+                placeholder={t('settings.regex.testInputPlaceholder')}
+                class="textarea"
+              />
+            </label>
+            <label class="field-label">
+              {t('settings.regex.testOutput')}
+              <textarea
+                data-testid="regex-test-output"
+                rows={3}
+                value={regexTestOutput()}
+                readOnly
+                class="bg-secondary"
+              />
+            </label>
+
+            <div class="edit-actions">
+              <button type="button" data-testid="regex-rule-cancel" onClick={() => setEditingRegex(null)} class="btn">
+                {t('common.cancel')}
+              </button>
+              <button class="btn" type="button" data-testid="regex-rule-save" onClick={saveRegexEdit}>
+                {t('settings.regex.saveRule')}
+              </button>
+            </div>
+          </div>
+        )}
+      </Show>
+    </Modal>
   );
 }

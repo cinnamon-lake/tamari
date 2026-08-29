@@ -49,7 +49,6 @@ docker stop tamari-e2e
 `E2E_SKIP_STALE_CHECK=1` because the dist under test lives inside the image,
 not in the checkout.
 
-
 ### Local-only specs (`e2e/local/`)
 
 Gitignored scratch space for specs you are **not** committing — e.g. smoke-testing
@@ -66,11 +65,9 @@ cd e2e && npx playwright test --config=playwright.local.config.ts
 E2E_PORT=8767 npm run test:e2e:local
 ```
 
-
 ### Architecture
 
-- **`fixtures/server.ts`** — Starts/stops a real server with an isolated SQLite database.
-- **`fixtures/mockBackend.ts`** — Mocks LLM API responses so tests don't need API keys.
+- **`playwright.config.ts` `webServer`** — Starts the built server (`node server/dist/main.js`) with an isolated `DATA_DIR` before the run; see "How it works" below.
 - **`fixtures/mockLlmServer.ts`** — Deterministic mock OpenAI-compatible LLM (started in `global-setup.ts`). Endpoints: `GET /models`, `POST /chat/completions`, `POST /completions` (text mode), plus test-inspection endpoints `GET /last-request` and `POST /__reset-requests`. Response selectors: `respond:`/`seq:` user-message prefixes, `[WI]`/`[AN]` injectable-token echo, tool-call and reasoning modes, and OpenAI `stop` param handling.
 - **`helpers/auth.ts`** — Reusable auth flows (login, assert logged in).
 - **`tests/*.spec.ts`** — Fast, isolated per-feature specs (the `chromium-smoke` project).
@@ -85,7 +82,8 @@ E2E_PORT=8767 npm run test:e2e:local
 
 ### Adding test IDs
 
-Use `data-testid` attributes for stable selectors:
+Use `data-testid` attributes for stable selectors (prefer `getByTestId` over
+text-coupled `:has-text`/`hasText` or positional `.nth()` picks):
 
 ```tsx
 <button data-testid="char-save-btn">Save</button>
@@ -94,8 +92,17 @@ Use `data-testid` attributes for stable selectors:
 Then target them in tests:
 
 ```ts
-await page.locator('[data-testid="char-save-btn"]').click();
+await page.getByTestId('char-save-btn').click();
 ```
+
+Existing exemplar surfaces: the Settings modal's schema-driven fields expose
+`setting-<key>` testids via `SchemaForm` (`client/src/components/settingsSchema.ts`
+
+- `SchemaForm.tsx`'s inline variant), the character editor textareas are hooked
+  via `PromptTextarea`'s `testId` prop, and the sidebar/app-modal buttons
+  (`open-settings`, `open-tools`, …) plus the Tools/Instruct-Templates/Regex-Rules/
+  Backend-Config modals carry per-control testids — see
+  `tests/settings-advanced.spec.ts` and `tests/tools-modal.spec.ts` for usage.
 
 ## Server E2E Tests (Vitest)
 

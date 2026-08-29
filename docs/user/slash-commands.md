@@ -18,13 +18,13 @@ The composer also autocompletes **macros**: typing `{{` opens a second suggestio
 
 ### Chat Actions
 
-| Command | Arguments | What it does |
-|---------|-----------|--------------|
-| `/send` | `[text]` | Appends `text` as your message and immediately generates a reply — the same as typing a message and pressing **Send**. |
-| `/sys` | `<text>` | Appends `text` as a **system** (narrator-style) message. No generation is triggered. |
-| `/reset` | — | Deletes **every** message in the chat. |
-| `/cut` | `[count]` | Removes the last `count` messages (default `1`). |
-| `/swipe` | `left` \| `right` | Moves to the previous/next swipe of the last message. |
+| Command  | Arguments         | What it does                                                                                                           |
+| -------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `/send`  | `[text]`          | Appends `text` as your message and immediately generates a reply — the same as typing a message and pressing **Send**. |
+| `/sys`   | `<text>`          | Appends `text` as a **system** (narrator-style) message. No generation is triggered.                                   |
+| `/reset` | —                 | Deletes **every** message in the chat.                                                                                 |
+| `/cut`   | `[count]`         | Removes the last `count` messages (default `1`).                                                                       |
+| `/swipe` | `left` \| `right` | Moves to the previous/next swipe of the last message.                                                                  |
 
 > **Warning:** `/reset` has no confirmation and no undo — the entire chat history is deleted immediately.
 
@@ -32,25 +32,25 @@ The composer also autocompletes **macros**: typing `{{` opens a second suggestio
 
 ### Generation Control
 
-| Command | Arguments | What it does |
-|---------|-----------|--------------|
-| `/continue` | — | Continues the last assistant message. Fails with an error if the last message isn't from the assistant. |
-| `/regenerate` | — | Regenerates the last message, producing a new swipe. |
-| `/regen` | — | Alias for `/regenerate`. |
-| `/impersonate` | — | Generates a draft **user** message and drops it into the composer — nothing is sent until you press **Send**. Same as the **Impersonate** (person icon) button next to the composer. |
-| `/gen` | `<prompt>` | Quiet generation **with** chat context: no user message is appended, and the result is appended to the chat as a system message. |
-| `/sysgen` | `<text>` | Currently identical to `/gen`. |
-| `/genraw` | `<prompt>` | Truly raw generation: the prompt text goes to the model as a single user message — no chat history, no character card, no World Info. The result is appended as a system message. |
-| `/ask` | `<character> <message>` | Posts `<message>` as you, then generates a reply as the named character (exact name match). Does not switch chats — the reply lands in the current one. |
+| Command        | Arguments               | What it does                                                                                                                                                                         |
+| -------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/continue`    | —                       | Continues the last assistant message. Fails with an error if the last message isn't from the assistant.                                                                              |
+| `/regenerate`  | —                       | Regenerates the last message, producing a new swipe.                                                                                                                                 |
+| `/regen`       | —                       | Alias for `/regenerate`.                                                                                                                                                             |
+| `/impersonate` | —                       | Generates a draft **user** message and drops it into the composer — nothing is sent until you press **Send**. Same as the **Impersonate** (person icon) button next to the composer. |
+| `/gen`         | `<prompt>`              | Quiet generation **with** chat context: no user message is appended, and the result is appended to the chat as a system message.                                                     |
+| `/sysgen`      | `<text>`                | Currently identical to `/gen`.                                                                                                                                                       |
+| `/genraw`      | `<prompt>`              | Truly raw generation: the prompt text goes to the model as a single user message — no chat history, no character card, no World Info. The result is appended as a system message.    |
+| `/ask`         | `<character> <message>` | Posts `<message>` as you, then generates a reply as the named character (exact name match). Does not switch chats — the reply lands in the current one.                              |
 
 ### Settings & Appearance
 
-| Command | Arguments | What it does |
-|---------|-----------|--------------|
-| `/name` | `<name>` | Sets your display name (the `userName` setting). With no argument, does nothing. |
-| `/persona` | `<name>` | Switches the current chat's persona. Name match is case-insensitive, exact first, then substring. Shows an error toast if no persona matches. |
-| `/theme` | `<preset>` or `<css>` | Applies a theme preset — `dark` (the default), `light`, `high-contrast`, or `none`. Anything that isn't a preset name is stored verbatim as custom CSS (the `themeCustomCss` setting). |
-| `/bg` | `[url]` | Sets the chat background image URL (the `backgroundImageUrl` setting). No argument clears it. |
+| Command    | Arguments             | What it does                                                                                                                                                                           |
+| ---------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/name`    | `<name>`              | Sets your display name (the `userName` setting). With no argument, does nothing.                                                                                                       |
+| `/persona` | `<name>`              | Switches the current chat's persona. Name match is case-insensitive, exact first, then substring. Shows an error toast if no persona matches.                                          |
+| `/theme`   | `<preset>` or `<css>` | Applies a theme preset — `dark` (the default), `light`, `high-contrast`, or `none`. Anything that isn't a preset name is stored verbatim as custom CSS (the `themeCustomCss` setting). |
+| `/bg`      | `[url]`               | Sets the chat background image URL (the `backgroundImageUrl` setting). No argument clears it.                                                                                          |
 
 Themes and backgrounds are covered in depth in [UI Customization](./ui-customization.md); personas in [Personas](./personas.md).
 
@@ -58,12 +58,12 @@ Themes and backgrounds are covered in depth in [UI Customization](./ui-customiza
 
 `/wi` is a family of shortcuts for the **lorebook linked to the current chat's character**. If the character has no linked book, every subcommand fails with the toast `No lorebook linked to this chat`. See [World Info](./world-info.md) for linking and the full editor.
 
-| Command | Arguments | What it does |
-|---------|-----------|--------------|
-| `/wi list` | — | Posts a numbered list of all entries (`[keys] content preview…`) into the chat as a system message. |
-| `/wi get` | `<key>` | Posts the full content of the first entry whose keys include `<key>` (case-insensitive) as a system message. |
-| `/wi add` | `<keys> <content...>` | Creates an entry. `<keys>` is a comma-separated list with no spaces; everything after it is the content. |
-| `/wi del` | `<key>` | Deletes the first entry whose keys include `<key>` (case-insensitive). |
+| Command    | Arguments             | What it does                                                                                                 |
+| ---------- | --------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `/wi list` | —                     | Posts a numbered list of all entries (`[keys] content preview…`) into the chat as a system message.          |
+| `/wi get`  | `<key>`               | Posts the full content of the first entry whose keys include `<key>` (case-insensitive) as a system message. |
+| `/wi add`  | `<keys> <content...>` | Creates an entry. `<keys>` is a comma-separated list with no spaces; everything after it is the content.     |
+| `/wi del`  | `<key>`               | Deletes the first entry whose keys include `<key>` (case-insensitive).                                       |
 
 ```
 /wi add obsidian,order The Obsidian Order is a secret cabal of archivists.
@@ -77,19 +77,19 @@ Entries created with `/wi add` get fixed defaults: position **Before Character**
 
 ### Navigation & Input
 
-| Command | Arguments | What it does |
-|---------|-----------|--------------|
-| `/char` | `<name>` | Switches to a chat with the named character (same fuzzy match as `/persona`): opens their most recently updated chat, or creates a new one named `<Character> - <date>` if none exists. Shows an error toast if no character matches. |
-| `/lock` | — | Locks the composer — the input is disabled and its placeholder changes to *"Input is locked. Type /unlock to enable."* |
-| `/unlock` | — | Unlocks the composer. |
+| Command   | Arguments | What it does                                                                                                                                                                                                                          |
+| --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/char`   | `<name>`  | Switches to a chat with the named character (same fuzzy match as `/persona`): opens their most recently updated chat, or creates a new one named `<Character> - <date>` if none exists. Shows an error toast if no character matches. |
+| `/lock`   | —         | Locks the composer — the input is disabled and its placeholder changes to _"Input is locked. Type /unlock to enable."_                                                                                                                |
+| `/unlock` | —         | Unlocks the composer.                                                                                                                                                                                                                 |
 
 > **Note:** The input lock is client-side and not persisted — reloading the page unlocks it.
 
 ### Utility
 
-| Command | Arguments | What it does |
-|---------|-----------|--------------|
-| `/listvar` | — | Shows a toast listing all macro variables: global variables as `{{$name}} = value` and chat-local ones as `{{.name}} = value`, or `No variables set` when empty. |
+| Command    | Arguments | What it does                                                                                                                                                     |
+| ---------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/listvar` | —         | Shows a toast listing all macro variables: global variables as `{{$name}} = value` and chat-local ones as `{{.name}} = value`, or `No variables set` when empty. |
 
 Variables are set by `{{setvar}}` macros and Lua scripts — see [Macro System](./macros.md).
 
@@ -97,7 +97,7 @@ Variables are set by `{{setvar}}` macros and Lua scripts — see [Macro System](
 
 These are different systems that are easy to confuse:
 
-- **Slash commands** are typed by *you*, one at a time, in the composer. They are a fixed, built-in list — you can't add your own.
+- **Slash commands** are typed by _you_, one at a time, in the composer. They are a fixed, built-in list — you can't add your own.
 - **Quick replies** are buttons (global, per-character, or per-chat) that run **Lua scripts** against the `st` API — not slash commands. A quick reply can do anything the `st` API can do, including multi-step logic slash commands can't express.
 
 If you find yourself wanting a custom slash command, a quick reply with a Lua script is the answer. See [Lua Scripting](./lua-scripting.md).
@@ -106,21 +106,21 @@ If you find yourself wanting a custom slash command, a quick reply with a Lua sc
 
 Many slash commands wrap the same server operations as `st` functions, so anything you can do with a command you can also script:
 
-| Slash command | Lua equivalent |
-|---------------|----------------|
-| `/continue` | `st.continue()` |
-| `/impersonate` | `st.impersonate()` |
-| `/regenerate` | `st.regenerate()` |
-| `/swipe left` | `st.swipe("left")` |
-| `/cut 3` | `st.cut(3)` |
-| `/reset` | `st.reset_chat()` |
-| `/gen prompt` | `st.generate("prompt")` — returns the text instead of appending it |
-| `/genraw prompt` | `st.genraw("prompt")` |
-| `/ask Name msg` | `st.ask("Name", "msg")` |
-| `/sysgen text` | `st.sysgen("text")` |
+| Slash command                      | Lua equivalent                                                                       |
+| ---------------------------------- | ------------------------------------------------------------------------------------ |
+| `/continue`                        | `st.continue()`                                                                      |
+| `/impersonate`                     | `st.impersonate()`                                                                   |
+| `/regenerate`                      | `st.regenerate()`                                                                    |
+| `/swipe left`                      | `st.swipe("left")`                                                                   |
+| `/cut 3`                           | `st.cut(3)`                                                                          |
+| `/reset`                           | `st.reset_chat()`                                                                    |
+| `/gen prompt`                      | `st.generate("prompt")` — returns the text instead of appending it                   |
+| `/genraw prompt`                   | `st.genraw("prompt")`                                                                |
+| `/ask Name msg`                    | `st.ask("Name", "msg")`                                                              |
+| `/sysgen text`                     | `st.sysgen("text")`                                                                  |
 | `/wi list` / `get` / `add` / `del` | `st.wi_list()` / `st.wi_get(key)` / `st.wi_add(keys, content)` / `st.wi_remove(key)` |
-| `/persona` | `st.set_persona(personaId)` — takes an ID, not a name |
-| `/char` | `st.set_character(characterId)` — takes an ID, not a name |
+| `/persona`                         | `st.set_persona(personaId)` — takes an ID, not a name                                |
+| `/char`                            | `st.set_character(characterId)` — takes an ID, not a name                            |
 
 > **Note:** `st.send(text)` is **not** the same as `/send` — it appends your message without triggering a generation. Pair it with `st.trigger()` if you want the reply too.
 

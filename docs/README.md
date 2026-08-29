@@ -4,12 +4,13 @@ This directory contains design documents, roadmaps, external specifications, and
 
 ## Directory Layout
 
-| Directory / File | Purpose |
-|------------------|---------|
-| [`design/`](./design/) | Engineering standards — tamari architecture rules, CSS principles/audit, and design proposals (scriptable layers). |
-| [`roadmap/`](./roadmap/) | High-level roadmap, breaking changes, completed work, and pending features. |
-| [`user/`](./user/) | **User-facing documentation** — getting started, characters, backends, world info, tools, the workbench, macros, Lua scripting, and more. Start at [`user/getting-started.md`](./user/getting-started.md). |
-| [`external/`](./external/) | **External specifications** imported from other projects — not original tamari docs. |
+| Directory / File           | Purpose                                                                                                                                                                                                    |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`design/`](./design/)     | Engineering standards — tamari architecture rules, CSS principles/audit, and design proposals (scriptable layers).                                                                                         |
+| [`roadmap/`](./roadmap/)   | High-level roadmap, breaking changes, completed work, and pending features.                                                                                                                                |
+| [`user/`](./user/)         | **User-facing documentation** — getting started, characters, backends, world info, tools, the workbench, macros, Lua scripting, and more. Start at [`user/getting-started.md`](./user/getting-started.md). |
+| [`external/`](./external/) | **External specifications** imported from other projects — not original tamari docs.                                                                                                                       |
+| [`audits/`](./audits/)     | Dated audit reports — code-quality and UX audits of the codebase.                                                                                                                                          |
 
 ---
 
@@ -66,8 +67,10 @@ This directory contains design documents, roadmaps, external specifications, and
 These are community standards that SillyTavern implements. They are **not** original project documentation.
 
 ### Character Card Specifications
+
 - [`external/character-card-spec-v2/`](./external/character-card-spec-v2/) — Character Card V2 specification (community standard).
 - [`external/character-card-spec-v3/`](./external/character-card-spec-v3/) — Character Card V3 specification (community standard).
 
 ### API Documentation
+
 - [`external/api/`](./external/api/) — Copies of third-party API docs referenced by backend adapters (OpenAI, Claude, Gemini, OpenRouter, llama.cpp, TabbyAPI, KoboldCPP, etc.).

@@ -48,9 +48,10 @@ describe('BackendDryRunPanel', () => {
 
   const sendSpy = () => vi.mocked(bus.send);
   const sentTestMessage = () =>
-    sendSpy().mock.calls.map((c) => c[0]).find((m) => m.type === 'custombackend.test') as
-      | { requestId?: string; input: string; luaSource?: string; characterId?: string; state?: string }
-      | undefined;
+    sendSpy()
+      .mock.calls.map((c) => c[0])
+      .find((m) => m.type === 'custombackend.test') as
+      { requestId?: string; input: string; luaSource?: string; characterId?: string; state?: string } | undefined;
 
   const fillAndRun = () => {
     fireEvent.input(screen.getByPlaceholderText('A sample user message...'), {

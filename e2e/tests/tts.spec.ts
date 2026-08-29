@@ -1,30 +1,17 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { resetLlmRequests } from '../helpers/llm.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
-import { App } from '../helpers/app.js';
+import { uniqueName } from '../helpers/names.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
 
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
-
 test.describe('TTS (speak tool)', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('speak tool generates audio via the configured provider and renders it inline', async ({ page }) => {
-    const app = new App(page);
+  test('speak tool generates audio via the configured provider and renders it inline', async ({ page, app }) => {
     const toolsetId = await enableBuiltinToolset(page, 'speak', {
       provider: 'kokoro',
       baseUrl: MOCK_URL,

@@ -6,7 +6,13 @@ import {
   type CustomBackendDelegate,
   type DelegatedGenerateResult,
 } from './LuaBackendAdapter.js';
-import type { BackendAdapter, BackendStreamItem, BranchHistoryMessage, GenerationResult, Prompt } from './BackendAdapter.js';
+import type {
+  BackendAdapter,
+  BackendStreamItem,
+  BranchHistoryMessage,
+  GenerationResult,
+  Prompt,
+} from './BackendAdapter.js';
 import { consumeStream } from './BackendAdapter.js';
 import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
 
@@ -42,7 +48,9 @@ function makeAdapter(luaSource: string, delegate = makeDelegate()): LuaBackendAd
 }
 
 async function run(adapter: LuaBackendAdapter) {
-  return consumeStream(adapter.stream(makePrompt(), new AbortController().signal, { chatId: 'chat1', generationType: 'send' }));
+  return consumeStream(
+    adapter.stream(makePrompt(), new AbortController().signal, { chatId: 'chat1', generationType: 'send' }),
+  );
 }
 
 describe('LuaBackendAdapter', () => {
@@ -116,7 +124,11 @@ describe('LuaBackendAdapter', () => {
     it('layers a script error as LUA_ERROR with the adapter name', async () => {
       const adapter = makeAdapter('function generate(prompt, ctx) error("boom") end');
       const { result } = await run(adapter);
-      expect(result.traceError).toEqual({ code: 'LUA_ERROR', layer: 'Test Backend', message: expect.stringContaining('boom') });
+      expect(result.traceError).toEqual({
+        code: 'LUA_ERROR',
+        layer: 'Test Backend',
+        message: expect.stringContaining('boom'),
+      });
     });
 
     it('layers a timeout as LUA_TIMEOUT', async () => {
@@ -150,12 +162,15 @@ describe('LuaBackendAdapter', () => {
         })),
       });
       // The script does NOT pcall — the thrown chain becomes the script's error.
-      const adapter = makeAdapter(`
+      const adapter = makeAdapter(
+        `
         function generate(prompt, ctx)
           local res = backends.generate(prompt):await()
           return res.text
         end
-      `, delegate);
+      `,
+        delegate,
+      );
       const { result } = await run(adapter);
       expect(result.traceError?.code).toBe('LUA_ERROR');
       expect(result.traceError?.layer).toBe('Test Backend');
@@ -172,13 +187,16 @@ describe('LuaBackendAdapter', () => {
           usage: { promptTokens: 0, completionTokens: 0 },
         })),
       });
-      const adapter = makeAdapter(`
+      const adapter = makeAdapter(
+        `
         function generate(prompt, ctx)
           local ok, err = pcall(function() return backends.generate("cfg-9", prompt):await() end)
           if not ok then return { error = tostring(err) } end
           return "unreachable"
         end
-      `, delegate);
+      `,
+        delegate,
+      );
       const { result } = await run(adapter);
       expect(result.error).toContain('delegate(cfg-9): DELEGATE_ERROR: kaboom');
       expect(result.traceError?.code).toBe('UNKNOWN');
@@ -190,11 +208,14 @@ describe('LuaBackendAdapter', () => {
           throw new Error('backend config "nope" not found');
         }),
       });
-      const adapter = makeAdapter(`
+      const adapter = makeAdapter(
+        `
         function generate(prompt, ctx)
           return { __passthrough = "nope" }
         end
-      `, delegate);
+      `,
+        delegate,
+      );
       const { result } = await run(adapter);
       expect(result.traceError?.code).toBe('DELEGATE_ERROR');
       expect(result.traceError?.layer).toBe('Test Backend');
@@ -215,13 +236,16 @@ describe('LuaBackendAdapter', () => {
 
   it('delegates via backends.generate and aggregates usage', async () => {
     const delegate = makeDelegate();
-    const adapter = makeAdapter(`
+    const adapter = makeAdapter(
+      `
       function generate(prompt, ctx)
         local a = backends.generate(prompt):await()            -- default delegate
         local b = backends.generate("cfg-1", prompt):await()   -- explicit by id
         return a.text .. " & " .. b.text
       end
-    `, delegate);
+    `,
+      delegate,
+    );
     const { items, result } = await run(adapter);
     expect(delegate.generate).toHaveBeenCalledTimes(2);
     expect(vi.mocked(delegate.generate).mock.calls[0]![0]).toBeNull();
@@ -239,7 +263,8 @@ describe('LuaBackendAdapter', () => {
         toolCalls: [{ id: 'call_1', name: 'roll_dice', arguments: { sides: 20 } }],
       })),
     });
-    const adapter = makeAdapter(`
+    const adapter = makeAdapter(
+      `
       function generate(prompt, ctx)
         local res = backends.generate(prompt):await()
         if res.toolCalls and #res.toolCalls > 0 then
@@ -248,7 +273,9 @@ describe('LuaBackendAdapter', () => {
         end
         return "no-calls"
       end
-    `, delegate);
+    `,
+      delegate,
+    );
     const { items } = await run(adapter);
     expect(items).toEqual([{ type: 'text', token: 'call_1|roll_dice|20' }]);
   });
@@ -269,7 +296,8 @@ describe('LuaBackendAdapter', () => {
         return { text: 'You rolled 17.', finishReason: 'stop', usage: { promptTokens: 1, completionTokens: 1 } };
       }),
     });
-    const adapter = makeAdapter(`
+    const adapter = makeAdapter(
+      `
       function generate(prompt, ctx)
         local sub = {}
         for k, v in pairs(prompt) do sub[k] = v end
@@ -286,7 +314,9 @@ describe('LuaBackendAdapter', () => {
         end
         return res.text
       end
-    `, delegate);
+    `,
+      delegate,
+    );
     const { items } = await run(adapter);
     expect(items).toEqual([{ type: 'text', token: 'You rolled 17.' }]);
     expect(seen).toHaveLength(2);
@@ -321,7 +351,11 @@ describe('LuaBackendAdapter', () => {
       end
     `);
     const { items } = await consumeStream(
-      adapter.stream(makePrompt(), new AbortController().signal, { chatId: 'chat1', generationType: 'send', branchHistory }),
+      adapter.stream(makePrompt(), new AbortController().signal, {
+        chatId: 'chat1',
+        generationType: 'send',
+        branchHistory,
+      }),
     );
     expect(items).toEqual([{ type: 'text', token: '3|five goblins attack|nil|2|3|2' }]);
     expect(branchHistory).toHaveBeenCalledTimes(1);
@@ -340,13 +374,16 @@ describe('LuaBackendAdapter', () => {
 
   it('normalizes response_format to responseFormat on delegate calls', async () => {
     const delegate = makeDelegate();
-    const adapter = makeAdapter(`
+    const adapter = makeAdapter(
+      `
       function generate(prompt, ctx)
         prompt.response_format = { type = 'json_schema', schema = { type = 'object' } }
         local res = backends.generate(prompt):await()
         return res.text
       end
-    `, delegate);
+    `,
+      delegate,
+    );
     await run(adapter);
     const calledPrompt = vi.mocked(delegate.generate).mock.calls[0]![1] as unknown as Record<string, unknown>;
     expect(calledPrompt['responseFormat']).toEqual({ type: 'json_schema', schema: { type: 'object' } });
@@ -355,14 +392,17 @@ describe('LuaBackendAdapter', () => {
 
   it('keeps an explicit responseFormat over a snake_case duplicate', async () => {
     const delegate = makeDelegate();
-    const adapter = makeAdapter(`
+    const adapter = makeAdapter(
+      `
       function generate(prompt, ctx)
         prompt.responseFormat = { type = 'text' }
         prompt.response_format = { type = 'json_object' }
         local res = backends.generate(prompt):await()
         return res.text
       end
-    `, delegate);
+    `,
+      delegate,
+    );
     await run(adapter);
     const calledPrompt = vi.mocked(delegate.generate).mock.calls[0]![1] as unknown as Record<string, unknown>;
     expect(calledPrompt['responseFormat']).toEqual({ type: 'text' });
@@ -383,12 +423,15 @@ describe('LuaBackendAdapter', () => {
       listModels: async () => [],
     };
     const delegate = makeDelegate({ resolveAdapter: vi.fn(async () => recordingAdapter) });
-    const adapter = makeAdapter(`
+    const adapter = makeAdapter(
+      `
       function generate(prompt, ctx)
         prompt.response_format = { type = 'json_object' }
         return { __passthrough = true, prompt = prompt }
       end
-    `, delegate);
+    `,
+      delegate,
+    );
     await run(adapter);
     expect((seen as unknown as Record<string, unknown>)['responseFormat']).toEqual({ type: 'json_object' });
   });
@@ -399,12 +442,15 @@ describe('LuaBackendAdapter', () => {
         throw new Error('backend "nope" not found');
       }),
     });
-    const adapter = makeAdapter(`
+    const adapter = makeAdapter(
+      `
       function generate(prompt, ctx)
         local res = backends.generate("nope", prompt):await()
         return res.text
       end
-    `, delegate);
+    `,
+      delegate,
+    );
     const { result } = await run(adapter);
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('not found');
@@ -423,11 +469,14 @@ describe('LuaBackendAdapter', () => {
       listModels: async () => [],
     };
     const delegate = makeDelegate({ resolveAdapter: vi.fn(async () => passthroughAdapter) });
-    const adapter = makeAdapter(`
+    const adapter = makeAdapter(
+      `
       function generate(prompt, ctx)
         return { __passthrough = true }
       end
-    `, delegate);
+    `,
+      delegate,
+    );
     const { items, result } = await run(adapter);
     expect(delegate.resolveAdapter).toHaveBeenCalledWith(null);
     expect(items).toEqual([
@@ -620,7 +669,11 @@ describe('store JSON + recursive-array primitives', () => {
   it('putJson/getJson round-trips a Lua table', async () => {
     const adapter = makeAdapter(PRIM_LUA);
     const { items } = await consumeStream(
-      adapter.stream({ messages: [{ role: 'user', content: 'json' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'send' }),
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'json' }], tokenUsage: { prompt: 0, completion: 0 } },
+        new AbortController().signal,
+        { chatId: 'c', generationType: 'send' },
+      ),
     );
     expect(items[0]).toEqual({ type: 'text', token: 'doc#1|x|3|b|true' });
   });
@@ -628,7 +681,11 @@ describe('store JSON + recursive-array primitives', () => {
   it('append/readArray: the chain walks oldest-first and flattens array items recursively', async () => {
     const adapter = makeAdapter(PRIM_LUA);
     const { items } = await consumeStream(
-      adapter.stream({ messages: [{ role: 'user', content: 'chain' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'send' }),
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'chain' }], tokenUsage: { prompt: 0, completion: 0 } },
+        new AbortController().signal,
+        { chatId: 'c', generationType: 'send' },
+      ),
     );
     expect(items[0]).toEqual({ type: 'text', token: 'a1,a2,b1,c1,d1,d2' });
   });
@@ -636,10 +693,18 @@ describe('store JSON + recursive-array primitives', () => {
   it('an old head still reads its own prefix (branch-correct persistence)', async () => {
     const adapter = makeAdapter(PRIM_LUA);
     const first = await consumeStream(
-      adapter.stream({ messages: [{ role: 'user', content: 'oldhead' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'send' }),
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'oldhead' }], tokenUsage: { prompt: 0, completion: 0 } },
+        new AbortController().signal,
+        { chatId: 'c', generationType: 'send' },
+      ),
     );
     const second = await consumeStream(
-      adapter.stream({ messages: [{ role: 'user', content: 'oldhead' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'send', scriptState: first.result.scriptState }),
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'oldhead' }], tokenUsage: { prompt: 0, completion: 0 } },
+        new AbortController().signal,
+        { chatId: 'c', generationType: 'send', scriptState: first.result.scriptState },
+      ),
     );
     expect(second.items[0]).toEqual({ type: 'text', token: 'first vs first,second' });
   });
@@ -647,12 +712,20 @@ describe('store JSON + recursive-array primitives', () => {
   it('append to a missing prev is loud; readArray(nil) is empty', async () => {
     const adapter = makeAdapter(PRIM_LUA);
     const bad = await consumeStream(
-      adapter.stream({ messages: [{ role: 'user', content: 'badprev' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'send' }),
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'badprev' }], tokenUsage: { prompt: 0, completion: 0 } },
+        new AbortController().signal,
+        { chatId: 'c', generationType: 'send' },
+      ),
     );
     expect(bad.result.finishReason).toBe('error');
     expect(bad.result.error).toContain('missing prev blob');
     const ok = await consumeStream(
-      adapter.stream({ messages: [{ role: 'user', content: 'nilread' }], tokenUsage: { prompt: 0, completion: 0 } }, new AbortController().signal, { chatId: 'c', generationType: 'send' }),
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'nilread' }], tokenUsage: { prompt: 0, completion: 0 } },
+        new AbortController().signal,
+        { chatId: 'c', generationType: 'send' },
+      ),
     );
     expect(ok.items[0]).toEqual({ type: 'text', token: 'len=0' });
   });
@@ -661,7 +734,9 @@ describe('store JSON + recursive-array primitives', () => {
     const blobs = new MemoryScriptBlobRepository();
     blobs.seed('arr#1', '{not json');
     const withBlobs = new LuaBackendAdapter({
-      id: 'custom:t', name: 'T', luaSource: `function generate(prompt, ctx) return store.getJson("arr#1"):await() end
+      id: 'custom:t',
+      name: 'T',
+      luaSource: `function generate(prompt, ctx) return store.getJson("arr#1"):await() end
         function list_models() return {} end`,
       runtime: new LuaRuntime(),
       delegate: makeDelegate(),
@@ -728,12 +803,15 @@ describe('store JSON + recursive-array primitives', () => {
         listModels: async () => [],
       };
       const delegate = makeDelegate({ resolveAdapter: vi.fn(async () => delegateAdapter) });
-      const adapter = makeAdapter(`
+      const adapter = makeAdapter(
+        `
         function generate(prompt, ctx)
           print("routing to delegate")
           return { __passthrough = true, prompt = prompt }
         end
-      `, delegate);
+      `,
+        delegate,
+      );
       const { items } = await run(adapter);
       expect(items).toEqual([
         { type: 'backendDebug', token: 'routing to delegate\n' },

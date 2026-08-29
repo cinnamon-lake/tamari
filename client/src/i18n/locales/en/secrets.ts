@@ -3,7 +3,8 @@
  */
 export const secrets = {
   title: 'Secrets',
-  description: 'Encrypted vault for API keys and tokens. Reference a secret from a backend config or tool as {{ref}} to avoid pasting raw keys everywhere.',
+  description:
+    'Encrypted vault for API keys and tokens. Reference a secret from a backend config or tool as {{ref}} to avoid pasting raw keys everywhere.',
   empty: 'No secrets stored yet.',
   add: 'Add Secret',
   edit: 'Edit',

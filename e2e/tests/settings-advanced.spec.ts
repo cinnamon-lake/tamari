@@ -29,23 +29,22 @@
  * the UI, and touched settings are reset to their schema defaults in
  * afterEach (belt-and-braces purge in case a test fails mid-way).
  */
-import { test, expect, type Locator, type Page } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { App } from '../helpers/app.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Locator, Page } from '../fixtures/base.js';
 import { setSetting } from '../helpers/settings.js';
 import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
+import { uniqueName as baseUniqueName } from '../helpers/names.js';
 
 /** Marker prefix for everything this spec creates — used by the afterEach purge. */
 const MARK = 'E2EAdv';
 
 function uniqueName(base: string): string {
-  return `${MARK} ${base} ${Date.now()}`;
+  return baseUniqueName(`${MARK} ${base}`);
 }
 
-/** Idempotently set a checkbox row inside the open settings modal. */
-async function setCheckbox(modal: Locator, label: string, desired: boolean): Promise<void> {
-  const checkbox = modal.locator(`label.checkbox-row:has-text("${label}") input[type="checkbox"]`);
+/** Idempotently set a checkbox inside the open settings modal by its testid. */
+async function setCheckbox(modal: Locator, testId: string, desired: boolean): Promise<void> {
+  const checkbox = modal.getByTestId(testId);
   if ((await checkbox.isChecked()) !== desired) {
     await checkbox.click();
     await expect(checkbox).toBeChecked({ checked: desired });
@@ -64,7 +63,6 @@ async function purgeSpecArtifacts(page: Page): Promise<void> {
       const token = localStorage.getItem('st_auth_token') ?? '';
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const ws = new WebSocket(`${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`);
-      let snapshot: Record<string, unknown> | null = null;
       const sends: Array<[string, unknown]> = [];
 
       ws.onopen = () => ws.send(JSON.stringify({ type: 'auth' }));
@@ -72,11 +70,17 @@ async function purgeSpecArtifacts(page: Page): Promise<void> {
         try {
           const msg = JSON.parse(event.data as string);
           if (msg.type === 'snapshot') {
-            snapshot = msg.state?.settings ?? {};
-            const rules = Array.isArray(snapshot['regexRules']) ? (snapshot['regexRules'] as Array<{ name?: string }>) : [];
+            // Local const: assigning the `any` from JSON.parse into a `| null`
+            // variable doesn't narrow it for the property reads below.
+            const settings = (msg.state?.settings ?? {}) as Record<string, unknown>;
+            const rules = Array.isArray(settings['regexRules'])
+              ? (settings['regexRules'] as Array<{ name?: string }>)
+              : [];
             const keptRules = rules.filter((r) => !(r?.name ?? '').includes(mark));
             if (keptRules.length !== rules.length) sends.push(['regexRules', keptRules]);
-            const tpls = Array.isArray(snapshot['instructTemplates']) ? (snapshot['instructTemplates'] as Array<{ name?: string }>) : [];
+            const tpls = Array.isArray(settings['instructTemplates'])
+              ? (settings['instructTemplates'] as Array<{ name?: string }>)
+              : [];
             const keptTpls = tpls.filter((t) => !(t?.name ?? '').includes(mark));
             if (keptTpls.length !== tpls.length) sends.push(['instructTemplates', keptTpls]);
             const scalars: Array<[string, unknown]> = [
@@ -88,7 +92,7 @@ async function purgeSpecArtifacts(page: Page): Promise<void> {
               ['autoContinueTargetLength', 100],
             ];
             for (const [key, def] of scalars) {
-              if (JSON.stringify(snapshot[key]) !== JSON.stringify(def)) sends.push([key, def]);
+              if (JSON.stringify(settings[key]) !== JSON.stringify(def)) sends.push([key, def]);
             }
             if (sends.length === 0) {
               ws.close();
@@ -119,7 +123,7 @@ async function purgeSpecArtifacts(page: Page): Promise<void> {
             reject(new Error(msg.message ?? 'purge settings.set failed'));
           }
         } catch (err) {
-          reject(err);
+          reject(err instanceof Error ? err : new Error(String(err)));
         }
       };
       ws.onerror = (err) => reject(new Error(`WebSocket error: ${err.type}`));
@@ -145,7 +149,7 @@ function requestStop(body: unknown): string[] {
 
 /** Sidebar "Instruct Templates" button → .instruct-templates-modal. */
 async function openInstructTemplates(page: Page): Promise<Locator> {
-  await page.locator('button.settings-btn:has-text("Instruct Templates")').click();
+  await page.getByTestId('open-instruct-templates').click();
   const modal = page.locator('.instruct-templates-modal');
   await expect(modal).toBeVisible();
   return modal;
@@ -159,7 +163,7 @@ async function closeInstructTemplates(page: Page): Promise<void> {
 
 /** Sidebar "Regex Rules" button → .regex-rules-modal. */
 async function openRegexRules(page: Page): Promise<Locator> {
-  await page.locator('button.settings-btn:has-text("Regex Rules")').click();
+  await page.getByTestId('open-regex-rules').click();
   const modal = page.locator('.regex-rules-modal');
   await expect(modal).toBeVisible();
   return modal;
@@ -171,40 +175,30 @@ async function closeRegexRules(page: Page): Promise<void> {
   await expect(modal).not.toBeVisible();
 }
 
-/**
- * Sidebar "Backend Config" button → the Backend Config modal. Its root shares
- * the `.settings-modal` class with the Settings modal, so filter by title
- * (same pattern as backend-config-modal.spec.ts).
- */
+/** Sidebar "Backend Config" button → the Backend Config modal. */
 async function openBackendConfig(page: Page): Promise<Locator> {
-  const btn = page.locator('button.settings-btn:has-text("Backend Config")');
+  const btn = page.getByTestId('open-backend-config');
   await btn.scrollIntoViewIfNeeded();
   await btn.click();
-  const modal = page.locator('.modal.settings-modal').filter({ hasText: 'Backend Config' });
+  const modal = page.getByTestId('backend-config-modal');
   await expect(modal).toBeVisible();
   return modal;
 }
 
 async function closeBackendConfig(modal: Locator): Promise<void> {
   // The Close button runs the modal's close(): a dirty form is saved first.
-  await modal.locator('.modal-actions button:has-text("Close")').click();
+  await modal.getByTestId('backend-config-close').click();
   await expect(modal).not.toBeVisible();
 }
 
 test.describe('Settings — Advanced', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
     await purgeSpecArtifacts(page);
-    await resetBackendConfig(page);
   });
 
-  test('instruct template CRUD: create, edit, persist across reopen, delete', async ({ page }) => {
+  test('instruct template CRUD: create, edit, persist across reopen, delete', async ({ page, app: _app }) => {
     test.setTimeout(90000);
     const stamp = Date.now();
     const tplId = `${MARK.toLowerCase()}-tpl-${stamp}`;
@@ -215,12 +209,12 @@ test.describe('Settings — Advanced', () => {
     const modal = await openInstructTemplates(page);
 
     // New Template → fill the form with distinctive markers → save.
-    await modal.locator('button:has-text("New Template")').click();
-    await modal.locator('label.field-label:has-text("ID (unique key)") input').fill(tplId);
-    await modal.locator('label.field-label:has-text("Display Name") input').fill(tplName);
-    await modal.locator('label.field-label:has-text("System Prefix") input').fill(sysPrefix);
-    await modal.locator('label.field-label:has-text("User Prefix") input').fill(userPrefix);
-    await modal.locator('button:has-text("Save Template")').click();
+    await modal.getByTestId('instruct-template-new').click();
+    await modal.getByTestId('instruct-template-id').fill(tplId);
+    await modal.getByTestId('instruct-template-name').fill(tplName);
+    await modal.getByTestId('instruct-template-system-prefix').fill(sysPrefix);
+    await modal.getByTestId('instruct-template-user-prefix').fill(userPrefix);
+    await modal.getByTestId('instruct-template-save').click();
 
     // Appears in the list with its id.
     const row = modal.locator(`.worldinfo-item[id="${tplId}"]`);
@@ -229,10 +223,10 @@ test.describe('Settings — Advanced', () => {
     await expect(row.locator('.worldinfo-meta')).toContainText(`ID: ${tplId}`);
 
     // Edit → change a field → save.
-    await row.locator('button[title="Edit"]').click();
+    await row.getByTestId('instruct-template-edit').click();
     const editedSysPrefix = `${sysPrefix}-EDITED`;
-    await modal.locator('label.field-label:has-text("System Prefix") input').fill(editedSysPrefix);
-    await modal.locator('button:has-text("Save Template")').click();
+    await modal.getByTestId('instruct-template-system-prefix').fill(editedSysPrefix);
+    await modal.getByTestId('instruct-template-save').click();
     await expect(row).toBeVisible();
 
     // Persists after modal close/reopen (round-tripped to the server).
@@ -240,26 +234,25 @@ test.describe('Settings — Advanced', () => {
     const modal2 = await openInstructTemplates(page);
     const row2 = modal2.locator(`.worldinfo-item[id="${tplId}"]`);
     await expect(row2).toBeVisible();
-    await row2.locator('button[title="Edit"]').click();
-    await expect(modal2.locator('label.field-label:has-text("System Prefix") input')).toHaveValue(editedSysPrefix);
-    await expect(modal2.locator('label.field-label:has-text("User Prefix") input')).toHaveValue(userPrefix);
-    await modal2.locator('.edit-actions button:has-text("Cancel")').click();
+    await row2.getByTestId('instruct-template-edit').click();
+    await expect(modal2.getByTestId('instruct-template-system-prefix')).toHaveValue(editedSysPrefix);
+    await expect(modal2.getByTestId('instruct-template-user-prefix')).toHaveValue(userPrefix);
+    await modal2.getByTestId('instruct-template-cancel').click();
 
     // Delete → confirm popup → gone.
-    await row2.locator('button[title="Delete"]').click();
+    await row2.getByTestId('instruct-template-delete').click();
     const popup = page.locator('.popup-modal');
     await expect(popup).toBeVisible();
     await expect(popup.locator('.popup-message')).toHaveText('Delete this custom template?');
-    await popup.locator('button.primary').click();
+    await popup.getByTestId('popup-confirm').click();
     await expect(popup).not.toBeVisible();
     await expect(modal2.locator(`.worldinfo-item[id="${tplId}"]`)).toHaveCount(0);
 
     await closeInstructTemplates(page);
   });
 
-  test('global regex rule CRUD, Test area transform, and display-rule bubble transform', async ({ page }) => {
+  test('global regex rule CRUD, Test area transform, and display-rule bubble transform', async ({ page, app }) => {
     test.setTimeout(120000);
-    const app = new App(page);
     const charName = uniqueName('Regex Char');
     await app.createCharacterAndChat({ name: charName, firstMes: `Hello from ${charName}.` });
 
@@ -267,33 +260,29 @@ test.describe('Settings — Advanced', () => {
     const modal = await openRegexRules(page);
 
     // New Regex Rule → fill name/find/replace → tick Display placement.
-    // ('Display' needs an exact match — 'Show recently-used character bar'
-    // also contains the substring.)
-    await modal.locator('button:has-text("New Regex Rule")').click();
-    await modal.locator('label.field-label:has-text("Name") input').fill(ruleName);
-    await modal.locator('label.field-label:has-text("Find Regex") input').fill('/deterministic/g');
-    await modal.locator('label.field-label:has-text("Replace With") textarea').fill('DETERMINISTIC');
-    const displayCheckbox = modal.locator('label.checkbox-row', { hasText: /^Display\s*$/ }).locator('input[type="checkbox"]');
+    await modal.getByTestId('regex-rule-new').click();
+    await modal.getByTestId('regex-rule-name').fill(ruleName);
+    await modal.getByTestId('regex-rule-find').fill('/deterministic/g');
+    await modal.getByTestId('regex-rule-replace').fill('DETERMINISTIC');
+    const displayCheckbox = modal.getByTestId('regex-rule-display');
     await displayCheckbox.click();
     await expect(displayCheckbox).toBeChecked();
 
     // Test area: typing in Test Input transforms via applyDisplayRules
     // (client/src/lib/regexDisplay.ts) into the read-only Test Output.
-    await modal.locator('label.field-label:has-text("Test Input") textarea').fill('a deterministic reply');
-    await expect(modal.locator('label.field-label:has-text("Test Output") textarea')).toHaveValue(
-      'a DETERMINISTIC reply',
-    );
+    await modal.getByTestId('regex-test-input').fill('a deterministic reply');
+    await expect(modal.getByTestId('regex-test-output')).toHaveValue('a DETERMINISTIC reply');
 
     // Save Rule → row appears in the list.
-    await modal.locator('button:has-text("Save Rule")').click();
+    await modal.getByTestId('regex-rule-save').click();
     const row = modal.locator('.worldinfo-item', { hasText: ruleName });
     await expect(row).toBeVisible();
     await expect(row.locator('.worldinfo-meta').first()).toContainText('/deterministic/g → DETERMINISTIC');
 
     // Edit → change the replacement → meta updates.
-    await row.locator('button[title="Edit"]').click();
-    await modal.locator('label.field-label:has-text("Replace With") textarea').fill('DETERMINISTIC!');
-    await modal.locator('button:has-text("Save Rule")').click();
+    await row.getByTestId('regex-rule-edit').click();
+    await modal.getByTestId('regex-rule-replace').fill('DETERMINISTIC!');
+    await modal.getByTestId('regex-rule-save').click();
     await expect(row.locator('.worldinfo-meta').first()).toContainText('/deterministic/g → DETERMINISTIC!');
 
     // Bonus: with the Display rule active, a generated reply renders
@@ -306,54 +295,52 @@ test.describe('Settings — Advanced', () => {
     const modal2 = await openRegexRules(page);
     const row2 = modal2.locator('.worldinfo-item', { hasText: ruleName });
     await expect(row2).toBeVisible();
-    await row2.locator('button[title="Delete"]').click();
+    await row2.getByTestId('regex-rule-delete').click();
     const popup = page.locator('.popup-modal');
     await expect(popup.locator('.popup-message')).toHaveText('Delete this regex rule?');
-    await popup.locator('button.primary').click();
+    await popup.getByTestId('popup-confirm').click();
     await expect(popup).not.toBeVisible();
     await expect(modal2.locator('.worldinfo-item', { hasText: ruleName })).toHaveCount(0);
 
     await closeRegexRules(page);
   });
 
-  test('regex rule validation alerts on empty name and bad find regex', async ({ page }) => {
-    test.setTimeout(60000);
+  test('regex rule validation alerts on empty name and bad find regex', async ({ page, app: _app }) => {
     const modal = await openRegexRules(page);
 
-    await modal.locator('button:has-text("New Regex Rule")').click();
+    await modal.getByTestId('regex-rule-new').click();
     const popup = page.locator('.popup-modal');
 
     // Empty name → "Rule name is required".
-    await modal.locator('button:has-text("Save Rule")').click();
+    await modal.getByTestId('regex-rule-save').click();
     await expect(popup.locator('.popup-message')).toHaveText('Rule name is required');
-    await popup.locator('button.primary').click();
+    await popup.getByTestId('popup-confirm').click();
     await expect(popup).not.toBeVisible();
 
     // Find regex not in /pattern/flags format → invalidFormat alert.
-    await modal.locator('label.field-label:has-text("Name") input').fill(uniqueName('Invalid'));
-    await modal.locator('label.field-label:has-text("Find Regex") input').fill('not-a-regex');
-    await modal.locator('button:has-text("Save Rule")').click();
+    await modal.getByTestId('regex-rule-name').fill(uniqueName('Invalid'));
+    await modal.getByTestId('regex-rule-find').fill('not-a-regex');
+    await modal.getByTestId('regex-rule-save').click();
     await expect(popup.locator('.popup-message')).toHaveText('Regex must be in /pattern/flags format');
-    await popup.locator('button.primary').click();
+    await popup.getByTestId('popup-confirm').click();
     await expect(popup).not.toBeVisible();
 
     // Correct format but uncompilable pattern → invalidPattern alert.
-    await modal.locator('label.field-label:has-text("Find Regex") input').fill('/[/g');
-    await modal.locator('button:has-text("Save Rule")').click();
+    await modal.getByTestId('regex-rule-find').fill('/[/g');
+    await modal.getByTestId('regex-rule-save').click();
     await expect(popup.locator('.popup-message')).toHaveText('Invalid regex pattern');
-    await popup.locator('button.primary').click();
+    await popup.getByTestId('popup-confirm').click();
     await expect(popup).not.toBeVisible();
 
     // Cancel: nothing was saved.
-    await modal.locator('.edit-actions button:has-text("Cancel")').click();
+    await modal.getByTestId('regex-rule-cancel').click();
     await expect(modal.locator('.worldinfo-item', { hasText: MARK })).toHaveCount(0);
 
     await closeRegexRules(page);
   });
 
-  test('stop-string row editing cuts the reply at the typed stop string', async ({ page }) => {
+  test('stop-string row editing cuts the reply at the typed stop string', async ({ page, app }) => {
     test.setTimeout(90000);
-    const app = new App(page);
     const charName = uniqueName('Stop Char');
     await app.createCharacterAndChat({ name: charName, firstMes: `Hello from ${charName}.` });
 
@@ -363,9 +350,10 @@ test.describe('Settings — Advanced', () => {
     // adds/removes empty rows). Cleanup goes through setSetting afterwards,
     // avoiding the stale remove-button handle noted there.
     const modal = await app.openSettings();
-    await modal.locator('h3:has-text("Generation")').scrollIntoViewIfNeeded();
-    await modal.locator('button:has-text("Add stop string")').click();
-    const stopInput = modal.locator('div[id^="stop-str-"] input[type="text"]').last();
+    await modal.getByTestId('settings-section-generation').scrollIntoViewIfNeeded();
+    await modal.getByTestId('add-stop-string').click();
+    // `.last()` = the row just appended.
+    const stopInput = modal.getByTestId('stop-string-input').last();
     await stopInput.fill(stopToken);
     await expect(stopInput).toHaveValue(stopToken);
     await app.closeSettings();
@@ -380,9 +368,8 @@ test.describe('Settings — Advanced', () => {
     await setSetting(page, 'customStoppingStrings', []);
   });
 
-  test('generation knobs: stripExamples, stop-string macros on the wire', async ({ page }) => {
+  test('generation knobs: stripExamples, stop-string macros on the wire', async ({ page, app }) => {
     test.setTimeout(180000);
-    const app = new App(page);
     const charName = uniqueName('Knob Char');
     await app.createCharacterAndChat({ name: charName, firstMes: `Hello from ${charName}.` });
 
@@ -398,17 +385,32 @@ test.describe('Settings — Advanced', () => {
             const msg = JSON.parse(event.data);
             if (msg.type === 'snapshot') {
               const char = (msg.state?.characters ?? []).find((c: { name: string }) => c.name === name);
-              if (!char) { ws.close(); reject(new Error('character not found')); return; }
-              ws.send(JSON.stringify({
-                type: 'character.update',
-                characterId: char.id,
-                patch: { mesExample: '<START>\nUser: Example question\nChar: EXAMPLEDLG_SENTINEL reply' },
-              }));
+              if (!char) {
+                ws.close();
+                reject(new Error('character not found'));
+                return;
+              }
+              ws.send(
+                JSON.stringify({
+                  type: 'character.update',
+                  characterId: char.id,
+                  patch: { mesExample: '<START>\nUser: Example question\nChar: EXAMPLEDLG_SENTINEL reply' },
+                }),
+              );
             }
-            if (msg.type === 'character.updated') { ws.close(); resolve(); }
-            if (msg.type === 'error') { ws.close(); reject(new Error(msg.message)); }
+            if (msg.type === 'character.updated') {
+              ws.close();
+              resolve();
+            }
+            if (msg.type === 'error') {
+              ws.close();
+              reject(new Error(msg.message));
+            }
           };
-          setTimeout(() => { ws.close(); reject(new Error('patchCharacter timeout')); }, 10000);
+          setTimeout(() => {
+            ws.close();
+            reject(new Error('patchCharacter timeout'));
+          }, 10000);
         }),
       { name: charName },
     );
@@ -450,39 +452,35 @@ test.describe('Settings — Advanced', () => {
     // (Display-only render limit — it never touches the prompt.)
     await setSetting(page, 'chatMessageLoadLimit', 42);
     const modal = await app.openSettings();
-    await modal.locator('h3:has-text("Generation")').scrollIntoViewIfNeeded();
-    const loadLimitInput = modal.locator(
-      'label.field-label:has-text("Chat messages per page") input[type="number"]',
-    );
+    await modal.getByTestId('settings-section-generation').scrollIntoViewIfNeeded();
+    const loadLimitInput = modal.getByTestId('setting-chatMessageLoadLimit');
     await expect(loadLimitInput).toHaveValue('42');
     await app.closeSettings();
     await setSetting(page, 'chatMessageLoadLimit', 30);
   });
 
-  test('claude cache mode, manual depth and TTL persist across reopen', async ({ page }) => {
-    test.setTimeout(60000);
-
+  test('claude cache mode, manual depth and TTL persist across reopen', async ({ page, app: _app }) => {
     // The caching controls live in the Backend Config modal (per-config
     // providerParams) and only render for claude/openrouter providers —
     // switch the provider first so the section appears.
     const modal = await openBackendConfig(page);
-    const providerSelect = modal.locator('select:has(option[value="openrouter"])');
+    const providerSelect = modal.getByTestId('backend-config-provider');
     await providerSelect.selectOption('claude');
 
     // Functional wire assertions for Claude caching live in the claude /
     // openrouter specs — here we only verify the UI round-trips.
-    const modeSelect = modal.locator('label.field-label:has-text("Cache Mode") select');
+    const modeSelect = modal.getByTestId('backend-config-cache-mode');
     await modeSelect.selectOption('manual');
     await expect(modeSelect).toHaveValue('manual');
 
     // The depth input only renders in manual mode.
-    const depthInput = modal.locator('label.field-label:has-text("Manual Cache Depth") input[type="number"]');
+    const depthInput = modal.getByTestId('backend-config-cache-depth');
     await expect(depthInput).toBeVisible();
     await depthInput.fill('3');
     await expect(depthInput).toHaveValue('3');
 
     // Cache TTL is a free-text input (e.g. "5m", "1h"), not a select.
-    const ttlInput = modal.locator('label.field-label:has-text("Cache TTL") input');
+    const ttlInput = modal.getByTestId('backend-config-cache-ttl');
     await ttlInput.fill('1h');
     await expect(ttlInput).toHaveValue('1h');
 
@@ -490,50 +488,39 @@ test.describe('Settings — Advanced', () => {
     await closeBackendConfig(modal);
 
     const modal2 = await openBackendConfig(page);
-    await expect(modal2.locator('label.field-label:has-text("Cache Mode") select')).toHaveValue('manual');
-    await expect(modal2.locator('label.field-label:has-text("Manual Cache Depth") input[type="number"]')).toHaveValue('3');
-    await expect(modal2.locator('label.field-label:has-text("Cache TTL") input')).toHaveValue('1h');
+    await expect(modal2.getByTestId('backend-config-cache-mode')).toHaveValue('manual');
+    await expect(modal2.getByTestId('backend-config-cache-depth')).toHaveValue('3');
+    await expect(modal2.getByTestId('backend-config-cache-ttl')).toHaveValue('1h');
 
     // Restore defaults (off hides the depth input; TTL blank => null). The
-    // provider itself is reset by the afterEach resetBackendConfig.
-    await modal2.locator('label.field-label:has-text("Cache TTL") input').fill('');
-    await modal2.locator('label.field-label:has-text("Cache Mode") select').selectOption('off');
-    await expect(modal2.locator('label.field-label:has-text("Manual Cache Depth")')).toHaveCount(0);
+    // provider itself is reset by the smokeTest fixture's backend-config reset.
+    await modal2.getByTestId('backend-config-cache-ttl').fill('');
+    await modal2.getByTestId('backend-config-cache-mode').selectOption('off');
+    await expect(modal2.getByTestId('backend-config-cache-depth')).toHaveCount(0);
     await closeBackendConfig(modal2);
   });
 
-  test('auto-continue toggle and target length persist across reopen', async ({ page }) => {
-    test.setTimeout(60000);
-    const app = new App(page);
-
+  test('auto-continue toggle and target length persist across reopen', async ({ app }) => {
     const modal = await app.openSettings();
-    await modal.locator('h3:has-text("Generation")').scrollIntoViewIfNeeded();
+    await modal.getByTestId('settings-section-generation').scrollIntoViewIfNeeded();
 
     // The functional auto-continue behavior is covered elsewhere — UI only.
-    await setCheckbox(modal, 'Auto-continue short responses', true);
-    const targetInput = modal.locator(
-      'label.field-label:has-text("Auto-continue target length") input[type="number"]',
-    );
+    await setCheckbox(modal, 'setting-autoContinueEnabled', true);
+    const targetInput = modal.getByTestId('setting-autoContinueTargetLength');
     await expect(targetInput).toBeVisible();
     await targetInput.fill('150');
     await expect(targetInput).toHaveValue('150');
     await app.closeSettings();
 
     const modal2 = await app.openSettings();
-    await modal2.locator('h3:has-text("Generation")').scrollIntoViewIfNeeded();
-    await expect(
-      modal2.locator('label.checkbox-row:has-text("Auto-continue short responses") input[type="checkbox"]'),
-    ).toBeChecked();
-    await expect(
-      modal2.locator('label.field-label:has-text("Auto-continue target length") input[type="number"]'),
-    ).toHaveValue('150');
+    await modal2.getByTestId('settings-section-generation').scrollIntoViewIfNeeded();
+    await expect(modal2.getByTestId('setting-autoContinueEnabled')).toBeChecked();
+    await expect(modal2.getByTestId('setting-autoContinueTargetLength')).toHaveValue('150');
 
     // Restore defaults.
-    await modal2
-      .locator('label.field-label:has-text("Auto-continue target length") input[type="number"]')
-      .fill('100');
-    await setCheckbox(modal2, 'Auto-continue short responses', false);
-    await expect(modal2.locator('label.field-label:has-text("Auto-continue target length")')).toHaveCount(0);
+    await modal2.getByTestId('setting-autoContinueTargetLength').fill('100');
+    await setCheckbox(modal2, 'setting-autoContinueEnabled', false);
+    await expect(modal2.getByTestId('setting-autoContinueTargetLength')).toHaveCount(0);
     await app.closeSettings();
   });
 });

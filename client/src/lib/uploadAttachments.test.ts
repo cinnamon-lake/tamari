@@ -18,7 +18,12 @@ describe('uploadAttachments', () => {
   }
 
   it('uploads a single file and returns attachment ref', async () => {
-    const attachment = { id: 'att-1', url: '/api/attachments/att-1', mimeType: 'image/png', meta: { name: 'test.png' } };
+    const attachment = {
+      id: 'att-1',
+      url: '/api/attachments/att-1',
+      mimeType: 'image/png',
+      meta: { name: 'test.png' },
+    };
     vi.spyOn(apiFetchModule, 'apiFetch').mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue(attachment),
@@ -30,10 +35,13 @@ describe('uploadAttachments', () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual(attachment);
     expect(apiFetchModule.apiFetch).toHaveBeenCalledTimes(1);
-    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith('/api/attachments', expect.objectContaining({
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    }));
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/attachments',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
   });
 
   it('uploads multiple files', async () => {

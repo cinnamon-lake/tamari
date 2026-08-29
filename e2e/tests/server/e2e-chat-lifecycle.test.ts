@@ -130,15 +130,11 @@ describe('e2e chat lifecycle', () => {
     const started = h.expectBroadcast('generation.started');
     expect(started.chatId).toBe(chatId);
 
-    const reasoningTokens = client.messages.filter(
-      (m) => m.type === 'generation.reasoningToken',
-    );
+    const reasoningTokens = client.messages.filter((m) => m.type === 'generation.reasoningToken');
     expect(reasoningTokens.length).toBeGreaterThan(0);
     expect(reasoningTokens.map((m: any) => m.token).join('')).toBe('Hmm...');
 
-    const contentTokens = client.messages.filter(
-      (m) => m.type === 'generation.token',
-    );
+    const contentTokens = client.messages.filter((m) => m.type === 'generation.token');
     expect(contentTokens.length).toBeGreaterThan(0);
     expect(contentTokens.map((m: any) => m.token).join('')).toBe('Hello!');
 
@@ -194,9 +190,7 @@ describe('e2e chat lifecycle', () => {
     } as ClientMessage);
     h.expectBroadcast('generation.started');
 
-    const secondTokens = client.messages
-      .filter((m) => m.type === 'generation.token')
-      .slice(-'How can I help?'.length);
+    const secondTokens = client.messages.filter((m) => m.type === 'generation.token').slice(-'How can I help?'.length);
     expect(secondTokens.map((m: any) => m.token).join('')).toBe('How can I help?');
 
     const secondPatched = h.expectBroadcast('message.snapshot');
@@ -379,9 +373,7 @@ describe('e2e chat lifecycle', () => {
 
     h.expectBroadcast('generation.started');
 
-    const reasoningTokens = client.messages.filter(
-      (m) => m.type === 'generation.reasoningToken',
-    );
+    const reasoningTokens = client.messages.filter((m) => m.type === 'generation.reasoningToken');
     expect(reasoningTokens.length).toBeGreaterThan(0);
     expect(reasoningTokens.map((m: any) => m.token).join('')).toBe('Pretending to be user...');
 

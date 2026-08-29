@@ -104,9 +104,7 @@ export async function assertSafeUrl(url: string, allowLocalhost = false): Promis
 
   for (const addr of addresses) {
     if (isBlockedIp(addr.address)) {
-      throw new RequestScriptError(
-        `SSRF blocked: ${hostname} resolves to private address ${addr.address}`,
-      );
+      throw new RequestScriptError(`SSRF blocked: ${hostname} resolves to private address ${addr.address}`);
     }
   }
 }
@@ -182,8 +180,8 @@ export async function applyRequestScript(
       url: finalUrl,
       init: {
         ...init,
-        method: (mutated.method) ?? init.method,
-        headers: (mutated.headers) ?? init.headers,
+        method: mutated.method ?? init.method,
+        headers: mutated.headers ?? init.headers,
         body: mutated.body !== undefined ? JSON.stringify(mutated.body) : init.body,
       },
       guardAllowLocalhost: allowLoopback,

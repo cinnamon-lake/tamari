@@ -28,18 +28,16 @@ import {
   type OpenAIStreamChunk,
   type OpenAIChatCompletionRequest,
   type OpenAIChatMessage,
-
   INTERNAL_PARAM_KEYS,
 } from './types.js';
-import { resolveLocalAttachmentUrl } from './resolveLocalAttachment.js';
+import { resolveLocalAttachmentUrl, parseDataUrl } from './resolveLocalAttachment.js';
+import { readSseEvents } from './sseReader.js';
 
 export interface OpenAIAdapterConfig extends BaseAdapterConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
 }
-
-
 
 export class OpenAIBackendAdapter implements BackendAdapter {
   readonly id: string = 'openai';
@@ -137,9 +135,6 @@ export class OpenAIBackendAdapter implements BackendAdapter {
     prompt: Prompt,
     signal: AbortSignal,
   ): AsyncGenerator<BackendStreamItem, GenerationResult> {
-    const reader = body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
     let completionTokens = 0;
     let finishReason: string | null = null;
     let reportedPromptTokens = 0;
@@ -151,118 +146,98 @@ export class OpenAIBackendAdapter implements BackendAdapter {
     let lastContent = ''; // track previous content delta to detect cumulative streams
 
     // Accumulate tool calls by index
-    const toolCallAccumulators = new Map<
-      number,
-      { id: string; name: string; args: string }
-    >();
+    const toolCallAccumulators = new Map<number, { id: string; name: string; args: string }>();
 
-    try {
-      while (true) {
-        if (signal.aborted) {
-          return {
-            finishReason: 'error',
-            usage: {
-              promptTokens: reportedPromptTokens || prompt.tokenUsage.prompt,
-              completionTokens: reportedCompletionTokens || completionTokens,
-            },
-            error: 'Aborted',
-            reasoningText: reasoningText || undefined,
-          };
-        }
-
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data:')) continue;
-          const data = trimmed.slice(5).trimStart();
-          if (data === '[DONE]') {
-            finishReason = finishReason ?? 'stop';
-            continue;
-          }
-
-          try {
-            const raw: unknown = JSON.parse(data);
-            const chunk = this.parseStreamChunk(raw);
-            if (!chunk) continue;
-            logDelta(this.id, chunk);
-            const delta = chunk.choices?.[0]?.delta;
-            if (delta && 'content' in delta) {
-              sawContentField = true;
-            }
-            const content = delta?.content;
-            const reasoningChunk = delta?.reasoning_content ?? delta?.reasoning;
-
-            if (typeof content === 'string' && content.length > 0) {
-              // First time we see real content: flush any buffered reasoning
-              // to the reasoning panel (this is a normal provider).
-              if (reasoningBuffer.length > 0) {
-                yield { type: 'reasoning', token: reasoningBuffer };
-                reasoningBuffer = '';
-              }
-              // Defensive: some providers (Fireworks, etc.) send cumulative content
-              // instead of incremental deltas. Only emit the net-new text.
-              let token = content;
-              if (content.startsWith(lastContent) && content.length > lastContent.length) {
-                token = content.slice(lastContent.length);
-              }
-              lastContent = content;
-              yield { type: 'text', token };
-              completionTokens++;
-            }
-
-            if (reasoningChunk) {
-              reasoningText += reasoningChunk;
-              if (sawContentField) {
-                // Normal provider: reasoning belongs in the reasoning panel
-                yield { type: 'reasoning', token: reasoningChunk };
-              } else {
-                // Haven't seen a content key yet. Buffer the reasoning in case
-                // this turns out to be a normal provider that omits content in
-                // early reasoning chunks. If content never arrives, we'll emit
-                // the buffer as message text at the end (Fireworks-style).
-                reasoningBuffer += reasoningChunk;
-                bufferedReasoningChunks++;
-              }
-            }
-
-            // Accumulate tool call deltas
-            if (delta?.tool_calls) {
-              for (const tc of delta.tool_calls) {
-                const idx = tc.index;
-                let acc = toolCallAccumulators.get(idx);
-                if (!acc) {
-                  acc = { id: '', name: '', args: '' };
-                  toolCallAccumulators.set(idx, acc);
-                }
-                if (tc.id) acc.id = tc.id;
-                if (tc.type) {
-                  // store type if needed
-                }
-                if (tc.function?.name) acc.name = tc.function.name;
-                if (tc.function?.arguments) acc.args += tc.function.arguments;
-              }
-            }
-
-            if (chunk.choices?.[0]?.finish_reason) {
-              finishReason = chunk.choices[0].finish_reason;
-            }
-            if (chunk.usage) {
-              if (chunk.usage.prompt_tokens) reportedPromptTokens = chunk.usage.prompt_tokens;
-              if (chunk.usage.completion_tokens) reportedCompletionTokens = chunk.usage.completion_tokens;
-            }
-          } catch (err) {
-            logger.debug({ err, line: line.trim() }, `Malformed SSE line in ${this.id} stream`);
-          }
-        }
+    for await (const item of readSseEvents(body, signal)) {
+      if (item.type === 'aborted') {
+        return {
+          finishReason: 'error',
+          usage: {
+            promptTokens: reportedPromptTokens || prompt.tokenUsage.prompt,
+            completionTokens: reportedCompletionTokens || completionTokens,
+          },
+          error: 'Aborted',
+          reasoningText: reasoningText || undefined,
+        };
       }
-    } finally {
-      reader.releaseLock();
+      if (item.type === 'done') {
+        finishReason = finishReason ?? 'stop';
+        continue;
+      }
+
+      try {
+        const raw: unknown = JSON.parse(item.data);
+        const chunk = this.parseStreamChunk(raw);
+        if (!chunk) continue;
+        logDelta(this.id, chunk);
+        const delta = chunk.choices?.[0]?.delta;
+        if (delta && 'content' in delta) {
+          sawContentField = true;
+        }
+        const content = delta?.content;
+        const reasoningChunk = delta?.reasoning_content ?? delta?.reasoning;
+
+        if (typeof content === 'string' && content.length > 0) {
+          // First time we see real content: flush any buffered reasoning
+          // to the reasoning panel (this is a normal provider).
+          if (reasoningBuffer.length > 0) {
+            yield { type: 'reasoning', token: reasoningBuffer };
+            reasoningBuffer = '';
+          }
+          // Defensive: some providers (Fireworks, etc.) send cumulative content
+          // instead of incremental deltas. Only emit the net-new text.
+          let token = content;
+          if (content.startsWith(lastContent) && content.length > lastContent.length) {
+            token = content.slice(lastContent.length);
+          }
+          lastContent = content;
+          yield { type: 'text', token };
+          completionTokens++;
+        }
+
+        if (reasoningChunk) {
+          reasoningText += reasoningChunk;
+          if (sawContentField) {
+            // Normal provider: reasoning belongs in the reasoning panel
+            yield { type: 'reasoning', token: reasoningChunk };
+          } else {
+            // Haven't seen a content key yet. Buffer the reasoning in case
+            // this turns out to be a normal provider that omits content in
+            // early reasoning chunks. If content never arrives, we'll emit
+            // the buffer as message text at the end (Fireworks-style).
+            reasoningBuffer += reasoningChunk;
+            bufferedReasoningChunks++;
+          }
+        }
+
+        // Accumulate tool call deltas
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index;
+            let acc = toolCallAccumulators.get(idx);
+            if (!acc) {
+              acc = { id: '', name: '', args: '' };
+              toolCallAccumulators.set(idx, acc);
+            }
+            if (tc.id) acc.id = tc.id;
+            if (tc.type) {
+              // store type if needed
+            }
+            if (tc.function?.name) acc.name = tc.function.name;
+            if (tc.function?.arguments) acc.args += tc.function.arguments;
+          }
+        }
+
+        if (chunk.choices?.[0]?.finish_reason) {
+          finishReason = chunk.choices[0].finish_reason;
+        }
+        if (chunk.usage) {
+          if (chunk.usage.prompt_tokens) reportedPromptTokens = chunk.usage.prompt_tokens;
+          if (chunk.usage.completion_tokens) reportedCompletionTokens = chunk.usage.completion_tokens;
+        }
+      } catch (err) {
+        logger.debug({ err, line: item.line }, `Malformed SSE line in ${this.id} stream`);
+      }
     }
 
     // If we buffered reasoning and never saw content, this is a Fireworks-style
@@ -367,9 +342,7 @@ export class OpenAIBackendAdapter implements BackendAdapter {
           if (part.type === 'tool_result') {
             flushAssistant(assistantBuffer);
             assistantBuffer = [];
-            const toolContent = Array.isArray(part.content)
-              ? this.convertParts(part.content)
-              : part.content;
+            const toolContent = Array.isArray(part.content) ? this.convertParts(part.content) : part.content;
             out.push({
               role: 'tool',
               tool_call_id: part.toolUseId,
@@ -417,11 +390,14 @@ export class OpenAIBackendAdapter implements BackendAdapter {
         case 'text':
           return { type: 'text', text: part.text };
         case 'image':
-          return { type: 'image_url', image_url: { url: resolveLocalAttachmentUrl(part.source, part.mimeType), detail: part.detail ?? 'auto' } };
+          return {
+            type: 'image_url',
+            image_url: { url: resolveLocalAttachmentUrl(part.source, part.mimeType), detail: part.detail ?? 'auto' },
+          };
         case 'audio': {
           const resolved = resolveLocalAttachmentUrl(part.source, part.mimeType);
           if (resolved.startsWith('data:')) {
-            const parsed = this.parseDataUrl(resolved);
+            const parsed = parseDataUrl(resolved);
             if (parsed) {
               const format = parsed.mediaType === 'audio/wav' ? 'wav' : 'mp3';
               return { type: 'input_audio', input_audio: { data: parsed.data, format } };
@@ -430,7 +406,10 @@ export class OpenAIBackendAdapter implements BackendAdapter {
           return { type: 'text', text: `[Audio: ${part.source}]` };
         }
         case 'video':
-          return { type: 'image_url', image_url: { url: resolveLocalAttachmentUrl(part.source, part.mimeType), detail: 'auto' } };
+          return {
+            type: 'image_url',
+            image_url: { url: resolveLocalAttachmentUrl(part.source, part.mimeType), detail: 'auto' },
+          };
         case 'tool_use':
           // tool_use should not appear inside user/system content in OpenAI format
           return { type: 'text', text: `[Tool call: ${part.name}]` };
@@ -467,14 +446,6 @@ export class OpenAIBackendAdapter implements BackendAdapter {
       default:
         return 'error';
     }
-  }
-
-  private parseDataUrl(url: string): { mediaType: string; data: string } | null {
-    const match = /^data:([^;]+);base64,(.+)$/.exec(url);
-    const mediaType = match?.[1];
-    const data = match?.[2];
-    if (mediaType === undefined || data === undefined) return null;
-    return { mediaType, data };
   }
 
   async listModels(signal?: AbortSignal): Promise<ModelInfo[]> {

@@ -17,18 +17,12 @@ function settingsValueEqual(a: unknown, b: unknown): boolean {
   if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
   if (Array.isArray(a) || Array.isArray(b)) {
     return (
-      Array.isArray(a) &&
-      Array.isArray(b) &&
-      a.length === b.length &&
-      a.every((v, i) => settingsValueEqual(v, b[i]))
+      Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => settingsValueEqual(v, b[i]))
     );
   }
   const aEntries = Object.entries(a as Record<string, unknown>);
   const bObj = b as Record<string, unknown>;
-  return (
-    aEntries.length === Object.keys(bObj).length &&
-    aEntries.every(([k, v]) => settingsValueEqual(v, bObj[k]))
-  );
+  return aEntries.length === Object.keys(bObj).length && aEntries.every(([k, v]) => settingsValueEqual(v, bObj[k]));
 }
 
 export function buildSettingsHandlers(deps: DispatcherDeps): Handlers<'settings.set' | 'settings.get'> {
@@ -51,7 +45,11 @@ export function buildSettingsHandlers(deps: DispatcherDeps): Handlers<'settings.
         // Schema validation failure (wrong-typed value for a known key) —
         // tell the originating client instead of silently dropping the write.
         const message = err instanceof Error ? err.message : String(err);
-        bus.sendTo(client.id, { type: 'error', message: `Invalid value for setting '${msg.key}': ${message}`, code: 'SETTINGS_INVALID' });
+        bus.sendTo(client.id, {
+          type: 'error',
+          message: `Invalid value for setting '${msg.key}': ${message}`,
+          code: 'SETTINGS_INVALID',
+        });
         return;
       }
       // Never echo secret values back onto the wire.

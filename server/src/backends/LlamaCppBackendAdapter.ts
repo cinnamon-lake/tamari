@@ -28,7 +28,6 @@ import {
   OpenAIModelListSchema,
   type LlamaCppStreamChunk,
   type LlamaCppCompletionRequest,
-
   INTERNAL_PARAM_KEYS,
 } from './types.js';
 import { getInstructTemplate, type InstructTemplate } from './InstructTemplate.js';
@@ -42,8 +41,6 @@ export interface LlamaCppAdapterConfig extends BaseAdapterConfig {
   /** Inline past reasoning blocks into the flat prompt (template delimiters). */
   includeReasoning?: boolean;
 }
-
-
 
 export class LlamaCppBackendAdapter implements BackendAdapter {
   readonly id = 'llamacpp';

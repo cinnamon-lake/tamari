@@ -1,8 +1,6 @@
 import { createStore, produce, reconcile } from 'solid-js/store';
 import type { z } from 'zod';
-import {
-  AppSettingsSchema,
-} from '@tamari/types';
+import { AppSettingsSchema } from '@tamari/types';
 import type {
   AppSettings,
   Character,
@@ -489,17 +487,27 @@ bus.on('error', (msg) => {
   addToast(msg.message, 'error');
 });
 
+// Unknown/invalid settings keys arrive on every server push; log each key
+// once instead of spamming the console.
+const loggedIgnoredSettingKeys = new Set<string>();
+function debugIgnoredSettingOnce(key: string, message: string, detail?: unknown): void {
+  if (loggedIgnoredSettingKeys.has(key)) return;
+  loggedIgnoredSettingKeys.add(key);
+  if (detail === undefined) console.debug(message);
+  else console.debug(message, detail);
+}
+
 bus.on('settings.changed', (msg) => {
   // Validate against the known AppSettings fields — unknown keys (catchall
   // forward-compat from a newer server) and invalid values are ignored.
   const fieldSchema = (AppSettingsSchema.shape as Record<string, z.ZodTypeAny>)[msg.key];
   if (!fieldSchema) {
-    console.debug(`[settings] ignoring unknown key '${msg.key}'`);
+    debugIgnoredSettingOnce(msg.key, `[settings] ignoring unknown key '${msg.key}'`);
     return;
   }
   const parsed = fieldSchema.safeParse(msg.value);
   if (!parsed.success) {
-    console.debug(`[settings] ignoring invalid value for '${msg.key}':`, parsed.error.flatten());
+    debugIgnoredSettingOnce(msg.key, `[settings] ignoring invalid value for '${msg.key}':`, parsed.error.flatten());
     return;
   }
   setState(
@@ -652,9 +660,7 @@ bus.on('custombackend.listed', (msg) => {
 });
 
 bus.on('custombackend.created', (msg) => {
-  setState('customBackends', (list) =>
-    list.some((b) => b.id === msg.item.id) ? list : [...list, msg.item],
-  );
+  setState('customBackends', (list) => (list.some((b) => b.id === msg.item.id) ? list : [...list, msg.item]));
 });
 
 bus.on('custombackend.updated', (msg) => {

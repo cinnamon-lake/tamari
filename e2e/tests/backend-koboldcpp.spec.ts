@@ -28,11 +28,9 @@
  * (GET /last-request?route=<prefix>), which records the LAST request per route
  * with body + headers.
  */
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { resetLlmRequests } from '../helpers/llm.js';
-import { App } from '../helpers/app.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
 
@@ -65,9 +63,7 @@ async function waitForRouteCapture(routePrefix: string, timeout = 10000): Promis
 test.describe('KoboldCpp backend adapter', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async ({ app: _app, page }) => {
     // Keep the mock URL/key + chat generation mode, switch provider to KoboldCpp.
     await patchActiveBackendConfig(page, {
       backendProvider: 'koboldcpp',
@@ -87,11 +83,9 @@ test.describe('KoboldCpp backend adapter', () => {
       minP: null,
       repetitionPenalty: null,
     });
-    await resetBackendConfig(page);
   });
 
-  test('streams a reply and sends a Kobold-shaped request', async ({ page }) => {
-    const app = new App(page);
+  test('streams a reply and sends a Kobold-shaped request', async ({ app }) => {
     const charName = `Kobold Basic ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -117,7 +111,7 @@ test.describe('KoboldCpp backend adapter', () => {
     expect(cap.headers['authorization']).toBe('Bearer mock-api-key');
   });
 
-  test('maps sampler knobs to Kobold-native wire names', async ({ page }) => {
+  test('maps sampler knobs to Kobold-native wire names', async ({ page, app }) => {
     // Typed knobs land in the koboldcpp.params blob (buildBackendSettings →
     // paramsKeyForProvider) and buildBody renames them; declared advanced
     // providerParams pass through under their wire names.
@@ -137,7 +131,6 @@ test.describe('KoboldCpp backend adapter', () => {
       },
     });
 
-    const app = new App(page);
     const charName = `Kobold Samplers ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -163,12 +156,11 @@ test.describe('KoboldCpp backend adapter', () => {
     expect(body['sampler_seed']).toBe(1234);
   });
 
-  test('stop button halts a slow stream', async ({ page }) => {
+  test('stop button halts a slow stream', async ({ page, app }) => {
     // The slow: selector travels in the user turn itself — the adapter's flat
     // prompt carries it to the mock (a providerParams.requestScript overriding
     // body.prompt would work too, but the direct path is the realistic one).
 
-    const app = new App(page);
     const charName = `Kobold Abort ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -195,9 +187,8 @@ test.describe('KoboldCpp backend adapter', () => {
     // The halt above is the stable end-to-end contract.
   });
 
-  test('maps a length finish_reason to a length finish', async ({ page }) => {
+  test('maps a length finish_reason to a length finish', async ({ app }) => {
     // The length: selector travels in the user turn itself (see header).
-    const app = new App(page);
     const charName = `Kobold Length ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 

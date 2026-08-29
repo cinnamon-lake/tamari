@@ -8,9 +8,7 @@ describe('e2e attachments / multimodal', () => {
   let client: ReturnType<TestHarness['connectClient']>;
 
   beforeEach(async () => {
-    const backend = new TrivialBackendAdapter([
-      [{ type: 'content', content: 'I see the image!' }],
-    ]);
+    const backend = new TrivialBackendAdapter([[{ type: 'content', content: 'I see the image!' }]]);
 
     h = new TestHarness({
       backendFactory: { create: async () => backend },
@@ -84,7 +82,12 @@ describe('e2e attachments / multimodal', () => {
     const filePath = h.deps.storage.write('attachments', 'test-img.png', new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
 
     // Create attachment record
-    const attachment = await h.deps.attachments.create({ id: 'att-test-1', messageId: null, mimeType: 'image/png', filePath });
+    const attachment = await h.deps.attachments.create({
+      id: 'att-test-1',
+      messageId: null,
+      mimeType: 'image/png',
+      filePath,
+    });
     expect(attachment.id).toBe('att-test-1');
 
     // Send a message with the attachment reference

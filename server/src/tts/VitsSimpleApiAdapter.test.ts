@@ -42,7 +42,13 @@ describe('VitsSimpleApiAdapter', () => {
   it('flattens the model-type-bucketed speakers list', async () => {
     fetchSpy.mockResolvedValueOnce({
       ok: true,
-      json: vi.fn().mockResolvedValue({ VITS: [{ id: 0, name: 'A' }, { id: 1, name: 'B' }], 'BERT-VITS2': [{ id: 9, name: 'C' }] }),
+      json: vi.fn().mockResolvedValue({
+        VITS: [
+          { id: 0, name: 'A' },
+          { id: 1, name: 'B' },
+        ],
+        'BERT-VITS2': [{ id: 9, name: 'C' }],
+      }),
     });
     const voices = await adapter.listVoices();
     expect(voices.map((v) => v.id)).toEqual(['0', '1', '9']);

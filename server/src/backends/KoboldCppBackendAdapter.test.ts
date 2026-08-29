@@ -39,10 +39,12 @@ describe('KoboldCppBackendAdapter', () => {
       body: createMockStream(['data: {"token":"Hello"}', 'data: {"token":" world"}']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Once upon a time' }], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Once upon a time' }], tokenUsage: { prompt: 10, completion: 100 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -64,10 +66,12 @@ describe('KoboldCppBackendAdapter', () => {
       body: createMockStream(['data: {"token":"Hello"}', 'data: {"token":" world"}', 'data: {"token":"!"}']),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Hi' }], tokenUsage: { prompt: 5, completion: 50 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Hi' }], tokenUsage: { prompt: 5, completion: 50 } },
+        new AbortController().signal,
+      ),
+    );
     const emitted = items.filter((i) => i.type === 'text').map((i) => i.token);
 
     expect(emitted).toEqual(['Hello', ' world', '!']);
@@ -87,10 +91,12 @@ describe('KoboldCppBackendAdapter', () => {
       body: createMockStream(['data: {"token":"x"}']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -112,10 +118,12 @@ describe('KoboldCppBackendAdapter', () => {
       body: createMockStream(['data: {"token":"x"}']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -142,10 +150,12 @@ describe('KoboldCppBackendAdapter', () => {
     fetchMock.mockResolvedValueOnce({ ok: true } as Response);
 
     const controller = new AbortController();
-    const promise = consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      controller.signal,
-    ));
+    const promise = consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        controller.signal,
+      ),
+    );
 
     // Abort immediately
     controller.abort();
@@ -171,10 +181,12 @@ describe('KoboldCppBackendAdapter', () => {
       text: async () => 'Server busy',
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
 
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('503');
@@ -191,10 +203,12 @@ describe('KoboldCppBackendAdapter', () => {
       body: createMockStream(['data: {"token":"x"}']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit];

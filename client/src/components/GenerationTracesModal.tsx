@@ -3,8 +3,7 @@ import type { Generation, GenerationMeta, TraceError } from '@tamari/types';
 import { state } from '../stores/serverStore.js';
 import { apiFetch } from '../lib/apiFetch.js';
 import { useI18n } from '../i18n/index.js';
-import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
-import { createBackdropDismiss } from '../lib/backdropDismiss.js';
+import { Modal } from './Modal.js';
 import './GenerationTracesModal.css';
 
 type TFunc = ReturnType<typeof useI18n>['t'];
@@ -47,23 +46,35 @@ const STATUS_ICON: Record<Generation['status'], string> = {
 
 function kindLabel(kind: Generation['kind'], t: TFunc): string {
   switch (kind) {
-    case 'send': return t('generationTraces.kindSend');
-    case 'regenerate': return t('generationTraces.kindRegenerate');
-    case 'continue': return t('generationTraces.kindContinue');
-    case 'impersonate': return t('generationTraces.kindImpersonate');
-    case 'quiet': return t('generationTraces.kindQuiet');
-    case 'genraw': return t('generationTraces.kindGenraw');
-    case 'subagent': return t('generationTraces.kindSubagent');
+    case 'send':
+      return t('generationTraces.kindSend');
+    case 'regenerate':
+      return t('generationTraces.kindRegenerate');
+    case 'continue':
+      return t('generationTraces.kindContinue');
+    case 'impersonate':
+      return t('generationTraces.kindImpersonate');
+    case 'quiet':
+      return t('generationTraces.kindQuiet');
+    case 'genraw':
+      return t('generationTraces.kindGenraw');
+    case 'subagent':
+      return t('generationTraces.kindSubagent');
   }
 }
 
 function statusLabel(status: Generation['status'], t: TFunc): string {
   switch (status) {
-    case 'complete': return t('generationTraces.statusComplete');
-    case 'error': return t('generationTraces.statusError');
-    case 'aborted': return t('generationTraces.statusAborted');
-    case 'pending': return t('generationTraces.statusPending');
-    case 'streaming': return t('generationTraces.statusStreaming');
+    case 'complete':
+      return t('generationTraces.statusComplete');
+    case 'error':
+      return t('generationTraces.statusError');
+    case 'aborted':
+      return t('generationTraces.statusAborted');
+    case 'pending':
+      return t('generationTraces.statusPending');
+    case 'streaming':
+      return t('generationTraces.statusStreaming');
   }
 }
 
@@ -75,7 +86,6 @@ export function GenerationTracesModal(props: GenerationTracesModalProps) {
 
   createEffect(() => {
     if (!props.open) return;
-    saveFocus();
     const chatId = state.activeChat?.id;
     if (!chatId) return;
     setLoading(true);
@@ -93,10 +103,7 @@ export function GenerationTracesModal(props: GenerationTracesModalProps) {
       .finally(() => setLoading(false));
   });
 
-  const close = () => {
-    restoreFocus();
-    props.onClose();
-  };
+  const close = () => props.onClose();
 
   /** Roots in server order (newest first); children nested under their parent. */
   const tree = () => {
@@ -117,9 +124,7 @@ export function GenerationTracesModal(props: GenerationTracesModalProps) {
 
   const rounds = (meta?: GenerationMeta | null) => {
     if (meta?.rounds === undefined) return null;
-    return meta.rounds === 1
-      ? t('generationTraces.roundsOne')
-      : t('generationTraces.rounds', { count: meta.rounds });
+    return meta.rounds === 1 ? t('generationTraces.roundsOne') : t('generationTraces.rounds', { count: meta.rounds });
   };
 
   const toolNames = (meta?: GenerationMeta | null) => {
@@ -134,41 +139,51 @@ export function GenerationTracesModal(props: GenerationTracesModalProps) {
 
   return (
     <Show when={props.open}>
-      <div class="modal-overlay" {...createBackdropDismiss(close)}>
-        <div class="modal settings-modal generation-traces-modal" role="dialog" aria-modal="true" aria-labelledby="generation-traces-title" onKeyDown={(e) => trapFocus(e.currentTarget, e)}>
-          <h2 class="generation-traces-title" id="generation-traces-title">
+      <Modal
+        title={
+          <>
             <i class="bi bi-diagram-3" /> {t('generationTraces.title')}
-          </h2>
+          </>
+        }
+        onClose={close}
+        class="modal settings-modal generation-traces-modal"
+        titleClass="generation-traces-title"
+        titleId="generation-traces-title"
+      >
+        <div class="generation-traces-body">
+          <Show when={loading()}>
+            <p class="generation-traces-note">{t('generationTraces.loading')}</p>
+          </Show>
+          <Show when={!loading() && loadError()}>
+            <p class="generation-traces-note generation-traces-error">{t('generationTraces.loadError')}</p>
+          </Show>
+          <Show when={!loading() && !loadError() && rows().length === 0}>
+            <p class="generation-traces-note">{t('generationTraces.empty')}</p>
+          </Show>
 
-          <div class="generation-traces-body">
-            <Show when={loading()}>
-              <p class="generation-traces-note">{t('generationTraces.loading')}</p>
-            </Show>
-            <Show when={!loading() && loadError()}>
-              <p class="generation-traces-note generation-traces-error">{t('generationTraces.loadError')}</p>
-            </Show>
-            <Show when={!loading() && !loadError() && rows().length === 0}>
-              <p class="generation-traces-note">{t('generationTraces.empty')}</p>
-            </Show>
-
-            <Show when={!loading() && !loadError() && rows().length > 0}>
-              <ul class="generation-traces-list">
-                <For each={tree().roots}>
-                  {(row) => (
-                    <TraceRow row={row} children={tree().children.get(row.id) ?? []} rounds={rounds} toolNames={toolNames} traceText={traceText} />
-                  )}
-                </For>
-              </ul>
-            </Show>
-          </div>
-
-          <div class="modal-actions">
-            <button class="generation-traces-close-btn" type="button" onClick={close}>
-              {t('common.close')}
-            </button>
-          </div>
+          <Show when={!loading() && !loadError() && rows().length > 0}>
+            <ul class="generation-traces-list">
+              <For each={tree().roots}>
+                {(row) => (
+                  <TraceRow
+                    row={row}
+                    children={tree().children.get(row.id) ?? []}
+                    rounds={rounds}
+                    toolNames={toolNames}
+                    traceText={traceText}
+                  />
+                )}
+              </For>
+            </ul>
+          </Show>
         </div>
-      </div>
+
+        <div class="modal-actions">
+          <button class="generation-traces-close-btn" type="button" onClick={close}>
+            {t('common.close')}
+          </button>
+        </div>
+      </Modal>
     </Show>
   );
 }
@@ -185,12 +200,28 @@ function TraceRow(props: {
 
   return (
     <li class="generation-trace-row">
-      <TraceLine row={props.row} nested={false} rounds={props.rounds} toolNames={props.toolNames} chain={chain()} hasPrompt={hasPrompt()} />
+      <TraceLine
+        row={props.row}
+        nested={false}
+        rounds={props.rounds}
+        toolNames={props.toolNames}
+        chain={chain()}
+        hasPrompt={hasPrompt()}
+      />
       <For each={props.children}>
         {(child) => (
           <div class="generation-trace-child">
-            <span class="generation-trace-child-marker" aria-hidden="true">↳</span>
-            <TraceLine row={child} nested rounds={props.rounds} toolNames={props.toolNames} chain={props.traceText(child)} hasPrompt={child.meta?.prompt !== undefined} />
+            <span class="generation-trace-child-marker" aria-hidden="true">
+              ↳
+            </span>
+            <TraceLine
+              row={child}
+              nested
+              rounds={props.rounds}
+              toolNames={props.toolNames}
+              chain={props.traceText(child)}
+              hasPrompt={child.meta?.prompt !== undefined}
+            />
           </div>
         )}
       </For>
@@ -211,7 +242,11 @@ function TraceLine(props: {
   return (
     <div class={`generation-trace-line ${props.nested ? 'nested' : ''} status-${props.row.status}`}>
       <div class="generation-trace-head">
-        <i class={`generation-trace-status bi ${STATUS_ICON[props.row.status]}`} title={statusLabel(props.row.status, t)} aria-label={statusLabel(props.row.status, t)} />
+        <i
+          class={`generation-trace-status bi ${STATUS_ICON[props.row.status]}`}
+          title={statusLabel(props.row.status, t)}
+          aria-label={statusLabel(props.row.status, t)}
+        />
         <span class="generation-trace-kind">{kindLabel(props.row.kind, t)}</span>
         <span class="generation-trace-backend">{props.row.backend}</span>
         <span class="generation-trace-time">{relativeTime(props.row.createdAt, t)}</span>
@@ -225,7 +260,10 @@ function TraceLine(props: {
         </Show>
         <Show when={props.row.promptTokens !== null || props.row.completionTokens !== null}>
           <span class="generation-trace-tokens">
-            {t('generationTraces.tokens', { prompt: props.row.promptTokens ?? 0, completion: props.row.completionTokens ?? 0 })}
+            {t('generationTraces.tokens', {
+              prompt: props.row.promptTokens ?? 0,
+              completion: props.row.completionTokens ?? 0,
+            })}
           </span>
         </Show>
       </div>
@@ -243,7 +281,9 @@ function TraceLine(props: {
               {(msg) => (
                 <li class="generation-trace-prompt-message">
                   <span class="generation-trace-prompt-role">{msg.role}</span>
-                  <pre class="generation-trace-pre">{typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}</pre>
+                  <pre class="generation-trace-pre">
+                    {typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}
+                  </pre>
                 </li>
               )}
             </For>

@@ -168,8 +168,10 @@ export class WebSocketBus {
         payload = JSON.stringify(msg);
       } catch (err) {
         console.error(
-          '[bus] send: JSON.stringify threw type=' + (msg as { type: string }).type +
-            ' err=' + (err instanceof Error ? err.message : String(err)),
+          '[bus] send: JSON.stringify threw type=' +
+            (msg as { type: string }).type +
+            ' err=' +
+            (err instanceof Error ? err.message : String(err)),
         );
         return;
       }
@@ -177,8 +179,10 @@ export class WebSocketBus {
         this.ws.send(payload);
       } catch (err) {
         console.error(
-          '[bus] send: ws.send threw type=' + (msg as { type: string }).type +
-            ' err=' + (err instanceof Error ? err.message : String(err)) +
+          '[bus] send: ws.send threw type=' +
+            (msg as { type: string }).type +
+            ' err=' +
+            (err instanceof Error ? err.message : String(err)) +
             ' — re-queuing to pending',
         );
         this.pending.push(msg);

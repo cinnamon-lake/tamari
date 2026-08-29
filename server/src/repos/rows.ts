@@ -10,7 +10,7 @@
 
 import { getLogger } from '../lib/logger.js';
 
-const log = getLogger('repos');
+const log = getLogger('repos/rows');
 
 /**
  * Map DB rows to domain objects, skipping (and logging) any row that fails

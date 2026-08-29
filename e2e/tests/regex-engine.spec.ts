@@ -1,13 +1,7 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { getLastLlmRequest, resetLlmRequests, waitForNextLlmRequest } from '../helpers/llm.js';
 import { setSetting } from '../helpers/settings.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 function promptText(captured: { body: unknown }): string {
   const body = captured.body as Record<string, unknown>;
@@ -16,20 +10,16 @@ function promptText(captured: { body: unknown }): string {
 }
 
 test.describe('Regex Engine', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
   test.afterEach(async ({ page }) => {
     // Rules persist on the shared e2e server — clear them or later specs see them.
     await setSetting(page, 'regexRules', []);
-    await resetBackendConfig(page);
   });
 
-  test('display rule rewrites the rendered reply but not the stored text', async ({ page }) => {
-    const app = new App(page);
+  test('display rule rewrites the rendered reply but not the stored text', async ({ page, app }) => {
     await setSetting(page, 'regexRules', [
       {
         id: 'r-cat-dog',
@@ -55,8 +45,7 @@ test.describe('Regex Engine', () => {
     expect(all).toContain('I have a cat');
   });
 
-  test('prompt-placement rule rewrites the outgoing prompt', async ({ page }) => {
-    const app = new App(page);
+  test('prompt-placement rule rewrites the outgoing prompt', async ({ page, app }) => {
     await setSetting(page, 'regexRules', [
       {
         id: 'r-alpha-beta',

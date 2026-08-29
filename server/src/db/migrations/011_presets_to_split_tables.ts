@@ -16,7 +16,7 @@ import { PromptListRepository } from '../../repos/PromptListRepository.js';
 import { SettingsRepository } from '../../repos/SettingsRepository.js';
 import type { Migration } from '../runMigrations.js';
 
-const log = getLogger('db');
+const log = getLogger('db/migrations/011_presets_to_split_tables');
 
 const migration: Migration = {
   async up({ db }) {
@@ -54,7 +54,9 @@ const migration: Migration = {
           instructTemplate: str(r.instruct_template),
           contextLength: r.context_length != null ? Number(r.context_length) : null,
           promptHistoryLimit: r.prompt_history_limit != null ? Number(r.prompt_history_limit) : null,
-          providerParams: r.provider_params_json ? (JSON.parse(str(r.provider_params_json)) as Record<string, unknown>) : {},
+          providerParams: r.provider_params_json
+            ? (JSON.parse(str(r.provider_params_json)) as Record<string, unknown>)
+            : {},
           stopStrings: r.stop_strings_json ? (JSON.parse(str(r.stop_strings_json)) as string[]) : [],
           openrouterProvider: r.openrouter_provider ? str(r.openrouter_provider) : null,
           apiUrl: r.api_url ? str(r.api_url) : null,

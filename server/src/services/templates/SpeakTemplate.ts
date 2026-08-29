@@ -12,11 +12,13 @@ import { createTtsAdapter } from '../../tts/factory.js';
 import { getLogger } from '../../lib/logger.js';
 import { str } from '../../lib/coerce.js';
 
-const logger = getLogger('speak');
+const logger = getLogger('services/templates/SpeakTemplate');
 
 /** Args for `speak`. Single source of truth for the LLM schema and runtime validation. */
 const SpeakArgs = z.object({
-  text: z.string().describe('Text to speak, including natural-language prosody/emotion tags if supported by the provider.'),
+  text: z
+    .string()
+    .describe('Text to speak, including natural-language prosody/emotion tags if supported by the provider.'),
 });
 
 export interface SpeakTemplateDeps {
@@ -63,12 +65,14 @@ export class SpeakTemplate implements ToolTemplate {
           },
           voiceId: {
             type: 'string',
-            description: 'Voice ID. Optional — uses provider default if empty. For Azure this is the voice ShortName (e.g. en-US-JennyNeural); for GPT-SoVITS the server-side reference-audio path.',
+            description:
+              'Voice ID. Optional — uses provider default if empty. For Azure this is the voice ShortName (e.g. en-US-JennyNeural); for GPT-SoVITS the server-side reference-audio path.',
             default: '',
           },
           baseUrl: {
             type: 'string',
-            description: 'API base URL. Optional — uses provider default if empty. For Azure this is the regional host (e.g. https://eastus.tts.speech.microsoft.com).',
+            description:
+              'API base URL. Optional — uses provider default if empty. For Azure this is the regional host (e.g. https://eastus.tts.speech.microsoft.com).',
             default: '',
           },
           apiKey: {
@@ -101,7 +105,8 @@ export class SpeakTemplate implements ToolTemplate {
           requestScript: {
             type: 'string',
             format: 'textarea',
-            description: 'Lua script to mutate the outgoing HTTP request. The script receives a `request` table with `url`, `method`, `headers`, and `body` fields.',
+            description:
+              'Lua script to mutate the outgoing HTTP request. The script receives a `request` table with `url`, `method`, `headers`, and `body` fields.',
             default: '',
           },
         },
@@ -177,7 +182,12 @@ export class SpeakTemplate implements ToolTemplate {
 
     let attachment: Attachment;
     try {
-      attachment = await this.deps.attachments.create({ id: attachmentId, messageId: null, mimeType: result.contentType, filePath });
+      attachment = await this.deps.attachments.create({
+        id: attachmentId,
+        messageId: null,
+        mimeType: result.contentType,
+        filePath,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.warn({ err: msg }, 'SpeakTemplate: failed to create attachment');

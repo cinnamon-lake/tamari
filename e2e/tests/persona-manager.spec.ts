@@ -1,13 +1,8 @@
 import { deflateSync } from 'node:zlib';
-import { test, expect, type Page, type Locator } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Page, Locator } from '../fixtures/base.js';
 import { deleteNonDefaultPersonas } from '../helpers/personas.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // ── solid-color PNG builder (same recipe as character-card-formats.spec.ts) ──
 
@@ -119,9 +114,10 @@ async function deletePersonaViaWs(page: Page, personaId: string): Promise<void> 
 test.describe('Persona Manager', () => {
   const createdPersonaIds: string[] = [];
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  // Requesting `app` here forces the fixture's login + configureMockBackend to
+  // run BEFORE this hook (fixtures are lazy) — deleteNonDefaultPersonas needs
+  // the auth token from login.
+  test.beforeEach(async ({ app: _app, page }) => {
     // chat.create binds the FIRST (newest) persona in the DB to a new chat
     // when none is given (chatHandlers.ts), and {{user}} then resolves to that
     // persona's name. Personas leaked by earlier specs (full-flow, personas, …)
@@ -130,13 +126,12 @@ test.describe('Persona Manager', () => {
   });
 
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     for (const id of createdPersonaIds.splice(0)) {
       await deletePersonaViaWs(page, id);
     }
   });
 
-  test('uploads a persona avatar through the crop modal', async ({ page }) => {
+  test('uploads a persona avatar through the crop modal', async ({ app: _app, page }) => {
     const personaName = uniqueName('Avatar Persona');
     const manager = await openPersonaManager(page);
 
@@ -158,8 +153,10 @@ test.describe('Persona Manager', () => {
     });
     const cropModal = page.locator('.crop-modal');
     await expect(cropModal).toBeVisible();
-    // Wait for cropperjs to finish initializing before applying.
-    await expect(cropModal.locator('.cropper-crop-box')).toBeVisible();
+    // Wait for cropperjs v2 to finish initializing before applying
+    // (the v1 .cropper-crop-box class is gone; the template renders a
+    // <cropper-selection> custom element instead).
+    await expect(cropModal.locator('cropper-selection')).toBeVisible();
     await cropModal.locator('button.primary:has-text("Apply")').click();
     await expect(cropModal).not.toBeVisible();
     await uploadResponse;
@@ -180,7 +177,7 @@ test.describe('Persona Manager', () => {
     await closePersonaManager(page, manager);
   });
 
-  test('deletes a persona after confirmation', async ({ page }) => {
+  test('deletes a persona after confirmation', async ({ app: _app, page }) => {
     const personaName = uniqueName('Delete Persona');
     const manager = await openPersonaManager(page);
     await createPersona(manager, personaName);
@@ -202,8 +199,10 @@ test.describe('Persona Manager', () => {
     await closePersonaManager(page, manager);
   });
 
-  test('assigning a persona to the active chat re-resolves the greeting and names user messages', async ({ page }) => {
-    const app = new App(page);
+  test('assigning a persona to the active chat re-resolves the greeting and names user messages', async ({
+    page,
+    app,
+  }) => {
     const charName = uniqueName('Persona Host');
     const nameA = uniqueName('PA');
     const nameB = uniqueName('PB');

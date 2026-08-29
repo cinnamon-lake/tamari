@@ -20,9 +20,7 @@ describe('dndStore', () => {
   });
 
   it('appendPendingAttachments adds items', () => {
-    appendPendingAttachments([
-      { id: 'a1', mimeType: 'text/plain', meta: {}, url: '' },
-    ]);
+    appendPendingAttachments([{ id: 'a1', mimeType: 'text/plain', meta: {}, url: '' }]);
     expect(pendingAttachments()).toHaveLength(1);
     expect(pendingAttachments()[0]!.mimeType).toBe('text/plain');
   });

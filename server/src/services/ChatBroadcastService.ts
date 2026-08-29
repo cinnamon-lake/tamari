@@ -8,15 +8,15 @@ import type {
   ICharacterAssetRepository,
 } from '../repos/index.js';
 import { getChatSnapshotMessages } from '../lib/swipeInfo.js';
-import { renderMessageParts, renderTextPartHtml, renderMarkdownToHtml, type DisplayRenderContext } from './DisplayRenderer.js';
+import {
+  renderMessageParts,
+  renderTextPartHtml,
+  renderMarkdownToHtml,
+  type DisplayRenderContext,
+} from './DisplayRenderer.js';
 import { applyRules, filterRulesByRole } from './RegexEngine.js';
 import { mergeRegexRules } from './characterRegex.js';
-import {
-  withCharacterAvatar,
-  withCharacterAssets,
-  withPersonaAvatar,
-  withChatUrls,
-} from '../lib/summaries.js';
+import { withCharacterAvatar, withCharacterAssets, withPersonaAvatar, withChatUrls } from '../lib/summaries.js';
 import { resolveHtmlImages } from '../lib/resolveHtmlImages.js';
 import { MacroResolver } from '../pipeline/MacroResolver.js';
 
@@ -46,9 +46,7 @@ export class ChatBroadcastService {
     let enrichedCharacter: Character | undefined;
     if (character) {
       const withAvatar = withCharacterAvatar(character);
-      const assetList = this.deps.characterAssets
-        ? await this.deps.characterAssets.listForCharacter(character.id)
-        : [];
+      const assetList = this.deps.characterAssets ? await this.deps.characterAssets.listForCharacter(character.id) : [];
       enrichedCharacter = withCharacterAssets(withAvatar, assetList);
       if (bulk.length === 0) {
         const greetings: string[] = [];
@@ -64,7 +62,7 @@ export class ChatBroadcastService {
           const risuExt = (character.extensions.risuai ?? {}) as Record<string, unknown>;
           const macroVars: Record<string, string> = {};
           if (typeof risuExt.defaultVariables === 'string') {
-            for (const line of (risuExt.defaultVariables).split('\n')) {
+            for (const line of risuExt.defaultVariables.split('\n')) {
               const idx = line.indexOf('=');
               if (idx !== -1) {
                 const key = line.slice(0, idx).trim();
@@ -160,9 +158,8 @@ export class ChatBroadcastService {
       }
       greetingHtml = renderMarkdownToHtml(greetingText, strictHtml);
     }
-    const chatCharacterAssets = character && this.deps.characterAssets
-      ? await this.deps.characterAssets.listForCharacter(character.id)
-      : [];
+    const chatCharacterAssets =
+      character && this.deps.characterAssets ? await this.deps.characterAssets.listForCharacter(character.id) : [];
 
     const renderMessage = async (msg: Message): Promise<Message> => {
       if (msg.role === 'tool') return msg;
@@ -196,11 +193,7 @@ export class ChatBroadcastService {
     );
   }
 
-  async broadcastMessageSnapshot(
-    chatId: string,
-    messageId: number,
-    excludeClientId?: string,
-  ): Promise<void> {
+  async broadcastMessageSnapshot(chatId: string, messageId: number, excludeClientId?: string): Promise<void> {
     const message = await this.deps.chats.getMessageById(messageId);
     if (!message) throw new Error('Message not found');
 
@@ -289,9 +282,8 @@ export class ChatBroadcastService {
     const settingsUserName = (await this.deps.settings.getTyped()).userName;
     const userName = settingsUserName || persona?.name || 'User';
     const charName = character?.name ?? 'Character';
-    const characterAssets = character && this.deps.characterAssets
-      ? await this.deps.characterAssets.listForCharacter(character.id)
-      : [];
+    const characterAssets =
+      character && this.deps.characterAssets ? await this.deps.characterAssets.listForCharacter(character.id) : [];
 
     return {
       message,
@@ -335,7 +327,8 @@ export class ChatBroadcastService {
       nextExtra.characterName = charMeta.name;
       if (charMeta.url) nextExtra.characterAvatarUrl = charMeta.url;
     }
-    const personaMeta = typeof message.extra.personaId === 'string' ? personaMap.get(message.extra.personaId) : undefined;
+    const personaMeta =
+      typeof message.extra.personaId === 'string' ? personaMap.get(message.extra.personaId) : undefined;
     if (personaMeta) {
       nextExtra.personaName = personaMeta.name;
       if (personaMeta.url) nextExtra.personaAvatarUrl = personaMeta.url;

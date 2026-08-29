@@ -17,9 +17,7 @@ export function selectChat(chatId: string) {
 
 function fuzzyFindPersona(name: string) {
   const lower = name.toLowerCase();
-  return state.personas.find(
-    (p) => p.name.toLowerCase() === lower || p.name.toLowerCase().includes(lower),
-  );
+  return state.personas.find((p) => p.name.toLowerCase() === lower || p.name.toLowerCase().includes(lower));
 }
 
 /**
@@ -30,9 +28,7 @@ function fuzzyFindPersona(name: string) {
  */
 function fuzzyFindCharacter(name: string) {
   const lower = name.toLowerCase();
-  return state.characters.find(
-    (c) => c.name.toLowerCase() === lower || c.name.toLowerCase().includes(lower),
-  );
+  return state.characters.find((c) => c.name.toLowerCase() === lower || c.name.toLowerCase().includes(lower));
 }
 
 function clearInput(deps: CommandDeps) {
@@ -45,11 +41,7 @@ function clearInput(deps: CommandDeps) {
  * @returns `true` if the command was fully handled (including sending any WS messages),
  *          `false` if the input should fall through to normal message sending.
  */
-export function executeSlashCommand(
-  parsed: ParsedCommand,
-  chatId: string,
-  deps: CommandDeps,
-): boolean {
+export function executeSlashCommand(parsed: ParsedCommand, chatId: string, deps: CommandDeps): boolean {
   switch (parsed.command) {
     case 'name': {
       const newName = parsed.args.join(' ');
@@ -70,9 +62,7 @@ export function executeSlashCommand(
     case 'theme': {
       const preset = parsed.args[0]?.toLowerCase();
       const css =
-        preset !== undefined && preset in THEME_PRESETS
-          ? THEME_PRESETS[preset as ThemePreset]
-          : parsed.args.join(' ');
+        preset !== undefined && preset in THEME_PRESETS ? THEME_PRESETS[preset as ThemePreset] : parsed.args.join(' ');
       bus.send({ type: 'settings.set', key: 'themeCustomCss', value: css });
       clearInput(deps);
       return true;
@@ -151,8 +141,7 @@ export function executeSlashCommand(
 
       if (sub === 'list') {
         const lines = book.entries.map(
-          (e, i) =>
-            `${i + 1}. [${e.keys.join(', ')}] ${e.content.slice(0, 60)}${e.content.length > 60 ? '...' : ''}`,
+          (e, i) => `${i + 1}. [${e.keys.join(', ')}] ${e.content.slice(0, 60)}${e.content.length > 60 ? '...' : ''}`,
         );
         bus.send({
           type: 'action.system',
@@ -170,9 +159,7 @@ export function executeSlashCommand(
           clearInput(deps);
           return true;
         }
-        const entry = book.entries.find((e) =>
-          e.keys.some((k) => k.toLowerCase() === key.toLowerCase()),
-        );
+        const entry = book.entries.find((e) => e.keys.some((k) => k.toLowerCase() === key.toLowerCase()));
         if (!entry) {
           addToast(`No entry with key "${key}"`, 'error');
           clearInput(deps);
@@ -231,9 +218,7 @@ export function executeSlashCommand(
           clearInput(deps);
           return true;
         }
-        const entry = book.entries.find((e) =>
-          e.keys.some((k) => k.toLowerCase() === key.toLowerCase()),
-        );
+        const entry = book.entries.find((e) => e.keys.some((k) => k.toLowerCase() === key.toLowerCase()));
         if (!entry) {
           addToast(`No entry with key "${key}"`, 'error');
           clearInput(deps);

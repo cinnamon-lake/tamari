@@ -13,12 +13,14 @@
 Data that is persisted to SQLite and broadcast over the WebSocket bus. Every client tab sees the same server state.
 
 Examples:
+
 - `characters`, `chats`, `messages`, `personas`, `presets`, `settings`
 - `activeChat` — the **full** chat object currently being viewed (not just an ID)
 - `activeCharacter`, `activePreset`, etc. (same pattern)
 - `chatCharacter` — the character bound to the current chat (separate from `activeCharacter`, which is for the editor)
 
 Rules:
+
 - **Only mutated by server broadcasts.** The client never calls `setState` on server data in response to user actions.
 - **Always full objects.** `.updated` events broadcast the complete entity. The client replaces, never merges patches. Per-message updates during streaming/editing arrive as full-object `message.snapshot` events. `chat.updated` always carries the full `Chat` — see §5.
 - **Apply list replacements with `reconcile()`.** Solid's `reconcile` makes the store structurally identical to the broadcast payload (absent keys are dropped, so this is still "replace, never merge") while preserving object identity for unchanged items — a plain wholesale swap gives every row a fresh reference, and `<For>` remounts open editors on every own-save echo.
@@ -29,12 +31,14 @@ Rules:
 Per-tab, ephemeral chrome state. Each browser tab has its own copy.
 
 Examples:
+
 - `activeChatId` — which chat the user clicked (the server decides what `activeChat` object to send back)
 - `showEditor`, `showSettings`, `charSearch`, `chatSearch`
 - Form buffers (`CharacterEditor` fields, `SettingsModal` fields)
 - Textarea drafts
 
 Rules:
+
 - **Never persisted to the server.**
 - **Never broadcast.** Other tabs don't know or care.
 - **OK to mutate optimistically.** It's purely local chrome.
@@ -58,6 +62,7 @@ Client renders from the broadcast
 ```
 
 **Anti-patterns:**
+
 - ❌ Calling `setState('characters', ...)` on the client before the server broadcasts
 - ❌ Sending a WS mutation and immediately updating local state "because we know what the server will say"
 - ❌ Using `fetch()` for mutations (file uploads are the only exception)
@@ -81,13 +86,15 @@ When the user opens a specific item for viewing/editing, the server sends a **sn
 ```
 
 **Selecting a chat:**
+
 ```ts
 // Sidebar.tsx (local UI action)
-setActiveChatId(chatId);                          // local signal
+setActiveChatId(chatId); // local signal
 bus.send({ type: 'chat.select', chatId, limit }); // ask server
 ```
 
 **Server responds:**
+
 ```ts
 // dispatch/chatHandlers.ts
 const chat = await chats.getChatById(chatId);
@@ -97,6 +104,7 @@ bus.sendTo(client.id, { type: 'chat.snapshot', chat, messages, character });
 ```
 
 **Client stores it (guarded — snapshots for chats this tab isn't viewing are ignored):**
+
 ```ts
 // serverStore.ts
 bus.on('chat.snapshot', (msg) => {
@@ -108,9 +116,10 @@ bus.on('chat.snapshot', (msg) => {
 ```
 
 **Components render from `activeChat`:**
+
 ```ts
 // ChatView.tsx, ChatHeader.tsx, etc.
-const activeChat = () => state.activeChat;  // NOT state.chats.find(...)
+const activeChat = () => state.activeChat; // NOT state.chats.find(...)
 ```
 
 ### Opening modals from broadcasts (no pending state)
@@ -118,6 +127,7 @@ const activeChat = () => state.activeChat;  // NOT state.chats.find(...)
 For flows where the user clicks "edit" or "create" and a modal should open, **do not** use intermediate "pending" signals. The server includes `clientId` on broadcasts. The component installs a direct `bus.on` listener and opens itself when it sees its own `clientId`.
 
 **Edit flow:**
+
 ```ts
 // Sidebar.tsx — edit button ONLY sends the request
 const requestCharacterEdit = (charId: string) => {
@@ -138,6 +148,7 @@ onMount(() => {
 ```
 
 **Creation flow:**
+
 ```ts
 // dispatch/characterHandlers.ts — server broadcasts BOTH events after creation
 bus.broadcast({ type: 'character.created', character: withAvatar }, client.id);
@@ -157,16 +168,21 @@ onMount(() => {
       setShowEditor(true);
     }
   });
-  onCleanup(() => { unsubCreated(); unsubSnapshot(); });
+  onCleanup(() => {
+    unsubCreated();
+    unsubSnapshot();
+  });
 });
 ```
 
 Why this is better:
+
 - No `pendingCharacterEditorId` signal required.
 - The modal only appears when the server has actually sent the data.
 - Multiple tabs can independently edit/view without conflicting pending state.
 
 ### Reuse this pattern for:
+
 - `activeCharacter` (Character Editor)
 - `activePreset` (Preset Editor)
 - `activeWorldInfo` (World Info Editor)
@@ -176,12 +192,12 @@ Why this is better:
 
 ## 4. HTTP Endpoints vs WebSocket
 
-| What | Protocol | Notes |
-|------|----------|-------|
-| CRUD mutations | WebSocket | Always persist + broadcast |
-| File uploads | HTTP POST | Binary data justifies HTTP, but MUST `bus.broadcast()` after DB write |
-| Exports / downloads | HTTP GET | Read-only, no broadcast needed |
-| Stats, maid, secrets | HTTP | Intentionally outside the WS sync model |
+| What                 | Protocol  | Notes                                                                 |
+| -------------------- | --------- | --------------------------------------------------------------------- |
+| CRUD mutations       | WebSocket | Always persist + broadcast                                            |
+| File uploads         | HTTP POST | Binary data justifies HTTP, but MUST `bus.broadcast()` after DB write |
+| Exports / downloads  | HTTP GET  | Read-only, no broadcast needed                                        |
+| Stats, maid, secrets | HTTP      | Intentionally outside the WS sync model                               |
 
 If an HTTP endpoint mutates shared state, it must call `bus.broadcast()` after the DB write.
 
@@ -214,10 +230,13 @@ When an entity list changes, prefer rebroadcasting the **entire list** rather th
 ```ts
 // Good — server rebroadcasts the full list after any mutation
 const list = await characters.listSummaries();
-bus.broadcast({
-  type: 'character.listed',
-  characters: list.items.map(toCharacterSummary),
-}, client.id);
+bus.broadcast(
+  {
+    type: 'character.listed',
+    characters: list.items.map(toCharacterSummary),
+  },
+  client.id,
+);
 
 // Client replaces the whole list
 bus.on('character.listed', (msg) => {
@@ -236,22 +255,19 @@ If the client receives a broadcast for an entity it is not currently tracking, *
 bus.on('character.updated', (msg) => {
   const hasChar = state.characters.some((c) => c.id === msg.character.id);
   if (!hasChar) return; // not in our sidebar, ignore
-  setState('characters', (list) =>
-    list.map((c) => (c.id === msg.character.id ? msg.character : c))
-  );
+  setState('characters', (list) => list.map((c) => (c.id === msg.character.id ? msg.character : c)));
 });
 
 // Bad — unconditionally mutating state for every broadcast
 bus.on('character.updated', (msg) => {
-  setState('characters', (list) =>
-    list.map((c) => (c.id === msg.character.id ? msg.character : c))
-  );
+  setState('characters', (list) => list.map((c) => (c.id === msg.character.id ? msg.character : c)));
 });
 ```
 
 This rule applies to **all** list handlers: characters, chats, personas, presets, world info, quick replies.
 
 ### `.created` events
+
 Always broadcast the **full object**.
 
 ```ts
@@ -260,6 +276,7 @@ bus.broadcast({ type: 'character.created', character });
 ```
 
 ### `.updated` events
+
 Always broadcast the **full object** after the DB update.
 
 ```ts
@@ -268,6 +285,7 @@ bus.broadcast({ type: 'character.updated', character });
 ```
 
 ### `.deleted` events
+
 Broadcast the ID. Client removes from lists and clears `activeX` if it matches.
 
 ### `chat.updated` — full object, never a patch
@@ -277,6 +295,7 @@ Broadcast the ID. Client removes from lists and clears `activeX` if it matches.
 The `Chat` object is small — it does not contain messages (those live in `state.messages[chatId]` and arrive via `chat.snapshot` / `message.*` events), so re-broadcasting it on every change is cheap.
 
 When a change is **structural** — it alters the rendered message branch or the resolved greeting — the server follows `chat.updated` with a `chat.snapshot` so messages, swipes, `chatCharacter`, and greeting are refreshed for the active-viewing tab. Structural changes are:
+
 - `headMessageId` (the trunk changed → the bulk message list changed). Examples: `action.cut`, `chat.reset`.
 - `characterId` / `personaId` on an empty (un-materialized) chat (the resolved greeting changes). Example: `chat.update` that re-points the character.
 
@@ -302,6 +321,7 @@ Per-message updates (streaming, edits) are broadcast as full-object `message.sna
 ## 6. Snapshot Contract
 
 On WebSocket connect, the server sends a `snapshot` with:
+
 - All lists (`characters`, `chats`, `personas`, `presets`, etc.)
 - All settings
 - Active generation state (if any)
@@ -343,6 +363,7 @@ Both implement the same `ToolTemplate` interface. Built-ins register at startup 
 ### Toolsets
 
 A `Toolset` is a user-created instance:
+
 - `templateId` — which template to use
 - `config` — values for `configSchema`
 - `toolOverrides` — per-tool tweaks to name, description, and parameter descriptions
@@ -367,7 +388,7 @@ Tools within a template share state via `stateKey`. After execution, the executo
 
 A tool result whose `extra.renderType` is a non-empty string is rendered client-side: `MessagePartsView` (`client/src/components/MessagePartsView.tsx`) renders each part of a message directly — text parts inject the server-rendered HTML from the `renderedHtml` array (aligned 1:1 with `extra.parts`; `null` for non-text parts), and a `tool_result` with `renderType` mounts the matching component from the `toolRenderers` registry in `client/src/components/tool-renderers/` inline at its part position. Unregistered `renderType`s fall back to the default tool-result block, so they stay visible. Widget components receive `{ content, isError, extra, messageId?, disabled? }` — `disabled` is set when the message is not the branch leaf, which makes interactive widgets (e.g. the `choices` buttons) go stale once the conversation moves past them and re-enable on swipe/branch-back.
 
-The built-in `scene` template (`server/src/services/templates/SceneTemplate.ts`) adds a second consumer of this contract: the client derives the *current* scene by scanning the active branch's messages backwards for the newest `scene` renderType part (`client/src/lib/sceneState.ts`), and `SceneStage` renders it as a stage panel above the chat. Stage-like features should reuse this branch-scan derivation instead of adding new state channels.
+The built-in `scene` template (`server/src/services/templates/SceneTemplate.ts`) adds a second consumer of this contract: the client derives the _current_ scene by scanning the active branch's messages backwards for the newest `scene` renderType part (`client/src/lib/sceneState.ts`), and `SceneStage` renders it as a stage panel above the chat. Stage-like features should reuse this branch-scan derivation instead of adding new state channels.
 
 ### Lua Sandbox Surfaces
 
@@ -382,6 +403,7 @@ Backend scripts additionally get a **sandboxed `require`** (`server/src/scriptin
 **Delegate tools:** a script may put its OWN tool schemas on a delegate sub-prompt (`sub.tools`, `ToolDefinition[]` shape — nothing filters `prompt.tools` on the delegation path; OpenAI/Claude/Gemini send them). The delegate's calls surface as `res.toolCalls` (`runAdapterBlocking` copies `GenerationResult.toolCalls` through), so the script runs the whole tool loop in Lua; continuation sub-prompts use the standard `tool_use`/`tool_result` content parts (camelCase keys), which all three adapters render natively. Distinct from the blocking `{ toolCalls = ... }` return, which runs the caller's registered tools through the engine's registry.
 
 ### Rules
+
 - The `run_lua` backend tool (for arbitrary Lua execution during generation) uses the same `LuaRuntime` as Quick Replies but **does not** inject the `st` API.
 - Lua tool templates are cached for 30s; the cache is invalidated on `toolTemplate.update` / `delete`.
 - Tool definitions are sent to the backend adapter in `Prompt.tools`.
@@ -410,6 +432,7 @@ All tamari domain types, API schemas, and WebSocket messages use **camelCase** (
 SQLite columns remain **snake_case** (`character_id`, `first_mes`, `avatar_path`). Repositories are responsible for translating at the DB boundary using `rowToX()` functions.
 
 ### Rules
+
 - **Domain types** (`packages/types/src/db.ts`) — camelCase for all property names.
 - **Zod schemas** (`packages/types/src/schemas.ts`) — camelCase for all API-facing schemas.
 - **DB row schemas** (`packages/types/src/dbSchemas.ts`) — snakeCase to match SQLite columns exactly.
@@ -418,6 +441,7 @@ SQLite columns remain **snake_case** (`character_id`, `first_mes`, `avatar_path`
 - **SQL strings** — always use snake_case column names.
 
 ### Example
+
 ```ts
 // packages/types/src/db.ts
 export interface Character {
@@ -468,29 +492,35 @@ When adding a new entity type (e.g., `bookmarks`):
 The client must stay accessible. The a11y gate runs in CI: `e2e/tests/a11y.spec.ts` plus every feature spec's `expectNoAxeViolations(page)` call (`e2e/helpers/a11y.ts`), with the axe **`color-contrast` rule enabled by default**. A contrast or structural regression fails CI. Follow these rules so new code passes the gate without rework. See `docs/design/css-principles.md` for the styling side.
 
 ### Modals / dialogs
+
 - Every overlay dialog carries `role="dialog" aria-modal="true"` + an accessible name (`aria-label`, or `aria-labelledby` pointing at its heading `<h2>`) + `trapFocus(e.currentTarget, e)` on `onKeyDown` + `saveFocus()`/`restoreFocus()` around open/close. Pattern: `SettingsModal.tsx`; utilities in `client/src/lib/focusUtils.ts`.
 - `restoreFocus()` is rAF-deferred (so it fires after the dialog unmounts and the background is un-inerted) — call it in `close()` before `props.onClose()`; don't reorder.
 - The background (`<aside class="sidebar">` + `<main id="main-panel">`) is set `inert` automatically while any `[role="dialog"][aria-modal="true"]` is mounted (a `MutationObserver` in `App.tsx`). Don't add per-modal inert logic; just use the standard dialog attrs.
 
 ### Interactive non-button elements
+
 - A clickable `<div>` / `<li>` needs `role="button"` + `tabindex="0"` + `onKeyDown={onEnterActivate}` (Enter and Space activate). Pattern: `Sidebar.tsx` character cards.
 - `<nav>` is reserved for navigation landmarks — **never** for action menus or dropdowns. A dropdown of action buttons is a plain `<div>` (its `<button>` children are already semantic; avoid `role="menu"`, which obligates arrow-key navigation).
 - Toggle buttons disclose state with `aria-expanded` (and `aria-controls` → the toggled element's `id`).
 - Custom widgets with `role="slider"` must implement keyboard seek (Arrow/Home/End/PageUp-Down). See `AudioPlayer.tsx`.
 
 ### Forms
+
 - Every input has a `<label for>` or `aria-label`. A placeholder is **not** a label.
 - Link help/error text with `aria-describedby`; announce errors via an `aria-live` region or the toast system.
 
 ### Dynamic content
+
 - Announce async status a screen-reader user would otherwise miss (generation start/stop) via a visually-hidden `aria-live="polite"` region (the `.sr-only` announcer in `App.tsx`). Errors that route through `ToastContainer` are already announced — don't duplicate.
 - `aria-live` regions must exist on initial render (mounted empty, updated in place), never conditionally spawned.
 
 ### Contrast & visual cues
+
 - No text/background pair may drop below WCAG AA (4.5:1 normal text, 3:1 large text). Design tokens in `client/src/styles/tokens.css` are tuned to pass; **do not stack `opacity < 1` on a text color** — axe composites it against the backdrop and the pair drops below threshold.
 - Focus is drawn globally by `*:focus-visible` (`global.css`); don't remove it. A `@media (forced-colors: active)` block restores a visible `CanvasText` outline for Windows High Contrast Mode. Convey state with more than color alone (border / icon / text), because color-only cues collapse under forced colors.
 
 ### Reuse, don't reimplement
+
 - `focusUtils.ts` (`trapFocus` / `saveFocus` / `restoreFocus` / `onEnterActivate` / `focusFirst`) and the `.sr-only` class (`utilities.css`) are the shared tools. The skip-link target is `<main id="main-panel" tabindex="-1">`.
 
 ---
@@ -500,20 +530,23 @@ The client must stay accessible. The a11y gate runs in CI: `e2e/tests/a11y.spec.
 One goal: every symbol has one definition site, one name, and one grep that finds it. These are conventions the codebase already follows — keep it that way.
 
 ### Exports and files
+
 - **Named exports only.** No `export default` anywhere (client or server). The definition site and every import site share one identifier, so `rg CharacterEditor` finds both.
 - **One component per file**, named after the component: `Component.tsx`, with its co-located `Component.css` and `Component.test.tsx`.
 - **No new barrel files** (`index.ts` that only re-exports). Import from the defining module. The existing registry barrels are grandfathered: `components/tool-renderers/index.tsx`, `i18n/`, and server-side `server/src/repos/index.ts`, `server/src/tts/index.ts`.
 - **Import extensions follow the workspace:** `.js` in `server/` + `packages/types` (`module: NodeNext`), extensionless in `client/` (Vite bundler resolution).
 
 ### Functions and handlers
+
 - Exported components and functions use `export function Name()` declarations. Local helpers may be `const` arrows.
 - Event handlers are `const handleX = ...` (`handleDrop`, `handleSwipe`). Callback props are `onX` (`onClose`, `onSelect`) — `handleX` inside the component, `onX` across its boundary.
 - Boolean props and state are prefixed `is` / `has` / `show` / `can` (`isLast`, `showEditor`).
 
 ### SolidJS JSX
+
 - Use `<Show>`, `<For>`, and `<Switch>` for control flow in JSX — not `&&` chains or ternaries. Solid's control-flow components track reactivity at the right granularity and read one way.
 
 ### Type safety
+
 - **No non-null assertions (`!.`) or `as any` in production code.** Narrow with a guard, `?.`, or `??` — `noUncheckedIndexedAccess` is on precisely so the compiler forces this. Tests may bend the rule for fixtures.
 - Casts belong at validation boundaries (Zod `.parse()`, `rowToX()`), nowhere else.
-

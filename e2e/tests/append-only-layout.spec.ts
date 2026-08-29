@@ -1,12 +1,7 @@
-import { test, expect, type Page } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Page } from '../fixtures/base.js';
 import { getLastLlmRequest, waitForNextLlmRequest, resetLlmRequests } from '../helpers/llm.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 /**
  * WS fast-path: lorebook (keyword + constant entries), character linked to it,
@@ -41,23 +36,38 @@ async function setupChat(page: Page, charName: string): Promise<{ chatId: string
         try {
           const msg = JSON.parse(event.data as string);
           if (msg.type === 'snapshot') {
-            ws.send(JSON.stringify({
-              type: 'worldinfo.create',
-              data: {
-                name: 'AO Book',
-                entries: [
-                  { ...entryBase, keys: ['kwtoken'], content: 'KEYWORD-WI-ENTRY', position: 'before_char', constant: false },
-                  { ...entryBase, keys: [], content: 'CONSTANT-WI-ENTRY', position: 'before_char', constant: true },
-                ],
-              },
-            }));
+            ws.send(
+              JSON.stringify({
+                type: 'worldinfo.create',
+                data: {
+                  name: 'AO Book',
+                  entries: [
+                    {
+                      ...entryBase,
+                      keys: ['kwtoken'],
+                      content: 'KEYWORD-WI-ENTRY',
+                      position: 'before_char',
+                      constant: false,
+                    },
+                    { ...entryBase, keys: [], content: 'CONSTANT-WI-ENTRY', position: 'before_char', constant: true },
+                  ],
+                },
+              }),
+            );
           }
           if (msg.type === 'worldinfo.created') {
             bookId = msg.book.id;
-            ws.send(JSON.stringify({
-              type: 'character.create',
-              data: { name: cn, description: 'Append-only test character', firstMes: 'Greetings.', worldInfoId: bookId },
-            }));
+            ws.send(
+              JSON.stringify({
+                type: 'character.create',
+                data: {
+                  name: cn,
+                  description: 'Append-only test character',
+                  firstMes: 'Greetings.',
+                  worldInfoId: bookId,
+                },
+              }),
+            );
           }
           if (msg.type === 'character.created' && msg.character?.name === cn) {
             characterId = msg.character.id;
@@ -66,15 +76,23 @@ async function setupChat(page: Page, charName: string): Promise<{ chatId: string
           if (msg.type === 'chat.created') {
             chatId = msg.chat.id;
             ws.send(JSON.stringify({ type: 'chat.materialize', chatId }));
-            ws.send(JSON.stringify({
-              type: 'chat.update',
-              chatId,
-              patch: {
-                metadata: {
-                  authorsNote: { content: 'APPEND-ONLY-NOTE', position: 'in_chat', depth: 1, role: 'system', interval: 1 },
+            ws.send(
+              JSON.stringify({
+                type: 'chat.update',
+                chatId,
+                patch: {
+                  metadata: {
+                    authorsNote: {
+                      content: 'APPEND-ONLY-NOTE',
+                      position: 'in_chat',
+                      depth: 1,
+                      role: 'system',
+                      interval: 1,
+                    },
+                  },
                 },
-              },
-            }));
+              }),
+            );
           }
           if (msg.type === 'chat.updated') {
             ws.close();
@@ -85,7 +103,7 @@ async function setupChat(page: Page, charName: string): Promise<{ chatId: string
             reject(new Error(msg.message ?? 'WS setup failed'));
           }
         } catch (err) {
-          reject(err);
+          reject(err instanceof Error ? err : new Error(String(err)));
         }
       };
       ws.onerror = () => reject(new Error('WebSocket error'));
@@ -98,9 +116,7 @@ async function setupChat(page: Page, charName: string): Promise<{ chatId: string
 }
 
 test.describe('Append-only prompt layout', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
@@ -116,11 +132,9 @@ test.describe('Append-only prompt layout', () => {
         ws.close();
       };
     });
-    await resetBackendConfig(page);
   });
 
-  test('toggle persists across reload; note hoists to the top block, keyword WI vanishes', async ({ page }) => {
-    const app = new App(page);
+  test('toggle persists across reload; note hoists to the top block, keyword WI vanishes', async ({ page, app }) => {
     const charName = uniqueName('AppendOnly Char');
     const { chatId } = await setupChat(page, charName);
 
@@ -169,8 +183,7 @@ test.describe('Append-only prompt layout', () => {
    * depth 1, so turn 1's request is NOT a prefix of turn 2's. If this control
    * ever starts passing, the property test below isn't measuring anything.
    */
-  test('control: default layout is not append-only (note floats)', async ({ page }) => {
-    const app = new App(page);
+  test('control: default layout is not append-only (note floats)', async ({ page, app }) => {
     const { chatId } = await setupChat(page, uniqueName('AppendOnly Control Char'));
     await app.selectChatById(chatId);
 
@@ -194,8 +207,7 @@ test.describe('Append-only prompt layout', () => {
    * assistant reply — verbatim raw provider bytes (no post-processing, no
    * macro resolution). This is what snapshot caches need for hits.
    */
-  test('rendered requests are byte-prefixes across turns', async ({ page }) => {
-    const app = new App(page);
+  test('rendered requests are byte-prefixes across turns', async ({ page, app }) => {
     const { chatId } = await setupChat(page, uniqueName('AppendOnly Prefix Char'));
 
     const modal = await app.openSettings();

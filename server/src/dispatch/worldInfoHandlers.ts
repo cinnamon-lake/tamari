@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { getLogger } from '../lib/logger.js';
 import type { DispatcherDeps, Handlers } from './types.js';
 
-const log = getLogger('dispatcher');
+const log = getLogger('dispatch/worldInfoHandlers');
 
 export function buildWorldInfoHandlers(
   deps: DispatcherDeps,
@@ -52,7 +52,9 @@ export function buildWorldInfoHandlers(
     'worldinfo.update': async (client, msg) => {
       const patchEntries = msg.patch.entries?.map((e) => ({ ...e, id: randomUUID() }));
       const book = await worldInfo.update(msg.bookId, { ...msg.patch, entries: patchEntries });
-      deps.ragService?.indexWorldInfoEntries(msg.bookId, book.entries).catch((err) => log.warn({ err }, 'rag index failed'));
+      deps.ragService
+        ?.indexWorldInfoEntries(msg.bookId, book.entries)
+        .catch((err) => log.warn({ err }, 'rag index failed'));
       bus.broadcast({ type: 'worldinfo.updated', book }, client.id);
       bus.broadcast({ type: 'worldinfo.snapshot', book }, client.id);
       const list = await worldInfo.list();
@@ -88,7 +90,9 @@ export function buildWorldInfoHandlers(
       const entry = { id: randomUUID(), ...msg.data };
       const nextEntries = [...book.entries, entry];
       const updated = await worldInfo.update(msg.bookId, { entries: nextEntries });
-      deps.ragService?.indexWorldInfoEntries(msg.bookId, updated.entries).catch((err) => log.warn({ err }, 'rag index failed'));
+      deps.ragService
+        ?.indexWorldInfoEntries(msg.bookId, updated.entries)
+        .catch((err) => log.warn({ err }, 'rag index failed'));
       bus.broadcast({ type: 'worldinfo.updated', book: updated }, client.id);
       bus.broadcast({ type: 'worldinfo.snapshot', book: updated }, client.id);
       const list = await worldInfo.list();
@@ -101,11 +105,11 @@ export function buildWorldInfoHandlers(
         bus.sendTo(client.id, { type: 'error', message: 'World Info not found', code: 'NOT_FOUND' });
         return;
       }
-      const nextEntries = book.entries.map((e) =>
-        e.id === msg.entryId ? { ...e, ...msg.patch } : e,
-      );
+      const nextEntries = book.entries.map((e) => (e.id === msg.entryId ? { ...e, ...msg.patch } : e));
       const updated = await worldInfo.update(msg.bookId, { entries: nextEntries });
-      deps.ragService?.indexWorldInfoEntries(msg.bookId, updated.entries).catch((err) => log.warn({ err }, 'rag index failed'));
+      deps.ragService
+        ?.indexWorldInfoEntries(msg.bookId, updated.entries)
+        .catch((err) => log.warn({ err }, 'rag index failed'));
       bus.broadcast({ type: 'worldinfo.updated', book: updated }, client.id);
       bus.broadcast({ type: 'worldinfo.snapshot', book: updated }, client.id);
       const list = await worldInfo.list();
@@ -120,7 +124,9 @@ export function buildWorldInfoHandlers(
       }
       const nextEntries = book.entries.filter((e) => e.id !== msg.entryId);
       const updated = await worldInfo.update(msg.bookId, { entries: nextEntries });
-      deps.ragService?.indexWorldInfoEntries(msg.bookId, updated.entries).catch((err) => log.warn({ err }, 'rag index failed'));
+      deps.ragService
+        ?.indexWorldInfoEntries(msg.bookId, updated.entries)
+        .catch((err) => log.warn({ err }, 'rag index failed'));
       bus.broadcast({ type: 'worldinfo.updated', book: updated }, client.id);
       bus.broadcast({ type: 'worldinfo.snapshot', book: updated }, client.id);
       const list = await worldInfo.list();

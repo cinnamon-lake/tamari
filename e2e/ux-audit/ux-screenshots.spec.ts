@@ -76,7 +76,9 @@ test.describe('UX audit — desktop', () => {
     await expect(wiModal.locator('.entry-editor')).toBeVisible();
     await wiModal.locator('.entry-editor label:has-text("Keys") input').fill('kingdom');
     await wiModal.locator('.entry-editor label:has-text("Keys") input').blur();
-    await wiModal.locator('.entry-editor label:has-text("Content") textarea').fill('[WI] The kingdom is called Auditia.');
+    await wiModal
+      .locator('.entry-editor label:has-text("Content") textarea')
+      .fill('[WI] The kingdom is called Auditia.');
     await wiModal.locator('.entry-editor label:has-text("Content") textarea').blur();
     await shot(page, '06-worldinfo-entry-editor');
     await page.locator('.modal-overlay:has(.worldinfo-modal)').click({ position: { x: 0, y: 0 } });
@@ -88,11 +90,7 @@ test.describe('UX audit — desktop', () => {
     await shot(page, '07-chat-greeting');
 
     // ── 6. Multi-turn conversation ───────────────────────────────────────
-    const turns = [
-      'seq:Tell me about the kingdom.',
-      'seq:Who are its enemies?',
-      'seq:Describe the marketplace.',
-    ];
+    const turns = ['seq:Tell me about the kingdom.', 'seq:Who are its enemies?', 'seq:Describe the marketplace.'];
     let expected = 1;
     for (const text of turns) {
       await app.sendUserMessage(text, { expectReply: true });
@@ -111,10 +109,13 @@ test.describe('UX audit — desktop', () => {
     await app.clickMessageAction(lastAssistant, 'Edit');
     await expect(page.locator('.message-bubble.editing .edit-textarea')).toBeVisible();
     await shot(page, '10-message-edit-mode');
-    await page.locator('.message-bubble.editing button:has-text("Cancel")').click().catch(async () => {
-      // fall back to saving unchanged if there is no Cancel button
-      await page.locator('.message-bubble.editing button:has-text("Save")').click();
-    });
+    await page
+      .locator('.message-bubble.editing button:has-text("Cancel")')
+      .click()
+      .catch(async () => {
+        // fall back to saving unchanged if there is no Cancel button
+        await page.locator('.message-bubble.editing button:has-text("Save")').click();
+      });
     await expect(page.locator('.message-bubble.editing')).toHaveCount(0);
 
     // ── 9. Regenerate → swipes ───────────────────────────────────────────
@@ -196,7 +197,6 @@ test.describe('UX audit — mobile (390x844)', () => {
     // Mobile variant of startChat: the client auto-selects the new chat and the
     // sidebar slides off-canvas, so the explicit chat-item click app.startChat
     // does would be outside the viewport. Just open the chat and wait.
-    await app.revealHoverButtons();
     await page.locator('input[placeholder="Search characters..."]').fill(charName);
     await app.characterRow(charName).locator('[title="New chat"]').click({ force: true });
     await expect(page.locator('.chat-view')).toBeVisible();

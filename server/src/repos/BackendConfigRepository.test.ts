@@ -34,23 +34,26 @@ describe('BackendConfigRepository providerParams contract', () => {
   });
 
   it('create drops undeclared providerParams keys and keeps declared ones', async () => {
-    const created = await repo.create('bc-1', makeInsert({
-      providerParams: {
-        seed: 42,
-        mirostat_mode: 2,
-        requestScript: '-- lua',
-        samplerDisabled: { topK: true },
-        customBackendId: 'cb-1',
-        cacheTTL: '5m',
-        cacheMode: 'manual',
-        cacheDepth: 3,
-        // Undeclared legacy junk:
-        groq_model: 'llama-3.3-70b-versatile',
-        proxy_password: 'super-secret',
-        scenario_format: '{{scenario}}',
-        extensions: {},
-      },
-    }));
+    const created = await repo.create(
+      'bc-1',
+      makeInsert({
+        providerParams: {
+          seed: 42,
+          mirostat_mode: 2,
+          requestScript: '-- lua',
+          samplerDisabled: { topK: true },
+          customBackendId: 'cb-1',
+          cacheTTL: '5m',
+          cacheMode: 'manual',
+          cacheDepth: 3,
+          // Undeclared legacy junk:
+          groq_model: 'llama-3.3-70b-versatile',
+          proxy_password: 'super-secret',
+          scenario_format: '{{scenario}}',
+          extensions: {},
+        },
+      }),
+    );
 
     expect(created.providerParams).toEqual({
       seed: 42,

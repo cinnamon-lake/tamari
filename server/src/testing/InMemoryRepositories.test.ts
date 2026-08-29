@@ -113,7 +113,9 @@ describe('InMemoryChatRepository', () => {
     const repo = new InMemoryChatRepository();
     await makeChat(repo);
     const msg = await repo.appendMessage('chat-1', { role: 'assistant', parentId: null, extra: {} });
-    const updated = await repo.updateMessage(msg.id, { extra: { parts: [{ type: 'text', text: 'done' }], tokenCount: 3 } });
+    const updated = await repo.updateMessage(msg.id, {
+      extra: { parts: [{ type: 'text', text: 'done' }], tokenCount: 3 },
+    });
     expect(updated.extra.parts?.[0]).toEqual({ type: 'text', text: 'done' });
     expect((await repo.getMessageById(msg.id))!.extra.tokenCount).toBe(3);
     await expect(repo.updateMessage(999, { extra: {} })).rejects.toThrow();
@@ -149,11 +151,39 @@ describe('InMemoryChatRepository', () => {
 describe('InMemoryGenerationRepository', () => {
   it('creates, updates, lists by chat (newest first), and deletes', async () => {
     const repo = new InMemoryGenerationRepository();
-    await repo.create('gen-1', { chatId: 'chat-1', messageId: null, status: 'pending', backend: 'mock', promptTokens: 10, completionTokens: null, errorMessage: null });
-    await repo.create('gen-2', { chatId: 'chat-1', messageId: null, status: 'pending', backend: 'mock', promptTokens: 10, completionTokens: null, errorMessage: null });
-    await repo.create('gen-3', { chatId: 'chat-2', messageId: null, status: 'pending', backend: 'mock', promptTokens: 10, completionTokens: null, errorMessage: null });
+    await repo.create('gen-1', {
+      chatId: 'chat-1',
+      messageId: null,
+      status: 'pending',
+      backend: 'mock',
+      promptTokens: 10,
+      completionTokens: null,
+      errorMessage: null,
+    });
+    await repo.create('gen-2', {
+      chatId: 'chat-1',
+      messageId: null,
+      status: 'pending',
+      backend: 'mock',
+      promptTokens: 10,
+      completionTokens: null,
+      errorMessage: null,
+    });
+    await repo.create('gen-3', {
+      chatId: 'chat-2',
+      messageId: null,
+      status: 'pending',
+      backend: 'mock',
+      promptTokens: 10,
+      completionTokens: null,
+      errorMessage: null,
+    });
 
-    const updated = await repo.update('gen-1', { status: 'complete', completionTokens: 5, meta: { layer: 'mock', rounds: 1 } });
+    const updated = await repo.update('gen-1', {
+      status: 'complete',
+      completionTokens: 5,
+      meta: { layer: 'mock', rounds: 1 },
+    });
     expect(updated.status).toBe('complete');
     expect(updated.meta?.rounds).toBe(1);
     expect(updated.kind).toBe('send'); // insert default

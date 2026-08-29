@@ -18,7 +18,7 @@ import { BackendConfigRepository } from '../../repos/BackendConfigRepository.js'
 import { SettingsRepository } from '../../repos/SettingsRepository.js';
 import type { Migration } from '../runMigrations.js';
 
-const log = getLogger('db');
+const log = getLogger('db/migrations/017_claude_caching_to_backend_configs');
 
 const CACHE_PROVIDERS = new Set(['claude', 'openrouter']);
 
@@ -28,12 +28,9 @@ const migration: Migration = {
     const settings = new SettingsRepository(db);
 
     const row = await db.execute('SELECT blob FROM settings WHERE id = 0');
-    const raw = (
-      row.rows.length > 0 ? JSON.parse(str(row.rows[0]?.blob, '{}')) : {}
-    ) as Record<string, unknown>;
+    const raw = (row.rows.length > 0 ? JSON.parse(str(row.rows[0]?.blob, '{}')) : {}) as Record<string, unknown>;
 
-    const hasGlobals =
-      'claudeCacheMode' in raw || 'claudeCacheDepth' in raw || 'claudeCacheTTL' in raw;
+    const hasGlobals = 'claudeCacheMode' in raw || 'claudeCacheDepth' in raw || 'claudeCacheTTL' in raw;
 
     if (hasGlobals) {
       const globalMode = raw['claudeCacheMode'];

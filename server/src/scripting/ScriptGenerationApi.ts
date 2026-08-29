@@ -32,8 +32,7 @@ export interface ScriptGenerationApi extends Lockable {
   handleGenerate(chatId: string, lock?: ChatLock, clientId?: string): Promise<void>;
   handleStop(generationId: string): Promise<string | undefined>;
   getActiveGeneration():
-    | { id: string; chatId: string; messageId: number; text: string; reasoning?: string }
-    | undefined;
+    { id: string; chatId: string; messageId: number; text: string; reasoning?: string } | undefined;
   quietGenerate(
     chatId: string,
     promptText: string,

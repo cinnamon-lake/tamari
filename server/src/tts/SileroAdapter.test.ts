@@ -15,7 +15,10 @@ describe('SileroAdapter', () => {
       headers: new Map([['content-type', 'audio/wav']]),
       arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(4)),
       text: vi.fn().mockResolvedValue(''),
-      json: vi.fn().mockResolvedValue([{ name: 'en_0', voice_id: 'en_0' }, { name: 'en_1', voice_id: 'en_1' }]),
+      json: vi.fn().mockResolvedValue([
+        { name: 'en_0', voice_id: 'en_0' },
+        { name: 'en_1', voice_id: 'en_1' },
+      ]),
     });
   });
 

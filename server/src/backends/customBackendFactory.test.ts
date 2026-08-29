@@ -102,7 +102,11 @@ function mockAdapter(id: string, text: string): BackendAdapter {
 describe('customBackendSelectionFromSettings', () => {
   it('reads the selection for provider custom', () => {
     expect(
-      customBackendSelectionFromSettings({ backendProvider: 'custom', customBackendId: 'cb-1', delegateConfigId: 'cfg-9' }),
+      customBackendSelectionFromSettings({
+        backendProvider: 'custom',
+        customBackendId: 'cb-1',
+        delegateConfigId: 'cfg-9',
+      }),
     ).toEqual({ customBackendId: 'cb-1', delegateConfigId: 'cfg-9' });
   });
 
@@ -135,7 +139,9 @@ describe('createCustomBackendAdapter', () => {
 
   it('delegates to the default delegate config when no id is given', async () => {
     const deps = makeDeps({
-      customBackends: [makeCb('cb-1', 'function generate(p, c) local r = backends.generate(p):await() return r.text end')],
+      customBackends: [
+        makeCb('cb-1', 'function generate(p, c) local r = backends.generate(p):await() return r.text end'),
+      ],
       configs: [makeConfig('Main Model', 'openai')],
       createResolvedAdapter: async () => mockAdapter('openai', 'default-delegate-text'),
     });
@@ -159,7 +165,9 @@ describe('createCustomBackendAdapter', () => {
 
   it('errors when no default delegate is configured', async () => {
     const deps = makeDeps({
-      customBackends: [makeCb('cb-1', 'function generate(p, c) local r = backends.generate(p):await() return r.text end')],
+      customBackends: [
+        makeCb('cb-1', 'function generate(p, c) local r = backends.generate(p):await() return r.text end'),
+      ],
     });
     const adapter = await createCustomBackendAdapter(deps, 'cb-1', null);
     const { result } = await consumeStream(adapter.stream(makePrompt(), new AbortController().signal));
@@ -194,7 +202,10 @@ describe('createCustomBackendAdapter', () => {
   it('errors when a custom config has no customBackendId', async () => {
     const deps = makeDeps({
       customBackends: [
-        makeCb('cb-1', 'function generate(p, c) local r = backends.generate("cfg-broken", p):await() return r.text end'),
+        makeCb(
+          'cb-1',
+          'function generate(p, c) local r = backends.generate("cfg-broken", p):await() return r.text end',
+        ),
       ],
       configs: [makeConfig('broken', 'custom')],
     });
@@ -211,8 +222,12 @@ describe('getCharacterBackendScript', () => {
   });
 
   it('returns null when disabled, empty, missing, or malformed', () => {
-    expect(getCharacterBackendScript({ extensions: { contextualBackend: { enabled: false, luaSource: 'x' } } })).toBeNull();
-    expect(getCharacterBackendScript({ extensions: { contextualBackend: { enabled: true, luaSource: '  ' } } })).toBeNull();
+    expect(
+      getCharacterBackendScript({ extensions: { contextualBackend: { enabled: false, luaSource: 'x' } } }),
+    ).toBeNull();
+    expect(
+      getCharacterBackendScript({ extensions: { contextualBackend: { enabled: true, luaSource: '  ' } } }),
+    ).toBeNull();
     expect(getCharacterBackendScript({ extensions: {} })).toBeNull();
     expect(getCharacterBackendScript({ extensions: { contextualBackend: 'garbage' } })).toBeNull();
     expect(getCharacterBackendScript(null)).toBeNull();

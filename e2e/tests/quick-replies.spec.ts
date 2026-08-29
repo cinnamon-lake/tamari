@@ -3,10 +3,7 @@ import { login } from '../helpers/auth.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
 import { App } from '../helpers/app.js';
 import { createLuaQuickReply, deleteLuaQuickReply } from '../helpers/quickReplies.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 test.describe('Quick Replies', () => {
   test.beforeEach(async ({ page }) => {
@@ -38,9 +35,7 @@ test.describe('Quick Replies', () => {
     await expect(editor).not.toBeVisible();
 
     // Verify it appears in the bar.
-    await expect(
-      page.locator('.quick-reply-bar .quick-reply-btn').filter({ hasText: label }),
-    ).toBeVisible();
+    await expect(page.locator('.quick-reply-bar .quick-reply-btn').filter({ hasText: label })).toBeVisible();
 
     // Cleanup so the global reply can't leak into other specs.
     await deleteLuaQuickReply(page, label);

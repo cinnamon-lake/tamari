@@ -69,9 +69,7 @@ describe('StatsModal', () => {
   });
 
   it('shows error state when fetch fails', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-      Promise.resolve({ ok: false, status: 500 } as Response)
-    );
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve({ ok: false, status: 500 } as Response));
 
     render(() => (
       <ErrorBoundary fallback={<p class="error">Failed to load stats</p>}>

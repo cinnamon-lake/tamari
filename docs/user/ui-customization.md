@@ -8,25 +8,25 @@ Instead of SillyTavern's JSON theme files, tamari themes through **design tokens
 
 The token categories:
 
-| Category | Examples |
-|----------|----------|
-| Surface colors | `--color-bg-primary`, `--color-bg-secondary`, `--color-bg-tertiary`, `--color-bg-elevated` |
-| Text colors | `--color-text-primary`, `--color-text-secondary`, `--color-text-muted`, `--color-text-inverse` |
-| Accent | `--color-accent`, `--color-accent-hover`, `--color-accent-soft`, `--color-accent-border`, `--color-accent-glow` |
-| Status | `--color-success`, `--color-warning`, `--color-danger`, `--color-info-soft` |
-| Borders & surfaces | `--color-border-subtle`, `--color-border`, `--color-border-focus` |
-| Shadows | `--shadow-sm`, `--shadow-md`, `--shadow-lg`, `--shadow-xl`, focus rings like `--shadow-focus` |
-| Spacing | `--space-xs` … `--space-2xl` |
-| Typography | `--font-sans`, `--font-mono`, `--text-2xs` … `--text-4xl`, `--leading-tight` … `--leading-relaxed` |
-| Radii | `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-xl`, `--radius-full`, `--radius-none` |
-| Motion | `--transition-fast`, `--transition-base`, `--transition-slow` |
-| Z-index layers | `--z-sticky`, `--z-dropdown`, `--z-modal`, `--z-popover`, `--z-overlay` |
-| Layout | `--sidebar-width`, `--chat-max-width`, `--header-height`, `--modal-max-width` |
-| Component sizing | `--avatar-sm`, `--avatar-md`, `--asset-thumb` |
-| Backdrops | `--color-backdrop`, `--color-backdrop-light`, `--color-backdrop-subtle` |
-| Map terrain | `--color-terrain-grass`, `--color-terrain-water`, … (the `lua_map` tool widget tiles) |
+| Category           | Examples                                                                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Surface colors     | `--color-bg-primary`, `--color-bg-secondary`, `--color-bg-tertiary`, `--color-bg-elevated`                      |
+| Text colors        | `--color-text-primary`, `--color-text-secondary`, `--color-text-muted`, `--color-text-inverse`                  |
+| Accent             | `--color-accent`, `--color-accent-hover`, `--color-accent-soft`, `--color-accent-border`, `--color-accent-glow` |
+| Status             | `--color-success`, `--color-warning`, `--color-danger`, `--color-info-soft`                                     |
+| Borders & surfaces | `--color-border-subtle`, `--color-border`, `--color-border-focus`                                               |
+| Shadows            | `--shadow-sm`, `--shadow-md`, `--shadow-lg`, `--shadow-xl`, focus rings like `--shadow-focus`                   |
+| Spacing            | `--space-xs` … `--space-2xl`                                                                                    |
+| Typography         | `--font-sans`, `--font-mono`, `--text-2xs` … `--text-4xl`, `--leading-tight` … `--leading-relaxed`              |
+| Radii              | `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-xl`, `--radius-full`, `--radius-none`                    |
+| Motion             | `--transition-fast`, `--transition-base`, `--transition-slow`                                                   |
+| Z-index layers     | `--z-sticky`, `--z-dropdown`, `--z-modal`, `--z-popover`, `--z-overlay`                                         |
+| Layout             | `--sidebar-width`, `--chat-max-width`, `--header-height`, `--modal-max-width`                                   |
+| Component sizing   | `--avatar-sm`, `--avatar-md`, `--asset-thumb`                                                                   |
+| Backdrops          | `--color-backdrop`, `--color-backdrop-light`, `--color-backdrop-subtle`                                         |
+| Map terrain        | `--color-terrain-grass`, `--color-terrain-water`, … (the `lua_map` tool widget tiles)                           |
 
-Names are semantic — you target *what a color means* (`--color-bg-primary`), not a specific hex value. Three tokens exist specifically as override points for the Display settings: `--shadow-opacity`, `--backdrop-blur`, and `--avatar-border-radius` (see [Chat Display & Avatar Styles](#chat-display--avatar-styles)).
+Names are semantic — you target _what a color means_ (`--color-bg-primary`), not a specific hex value. Three tokens exist specifically as override points for the Display settings: `--shadow-opacity`, `--backdrop-blur`, and `--avatar-border-radius` (see [Chat Display & Avatar Styles](#chat-display--avatar-styles)).
 
 > **Note:** SillyTavern's JSON themes targeting the old `--SmartTheme*` variables do **not** apply — tamari's DOM and token names are completely different. Porting an old theme means mapping its colors onto the semantic tokens above and pasting the result into Custom CSS (below).
 
@@ -69,17 +69,17 @@ The [`/bg` command](#the-theme-and-bg-commands) does the same thing from the cha
 
 The **Display** section of the Settings modal covers the chat view itself:
 
-| Setting | What it does |
-|---------|--------------|
-| **Chat Style** | `Default`, `Bubbles` (rounded bubbles; yours tinted with the accent), or `Document` (flat, full-width rows — a manuscript look). Sets a `chat-style-default` / `chat-style-bubbles` / `chat-style-document` class on the messages container, so you can extend any of them in Custom CSS. |
-| **Avatar Style** | `Round`, `Rectangular`, `Square`, or `Rounded`. Works by setting `--avatar-border-radius`, which you can also override directly. |
-| **Font Scale** | 0.80–1.50×. Scales the root font size; everything sized in `rem` follows. |
-| **Chat Width (rem)** | 30–70. Overrides `--chat-max-width`. |
-| **Shadow Width** | 0–2× shadow intensity (drives `--shadow-opacity`). 0 flattens the UI entirely. |
-| **Hide chat avatars** | Removes avatars from chat messages (also greys out Avatar Style). |
-| **Hide chat names** | Removes sender names from chat messages. |
-| **Backdrop Blur** | 0–2× strength for the blur behind modals and overlays (drives `--backdrop-blur`). |
-| **Compact input area** | Tighter padding and smaller controls in the message input. |
+| Setting                | What it does                                                                                                                                                                                                                                                                              |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Chat Style**         | `Default`, `Bubbles` (rounded bubbles; yours tinted with the accent), or `Document` (flat, full-width rows — a manuscript look). Sets a `chat-style-default` / `chat-style-bubbles` / `chat-style-document` class on the messages container, so you can extend any of them in Custom CSS. |
+| **Avatar Style**       | `Round`, `Rectangular`, `Square`, or `Rounded`. Works by setting `--avatar-border-radius`, which you can also override directly.                                                                                                                                                          |
+| **Font Scale**         | 0.80–1.50×. Scales the root font size; everything sized in `rem` follows.                                                                                                                                                                                                                 |
+| **Chat Width (rem)**   | 30–70. Overrides `--chat-max-width`.                                                                                                                                                                                                                                                      |
+| **Shadow Width**       | 0–2× shadow intensity (drives `--shadow-opacity`). 0 flattens the UI entirely.                                                                                                                                                                                                            |
+| **Hide chat avatars**  | Removes avatars from chat messages (also greys out Avatar Style).                                                                                                                                                                                                                         |
+| **Hide chat names**    | Removes sender names from chat messages.                                                                                                                                                                                                                                                  |
+| **Backdrop Blur**      | 0–2× strength for the blur behind modals and overlays (drives `--backdrop-blur`).                                                                                                                                                                                                         |
+| **Compact input area** | Tighter padding and smaller controls in the message input.                                                                                                                                                                                                                                |
 
 The Display section also has **Reduced motion (disable animations)**, which kills animations and transitions app-wide (via a `.reduced-motion` class on `<html>`). tamari also honors your operating system's `prefers-reduced-motion` setting independently.
 

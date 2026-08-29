@@ -4,8 +4,7 @@ import { state } from '../../stores/serverStore.js';
 import { confirmPopup, alertPopup } from '../../stores/popupStore.js';
 import { apiFetch, authenticatedUrl } from '../../lib/apiFetch.js';
 import { useI18n } from '../../i18n/index.js';
-import { trapFocus, saveFocus, restoreFocus } from '../../lib/focusUtils.js';
-import { createBackdropDismiss } from '../../lib/backdropDismiss.js';
+import { Modal } from '../Modal.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../../timing.js';
 import type { Character, RegexRule } from '@tamari/types';
 import { CropModal } from '../CropModal.js';
@@ -62,18 +61,13 @@ export function CharacterEditor(props: CharacterEditorProps) {
   // local edit path (save, autosave, delete, avatar upload, field inputs).
   const isExternal = () => props.character.external === true;
   const unpackedSlug = () =>
-    props.character.id.startsWith('unpacked/')
-      ? props.character.id.slice('unpacked/'.length)
-      : props.character.id;
+    props.character.id.startsWith('unpacked/') ? props.character.id.slice('unpacked/'.length) : props.character.id;
   const unpackedErrors = (): string[] => {
     const raw = props.character.extensions['unpackedErrors'];
     return Array.isArray(raw) ? raw.filter((e): e is string => typeof e === 'string') : [];
   };
 
-  const close = () => {
-    restoreFocus();
-    props.onClose();
-  };
+  const close = () => props.onClose();
 
   // Basic fields
   const [name, setName] = createSignal(char.name ?? '');
@@ -114,7 +108,6 @@ export function CharacterEditor(props: CharacterEditorProps) {
   const [avatarBust, setAvatarBust] = createSignal(Date.now());
 
   onMount(() => {
-    saveFocus();
     bus.send({ type: 'worldinfo.list' });
   });
 
@@ -258,10 +251,7 @@ export function CharacterEditor(props: CharacterEditorProps) {
 
   const deleteCharacter = async () => {
     if (isExternal()) return;
-    if (
-      !(await confirmPopup(t('character.deleteConfirm', { name: char.name })))
-    )
-      return;
+    if (!(await confirmPopup(t('character.deleteConfirm', { name: char.name })))) return;
     bus.send({ type: 'character.delete', characterId: char.id });
     close();
   };
@@ -321,16 +311,15 @@ export function CharacterEditor(props: CharacterEditorProps) {
   };
 
   return (
-    <div class="modal-overlay" {...createBackdropDismiss(close)}>
-      <div class="modal character-editor-modal" role="dialog" aria-modal="true" aria-label={t('character.modalAriaLabel')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
-        <div class="modal-header-row">
-          <h2 class="modal-title">{char.name}</h2>
-          <IdBadge id={char.id} />
-          <button class="icon-btn" onClick={close} title={t('common.close')} aria-label={t('common.close')} type="button">
-            <i class="bi bi-x-lg" />
-          </button>
-        </div>
-
+    <>
+      <Modal
+        title={char.name}
+        onClose={close}
+        class="modal character-editor-modal"
+        ariaLabel={t('character.modalAriaLabel')}
+        showCloseButton
+        headerExtras={<IdBadge id={char.id} />}
+      >
         <Show when={isExternal()}>
           <div class="external-banner" role="status">
             <i class="bi bi-hdd" />
@@ -364,270 +353,365 @@ export function CharacterEditor(props: CharacterEditorProps) {
 
         {/* ---- Content: identity + prompt fields ---- */}
         <Show when={activeTab() === 'content'}>
-          <div class="editor-tab-panel" role="tabpanel"><fieldset class="editor-fieldset" disabled={isExternal()}>
-            <div class="avatar-upload">
-              <SafeImage
-                class="editor-avatar"
-                src={`${char.avatarUrl}?t=${avatarBust()}`}
-                alt={char.name}
-                loading="lazy"
-              />
-              <label class="file-input-label">
-                {t('character.changeAvatar')}
-                <input class="hidden-file-input" type="file" accept="image/*" onChange={handleAvatarUpload} hidden />
-              </label>
-            </div>
-
-            <label class="field-label">
-              {t('character.nameLabel')}
-              <input class="text-input"
-                value={name()}
-                required
-                aria-required="true"
-                autocomplete="off"
-                onInput={(e) => {
-                  setName(e.currentTarget.value);
-                  scheduleAutoSave();
-                }}
-              />
-            </label>
-
-            <label class="field-label">
-              {t('character.nicknameLabel')}
-              <input class="text-input"
-                value={nickname()}
-                onInput={(e) => {
-                  setNickname(e.currentTarget.value);
-                  scheduleAutoSave();
-                }}
-              />
-            </label>
-
-            <PromptTextarea label={t('character.descriptionLabel')} value={description()} onInput={(v) => { setDescription(v); scheduleAutoSave(); }} rows={5} />
-            <PromptTextarea label={t('character.personalityLabel')} value={personality()} onInput={(v) => { setPersonality(v); scheduleAutoSave(); }} />
-            <PromptTextarea label={t('character.scenarioLabel')} value={scenario()} onInput={(v) => { setScenario(v); scheduleAutoSave(); }} />
-            <PromptTextarea label={t('character.firstMessageLabel')} value={firstMes()} onInput={(v) => { setFirstMes(v); scheduleAutoSave(); }} rows={5} />
-            <PromptTextarea label={t('character.messageExampleLabel')} value={mesExample()} onInput={(v) => { setMesExample(v); scheduleAutoSave(); }} rows={4} />
-
-            {/* Tags */}
-            <div class="tag-editor">
-              <span class="tag-label">{t('character.tagsLabel')}</span>
-              <div class="tag-list">
-                <For each={tags()}>
-                  {(tag, index) => (
-                    <span class="tag-chip" id={`tag-${index()}`}>
-                      {tag}
-                      <button class="tag-remove" onClick={() => removeTag(tag)} type="button" aria-label={t('character.removeTag')}>
-                        <i class="bi bi-x" />
-                      </button>
-                    </span>
-                  )}
-                </For>
-              </div>
-              <div class="tag-input-wrap">
-                <input class="tag-input"
-                  value={tagInput()}
-                  onInput={(e) => {
-                    setTagInput(e.currentTarget.value);
-                    setShowTagSuggestions(true);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addTag(tagInput());
-                    }
-                  }}
-                  onBlur={() => setTimeout(() => setShowTagSuggestions(false), 150)}
-                  placeholder={t('character.addTagPlaceholder')}
+          <div class="editor-tab-panel" role="tabpanel">
+            <fieldset class="editor-fieldset" disabled={isExternal()}>
+              <div class="avatar-upload">
+                <SafeImage
+                  class="editor-avatar"
+                  src={`${char.avatarUrl}?t=${avatarBust()}`}
+                  alt={char.name}
+                  loading="lazy"
                 />
-                <Show when={showTagSuggestions() && tagSuggestions().length > 0}>
-                  <div class="tag-suggestions">
-                    <For each={tagSuggestions()}>
-                      {(suggestion, index) => (
-                        <button class="tag-suggestion" id={`tag-suggestion-${index()}`} onClick={() => addTag(suggestion)}>
-                          {suggestion}
-                        </button>
-                      )}
-                    </For>
-                  </div>
-                </Show>
+                <label class="file-input-label">
+                  {t('character.changeAvatar')}
+                  <input class="hidden-file-input" type="file" accept="image/*" onChange={handleAvatarUpload} hidden />
+                </label>
               </div>
-            </div>
 
-            {/* Linked Lorebook */}
-            <div class="lorebook-selector">
-              <span class="tag-label">{t('character.linkedLorebookLabel')}</span>
-              <Show
-                when={state.worldInfo.length > 0}
-                fallback={
-                  <div class="empty-state">
-                    <i class="bi bi-journal-bookmark" />
-                    <div class="empty-state-text">{t('character.noLorebooks')}</div>
-                    <div class="hint">{t('character.createLorebookHint')}</div>
-                  </div>
-                }
-              >
-                <select
-                  class="select"
-                  aria-label={t('character.linkedLorebookLabel')}
-                  value={worldInfoId() ?? ''}
-                  onChange={(e) => {
-                    const val = e.currentTarget.value;
-                    setWorldInfoId(val || null);
+              <label class="field-label">
+                {t('character.nameLabel')}
+                <input
+                  class="text-input"
+                  data-testid="character-name"
+                  value={name()}
+                  required
+                  aria-required="true"
+                  autocomplete="off"
+                  onInput={(e) => {
+                    setName(e.currentTarget.value);
                     scheduleAutoSave();
                   }}
-                >
-                  <option class="lorebook-option" value="">{t('character.noneOption')}</option>
-                  <For each={state.worldInfo}>
-                    {(book) => (
-                      <option class="lorebook-option" value={book.id} id={book.id}>
-                        {t('character.lorebookOptionLabel', { name: book.name, count: book.entries.length })}
-                      </option>
+                />
+              </label>
+
+              <label class="field-label">
+                {t('character.nicknameLabel')}
+                <input
+                  class="text-input"
+                  value={nickname()}
+                  onInput={(e) => {
+                    setNickname(e.currentTarget.value);
+                    scheduleAutoSave();
+                  }}
+                />
+              </label>
+
+              <PromptTextarea
+                label={t('character.descriptionLabel')}
+                testId="character-description"
+                value={description()}
+                onInput={(v) => {
+                  setDescription(v);
+                  scheduleAutoSave();
+                }}
+                rows={5}
+              />
+              <PromptTextarea
+                label={t('character.personalityLabel')}
+                testId="character-personality"
+                value={personality()}
+                onInput={(v) => {
+                  setPersonality(v);
+                  scheduleAutoSave();
+                }}
+              />
+              <PromptTextarea
+                label={t('character.scenarioLabel')}
+                testId="character-scenario"
+                value={scenario()}
+                onInput={(v) => {
+                  setScenario(v);
+                  scheduleAutoSave();
+                }}
+              />
+              <PromptTextarea
+                label={t('character.firstMessageLabel')}
+                testId="character-first-mes"
+                value={firstMes()}
+                onInput={(v) => {
+                  setFirstMes(v);
+                  scheduleAutoSave();
+                }}
+                rows={5}
+              />
+              <PromptTextarea
+                label={t('character.messageExampleLabel')}
+                testId="character-mes-example"
+                value={mesExample()}
+                onInput={(v) => {
+                  setMesExample(v);
+                  scheduleAutoSave();
+                }}
+                rows={4}
+              />
+
+              {/* Tags */}
+              <div class="tag-editor">
+                <span class="tag-label">{t('character.tagsLabel')}</span>
+                <div class="tag-list">
+                  <For each={tags()}>
+                    {(tag, index) => (
+                      <span class="tag-chip" id={`tag-${index()}`}>
+                        {tag}
+                        <button
+                          class="tag-remove"
+                          onClick={() => removeTag(tag)}
+                          type="button"
+                          aria-label={t('character.removeTag')}
+                        >
+                          <i class="bi bi-x" />
+                        </button>
+                      </span>
                     )}
                   </For>
-                </select>
-              </Show>
-            </div>
-          </fieldset></div>
+                </div>
+                <div class="tag-input-wrap">
+                  <input
+                    class="tag-input"
+                    value={tagInput()}
+                    onInput={(e) => {
+                      setTagInput(e.currentTarget.value);
+                      setShowTagSuggestions(true);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addTag(tagInput());
+                      }
+                    }}
+                    onBlur={() => setTimeout(() => setShowTagSuggestions(false), 150)}
+                    placeholder={t('character.addTagPlaceholder')}
+                  />
+                  <Show when={showTagSuggestions() && tagSuggestions().length > 0}>
+                    <div class="tag-suggestions">
+                      <For each={tagSuggestions()}>
+                        {(suggestion, index) => (
+                          <button
+                            class="tag-suggestion"
+                            id={`tag-suggestion-${index()}`}
+                            onClick={() => addTag(suggestion)}
+                          >
+                            {suggestion}
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
+                </div>
+              </div>
+
+              {/* Linked Lorebook */}
+              <div class="lorebook-selector">
+                <span class="tag-label">{t('character.linkedLorebookLabel')}</span>
+                <Show
+                  when={state.worldInfo.length > 0}
+                  fallback={
+                    <div class="empty-state">
+                      <i class="bi bi-journal-bookmark" />
+                      <div class="empty-state-text">{t('character.noLorebooks')}</div>
+                      <div class="hint">{t('character.createLorebookHint')}</div>
+                    </div>
+                  }
+                >
+                  <select
+                    class="select"
+                    aria-label={t('character.linkedLorebookLabel')}
+                    value={worldInfoId() ?? ''}
+                    onChange={(e) => {
+                      const val = e.currentTarget.value;
+                      setWorldInfoId(val || null);
+                      scheduleAutoSave();
+                    }}
+                  >
+                    <option class="lorebook-option" value="">
+                      {t('character.noneOption')}
+                    </option>
+                    <For each={state.worldInfo}>
+                      {(book) => (
+                        <option class="lorebook-option" value={book.id} id={book.id}>
+                          {t('character.lorebookOptionLabel', { name: book.name, count: book.entries.length })}
+                        </option>
+                      )}
+                    </For>
+                  </select>
+                </Show>
+              </div>
+            </fieldset>
+          </div>
         </Show>
 
         {/* ---- Greetings: first-message variants ---- */}
         <Show when={activeTab() === 'greetings'}>
-          <div class="editor-tab-panel" role="tabpanel"><fieldset class="editor-fieldset" disabled={isExternal()}>
-            <GreetingsEditor
-              label={t('character.alternateGreetingsLabel')}
-              items={alternateGreetings()}
-              onChange={(next) => {
-                setAlternateGreetings(next);
-                scheduleAutoSave();
-              }}
-            />
-            <GreetingsEditor
-              label={t('character.groupOnlyGreetingsLabel')}
-              items={groupOnlyGreetings()}
-              onChange={(next) => {
-                setGroupOnlyGreetings(next);
-                scheduleAutoSave();
-              }}
-            />
-          </fieldset></div>
+          <div class="editor-tab-panel" role="tabpanel">
+            <fieldset class="editor-fieldset" disabled={isExternal()}>
+              <GreetingsEditor
+                label={t('character.alternateGreetingsLabel')}
+                items={alternateGreetings()}
+                onChange={(next) => {
+                  setAlternateGreetings(next);
+                  scheduleAutoSave();
+                }}
+              />
+              <GreetingsEditor
+                label={t('character.groupOnlyGreetingsLabel')}
+                items={groupOnlyGreetings()}
+                onChange={(next) => {
+                  setGroupOnlyGreetings(next);
+                  scheduleAutoSave();
+                }}
+              />
+            </fieldset>
+          </div>
         </Show>
 
         {/* ---- Logic: regex, backend Lua, imported modules ---- */}
         <Show when={activeTab() === 'logic'}>
-          <div class="editor-tab-panel" role="tabpanel"><fieldset class="editor-fieldset" disabled={isExternal()}>
-            <div class="character-regex-section">
-              <h3 class="section-heading">{t('character.regexHeading')}</h3>
-              <p class="text-sm text-muted">{t('character.regexDescription')}</p>
-              <CharacterRegexEditor
-                rules={regexRules()}
-                onChange={(next) => {
-                  setRegexRules(next);
-                  scheduleAutoSave();
-                }}
-              />
-            </div>
+          <div class="editor-tab-panel" role="tabpanel">
+            <fieldset class="editor-fieldset" disabled={isExternal()}>
+              <div class="character-regex-section">
+                <h3 class="section-heading">{t('character.regexHeading')}</h3>
+                <p class="text-sm text-muted">{t('character.regexDescription')}</p>
+                <CharacterRegexEditor
+                  rules={regexRules()}
+                  onChange={(next) => {
+                    setRegexRules(next);
+                    scheduleAutoSave();
+                  }}
+                />
+              </div>
 
-            <div class="character-backend-section">
-              <h3 class="section-heading">{t('character.backendHeading')}</h3>
-              <p class="text-sm text-muted">{t('character.backendDescription')}</p>
-              <CharacterBackendEditor
-                value={backendLogic()}
-                characterId={char.id}
-                onChange={(next) => {
-                  setBackendLogic(next);
-                  scheduleAutoSave();
-                }}
-              />
-            </div>
+              <div class="character-backend-section">
+                <h3 class="section-heading">{t('character.backendHeading')}</h3>
+                <p class="text-sm text-muted">{t('character.backendDescription')}</p>
+                <CharacterBackendEditor
+                  value={backendLogic()}
+                  characterId={char.id}
+                  onChange={(next) => {
+                    setBackendLogic(next);
+                    scheduleAutoSave();
+                  }}
+                />
+              </div>
 
-            {/* Imported RisuAI (.risum) modules — read-only porting reference.
+              {/* Imported RisuAI (.risum) modules — read-only porting reference.
                 Renders nothing when the character has no modules. */}
-            <RisuModuleViewer characterId={char.id} />
-          </fieldset></div>
+              <RisuModuleViewer characterId={char.id} />
+            </fieldset>
+          </div>
         </Show>
 
         {/* ---- Advanced: metadata + prompt overrides + assets ---- */}
         <Show when={activeTab() === 'advanced'}>
-          <div class="editor-tab-panel" role="tabpanel"><fieldset class="editor-fieldset" disabled={isExternal()}>
-            <PromptTextarea label={t('character.creatorNotesLabel')} value={creatorNotes()} onInput={(v) => { setCreatorNotes(v); scheduleAutoSave(); }} />
-            <PromptTextarea label={t('character.systemPromptLabel')} value={systemPrompt()} onInput={(v) => { setSystemPrompt(v); scheduleAutoSave(); }} rows={4} />
-            <PromptTextarea label={t('character.postHistoryLabel')} value={postHistoryInstructions()} onInput={(v) => { setPostHistoryInstructions(v); scheduleAutoSave(); }} rows={4} />
-
-            <label class="field-label">
-              {t('character.creatorLabel')}
-              <input class="text-input"
-                value={creator()}
-                onInput={(e) => {
-                  setCreator(e.currentTarget.value);
+          <div class="editor-tab-panel" role="tabpanel">
+            <fieldset class="editor-fieldset" disabled={isExternal()}>
+              <PromptTextarea
+                label={t('character.creatorNotesLabel')}
+                value={creatorNotes()}
+                onInput={(v) => {
+                  setCreatorNotes(v);
                   scheduleAutoSave();
                 }}
               />
-            </label>
-
-            <label class="field-label">
-              {t('character.versionLabel')}
-              <input class="text-input"
-                value={version()}
-                onInput={(e) => {
-                  setVersion(e.currentTarget.value);
+              <PromptTextarea
+                label={t('character.systemPromptLabel')}
+                value={systemPrompt()}
+                onInput={(v) => {
+                  setSystemPrompt(v);
                   scheduleAutoSave();
                 }}
+                rows={4}
               />
-            </label>
-
-            <label class="field-label">
-              {t('character.sourceLabel')}
-              <textarea
-                class="textarea-input"
-                rows={2}
-                value={source().join('\n')}
-                onInput={(e) => {
-                  const lines = e.currentTarget.value.split('\n').map((s) => s.trim()).filter(Boolean);
-                  setSource(lines);
+              <PromptTextarea
+                label={t('character.postHistoryLabel')}
+                value={postHistoryInstructions()}
+                onInput={(v) => {
+                  setPostHistoryInstructions(v);
                   scheduleAutoSave();
                 }}
+                rows={4}
               />
-            </label>
 
-            {/* Assets (V3) */}
-            <Show when={(char.assets?.length ?? 0) > 0}>
-              <button class="advanced-toggle" onClick={() => setShowAssets((v) => !v)} type="button">
-                <i class={`bi bi-chevron-${showAssets() ? 'down' : 'right'}`} /> {t('character.assetsToggle', { count: char.assets?.length ?? 0 })}
-              </button>
-              <Show when={showAssets()}>
-                <div class="assets-section">
-                  <For each={Object.entries(assetGroups())}>
-                    {([type, items], index) => (
-                      <div class="asset-group" id={`asset-group-${index()}`}>
-                        <span class="asset-type-label">{type}</span>
-                        <div class="asset-grid">
-                          <For each={items}>
-                            {(asset) => (
-                              <div class="asset-item" id={asset.id} title={asset.name}>
-                                <Show
-                                  when={asset.assetUrl}
-                                  fallback={<div class="asset-placeholder">{asset.ext}</div>}
-                                >
-                                  <SafeImage
-                                    class="asset-thumb"
-                                    src={`${asset.assetUrl}?t=${asset.updatedAt}`}
-                                    alt={asset.name}
-                                    loading="lazy"
-                                  />
-                                </Show>
-                                <span class="asset-name">{asset.name || asset.id.slice(0, 8)}</span>
-                              </div>
-                            )}
-                          </For>
+              <label class="field-label">
+                {t('character.creatorLabel')}
+                <input
+                  class="text-input"
+                  value={creator()}
+                  onInput={(e) => {
+                    setCreator(e.currentTarget.value);
+                    scheduleAutoSave();
+                  }}
+                />
+              </label>
+
+              <label class="field-label">
+                {t('character.versionLabel')}
+                <input
+                  class="text-input"
+                  value={version()}
+                  onInput={(e) => {
+                    setVersion(e.currentTarget.value);
+                    scheduleAutoSave();
+                  }}
+                />
+              </label>
+
+              <label class="field-label">
+                {t('character.sourceLabel')}
+                <textarea
+                  class="textarea-input"
+                  rows={2}
+                  value={source().join('\n')}
+                  onInput={(e) => {
+                    const lines = e.currentTarget.value
+                      .split('\n')
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    setSource(lines);
+                    scheduleAutoSave();
+                  }}
+                />
+              </label>
+
+              {/* Assets (V3) */}
+              <Show when={(char.assets?.length ?? 0) > 0}>
+                <button class="advanced-toggle" onClick={() => setShowAssets((v) => !v)} type="button">
+                  <i class={`bi bi-chevron-${showAssets() ? 'down' : 'right'}`} />{' '}
+                  {t('character.assetsToggle', { count: char.assets?.length ?? 0 })}
+                </button>
+                <Show when={showAssets()}>
+                  <div class="assets-section">
+                    <For each={Object.entries(assetGroups())}>
+                      {([type, items], index) => (
+                        <div class="asset-group" id={`asset-group-${index()}`}>
+                          <span class="asset-type-label">{type}</span>
+                          <div class="asset-grid">
+                            <For each={items}>
+                              {(asset) => (
+                                <div class="asset-item" id={asset.id} title={asset.name}>
+                                  <Show
+                                    when={asset.assetUrl}
+                                    fallback={<div class="asset-placeholder">{asset.ext}</div>}
+                                  >
+                                    <SafeImage
+                                      class="asset-thumb"
+                                      src={`${asset.assetUrl}?t=${asset.updatedAt}`}
+                                      alt={asset.name}
+                                      loading="lazy"
+                                    />
+                                  </Show>
+                                  <span class="asset-name">{asset.name || asset.id.slice(0, 8)}</span>
+                                </div>
+                              )}
+                            </For>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </For>
-                </div>
+                      )}
+                    </For>
+                  </div>
+                </Show>
               </Show>
-            </Show>
-          </fieldset></div>
+            </fieldset>
+          </div>
         </Show>
 
         <div class="modal-actions">
@@ -641,13 +725,17 @@ export function CharacterEditor(props: CharacterEditorProps) {
             <span class="save-indicator">{t('character.saved')}</span>
           </Show>
           <div class="export-dropdown">
-            <button class="export-btn" onClick={() => exportCard('png')}>{t('character.exportPng')}</button>
+            <button class="export-btn" onClick={() => exportCard('png')}>
+              {t('character.exportPng')}
+            </button>
             <Show when={(char.assets?.length ?? 0) > 0}>
-              <button class="export-btn" onClick={() => exportCard('charx')}>{t('character.exportCharx')}</button>
+              <button class="export-btn" onClick={() => exportCard('charx')}>
+                {t('character.exportCharx')}
+              </button>
             </Show>
           </div>
         </div>
-      </div>
+      </Modal>
 
       <Show when={showCropModal()}>
         <CropModal
@@ -659,6 +747,6 @@ export function CharacterEditor(props: CharacterEditorProps) {
           }}
         />
       </Show>
-    </div>
+    </>
   );
 }

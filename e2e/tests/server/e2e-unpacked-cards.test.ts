@@ -43,9 +43,7 @@ class RecordingBackend extends TrivialBackendAdapter {
 /** Flatten a prompt (system prompt + message contents) to searchable text. */
 function promptText(prompt: Prompt): string {
   const parts = prompt.messages.map((m) =>
-    typeof m.content === 'string'
-      ? m.content
-      : m.content.map((p) => (p.type === 'text' ? p.text : '')).join(''),
+    typeof m.content === 'string' ? m.content : m.content.map((p) => (p.type === 'text' ? p.text : '')).join(''),
   );
   return [prompt.systemPrompt ?? '', ...parts].join('\n');
 }

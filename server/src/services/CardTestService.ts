@@ -31,7 +31,9 @@ export const TestCardArgsBase = z.object({
   folderPath: z
     .string()
     .optional()
-    .describe('Alternative to characterId: path of an unpacked card folder (absolute, or relative to <dataDir>/unpacked-cards).'),
+    .describe(
+      'Alternative to characterId: path of an unpacked card folder (absolute, or relative to <dataDir>/unpacked-cards).',
+    ),
   turns: z.array(z.string().min(1)).min(1).max(MAX_TURNS).describe('Scripted user messages, sent one per turn.'),
   keepChat: z
     .boolean()
@@ -42,7 +44,9 @@ export const TestCardArgsBase = z.object({
   backendConfigId: z
     .string()
     .optional()
-    .describe('Backend config to run against. Default: the ACTIVE config (real LLM, real cost). Pass a mock-provider config id for a deterministic run.'),
+    .describe(
+      'Backend config to run against. Default: the ACTIVE config (real LLM, real cost). Pass a mock-provider config id for a deterministic run.',
+    ),
   timeoutMs: z
     .number()
     .int()
@@ -74,7 +78,9 @@ export class CardTestService {
   async run(rawArgs: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = TestCardArgs.safeParse(rawArgs);
     if (!parsed.success) {
-      return { content: `Error: invalid arguments — ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}` };
+      return {
+        content: `Error: invalid arguments — ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
+      };
     }
     const args = parsed.data;
     let sessionId: string | undefined;

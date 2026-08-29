@@ -1,18 +1,15 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { App } from '../helpers/app.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { setSetting } from '../helpers/settings.js';
 import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 /** Last user-message string content in a captured mock-LLM request body. */
 function lastUserContent(body: unknown): string {
   const messages = (body as { messages?: Array<{ role?: string; content?: unknown }> })?.messages ?? [];
-  const lastUser = messages.slice().reverse().find((m) => m.role === 'user');
+  const lastUser = messages
+    .slice()
+    .reverse()
+    .find((m) => m.role === 'user');
   const content = lastUser?.content;
   return typeof content === 'string' ? content : JSON.stringify(content ?? '');
 }
@@ -27,11 +24,6 @@ function lastUserContent(body: unknown): string {
 test.describe('Generation Post-Processing', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
     // The server is shared per run — put every touched setting back to its
     // default even when a test fails halfway.
@@ -40,11 +32,9 @@ test.describe('Generation Post-Processing', () => {
     await setSetting(page, 'autoFixGeneratedMarkdown', false);
     await setSetting(page, 'removeXML', false);
     await setSetting(page, 'singleLine', false);
-    await resetBackendConfig(page);
   });
 
-  test('whitespaceMode full collapses whitespace in the request and the reply', async ({ page }) => {
-    const app = new App(page);
+  test('whitespaceMode full collapses whitespace in the request and the reply', async ({ page, app }) => {
     await app.createCharacterAndChat({ name: uniqueName('PP Whitespace'), firstMes: 'Ready.' });
 
     await setSetting(page, 'whitespaceMode', 'full');
@@ -60,8 +50,7 @@ test.describe('Generation Post-Processing', () => {
     expect(await app.lastAssistantText()).not.toMatch(/ {2}/);
   });
 
-  test('trimSentences cuts a dangling final fragment', async ({ page }) => {
-    const app = new App(page);
+  test('trimSentences cuts a dangling final fragment', async ({ page, app }) => {
     await app.createCharacterAndChat({ name: uniqueName('PP Trim'), firstMes: 'Ready.' });
 
     await setSetting(page, 'trimSentences', true);
@@ -69,8 +58,7 @@ test.describe('Generation Post-Processing', () => {
     expect(await app.lastAssistantText()).toBe('First sentence.');
   });
 
-  test('autoFixGeneratedMarkdown closes unbalanced bold markers', async ({ page }) => {
-    const app = new App(page);
+  test('autoFixGeneratedMarkdown closes unbalanced bold markers', async ({ page, app }) => {
     await app.createCharacterAndChat({ name: uniqueName('PP Markdown'), firstMes: 'Ready.' });
 
     await setSetting(page, 'autoFixGeneratedMarkdown', true);
@@ -83,8 +71,7 @@ test.describe('Generation Post-Processing', () => {
     await expect(app.lastBubble('assistant').locator('.message-content strong')).toContainText('bold');
   });
 
-  test('removeXML strips XML tags from the reply', async ({ page }) => {
-    const app = new App(page);
+  test('removeXML strips XML tags from the reply', async ({ page, app }) => {
     await app.createCharacterAndChat({ name: uniqueName('PP Xml'), firstMes: 'Ready.' });
 
     await setSetting(page, 'removeXML', true);
@@ -97,8 +84,7 @@ test.describe('Generation Post-Processing', () => {
     expect(await app.lastAssistantText()).toBe('keep this drop this');
   });
 
-  test('singleLine trims the reply to its first line', async ({ page }) => {
-    const app = new App(page);
+  test('singleLine trims the reply to its first line', async ({ page, app }) => {
     await app.createCharacterAndChat({ name: uniqueName('PP SingleLine'), firstMes: 'Ready.' });
 
     await setSetting(page, 'singleLine', true);

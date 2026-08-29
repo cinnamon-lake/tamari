@@ -375,9 +375,7 @@ export class TestHarness {
   ): Extract<ServerMessage, { type: T }> {
     const found = this.lastBroadcast(type, originator);
     if (!found) {
-      const allTypes = (originator ? originator.messages : this.clients.flatMap((c) => c.messages)).map(
-        (m) => m.type,
-      );
+      const allTypes = (originator ? originator.messages : this.clients.flatMap((c) => c.messages)).map((m) => m.type);
       throw new Error(`Expected broadcast '${type}' but got: [${allTypes.join(', ')}]`);
     }
     return found;

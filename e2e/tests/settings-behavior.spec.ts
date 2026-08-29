@@ -1,27 +1,15 @@
-import { test, expect, type Locator } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { App } from '../helpers/app.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { setSetting } from '../helpers/settings.js';
 import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
-
-/** Idempotently set a checkbox row inside the open settings modal. */
-async function setCheckbox(modal: Locator, label: string, desired: boolean): Promise<void> {
-  const checkbox = modal.locator(`label.checkbox-row:has-text("${label}") input[type="checkbox"]`);
-  if ((await checkbox.isChecked()) !== desired) {
-    await checkbox.click();
-    await expect(checkbox).toBeChecked({ checked: desired });
-  }
-}
+import { uniqueName } from '../helpers/names.js';
 
 /** Last user-message string content in a captured mock-LLM request body. */
 function lastUserContent(body: unknown): string {
   const messages = (body as { messages?: Array<{ role?: string; content?: unknown }> })?.messages ?? [];
-  const lastUser = messages.slice().reverse().find((m) => m.role === 'user');
+  const lastUser = messages
+    .slice()
+    .reverse()
+    .find((m) => m.role === 'user');
   const content = lastUser?.content;
   return typeof content === 'string' ? content : JSON.stringify(content ?? '');
 }
@@ -29,18 +17,8 @@ function lastUserContent(body: unknown): string {
 test.describe('Settings — Behavior', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('send on Enter and confirm before deleting messages', async ({ page }) => {
+  test('send on Enter and confirm before deleting messages', async ({ page, app }) => {
     test.setTimeout(90000);
-    const app = new App(page);
     const name = uniqueName('BehaviorSend');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 
@@ -88,9 +66,8 @@ test.describe('Settings — Behavior', () => {
     await app.ensureSetting('Confirm before deleting messages', false);
   });
 
-  test('soft fork and restore input text on chat switch', async ({ page }) => {
+  test('soft fork and restore input text on chat switch', async ({ page, app }) => {
     test.setTimeout(120000);
-    const app = new App(page);
     const name = uniqueName('BehaviorFork');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
     await app.sendUserMessage('seq:forkbase', { expectReply: true });
@@ -115,9 +92,8 @@ test.describe('Settings — Behavior', () => {
     await app.ensureSetting('Restore input text when switching chats', false);
   });
 
-  test('auto load last chat and character list grid view', async ({ page }) => {
+  test('auto load last chat and character list grid view', async ({ page, app }) => {
     test.setTimeout(90000);
-    const app = new App(page);
     const name = uniqueName('BehaviorLoad');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 
@@ -140,9 +116,8 @@ test.describe('Settings — Behavior', () => {
     await expect(page.locator('.character-list')).not.toHaveClass(/grid/);
   });
 
-  test('post-processing: whitespace, trim sentences, markdown fix, XML, single line', async ({ page }) => {
+  test('post-processing: whitespace, trim sentences, markdown fix, XML, single line', async ({ page, app }) => {
     test.setTimeout(180000);
-    const app = new App(page);
     const name = uniqueName('BehaviorPost');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 
@@ -171,7 +146,10 @@ test.describe('Settings — Behavior', () => {
     // removeXML: XML tags are stripped from the reply. (The user's own bubble
     // also renders without the tags — DOMPurify strips them at display time.)
     await app.ensureSetting('Remove XML tags from output', true);
-    await app.sendUserMessage('respond:keep <xml>drop</xml> end', { expectReply: true, userText: 'respond:keep drop end' });
+    await app.sendUserMessage('respond:keep <xml>drop</xml> end', {
+      expectReply: true,
+      userText: 'respond:keep drop end',
+    });
     const xmlText = (await app.lastAssistantText()).replace(/\s+/g, ' ').trim();
     expect(xmlText).toBe('keep drop end');
     await app.ensureSetting('Remove XML tags from output', false);
@@ -184,9 +162,8 @@ test.describe('Settings — Behavior', () => {
     await app.ensureSetting('Single-line mode (trim to first newline)', false);
   });
 
-  test('message sound and smooth streaming with fade-in', async ({ page }) => {
+  test('message sound and smooth streaming with fade-in', async ({ page, app }) => {
     test.setTimeout(90000);
-    const app = new App(page);
     const name = uniqueName('BehaviorStream');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 
@@ -249,9 +226,8 @@ test.describe('Settings — Behavior', () => {
     await app.ensureSetting('Fade in streamed text', true);
   });
 
-  test('whitespace handling radios persist across reload', async ({ page }) => {
+  test('whitespace handling radios persist across reload', async ({ page, app }) => {
     test.setTimeout(90000);
-    const app = new App(page);
 
     const modal = await app.openSettings();
     await modal.locator('label.radio-row:has-text("Full whitespace manipulation") input').click();

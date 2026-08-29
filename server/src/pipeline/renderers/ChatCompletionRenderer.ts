@@ -16,12 +16,18 @@ import type { RenderOptions, PromptCollection, ChatRenderResult, PromptRenderer 
 import { PROMPT_SEPARATOR } from './Renderer.js';
 import { getLogger } from '../../lib/logger.js';
 
-const rendererLog = getLogger('ChatCompletionRenderer');
+const rendererLog = getLogger('pipeline/renderers/ChatCompletionRenderer');
 
 export class ChatCompletionRenderer implements PromptRenderer {
   render(collection: PromptCollection, opts: RenderOptions): ChatRenderResult {
     rendererLog.debug(
-      { chatHistoryLength: opts.chatHistory.length, chatHistoryIds: opts.chatHistory.map((m) => m.id), chatHistoryRoles: opts.chatHistory.map((m) => m.role), maxContext: opts.maxContext, maxResponseTokens: opts.maxResponseTokens },
+      {
+        chatHistoryLength: opts.chatHistory.length,
+        chatHistoryIds: opts.chatHistory.map((m) => m.id),
+        chatHistoryRoles: opts.chatHistory.map((m) => m.role),
+        maxContext: opts.maxContext,
+        maxResponseTokens: opts.maxResponseTokens,
+      },
       'render() called',
     );
 
@@ -152,7 +158,7 @@ export class ChatCompletionRenderer implements PromptRenderer {
         }
         // Resolve macros in the remaining text part(s)
         parts = parts.map((p) =>
-          p.type === 'text' ? { ...p, text: opts.macroResolver.resolve((p).text, opts.macroCtx) } : p,
+          p.type === 'text' ? { ...p, text: opts.macroResolver.resolve(p.text, opts.macroCtx) } : p,
         );
         // Collapse to string when only a single text part remains
         const singlePart = parts.length === 1 ? parts[0] : undefined;
@@ -275,7 +281,11 @@ export class ChatCompletionRenderer implements PromptRenderer {
     );
 
     rendererLog.debug(
-      { outputMessageCount: finalMessages.length, outputRoles: finalMessages.map((m) => m.role), outputHasParts: finalMessages.map((m) => Array.isArray(m.content)) },
+      {
+        outputMessageCount: finalMessages.length,
+        outputRoles: finalMessages.map((m) => m.role),
+        outputHasParts: finalMessages.map((m) => Array.isArray(m.content)),
+      },
       'render() returning',
     );
     return {

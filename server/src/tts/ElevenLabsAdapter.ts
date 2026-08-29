@@ -9,7 +9,7 @@
  */
 
 import { logger } from '../lib/logger.js';
-import { applyRequestScript } from '../backends/RequestScript.js';
+import { BaseTtsAdapter } from './BaseTtsAdapter.js';
 import type { TtsAdapter, TtsVoice, TtsGenerateOptions, TtsResult } from './TtsAdapter.js';
 
 export interface ElevenLabsConfig {
@@ -22,15 +22,9 @@ export interface ElevenLabsConfig {
 const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // "Rachel"
 const DEFAULT_MODEL = 'eleven_multilingual_v2';
 
-export class ElevenLabsAdapter implements TtsAdapter {
+export class ElevenLabsAdapter extends BaseTtsAdapter<ElevenLabsConfig> implements TtsAdapter {
   readonly id = 'elevenlabs';
   readonly name = 'ElevenLabs';
-
-  constructor(private config: ElevenLabsConfig) {}
-
-  private get baseUrl(): string {
-    return this.config.baseUrl.replace(/\/$/, '');
-  }
 
   private get model(): string {
     return this.config.model || DEFAULT_MODEL;
@@ -38,11 +32,6 @@ export class ElevenLabsAdapter implements TtsAdapter {
 
   private authHeaders(): Record<string, string> {
     return this.config.apiKey ? { 'xi-api-key': this.config.apiKey } : {};
-  }
-
-  private async applyScript(url: string, init: RequestInit): Promise<{ url: string; init: RequestInit }> {
-    if (!this.config.requestScript) return { url, init };
-    return applyRequestScript(url, init, this.config.requestScript);
   }
 
   async healthCheck(signal?: AbortSignal): Promise<boolean> {
@@ -66,7 +55,10 @@ export class ElevenLabsAdapter implements TtsAdapter {
     });
     const res = await fetch(url, init);
     if (!res.ok) {
-      const text = await res.text().catch((err) => { logger.debug({ err }, 'TTS error body read failed'); return 'Unknown error'; });
+      const text = await res.text().catch((err) => {
+        logger.debug({ err }, 'TTS error body read failed');
+        return 'Unknown error';
+      });
       throw new Error(`Failed to list voices: HTTP ${res.status} - ${text}`);
     }
     const data = (await res.json()) as {
@@ -104,7 +96,10 @@ export class ElevenLabsAdapter implements TtsAdapter {
     );
     const res = await fetch(url, init);
     if (!res.ok) {
-      const t = await res.text().catch((err) => { logger.debug({ err }, 'TTS error body read failed'); return 'Unknown error'; });
+      const t = await res.text().catch((err) => {
+        logger.debug({ err }, 'TTS error body read failed');
+        return 'Unknown error';
+      });
       throw new Error(`TTS generation failed: HTTP ${res.status} - ${t}`);
     }
     const contentType = res.headers.get('content-type') ?? 'audio/mpeg';

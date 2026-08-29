@@ -9,7 +9,11 @@ import type { DispatcherDeps, Handlers } from './types.js';
 export function buildBackendConfigHandlers(
   deps: DispatcherDeps,
 ): Handlers<
-  'backendConfig.select' | 'backendConfig.list' | 'backendConfig.create' | 'backendConfig.update' | 'backendConfig.delete'
+  | 'backendConfig.select'
+  | 'backendConfig.list'
+  | 'backendConfig.create'
+  | 'backendConfig.update'
+  | 'backendConfig.delete'
 > {
   const { bus, backendConfigs, backendConfigService } = deps;
 

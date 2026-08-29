@@ -57,6 +57,8 @@ class AssetsTemplate implements ToolTemplate {
     return { content: `Assets (${limited.length}):\n${lines.join('\n')}` };
   }
 
-  serialize(): string { return ''; }
+  serialize(): string {
+    return '';
+  }
   deserialize(_raw: string): void {}
 }

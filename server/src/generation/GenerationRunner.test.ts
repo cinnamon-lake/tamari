@@ -131,9 +131,7 @@ describe('GenerationRunner trace errors', () => {
 
     const runPromise = h.generationRunner.run(transcriptTarget(chatId));
     // Wait for the run to be streaming, then stop it.
-    await expect
-      .poll(() => h!.generationRunner.getActiveGeneration()?.id, { timeout: 5000 })
-      .not.toBeUndefined();
+    await expect.poll(() => h!.generationRunner.getActiveGeneration()?.id, { timeout: 5000 }).not.toBeUndefined();
     const active = h.generationRunner.getActiveGeneration()!;
     h.generationRunner.handleStop(active.id);
 

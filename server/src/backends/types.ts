@@ -92,35 +92,37 @@ export const OpenAIStreamChunkSchema = z
     id: z.string().optional(),
     choices: z
       .array(
-        z.object({
-          delta: z
-            .object({
-              content: z.string().nullable().optional(),
-              reasoning: z.string().nullable().optional(),
-              reasoning_content: z.string().nullable().optional(),
-              role: z.string().nullable().optional(),
-              tool_calls: z
-                .array(
-                  z
-                    .object({
-                      index: z.number(),
-                      id: z.string().nullable().optional(),
-                      type: z.string().nullable().optional(),
-                      function: z
-                        .object({
-                          name: z.string().nullable().optional(),
-                          arguments: z.string().nullable().optional(),
-                        })
-                        .passthrough()
-                        .optional(),
-                    })
-                    .passthrough(),
-                )
-                .optional(),
-            })
-            .passthrough(),
-          finish_reason: z.string().nullable().optional(),
-        }).passthrough(),
+        z
+          .object({
+            delta: z
+              .object({
+                content: z.string().nullable().optional(),
+                reasoning: z.string().nullable().optional(),
+                reasoning_content: z.string().nullable().optional(),
+                role: z.string().nullable().optional(),
+                tool_calls: z
+                  .array(
+                    z
+                      .object({
+                        index: z.number(),
+                        id: z.string().nullable().optional(),
+                        type: z.string().nullable().optional(),
+                        function: z
+                          .object({
+                            name: z.string().nullable().optional(),
+                            arguments: z.string().nullable().optional(),
+                          })
+                          .passthrough()
+                          .optional(),
+                      })
+                      .passthrough(),
+                  )
+                  .optional(),
+              })
+              .passthrough(),
+            finish_reason: z.string().nullable().optional(),
+          })
+          .passthrough(),
       )
       .optional(),
     usage: z

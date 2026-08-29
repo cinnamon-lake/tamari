@@ -1,12 +1,7 @@
-import { test, expect, type Page } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Page } from '../fixtures/base.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 /**
  * Create a character over the app's WS bus and return its server-generated id,
@@ -31,7 +26,9 @@ async function createCharacterViaWs(page: Page, charName: string, firstMes?: str
           try {
             const msg = JSON.parse(event.data as string);
             if (msg.type === 'snapshot') {
-              ws.send(JSON.stringify({ type: 'character.create', data: { name: cn, ...(fm ? { firstMes: fm } : {}) } }));
+              ws.send(
+                JSON.stringify({ type: 'character.create', data: { name: cn, ...(fm ? { firstMes: fm } : {}) } }),
+              );
             }
             if (msg.type === 'character.created' && msg.character?.name === cn) {
               ws.close();
@@ -42,7 +39,7 @@ async function createCharacterViaWs(page: Page, charName: string, firstMes?: str
               reject(new Error(msg.message ?? 'WS creation failed'));
             }
           } catch (err) {
-            reject(err);
+            reject(err instanceof Error ? err : new Error(String(err)));
           }
         };
 
@@ -63,21 +60,14 @@ async function createCharacterViaWs(page: Page, charName: string, firstMes?: str
 test.describe('Character Workbench Tools', () => {
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     if (toolsetId) {
       await deleteToolset(page, toolsetId);
       toolsetId = undefined;
     }
   });
 
-  test('creating a character via a write to /characters/new appears in the sidebar', async ({ page }) => {
-    const app = new App(page);
+  test('creating a character via a write to /characters/new appears in the sidebar', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -100,8 +90,7 @@ test.describe('Character Workbench Tools', () => {
     await expect(page.locator('.character-list li', { hasText: name })).toBeVisible({ timeout: 10000 });
   });
 
-  test('read meta.json reads a card by id and a write to meta.json renames it', async ({ page }) => {
-    const app = new App(page);
+  test('read meta.json reads a card by id and a write to meta.json renames it', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -132,8 +121,10 @@ test.describe('Character Workbench Tools', () => {
     await expect(page.locator('.character-list li', { hasText: renamed })).toBeVisible({ timeout: 10000 });
   });
 
-  test('a lorebook write auto-creates the character lorebook, and it shows in the World Info UI', async ({ page }) => {
-    const app = new App(page);
+  test('a lorebook write auto-creates the character lorebook, and it shows in the World Info UI', async ({
+    page,
+    app,
+  }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -172,8 +163,8 @@ test.describe('Character Workbench Tools', () => {
 
   test('a regex write scopes a display rule to the character; a new greeting shows the transformed text', async ({
     page,
+    app,
   }) => {
-    const app = new App(page);
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({

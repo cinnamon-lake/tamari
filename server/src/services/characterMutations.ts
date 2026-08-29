@@ -53,10 +53,7 @@ export async function broadcastCharacterList(deps: CharacterMutationDeps): Promi
   deps.bus.broadcast({ type: 'character.listed', characters: list.items.map(toCharacterSummary) });
 }
 
-export async function createCharacter(
-  deps: CharacterMutationDeps,
-  input: Record<string, unknown>,
-): Promise<Character> {
+export async function createCharacter(deps: CharacterMutationDeps, input: Record<string, unknown>): Promise<Character> {
   if (typeof input.name !== 'string' || input.name.length === 0) {
     throw new Error('expected data.name (string)');
   }

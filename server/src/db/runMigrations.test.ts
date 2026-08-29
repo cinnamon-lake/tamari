@@ -38,9 +38,7 @@ describe('applyMigrations', () => {
 
     expect(await userVersion(client)).toBe(18);
 
-    const tables = await client.execute(
-      "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
-    );
+    const tables = await client.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name");
     const names = tables.rows.map((r) => String(r.name));
     expect(names).toContain('characters');
     expect(names).toContain('chats');
@@ -194,9 +192,7 @@ describe('applyMigrations', () => {
 
     // Simulate a pre-016 database: two prompt lists without the utility
     // prompts, and a settings blob with the legacy global keys.
-    const legacyPrompts = [
-      { identifier: 'main', name: 'Main Prompt', content: 'MAIN', role: 'system', enabled: true },
-    ];
+    const legacyPrompts = [{ identifier: 'main', name: 'Main Prompt', content: 'MAIN', role: 'system', enabled: true }];
     for (const id of ['list-a', 'list-b']) {
       await client.execute({
         sql: "INSERT INTO prompt_lists (id, name, prompts_json, prompt_order_json) VALUES (?, ?, ?, '[]')",
@@ -297,7 +293,9 @@ describe('applyMigrations', () => {
     // Simulate a pre-017 settings blob with the legacy global keys.
     await client.execute({
       sql: 'INSERT INTO settings (id, blob) VALUES (0, ?) ON CONFLICT(id) DO UPDATE SET blob = excluded.blob',
-      args: [JSON.stringify({ claudeCacheMode: 'manual', claudeCacheDepth: 2, claudeCacheTTL: '1h', userName: 'Tester' })],
+      args: [
+        JSON.stringify({ claudeCacheMode: 'manual', claudeCacheDepth: 2, claudeCacheTTL: '1h', userName: 'Tester' }),
+      ],
     });
 
     // Rewind to just before 017 and re-run.

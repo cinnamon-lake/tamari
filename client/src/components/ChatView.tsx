@@ -1,7 +1,7 @@
 import { Show, For, Switch, Match, createSignal, createEffect, createMemo, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { onEnterActivate, trapFocus } from '../lib/focusUtils.js';
-import { createBackdropDismiss } from '../lib/backdropDismiss.js';
+import { onEnterActivate } from '../lib/focusUtils.js';
+import { Modal } from './Modal.js';
 import { serializeResponseForm } from '../lib/responseForm.js';
 import { materializeChat } from '../lib/materializeChat.js';
 import type { JSX } from 'solid-js';
@@ -107,7 +107,9 @@ export function ChatView() {
     return loadingOlderChatId() === chat.id;
   });
 
-  const isStreaming = createMemo(() => state.generation.status === 'streaming' && state.generation.chatId === state.activeChat?.id);
+  const isStreaming = createMemo(
+    () => state.generation.status === 'streaming' && state.generation.chatId === state.activeChat?.id,
+  );
 
   const isGroupChat = createMemo(() => activeChat()?.characterId === null);
 
@@ -360,7 +362,8 @@ export function ChatView() {
               setTimeout(() => setScrollToBottomTrigger(false), 100);
             }}
             type="button"
-            title={t('chat.scrollToBottom')} aria-label={t('chat.scrollToBottom')}
+            title={t('chat.scrollToBottom')}
+            aria-label={t('chat.scrollToBottom')}
           >
             <i class="bi bi-arrow-down" />
           </button>
@@ -450,11 +453,7 @@ function MessageBubbleShell(props: MessageBubbleShellProps) {
     const dx = touch.clientX - startX;
     const dy = touch.clientY - startY;
     const dt = Date.now() - startTime;
-    if (
-      dt < SWIPE_TIMEOUT_MS &&
-      Math.abs(dx) > SWIPE_THRESHOLD &&
-      Math.abs(dx) > Math.abs(dy) * 1.5
-    ) {
+    if (dt < SWIPE_TIMEOUT_MS && Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.5) {
       if (dx < 0 && props.onSwipeLeft) {
         props.onSwipeLeft();
       } else if (dx > 0 && props.onSwipeRight) {
@@ -557,10 +556,11 @@ function MessageBubble(props: {
     return typeof message().extra?.editedAt === 'number';
   };
 
-  const isStreamingTarget = createMemo(() =>
-    state.generation.status === 'streaming' &&
-    state.generation.chatId === (activeChatId() ?? '') &&
-    state.generation.targetMessageId === message().id
+  const isStreamingTarget = createMemo(
+    () =>
+      state.generation.status === 'streaming' &&
+      state.generation.chatId === (activeChatId() ?? '') &&
+      state.generation.targetMessageId === message().id,
   );
 
   const streamFadeInEnabled = createMemo(
@@ -666,7 +666,8 @@ function MessageBubble(props: {
 
   const renderEditArea = (_partIndex: number, _partText: string): JSX.Element => (
     <div class="message-edit">
-      <textarea class="edit-textarea"
+      <textarea
+        class="edit-textarea"
         ref={(el) => {
           queueMicrotask(() => {
             el.focus();
@@ -689,8 +690,12 @@ function MessageBubble(props: {
       />
       <div class="edit-actions">
         <span class="text-xs text-muted">{t('chat.editHint')}</span>
-        <button class="btn btn-ghost" onClick={cancelEdit}>{t('common.cancel')}</button>
-        <button class="btn btn-primary" onClick={saveEdit}>{t('common.save')}</button>
+        <button class="btn btn-ghost" onClick={cancelEdit}>
+          {t('common.cancel')}
+        </button>
+        <button class="btn btn-primary" onClick={saveEdit}>
+          {t('common.save')}
+        </button>
       </div>
     </div>
   );
@@ -793,8 +798,7 @@ function MessageBubble(props: {
     () =>
       isAssistant() &&
       !editing() &&
-      (props.isLast ||
-        (state.settings['swipeNumbersOnAllMessages'] && (swipeInfo()?.swipeTotal ?? 0) > 1)),
+      (props.isLast || (state.settings['swipeNumbersOnAllMessages'] && (swipeInfo()?.swipeTotal ?? 0) > 1)),
   );
 
   const messageName = createMemo(() => {
@@ -948,11 +952,19 @@ function MessageBubble(props: {
             // generate a variant still works (see isSwipeable). Explicit
             // handlers (alternate-greeting cycling) bypass the gate — the
             // virtual greeting bubble has no swipeInfo of its own.
-            ((swipeInfo()?.swipeTotal ?? 0) > 1 || props.onSwipeLeft !== undefined || props.onSwipeRight !== undefined) &&
+            ((swipeInfo()?.swipeTotal ?? 0) > 1 ||
+              props.onSwipeLeft !== undefined ||
+              props.onSwipeRight !== undefined) &&
             (props.isLast || state.settings['swipeNumbersOnAllMessages'])
           }
         >
-          <button class="action-btn swipe-btn" onClick={() => handleSwipe('left')} title={t('chat.swipeLeft')} aria-label={t('chat.swipeLeft')} type="button">
+          <button
+            class="action-btn swipe-btn"
+            onClick={() => handleSwipe('left')}
+            title={t('chat.swipeLeft')}
+            aria-label={t('chat.swipeLeft')}
+            type="button"
+          >
             <i class="bi bi-chevron-left" />
           </button>
           <Show when={!props.readOnly && (swipeInfo()?.swipeTotal ?? 0) > 1}>
@@ -973,7 +985,13 @@ function MessageBubble(props: {
               {swipeInfo()?.swipeIndex}/{swipeInfo()?.swipeTotal}
             </span>
           </Show>
-          <button class="action-btn swipe-btn" onClick={() => handleSwipe('right')} title={t('chat.swipeRight')} aria-label={t('chat.swipeRight')} type="button">
+          <button
+            class="action-btn swipe-btn"
+            onClick={() => handleSwipe('right')}
+            title={t('chat.swipeRight')}
+            aria-label={t('chat.swipeRight')}
+            type="button"
+          >
             <i class="bi bi-chevron-right" />
           </button>
         </Show>
@@ -981,57 +999,60 @@ function MessageBubble(props: {
       swipePicker={
         <Show when={showSwipePicker()}>
           <Portal>
-            <div class="modal-overlay" {...createBackdropDismiss(() => setShowSwipePicker(false))}>
-              <div
-                class="modal settings-modal swipe-picker-modal"
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => trapFocus(e.currentTarget, e)}
-                role="dialog"
-                aria-modal="true"
-                aria-label={t('chat.swipePicker')}
-              >
-                <h2 class="modal-title">{t('chat.swipePicker')}</h2>
-                <section class="settings-section">
-                  <For each={state.swipes[activeChatId() ?? ''] ?? []}>
-                    {(swipe, i) => {
-                      const text = getMessageText(swipe.extra?.parts);
-                      const preview = text.length > 120 ? text.slice(0, 120) + '…' : text;
-                      const isActive = swipe.id === message().id;
-                      return (
-                        <div
-                          class={`swipe-picker-row${isActive ? ' active' : ''}`}
-                          role="button"
-                          tabindex={0}
-                          onKeyDown={onEnterActivate}
-                          onClick={() => selectSwipe(swipe.id)}
-                        >
-                          <div class="swipe-picker-index">{i() + 1}</div>
-                          <div class="swipe-picker-preview">{preview || <span class="text-muted">({t('chat.emptySwipe')})</span>}</div>
-                          <div class="swipe-picker-actions">
-                            <Show when={!isActive}>
-                              <button
-                                class="text-btn small"
-                                type="button"
-                                title={t('chat.forkAtMessage')} aria-label={t('chat.forkAtMessage')}
-                                onClick={(e) => { e.stopPropagation(); forkAtSwipe(swipe.id); }}
-                              >
-                                <i class="bi bi-diagram-2" />
-                              </button>
-                            </Show>
-                            <Show when={isActive}>
-                              <span class="text-xs text-muted">{t('chat.swipeCurrent')}</span>
-                            </Show>
-                          </div>
+            <Modal
+              title={t('chat.swipePicker')}
+              onClose={() => setShowSwipePicker(false)}
+              class="modal settings-modal swipe-picker-modal"
+              ariaLabel={t('chat.swipePicker')}
+            >
+              <section class="settings-section">
+                <For each={state.swipes[activeChatId() ?? ''] ?? []}>
+                  {(swipe, i) => {
+                    const text = getMessageText(swipe.extra?.parts);
+                    const preview = text.length > 120 ? text.slice(0, 120) + '…' : text;
+                    const isActive = swipe.id === message().id;
+                    return (
+                      <div
+                        class={`swipe-picker-row${isActive ? ' active' : ''}`}
+                        role="button"
+                        tabindex={0}
+                        onKeyDown={onEnterActivate}
+                        onClick={() => selectSwipe(swipe.id)}
+                      >
+                        <div class="swipe-picker-index">{i() + 1}</div>
+                        <div class="swipe-picker-preview">
+                          {preview || <span class="text-muted">({t('chat.emptySwipe')})</span>}
                         </div>
-                      );
-                    }}
-                  </For>
-                </section>
-                <div class="modal-actions">
-                  <button class="btn" onClick={() => setShowSwipePicker(false)}>{t('common.close')}</button>
-                </div>
+                        <div class="swipe-picker-actions">
+                          <Show when={!isActive}>
+                            <button
+                              class="text-btn small"
+                              type="button"
+                              title={t('chat.forkAtMessage')}
+                              aria-label={t('chat.forkAtMessage')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                forkAtSwipe(swipe.id);
+                              }}
+                            >
+                              <i class="bi bi-diagram-2" />
+                            </button>
+                          </Show>
+                          <Show when={isActive}>
+                            <span class="text-xs text-muted">{t('chat.swipeCurrent')}</span>
+                          </Show>
+                        </div>
+                      </div>
+                    );
+                  }}
+                </For>
+              </section>
+              <div class="modal-actions">
+                <button class="btn" onClick={() => setShowSwipePicker(false)}>
+                  {t('common.close')}
+                </button>
               </div>
-            </div>
+            </Modal>
           </Portal>
         </Show>
       }
@@ -1043,40 +1064,76 @@ function MessageBubble(props: {
               const idx = lastTextPartIndex();
               startEdit(idx === -1 ? parts().length : idx);
             }}
-            title={t('common.edit')} aria-label={t('common.edit')}
+            title={t('common.edit')}
+            aria-label={t('common.edit')}
             type="button"
           >
             <i class="bi bi-pencil" />
           </button>
           <Show when={message().extra?.hidden}>
-            <button class="action-btn" onClick={unhideMessage} title={t('chat.unhide')} aria-label={t('chat.unhide')} type="button">
+            <button
+              class="action-btn"
+              onClick={unhideMessage}
+              title={t('chat.unhide')}
+              aria-label={t('chat.unhide')}
+              type="button"
+            >
               <i class="bi bi-eye" />
             </button>
           </Show>
           <Show when={!message().extra?.hidden}>
-            <button class="action-btn" onClick={hideMessage} title={t('chat.hide')} aria-label={t('chat.hide')} type="button">
+            <button
+              class="action-btn"
+              onClick={hideMessage}
+              title={t('chat.hide')}
+              aria-label={t('chat.hide')}
+              type="button"
+            >
               <i class="bi bi-eye-slash" />
             </button>
           </Show>
           <Show when={!isGroupChat() || props.isLast}>
-            <button class="action-btn" onClick={deleteMessage} title={t('common.delete')} aria-label={t('common.delete')} type="button">
+            <button
+              class="action-btn"
+              onClick={deleteMessage}
+              title={t('common.delete')}
+              aria-label={t('common.delete')}
+              type="button"
+            >
               <i class="bi bi-trash" />
             </button>
           </Show>
           <Show when={message().parentId !== null}>
-            <button class="action-btn" onClick={forkMessage} title={t('chat.forkAtMessage')} aria-label={t('chat.forkAtMessage')} type="button">
+            <button
+              class="action-btn"
+              onClick={forkMessage}
+              title={t('chat.forkAtMessage')}
+              aria-label={t('chat.forkAtMessage')}
+              type="button"
+            >
               <i class="bi bi-diagram-2" />
             </button>
           </Show>
           <Show when={isAssistant() && props.isLast}>
-            <button class="action-btn" onClick={continueMessage} title={t('chat.continue')} aria-label={t('chat.continue')} type="button">
+            <button
+              class="action-btn"
+              onClick={continueMessage}
+              title={t('chat.continue')}
+              aria-label={t('chat.continue')}
+              type="button"
+            >
               <i class="bi bi-skip-end" />
             </button>
-            <button class="action-btn" onClick={regenerate} title={t('chat.regenerate')} aria-label={t('chat.regenerate')} type="button">
+            <button
+              class="action-btn"
+              onClick={regenerate}
+              title={t('chat.regenerate')}
+              aria-label={t('chat.regenerate')}
+              type="button"
+            >
               <i class="bi bi-arrow-clockwise" />
             </button>
           </Show>
-
         </Show>
       }
       suppressContent={(message().role === 'tool' || (!hasParts() && !hasRenderedHtml())) && !editing()}
@@ -1105,34 +1162,37 @@ function MessageBubble(props: {
               <For each={attachments()}>
                 {(att) => (
                   <div class="attachment-wrapper" id={att.id}>
-                  <Switch>
-                    <Match when={att.mimeType.startsWith('image/')}>
-                      <button
-                        type="button"
-                        class="message-attachment-btn"
-                        aria-label={t('chat.imageAttachment')}
-                        onClick={() => openLightbox(authenticatedSrc(att.url))}
-                      >
-                        <img
-                          class="message-attachment-img"
+                    <Switch>
+                      <Match when={att.mimeType.startsWith('image/')}>
+                        <button
+                          type="button"
+                          class="message-attachment-btn"
+                          aria-label={t('chat.imageAttachment')}
+                          onClick={() => openLightbox(authenticatedSrc(att.url))}
+                        >
+                          <img class="message-attachment-img" src={authenticatedSrc(att.url)} alt="" loading="lazy" />
+                        </button>
+                      </Match>
+                      <Match when={att.mimeType.startsWith('audio/')}>
+                        <AudioPlayer
                           src={authenticatedSrc(att.url)}
-                          alt=""
-                          loading="lazy"
+                          title={t('chat.audioAttachment', { id: att.id })}
                         />
-                      </button>
-                    </Match>
-                    <Match when={att.mimeType.startsWith('audio/')}>
-                      <AudioPlayer src={authenticatedSrc(att.url)} title={t('chat.audioAttachment', { id: att.id })} />
-                    </Match>
-                    <Match when={att.mimeType.startsWith('video/')}>
-                      <video class="message-attachment-video" controls src={authenticatedSrc(att.url)} preload="metadata" />
-                    </Match>
-                    <Match when={true}>
-                      <a class="attachment-link" href={authenticatedSrc(att.url)} target="_blank" rel="noopener">
-                        <i class="bi bi-paperclip" /> {att.id}
-                      </a>
-                    </Match>
-                  </Switch>
+                      </Match>
+                      <Match when={att.mimeType.startsWith('video/')}>
+                        <video
+                          class="message-attachment-video"
+                          controls
+                          src={authenticatedSrc(att.url)}
+                          preload="metadata"
+                        />
+                      </Match>
+                      <Match when={true}>
+                        <a class="attachment-link" href={authenticatedSrc(att.url)} target="_blank" rel="noopener">
+                          <i class="bi bi-paperclip" /> {att.id}
+                        </a>
+                      </Match>
+                    </Switch>
                   </div>
                 )}
               </For>
@@ -1147,5 +1207,3 @@ function MessageBubble(props: {
     />
   );
 }
-
-

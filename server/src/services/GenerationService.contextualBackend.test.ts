@@ -561,9 +561,7 @@ describe('group chat with one scripted character (e2e)', () => {
       expect(assistants).toHaveLength(2);
 
       // Insertion order: the scripted character answered from its own code…
-      expect(getMessageText(assistants[0]!.extra.parts)).toBe(
-        `GM[${scripted.id}] speaks only in riddles.`,
-      );
+      expect(getMessageText(assistants[0]!.extra.parts)).toBe(`GM[${scripted.id}] speaks only in riddles.`);
       // …and the unscripted one fell through to the plain writer backend.
       expect(getMessageText(assistants[1]!.extra.parts)).toContain('THE WRITER MODEL WAS CALLED');
       expect(writerCalls()).toBe(1);

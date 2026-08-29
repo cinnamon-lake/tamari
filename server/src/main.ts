@@ -83,7 +83,6 @@ import { QuickReplyWorkbench } from './services/workbench/QuickReplyWorkbench.js
 import { LuaToolWorkbench } from './services/workbench/LuaToolWorkbench.js';
 import { registerWorkbenchTemplate } from './services/templates/workbench/WorkbenchTemplate.js';
 
-
 import { LuaRuntime } from './scripting/LuaRuntime.js';
 import { seedToolTemplates } from './db/seeds/toolTemplateSeeds.js';
 import { GroupChatService } from './services/GroupChatService.js';
@@ -190,7 +189,14 @@ const createBackendAdapterResolved = async (backendSettings: Record<string, unkn
   const customSelection = customBackendSelectionFromSettings(backendSettings);
   if (customSelection) {
     return createCustomBackendAdapter(
-      { customBackends, backendConfigs, settings, luaRuntime, scriptBlobs, createResolvedAdapter: createBackendAdapterResolved },
+      {
+        customBackends,
+        backendConfigs,
+        settings,
+        luaRuntime,
+        scriptBlobs,
+        createResolvedAdapter: createBackendAdapterResolved,
+      },
       customSelection.customBackendId,
       customSelection.delegateConfigId,
       depth,
@@ -247,8 +253,14 @@ const unpackedCards = new UnpackedCardService({
   ragService,
   dataDir: config.dataDir,
 });
-const characters: ICharacterRepository = withLogging(new ReadThroughCharacterRepository(innerCharacters, unpackedCards), 'characters');
-const worldInfo: IWorldInfoRepository = withLogging(new ReadThroughWorldInfoRepository(innerWorldInfo, unpackedCards), 'worldInfo');
+const characters: ICharacterRepository = withLogging(
+  new ReadThroughCharacterRepository(innerCharacters, unpackedCards),
+  'characters',
+);
+const worldInfo: IWorldInfoRepository = withLogging(
+  new ReadThroughWorldInfoRepository(innerWorldInfo, unpackedCards),
+  'worldInfo',
+);
 
 // Memory service
 const memoryService = new MemoryService({
@@ -277,11 +289,34 @@ registerChatWorkbenchTemplate(toolRegistry, { chats, characters, chatMembers, ch
 registerDocsTemplate(toolRegistry);
 
 // The five workbench providers behind the single filesystem-style `workbench` template.
-const characterWorkbench = new CharacterWorkbench({ characters, worldInfo, settings, attachments, characterAssets, storage, bus, luaRuntime, ragService });
-const backendWorkbench = new BackendWorkbench({ backendConfigs, settings, bus, secretService, secretsPassword: config.secret, customBackends, luaRuntime });
+const characterWorkbench = new CharacterWorkbench({
+  characters,
+  worldInfo,
+  settings,
+  attachments,
+  characterAssets,
+  storage,
+  bus,
+  luaRuntime,
+  ragService,
+});
+const backendWorkbench = new BackendWorkbench({
+  backendConfigs,
+  settings,
+  bus,
+  secretService,
+  secretsPassword: config.secret,
+  customBackends,
+  luaRuntime,
+});
 const toolsetWorkbench = new ToolsetWorkbench({ toolsets, toolRegistry, bus });
 const quickReplyWorkbench = new QuickReplyWorkbench({ quickReplies, bus });
-const luaToolWorkbench = new LuaToolWorkbench({ toolTemplates, luaExecutor: luaToolExecutor, registry: toolRegistry, bus });
+const luaToolWorkbench = new LuaToolWorkbench({
+  toolTemplates,
+  luaExecutor: luaToolExecutor,
+  registry: toolRegistry,
+  bus,
+});
 // Card-testing sessions (test_card + test_session_*): a second generation
 // runner over in-memory repos sharing the production deps — no DB rows, no
 // UI broadcasts. Needs promptBuilder, so it is constructed here (the real
@@ -311,8 +346,16 @@ const testSessions = new TestSessionService({
   maxToolRounds: config.maxToolRounds,
 });
 const cardTest = new CardTestService({ testSessions });
-const workbenchTemplate = registerWorkbenchTemplate(toolRegistry, { characterWorkbench, backendWorkbench, toolsetWorkbench, quickReplyWorkbench, luaToolWorkbench, generations, cardTest, testSessions });
-
+const workbenchTemplate = registerWorkbenchTemplate(toolRegistry, {
+  characterWorkbench,
+  backendWorkbench,
+  toolsetWorkbench,
+  quickReplyWorkbench,
+  luaToolWorkbench,
+  generations,
+  cardTest,
+  testSessions,
+});
 
 await seedToolTemplates(toolTemplates);
 
@@ -474,32 +517,34 @@ for (const option of ClientMessageSchema.options) {
 
 // Express app (thin REST layer for uploads/exports + static client)
 const app = express();
-app.use(helmet({
-  hsts: false,
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      baseUri: ["'none'"],
-      scriptSrc: ["'self'"],
-      // Fonts and icons are vendored (see client/src/main.tsx) and served same-origin.
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: [
-        "'self'",
-        "blob:",
-        "data:",
-        // Empty string is ignored; '*' allows external image origins when the user enables the setting.
-        (_req, _res) => (settings.getSync('allowExternalMedia') ? '*' : ''),
-      ],
-      connectSrc: ["'self'", "ws:", "wss:"],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      frameAncestors: ["'none'"],
-      frameSrc: ["'none'"],
-      formAction: ["'none'"],
-      upgradeInsecureRequests: null,
+app.use(
+  helmet({
+    hsts: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'none'"],
+        scriptSrc: ["'self'"],
+        // Fonts and icons are vendored (see client/src/main.tsx) and served same-origin.
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: [
+          "'self'",
+          'blob:',
+          'data:',
+          // Empty string is ignored; '*' allows external image origins when the user enables the setting.
+          (_req, _res) => (settings.getSync('allowExternalMedia') ? '*' : ''),
+        ],
+        connectSrc: ["'self'", 'ws:', 'wss:'],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        frameSrc: ["'none'"],
+        formAction: ["'none'"],
+        upgradeInsecureRequests: null,
+      },
     },
-  },
-}));
+  }),
+);
 app.use((_req, res, next) => {
   res.setHeader(
     'Permissions-Policy',
@@ -533,7 +578,10 @@ app.use('/api/characters', createCharacterRouter(characters, characterAssets, wo
 app.use('/api/mcp', createMcpRouter({ workbench: workbenchTemplate, cardTest, testSessions, settings }));
 
 // Model listing REST API
-app.use('/api/models', createModelsRouter(settings, backendConfigs, secretService, config.secret, createBackendAdapterResolved));
+app.use(
+  '/api/models',
+  createModelsRouter(settings, backendConfigs, secretService, config.secret, createBackendAdapterResolved),
+);
 
 // Anthropic-like proxy API — backend configs exposed as models (`${uuid}-${name}`).
 // The router carries its own feature gate + dedicated API-key auth; the app
@@ -680,13 +728,11 @@ wss.on('connection', (ws, req) => {
             });
             return;
           }
-          bus
-            .dispatch(client, result.data)
-            .catch((err) => {
-              // bus.dispatch is async; the surrounding try/catch can't catch its
-              // rejection, so log it here instead of letting it vanish.
-              log.error({ err }, 'ws: dispatch rejected (async)');
-            });
+          bus.dispatch(client, result.data).catch((err) => {
+            // bus.dispatch is async; the surrounding try/catch can't catch its
+            // rejection, so log it here instead of letting it vanish.
+            log.error({ err }, 'ws: dispatch rejected (async)');
+          });
         } catch (err) {
           log.error({ err }, 'ws: dispatch error');
           bus.sendTo(client.id, {
@@ -775,7 +821,10 @@ async function ensureDefaultPersona(personaRepo: PersonaRepository): Promise<voi
   }
 }
 
-async function ensureDefaultBackendConfig(backendConfigRepo: BackendConfigRepository, settingsRepo: ISettingsRepository): Promise<void> {
+async function ensureDefaultBackendConfig(
+  backendConfigRepo: BackendConfigRepository,
+  settingsRepo: ISettingsRepository,
+): Promise<void> {
   const count = await backendConfigRepo.count();
   if (count === 0) {
     const defaults = loadDefaultConfigs();
@@ -793,7 +842,10 @@ async function ensureDefaultBackendConfig(backendConfigRepo: BackendConfigReposi
   }
 }
 
-async function ensureDefaultPromptList(promptListRepo: PromptListRepository, settingsRepo: ISettingsRepository): Promise<void> {
+async function ensureDefaultPromptList(
+  promptListRepo: PromptListRepository,
+  settingsRepo: ISettingsRepository,
+): Promise<void> {
   const count = await promptListRepo.count();
   if (count === 0) {
     const defaults = loadDefaultConfigs();

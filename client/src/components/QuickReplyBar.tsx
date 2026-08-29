@@ -77,7 +77,8 @@ export function QuickReplyBar() {
             setEditingQr(undefined);
             setShowEditor(true);
           }}
-          title={t('quickReply.addQuickReply')} aria-label={t('quickReply.addQuickReply')}
+          title={t('quickReply.addQuickReply')}
+          aria-label={t('quickReply.addQuickReply')}
         >
           +
         </button>

@@ -14,7 +14,9 @@ test.describe('Settings', () => {
     await expect(settings.locator('.modal-title')).toContainText('Settings');
 
     // Toggle a simple checkbox setting
-    const checkbox = settings.locator('label.checkbox-row:has-text("Show message token counts") input[type="checkbox"]');
+    const checkbox = settings.locator(
+      'label.checkbox-row:has-text("Show message token counts") input[type="checkbox"]',
+    );
     const before = await checkbox.isChecked();
     await checkbox.click();
     await expect(checkbox).toBeChecked({ checked: !before });

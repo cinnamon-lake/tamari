@@ -32,7 +32,12 @@ async function read(call: RouteCall): Promise<string | RouteError> {
   const [file] = call.segs;
   if (file === undefined) return { error: err(`is a directory (use ls): ${call.path}`) };
   if (isNewSegment(file) || !isJson(file)) return { error: err(`no such file: ${call.path}`) };
-  const res = await callProvider(call.providers.toolsetWorkbench, 'toolset_get', { id: stripJsonExt(file) }, call.context);
+  const res = await callProvider(
+    call.providers.toolsetWorkbench,
+    'toolset_get',
+    { id: stripJsonExt(file) },
+    call.context,
+  );
   if (!res.ok) return { error: res.error };
   return resultToString(res);
 }

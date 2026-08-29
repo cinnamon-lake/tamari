@@ -43,7 +43,7 @@ import type {
 import type { Prompt } from '../backends/BackendAdapter.js';
 import type { ResolvedGenerationBackend } from './GenerationTarget.js';
 
-const log = getLogger('ChatPromptAssembly');
+const log = getLogger('generation/ChatPromptAssembly');
 
 export interface ChatPromptAssemblyDeps {
   chats: IChatRepository;
@@ -229,12 +229,14 @@ export class ChatPromptAssembly {
 
     const promptHistoryLimit = backendConfig?.promptHistoryLimit ?? allSettings.promptHistoryLimit;
     const contextLength = backendConfig?.contextLength ?? 4096;
-    const maxResponseTokens = args.maxResponseTokensOverride !== undefined
-      ? Math.max(1, Math.floor(args.maxResponseTokensOverride))
-      : Math.max(1, backendConfig?.maxTokens ?? allSettings.maxResponseTokens);
-    const historySource = args.anchorMessageId !== undefined
-      ? await chats.getBulkOfMessages(chatId, { limit: promptHistoryLimit, beforeId: args.anchorMessageId })
-      : await chats.getActiveBranch(chatId, { limit: promptHistoryLimit });
+    const maxResponseTokens =
+      args.maxResponseTokensOverride !== undefined
+        ? Math.max(1, Math.floor(args.maxResponseTokensOverride))
+        : Math.max(1, backendConfig?.maxTokens ?? allSettings.maxResponseTokens);
+    const historySource =
+      args.anchorMessageId !== undefined
+        ? await chats.getBulkOfMessages(chatId, { limit: promptHistoryLimit, beforeId: args.anchorMessageId })
+        : await chats.getActiveBranch(chatId, { limit: promptHistoryLimit });
     const chatHistory = await this.resolveAttachments(historySource);
 
     if (args.trailingMessages?.length) {
@@ -249,7 +251,7 @@ export class ChatPromptAssembly {
           role: tm.role,
           extra: {
             parts: tm.parts,
-            macroVars: (chatHistory[chatHistory.length - 1]?.extra.macroVars) ?? {},
+            macroVars: chatHistory[chatHistory.length - 1]?.extra.macroVars ?? {},
           },
           createdAt: now,
           updatedAt: now,
@@ -327,7 +329,7 @@ export class ChatPromptAssembly {
     }
 
     const globalVars = allSettings.globalVars;
-    const extensions = Array.isArray(allSettings['extensions']) ? allSettings['extensions'] as string[] : undefined;
+    const extensions = Array.isArray(allSettings['extensions']) ? (allSettings['extensions'] as string[]) : undefined;
 
     const prompt = await promptBuilder.build({
       chatHistory,

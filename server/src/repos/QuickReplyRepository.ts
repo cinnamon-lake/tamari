@@ -64,9 +64,7 @@ export class QuickReplyRepository implements IQuickReplyRepository {
   }
 
   async listAll(): Promise<QuickReply[]> {
-    const rs = await this.client.execute(
-      'SELECT * FROM quick_replies ORDER BY order_index, created_at, id ASC',
-    );
+    const rs = await this.client.execute('SELECT * FROM quick_replies ORDER BY order_index, created_at, id ASC');
     return mapRowsLenient(rs.rows, rowToQr, 'QuickReplyRepository.listAll');
   }
 

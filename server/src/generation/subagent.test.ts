@@ -45,8 +45,7 @@ function registerEchoTemplate(toolRegistry: ToolRegistry): void {
         },
       ],
     }),
-    execute: (_toolName, args) =>
-      Promise.resolve({ content: `ECHO_EXECUTED:${(args as { value: string }).value}` }),
+    execute: (_toolName, args) => Promise.resolve({ content: `ECHO_EXECUTED:${(args as { value: string }).value}` }),
     serialize: () => '',
     deserialize: () => {},
   });
@@ -89,7 +88,9 @@ describe('sub-agents', () => {
     await h.teardown();
   });
 
-  async function createChatWithTools(toolNames: Array<{ templateId: string; name: string; agentVisible?: boolean }>): Promise<string> {
+  async function createChatWithTools(
+    toolNames: Array<{ templateId: string; name: string; agentVisible?: boolean }>,
+  ): Promise<string> {
     await h.send(client, {
       type: 'character.create',
       data: { name: 'AgentHost', description: 'hosts agents.', firstMes: 'Ready.' },
@@ -102,7 +103,14 @@ describe('sub-agents', () => {
     for (const t of toolNames) {
       await h.send(client, {
         type: 'toolset.create',
-        data: { templateId: t.templateId, name: t.name, config: {}, toolOverrides: {}, enabled: true, agentVisible: t.agentVisible ?? false },
+        data: {
+          templateId: t.templateId,
+          name: t.name,
+          config: {},
+          toolOverrides: {},
+          enabled: true,
+          agentVisible: t.agentVisible ?? false,
+        },
       });
       h.expectBroadcast('toolset.created');
     }
@@ -139,7 +147,9 @@ describe('sub-agents', () => {
 
     // The sub-agent's token stream must NOT reach clients (broadcast: false).
     const tokens = client.messages.filter((m) => m.type === 'generation.token');
-    expect(tokens.map((m) => m.type === 'generation.token' && 'token' in m ? (m as { token: string }).token : '').join('')).not.toContain('SUBAGENT_FINAL_TEXT');
+    expect(
+      tokens.map((m) => (m.type === 'generation.token' && 'token' in m ? (m as { token: string }).token : '')).join(''),
+    ).not.toContain('SUBAGENT_FINAL_TEXT');
 
     // Parent message: spawn tool_use + tool_result with the sub-agent's final text.
     const branch = await h.deps.chats.getActiveBranch(chatId);
@@ -168,7 +178,10 @@ describe('sub-agents', () => {
       id: 'scripted',
       supportsStreaming: true,
       supportsTools: true,
-      async *stream(): AsyncGenerator<import('../backends/BackendAdapter.js').BackendStreamItem, import('../backends/BackendAdapter.js').GenerationResult> {
+      async *stream(): AsyncGenerator<
+        import('../backends/BackendAdapter.js').BackendStreamItem,
+        import('../backends/BackendAdapter.js').GenerationResult
+      > {
         calls++;
         if (calls === 1) {
           yield { type: 'toolCall', id: 'spawn_1', name: 'run_agent', arguments: { prompt: 'go deep' } };
@@ -192,7 +205,9 @@ describe('sub-agents', () => {
 
     const branch = await h.deps.chats.getActiveBranch(chatId);
     const assistant = branch.filter((m) => m.role === 'assistant').at(-1)!;
-    const spawnResult = (assistant.extra.parts ?? []).find((p) => p.type === 'tool_result' && p.toolUseId === 'spawn_1');
+    const spawnResult = (assistant.extra.parts ?? []).find(
+      (p) => p.type === 'tool_result' && p.toolUseId === 'spawn_1',
+    );
     expect(spawnResult).toBeDefined();
     const content = spawnResult!.type === 'tool_result' ? String(spawnResult!.content) : '';
     // The composed trace: parent line, sub-agent line, rendered error chain.
@@ -205,7 +220,8 @@ describe('sub-agents', () => {
     const records = await new GenerationRepository(h.db).listByChat(chatId);
     const subagent = records.find((r) => r.kind === 'subagent');
     expect(subagent).toBeDefined();
-    const extra = spawnResult!.type === 'tool_result' ? (spawnResult!.extra as Record<string, unknown> | undefined) : undefined;
+    const extra =
+      spawnResult!.type === 'tool_result' ? (spawnResult!.extra as Record<string, unknown> | undefined) : undefined;
     expect(extra?.['generationId']).toBe(subagent!.id);
   });
 
@@ -361,17 +377,16 @@ describe('sub-agents', () => {
       (p) => p.type === 'tool_result' && p.toolUseId === 'spawn_1',
     );
     expect(spawnResult).toBeDefined();
-    const stateMap = spawnResult!.type === 'tool_result'
-      ? (spawnResult!.extra?.['_toolState'] as Record<string, string> | undefined)
-      : undefined;
+    const stateMap =
+      spawnResult!.type === 'tool_result'
+        ? (spawnResult!.extra?.['_toolState'] as Record<string, string> | undefined)
+        : undefined;
     expect(stateMap?.['stateful']).toBe('initial+x');
     expect(stateMap?.['agent']).toBeUndefined();
 
     // The parent's own bump deserialized the sub-agent's snapshot:
     // 'initial' → (sub) 'initial+x' → (parent, inherited) 'initial+x+x'.
-    const parentBump = (assistant.extra.parts ?? []).find(
-      (p) => p.type === 'tool_result' && p.toolUseId === 'bump_2',
-    );
+    const parentBump = (assistant.extra.parts ?? []).find((p) => p.type === 'tool_result' && p.toolUseId === 'bump_2');
     expect(parentBump).toBeDefined();
     expect(parentBump!.type === 'tool_result' && String(parentBump!.content)).toBe('state is now initial+x+x');
   });

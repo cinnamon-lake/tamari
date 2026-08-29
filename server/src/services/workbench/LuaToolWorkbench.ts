@@ -34,8 +34,15 @@ const LuaToolGetArgs = z.object({
 
 const LuaToolCreateArgs = z.object({
   name: z.string().min(1).describe('Template name.'),
-  code: z.string().min(1).describe('Lua source. Must assign a global `Tool` table with getDefinition() and execute(args, context, toolName).'),
-  sandbox: LuaSandboxFlagsSchema.optional().describe('Sandbox flags for this template (allowIo/allowOs/allowDebug/allowRequire). Fully sandboxed when omitted.'),
+  code: z
+    .string()
+    .min(1)
+    .describe(
+      'Lua source. Must assign a global `Tool` table with getDefinition() and execute(args, context, toolName).',
+    ),
+  sandbox: LuaSandboxFlagsSchema.optional().describe(
+    'Sandbox flags for this template (allowIo/allowOs/allowDebug/allowRequire). Fully sandboxed when omitted.',
+  ),
   configSchema: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -53,17 +60,21 @@ const LuaToolTestArgs = z
   .object({
     id: z.string().optional().describe('Stored template id — test its saved code.'),
     code: z.string().optional().describe('Raw, unsaved Lua code to test instead of a stored template.'),
-    sandbox: LuaSandboxFlagsSchema.optional().describe('Sandbox flags for raw-code tests (ignored when id is given — the stored flags apply).'),
-    toolName: z.string().describe('Name of the tool to invoke, as defined by the template\'s getDefinition().'),
+    sandbox: LuaSandboxFlagsSchema.optional().describe(
+      'Sandbox flags for raw-code tests (ignored when id is given — the stored flags apply).',
+    ),
+    toolName: z.string().describe("Name of the tool to invoke, as defined by the template's getDefinition()."),
     args: z.record(z.string(), z.unknown()).optional().describe('Tool arguments.'),
-    config: z.record(z.string(), z.unknown()).optional().describe('Toolset config exposed to the tool as context.config.'),
+    config: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe('Toolset config exposed to the tool as context.config.'),
   })
   .refine((v) => (v.id !== undefined) !== (v.code !== undefined), {
     message: 'Provide exactly one of id or code',
   });
 
 export class LuaToolWorkbench {
-
   constructor(private deps: LuaToolWorkbenchDeps) {}
 
   async execute(toolName: string, args: Record<string, unknown>, _context?: ToolContext): Promise<ToolExecuteResult> {
@@ -142,7 +153,9 @@ export class LuaToolWorkbench {
   private async testTemplate(args: Record<string, unknown>, context?: ToolContext): Promise<ToolExecuteResult> {
     const parsed = LuaToolTestArgs.safeParse(args);
     if (!parsed.success) {
-      return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)} (provide exactly one of id or code, plus toolName)` };
+      return {
+        content: `Error: invalid arguments — ${formatZodIssues(parsed.error)} (provide exactly one of id or code, plus toolName)`,
+      };
     }
     const { id, toolName, config } = parsed.data;
     let { code, sandbox } = parsed.data;

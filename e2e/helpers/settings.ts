@@ -33,7 +33,7 @@ export async function setSetting(page: Page, key: string, value: unknown): Promi
               reject(new Error(msg.message ?? `settings.set failed for ${key}`));
             }
           } catch (err) {
-            reject(err);
+            reject(err instanceof Error ? err : new Error(String(err)));
           }
         };
 
@@ -77,7 +77,7 @@ export async function getActiveBackendConfigId(page: Page): Promise<string> {
             else reject(new Error('No active backend config in snapshot'));
           }
         } catch (err) {
-          reject(err);
+          reject(err instanceof Error ? err : new Error(String(err)));
         }
       };
 

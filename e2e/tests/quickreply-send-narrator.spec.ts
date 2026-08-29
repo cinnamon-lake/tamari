@@ -1,10 +1,7 @@
 import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
 import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // Reproduces docs/quality/audits/interface-audit-2026-07-20.md live bug #1:
 // `st.send_narrator` (server/src/scripting/StApi.ts:763) references
@@ -64,9 +61,9 @@ test.describe('st.send_narrator via quick reply (audit: ESM arguments crash)', (
 
     // The narrator message should be appended and broadcast as a system bubble.
     try {
-      await expect(
-        page.locator('.message-bubble.system .message-content', { hasText: narratorToken }),
-      ).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('.message-bubble.system .message-content', { hasText: narratorToken })).toBeVisible({
+        timeout: 15000,
+      });
     } catch (err) {
       // Surface the server-side script error (relayed as script.error →
       // console.error in serverStore) so the failure names the root cause.

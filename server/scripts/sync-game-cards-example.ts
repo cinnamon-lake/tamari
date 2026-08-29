@@ -65,9 +65,7 @@ const missing = libModules.filter((m) => !embeddedLibs.has(m));
 if (missing.length > 0) {
   const blocks = missing.map(
     (m) =>
-      '\\`\\`\\`lua\n' +
-      escapeLua(readFileSync(join(LIB_DIR, `${m}.lua`), 'utf8').replace(/\s+$/, '')) +
-      '\n\\`\\`\\`',
+      '\\`\\`\\`lua\n' + escapeLua(readFileSync(join(LIB_DIR, `${m}.lua`), 'utf8').replace(/\s+$/, '')) + '\n\\`\\`\\`',
   );
   // Insert before the doc's final closing backtick of the template literal.
   const tail = '`;\n';

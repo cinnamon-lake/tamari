@@ -10,18 +10,11 @@
  *   SQL_PROFILE_TOP=20     — number of queries to show in the final report (default 20)
  */
 
-import type {
-  Client,
-  InStatement,
-  InArgs,
-  ResultSet,
-  Transaction,
-  TransactionMode,
-} from '@libsql/client';
+import type { Client, InStatement, InArgs, ResultSet, Transaction, TransactionMode } from '@libsql/client';
 
 import { getLogger } from '../lib/logger.js';
 
-const log = getLogger('db:profiler');
+const log = getLogger('db/profiler');
 
 export interface ProfilerConfig {
   slowMs: number;
@@ -90,19 +83,13 @@ export class ProfiledClient implements Client {
     this.entries.push(entry);
 
     if (durationMs >= this.config.slowMs) {
-      log.warn(
-        { durationMs, rows: rowCount, sql: entry.sql },
-        `slow query (${durationMs.toFixed(1)}ms)`,
-      );
+      log.warn({ durationMs, rows: rowCount, sql: entry.sql }, `slow query (${durationMs.toFixed(1)}ms)`);
     }
   }
 
   async execute(stmt: InStatement): Promise<ResultSet>;
   async execute(sql: string, args?: InArgs): Promise<ResultSet>;
-  async execute(
-    stmtOrSql: InStatement | string,
-    maybeArgs?: InArgs,
-  ): Promise<ResultSet> {
+  async execute(stmtOrSql: InStatement | string, maybeArgs?: InArgs): Promise<ResultSet> {
     const sql = typeof stmtOrSql === 'string' ? stmtOrSql : extractSql(stmtOrSql);
     const start = performance.now();
     try {
@@ -120,10 +107,7 @@ export class ProfiledClient implements Client {
     }
   }
 
-  async batch(
-    stmts: Array<InStatement | [string, InArgs?]>,
-    mode?: TransactionMode,
-  ): Promise<Array<ResultSet>> {
+  async batch(stmts: Array<InStatement | [string, InArgs?]>, mode?: TransactionMode): Promise<Array<ResultSet>> {
     const start = performance.now();
     try {
       const rss = await this.inner.batch(stmts, mode);
@@ -156,9 +140,7 @@ export class ProfiledClient implements Client {
 
   async transaction(mode?: TransactionMode): Promise<Transaction> {
     const tx = await this.inner.transaction(mode);
-    return new ProfiledTransaction(tx, (sql, dur, rows) =>
-      this.record(sql, dur, rows),
-    );
+    return new ProfiledTransaction(tx, (sql, dur, rows) => this.record(sql, dur, rows));
   }
 
   async executeMultiple(sql: string): Promise<void> {

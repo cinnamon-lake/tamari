@@ -17,7 +17,7 @@ import type { BackendAdapterFactory } from '../backends/factory.js';
 import { buildBackendSettings } from '../backends/buildBackendSettings.js';
 import { getLogger } from '../lib/logger.js';
 
-const logger = getLogger('MemoryService');
+const logger = getLogger('services/MemoryService');
 
 const MEMORY_EXTRA_KEY = 'memory';
 
@@ -42,11 +42,7 @@ interface MemoryExtra {
 function isMemoryExtra(value: unknown): value is MemoryExtra {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
-  return (
-    typeof v.summaryText === 'string' &&
-    Array.isArray(v.citations) &&
-    typeof v.anchoredAt === 'number'
-  );
+  return typeof v.summaryText === 'string' && Array.isArray(v.citations) && typeof v.anchoredAt === 'number';
 }
 
 export class MemoryService {
@@ -110,7 +106,11 @@ export class MemoryService {
     }
 
     // Build the set of messages to summarize.
-    const messagesToSummarize = this.collectMessagesToSummarize(chain, existing?.anchoredMessageId ?? null, candidateAnchor.id);
+    const messagesToSummarize = this.collectMessagesToSummarize(
+      chain,
+      existing?.anchoredMessageId ?? null,
+      candidateAnchor.id,
+    );
     if (messagesToSummarize.length === 0) {
       return existing;
     }
@@ -168,7 +168,10 @@ export class MemoryService {
   /**
    * Tool handler: focused summary of a message range.
    */
-  async summarizeRange(chatId: string, args: { startMessageId: number; endMessageId: number; focus?: string }): Promise<string> {
+  async summarizeRange(
+    chatId: string,
+    args: { startMessageId: number; endMessageId: number; focus?: string },
+  ): Promise<string> {
     const chain = await this.deps.chats.getMessageChain(chatId);
     const byId = new Map(chain.map((m) => [m.id, m]));
 
@@ -208,7 +211,7 @@ export class MemoryService {
   }
 
   private findLatestApplicableSummary(chain: Message[], upToMessageId: number): MemorySummary | null {
-    const byId = new Map(chain.map((m) => [m.id, m]))
+    const byId = new Map(chain.map((m) => [m.id, m]));
     for (let i = chain.length - 1; i >= 0; i--) {
       const msg = chain[i]!;
       if (msg.id === upToMessageId || this.isAncestor(msg.id, upToMessageId, byId)) {
@@ -296,7 +299,12 @@ export class MemoryService {
     };
   }
 
-  private buildRangePrompt(messages: Message[], focus: string | undefined, settings: MemorySettings, systemPrompt: string): Prompt {
+  private buildRangePrompt(
+    messages: Message[],
+    focus: string | undefined,
+    settings: MemorySettings,
+    systemPrompt: string,
+  ): Prompt {
     const lines = messages.map((m) => {
       const text = getMessageText(m.extra.parts).trim();
       const roleLabel = m.role === 'user' ? 'You' : m.role === 'assistant' ? 'Assistant' : m.role;
@@ -305,8 +313,7 @@ export class MemoryService {
 
     const focusLine = focus ? ` Focus on: ${focus}` : '';
     const userContent =
-      `Provide a focused summary of the following message range.${focusLine}\n\n` +
-      lines.join('\n\n');
+      `Provide a focused summary of the following message range.${focusLine}\n\n` + lines.join('\n\n');
 
     return {
       messages: [
@@ -396,12 +403,7 @@ function extractSentence(text: string, citationIndex: number): string {
     return idx === -1 ? 0 : idx + delimiter.length;
   }
 
-  const sentenceStart = Math.max(
-    startAfter('. '),
-    startAfter('\n'),
-    startAfter('! '),
-    startAfter('? '),
-  );
+  const sentenceStart = Math.max(startAfter('. '), startAfter('\n'), startAfter('! '), startAfter('? '));
 
   let sentenceEnd = after.search(/[.!?]\s/);
   if (sentenceEnd === -1) sentenceEnd = after.search(/[.!?]$/);

@@ -6,30 +6,30 @@
 
 ## Quick Reference: Automation Level
 
-| Principle | Auto | Script / Command |
-|-----------|------|------------------|
-| §1 Layout — no `float` / `inline-block` / `absolute` | ✅ | `rg` in `.css` files |
-| §2 Spacing — `gap` > margins | ❌ | Manual review |
-| §3 Margins — top-only | ✅ | `rg` in `.css` files |
-| §4 Padding — axis-explicit | ✅ | `rg` in `.css` files |
-| §5 Sizing — no fixed `height` | ✅ | `rg` in `.css` files |
-| §6 Colors — tokens only | ✅ | `rg` in `.css` files |
-| §7 Border radius — tokens only | ✅ | `rg` in `.css` files |
-| §8 Shadows — tokens only | ✅ | `rg` in `.css` files |
-| §9 Typography — tokens only | ✅ | `rg` in `.css` files |
-| §10 Z-index — named layers | ✅ | `rg` in `.css` files |
-| §11 Selectors — flat | ⚠️ | `rg` + manual review |
-| §12 Modifiers — explicit classes | ✅ | `rg` in `.css` files |
-| §13 Responsive — co-located breakpoints | ⚠️ | `rg` + manual review |
-| §14 Minimal DOM | ❌ | Manual review |
-| §15 No inline styles | ✅ | `rg` in `.tsx` files |
-| §16 Hookable elements | ✅ | `npm run lint:css` |
-| §17 Animation — token durations | ✅ | `rg` in `.css` files |
-| §18 No `!important` | ✅ | `rg` in `.css` files |
-| §19 Variable scope | ⚠️ | `rg` + manual review |
-| §20 Specificity ceiling | ✅ | `rg` in `.css` files |
-| §21 Base classes | ⚠️ | `rg` in `.css`/`.tsx` + manual review |
-| §22 Element selectors | ✅ | `rg` in `.css` files (whitelist) |
+| Principle                                            | Auto | Script / Command                      |
+| ---------------------------------------------------- | ---- | ------------------------------------- |
+| §1 Layout — no `float` / `inline-block` / `absolute` | ✅   | `rg` in `.css` files                  |
+| §2 Spacing — `gap` > margins                         | ❌   | Manual review                         |
+| §3 Margins — top-only                                | ✅   | `rg` in `.css` files                  |
+| §4 Padding — axis-explicit                           | ✅   | `rg` in `.css` files                  |
+| §5 Sizing — no fixed `height`                        | ✅   | `rg` in `.css` files                  |
+| §6 Colors — tokens only                              | ✅   | `rg` in `.css` files                  |
+| §7 Border radius — tokens only                       | ✅   | `rg` in `.css` files                  |
+| §8 Shadows — tokens only                             | ✅   | `rg` in `.css` files                  |
+| §9 Typography — tokens only                          | ✅   | `rg` in `.css` files                  |
+| §10 Z-index — named layers                           | ✅   | `rg` in `.css` files                  |
+| §11 Selectors — flat                                 | ⚠️   | `rg` + manual review                  |
+| §12 Modifiers — explicit classes                     | ✅   | `rg` in `.css` files                  |
+| §13 Responsive — co-located breakpoints              | ⚠️   | `rg` + manual review                  |
+| §14 Minimal DOM                                      | ❌   | Manual review                         |
+| §15 No inline styles                                 | ✅   | `rg` in `.tsx` files                  |
+| §16 Hookable elements                                | ✅   | `npm run lint:css`                    |
+| §17 Animation — token durations                      | ✅   | `rg` in `.css` files                  |
+| §18 No `!important`                                  | ✅   | `rg` in `.css` files                  |
+| §19 Variable scope                                   | ⚠️   | `rg` + manual review                  |
+| §20 Specificity ceiling                              | ✅   | `rg` in `.css` files                  |
+| §21 Base classes                                     | ⚠️   | `rg` in `.css`/`.tsx` + manual review |
+| §22 Element selectors                                | ✅   | `rg` in `.css` files (whitelist)      |
 
 ---
 
@@ -87,6 +87,7 @@ rg 'margin-(right|bottom)\s*:' client/src -g '*.css' -n
 ```
 
 Each hit must be manually validated. Allowed cases:
+
 - `margin-left: auto` / `margin-right: auto` for pushing a single element
 - Collapsing space between unrelated sections
 
@@ -103,6 +104,7 @@ rg 'margin-right\s*:\s*(?!auto)' client/src -g '*.css' -n
 ```
 
 **Allowed:**
+
 - `margin-top: var(--space-*)`
 - `margin-left: auto`
 - `margin-right: auto`
@@ -119,6 +121,7 @@ rg '\bpadding:\s+(?!0\b)' client/src -g '*.css' -n
 ```
 
 **Allowed:**
+
 - `padding: 0`
 - `padding-top:`, `padding-bottom:`, `padding-left:`, `padding-right:`
 
@@ -134,6 +137,7 @@ rg '\bheight\s*:' client/src -g '*.css' -n | rg -v 'min-height|max-height|100%|1
 ```
 
 **Allowed fixed sizes:**
+
 - Avatars (`--avatar-size`)
 - Icons in buttons (`36px` touch targets)
 - Modals (`max-width`, `max-height`)
@@ -152,6 +156,7 @@ rg '\bhsl\(' client/src -g '*.css' -n
 ```
 
 **Allowed:**
+
 - `rgba(...)` for overlays
 - `transparent`, `currentColor`
 - `url(...)` gradients defined in `tokens.css`
@@ -168,6 +173,7 @@ rg 'border-radius:\s*9999px' client/src -g '*.css' -n
 ```
 
 **Allowed:**
+
 - `border-radius: var(--radius-*)`
 - `border-radius: 0`
 
@@ -182,6 +188,7 @@ rg 'box-shadow:' client/src -g '*.css' -n
 ```
 
 **Allowed:**
+
 - `box-shadow: var(--shadow-*)`
 - `box-shadow: none`
 
@@ -199,6 +206,7 @@ rg 'line-height:\s*\d+\.\d+' client/src -g '*.css' -n
 ```
 
 **Allowed:**
+
 - `font-size: var(--text-*)`
 - `line-height: var(--leading-*)`
 
@@ -213,6 +221,7 @@ rg 'z-index:\s*\d' client/src -g '*.css' -n
 ```
 
 **Allowed:**
+
 - `z-index: var(--z-*)`
 
 ---
@@ -243,6 +252,7 @@ rg ':has\(' client/src -g '*.css' -n
 ```
 
 **Allowed:**
+
 - `[disabled]` on native elements is acceptable for base styles, but state changes should still use explicit classes.
 - ARIA attributes in selectors are banned per the principle.
 
@@ -257,6 +267,7 @@ rg '@media.*\d+px' client/src -g '*.css' -n
 ```
 
 **Allowed:**
+
 - `@media (min-width: 768px)` / `@media (max-width: 768px)`
 - `@media (min-width: 1200px)` / `@media (max-width: 1200px)`
 - Container queries (`@container`)
@@ -290,6 +301,7 @@ rg '\.(wrapper|container)\s*\{' client/src -g '*.css' -n
 ## §15 No Inline Styles
 
 **Violation:** `style={` in JSX/TSX, except for:
+
 - Dynamic positioning (`top`, `left`, `transform`)
 - Dynamic sizing (`width`, `height`) for progress bars, charts, virtual lists
 - User-defined colors where the value is data
@@ -325,6 +337,7 @@ rg 'animation:.*\d+(?:\.\d+)?(?:ms|s)' client/src -g '*.css' -n
 ```
 
 **Allowed:**
+
 - `transition: transform var(--transition-fast)`
 - `animation: fade-in var(--transition-base)`
 
@@ -352,6 +365,7 @@ rg ':root\s*\{[^}]*--[a-z]+-[a-z]+-' client/src -g '*.css' -n
 ```
 
 **What to look for:**
+
 - `--chat-bubble-bg` on `:root` → move to `.chat-bubble`
 - `--toolbar-height` on `:root` → acceptable if it's a global token
 
@@ -372,6 +386,7 @@ rg '^\s*\.\S+\s+\S+\s+\S+\s+\S+' client/src -g '*.css' -n
 ```
 
 **Allowed:**
+
 - `#root` in global/app shell CSS
 - Max two simple selectors per rule (e.g. `.card .btn`)
 
@@ -417,10 +432,11 @@ rg -n '^\s*\.[\w-]+(\.[\w-]+)*\s+(button|input|textarea|select|a|img|h[1-6]|code
 ```
 
 **Manual review needed:** the scoped-atom grep is the high-value one. Distinguish:
+
 - **Allowed:** `.message-content …`, `.reasoning-content …`, `.app-error …` (uncontrolled HTML).
 - **Violation:** `.modal input`, `.edit-actions button`, `.stats-modal h3`, `.entry-editor textarea` — these should be `.text-input` / `.btn` / `.section-heading`.
 
-A cross-file `@media` audit pairs with this: any `@media` rule whose base selector is defined in a *different* file is a §13 landmine (see 2026-07-11 audit §B).
+A cross-file `@media` audit pairs with this: any `@media` rule whose base selector is defined in a _different_ file is a §13 landmine (see 2026-07-11 audit §B).
 
 ```bash
 # @media rules — review whether each overridden selector's base lives in the same file
@@ -511,17 +527,17 @@ rg -n '@media' client/src -g '*.css'
 
 ## Remediation Priority
 
-| Priority | Principle | Reason |
-|----------|-----------|--------|
-| **P0** | §16 Hookable elements | Breaks user CSS; public API contract |
-| **P0** | §18 No `!important` | Irreversible specificity arms race |
-| **P1** | §6 Colors, §7 Radius, §8 Shadows, §9 Typography, §10 Z-index | Tokens are the design system; raw values leak inconsistencies |
-| **P1** | §20 Specificity ceiling | Hard to fix retroactively without refactoring callers |
-| **P1** | §21 Base classes, §22 Element selectors | Root cause of the duplication that breeds bugs (drifted copies, lost `.modal-content` styling); architectural — migrate incrementally, enforce with `lint:css` |
-| **P2** | §1 Layout, §3 Margins, §4 Padding, §5 Sizing | Affects maintainability and predictability |
-| **P2** | §15 No inline styles | Scatters design logic into JS |
-| **P3** | §2 Spacing, §14 Minimal DOM | Architectural debt; fix during refactors |
-| **P3** | §11 Selectors, §12 Modifiers, §13 Responsive, §17 Animation, §19 Variable scope | Code-review discipline; catch in PR |
+| Priority | Principle                                                                       | Reason                                                                                                                                                         |
+| -------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **P0**   | §16 Hookable elements                                                           | Breaks user CSS; public API contract                                                                                                                           |
+| **P0**   | §18 No `!important`                                                             | Irreversible specificity arms race                                                                                                                             |
+| **P1**   | §6 Colors, §7 Radius, §8 Shadows, §9 Typography, §10 Z-index                    | Tokens are the design system; raw values leak inconsistencies                                                                                                  |
+| **P1**   | §20 Specificity ceiling                                                         | Hard to fix retroactively without refactoring callers                                                                                                          |
+| **P1**   | §21 Base classes, §22 Element selectors                                         | Root cause of the duplication that breeds bugs (drifted copies, lost `.modal-content` styling); architectural — migrate incrementally, enforce with `lint:css` |
+| **P2**   | §1 Layout, §3 Margins, §4 Padding, §5 Sizing                                    | Affects maintainability and predictability                                                                                                                     |
+| **P2**   | §15 No inline styles                                                            | Scatters design logic into JS                                                                                                                                  |
+| **P3**   | §2 Spacing, §14 Minimal DOM                                                     | Architectural debt; fix during refactors                                                                                                                       |
+| **P3**   | §11 Selectors, §12 Modifiers, §13 Responsive, §17 Animation, §19 Variable scope | Code-review discipline; catch in PR                                                                                                                            |
 
 ---
 

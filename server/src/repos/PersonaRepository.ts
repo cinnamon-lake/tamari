@@ -14,9 +14,7 @@ export interface IPersonaRepository {
   getById(id: string): Promise<Persona | undefined>;
   getByIds(ids: string[]): Promise<Persona[]>;
   list(): Promise<Persona[]>;
-  listSummaries(): Promise<
-    Array<Pick<Persona, 'id' | 'name' | 'description' | 'avatarPath' | 'avatarThumbnailPath'>>
-  >;
+  listSummaries(): Promise<Array<Pick<Persona, 'id' | 'name' | 'description' | 'avatarPath' | 'avatarThumbnailPath'>>>;
   create(id: string, data: PersonaInsert): Promise<Persona>;
   update(id: string, patch: PersonaUpdate): Promise<Persona>;
   delete(id: string): Promise<void>;
@@ -110,7 +108,15 @@ export class PersonaRepository implements IPersonaRepository {
     await this.client.execute({
       sql: `INSERT INTO personas (id, name, description, avatar_path, avatar_thumbnail_path, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      args: [id, data.name, data.description ?? '', data.avatarPath ?? null, data.avatarThumbnailPath ?? null, now, now],
+      args: [
+        id,
+        data.name,
+        data.description ?? '',
+        data.avatarPath ?? null,
+        data.avatarThumbnailPath ?? null,
+        now,
+        now,
+      ],
     });
     const created = await this.getById(id);
     if (!created) throw new Error(`Failed to retrieve created persona: ${id}`);

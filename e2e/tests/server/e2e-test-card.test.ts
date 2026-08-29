@@ -18,7 +18,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { ClientMessage } from '@tamari/types';
 import { TestHarness } from '../../../server/src/testing/TestHarness.js';
 import { TrivialBackendAdapter } from '../../../server/src/backends/TrivialBackendAdapter.js';
-import type { BackendAdapter, BackendStreamItem, GenerationResult, ModelInfo, Prompt } from '../../../server/src/backends/BackendAdapter.js';
+import type {
+  BackendAdapter,
+  BackendStreamItem,
+  GenerationResult,
+  ModelInfo,
+  Prompt,
+} from '../../../server/src/backends/BackendAdapter.js';
 import { createBackendAdapter, buildAdapterFactoryInput } from '../../../server/src/backends/factory.js';
 import { ScriptBlobRepository } from '../../../server/src/repos/ScriptBlobRepository.js';
 import { PromptBuilder } from '../../../server/src/pipeline/PromptBuilder.js';
@@ -64,6 +70,7 @@ class StuckBackendAdapter implements BackendAdapter {
   readonly supportsStreaming = true;
   readonly supportsTools = false;
 
+  // eslint-disable-next-line require-yield -- must satisfy the AsyncGenerator stream interface; the point is that it never yields a token
   async *stream(prompt: Prompt, signal: AbortSignal): AsyncGenerator<BackendStreamItem, GenerationResult> {
     await new Promise<void>((resolve) => {
       if (signal.aborted) resolve();
@@ -218,6 +225,10 @@ describe('e2e test_card (session-based)', () => {
         maxTokens: 100,
         instructTemplate: '',
         providerParams: { mockScript: script },
+        stopStrings: [],
+        supportsImages: false,
+        supportsAudio: false,
+        supportsVideo: false,
       },
     } as ClientMessage);
     return h.expectBroadcast('backendConfig.created').backendConfig.id;
@@ -305,7 +316,10 @@ describe('e2e test_card (session-based)', () => {
     const menu = await template.execute('run', {});
     expect(menu.content).toContain('test_card');
 
-    const result = await template.execute('run', { verb: 'test_card', args: { characterId: characterId(), turns: ['Hello'] } });
+    const result = await template.execute('run', {
+      verb: 'test_card',
+      args: { characterId: characterId(), turns: ['Hello'] },
+    });
     const parsed = JSON.parse(result.content as string);
     expect(parsed.turns[0].reply).toBe('Reply one.');
   });
@@ -327,7 +341,8 @@ describe('e2e test_card (session-based)', () => {
           },
         ],
       }),
-      execute: (_toolName, args) => Promise.resolve({ content: `Weather for ${(args as { city: string }).city}: sunny, 25°C` }),
+      execute: (_toolName, args) =>
+        Promise.resolve({ content: `Weather for ${(args as { city: string }).city}: sunny, 25°C` }),
       serialize: () => '',
       deserialize: () => {},
     });
@@ -396,7 +411,11 @@ describe('e2e test_card (session-based)', () => {
     });
 
     const mockConfigId = await createMockConfig('tool:get_weather:{"city":"Paris"}\nrespond:It is sunny in Paris.');
-    const result = await cardTest.run({ characterId: character.id, backendConfigId: mockConfigId, turns: ['weather in Paris?'] });
+    const result = await cardTest.run({
+      characterId: character.id,
+      backendConfigId: mockConfigId,
+      turns: ['weather in Paris?'],
+    });
     const parsed = JSON.parse(result.content as string);
 
     // Round 1: the mock emits the tool call; round 2: the canned answer.

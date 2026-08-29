@@ -14,7 +14,6 @@
   gap: var(--space-sm);
 }
 
-
 .character-main {
   display: flex;
   align-items: center;

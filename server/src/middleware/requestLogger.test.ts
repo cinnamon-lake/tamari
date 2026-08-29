@@ -58,15 +58,10 @@ describe('requestLogger', () => {
   it('redacts sensitive body fields when debug logging is enabled', async () => {
     childMock.isLevelEnabled.mockReturnValue(true);
     const app = createApp();
-    await request(app)
-      .post('/login')
-      .send({ apiKey: 'super-secret', user: 'me', password: 'hunter2' })
-      .expect(200);
+    await request(app).post('/login').send({ apiKey: 'super-secret', user: 'me', password: 'hunter2' }).expect(200);
 
     expect(childMock.debug).toHaveBeenCalled();
-    const debugCall = childMock.debug.mock.calls.find(
-      (c: any) => (c[0] as Record<string, unknown>).method === 'POST',
-    );
+    const debugCall = childMock.debug.mock.calls.find((c: any) => (c[0] as Record<string, unknown>).method === 'POST');
     expect(debugCall).toBeDefined();
     const body = (debugCall![0] as Record<string, unknown>).body as Record<string, string>;
     expect(body.apiKey).toBe('[REDACTED]');

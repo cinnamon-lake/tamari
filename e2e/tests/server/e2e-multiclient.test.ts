@@ -7,9 +7,7 @@ describe('e2e multi-client consistency', () => {
   let h: TestHarness;
 
   beforeEach(async () => {
-    const backend = new TrivialBackendAdapter([
-      [{ type: 'content', content: 'Hello!' }],
-    ]);
+    const backend = new TrivialBackendAdapter([[{ type: 'content', content: 'Hello!' }]]);
 
     h = new TestHarness({
       backendFactory: {

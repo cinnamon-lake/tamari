@@ -24,15 +24,15 @@ Set **Generation Mode** first — it decides which providers the **Provider** dr
 
 ### Connection Fields
 
-| Field | Notes |
-|-------|-------|
+| Field                  | Notes                                                                                                                                                                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **API URL** (`apiUrl`) | Empty = the canonical provider URL (e.g. `https://api.openai.com/v1`, `http://localhost:8080` for llama.cpp, `http://localhost:5000` for TabbyAPI, `http://localhost:5001` for KoboldCPP). Point it at any compatible endpoint or reverse proxy. |
-| **API Key** (`apiKey`) | Raw key or a vault reference (`secret:<key>`) — see [API Keys & Secrets](#api-keys--secrets). Never validated, so proxy and local setups with unusual keys work. Local providers (llama.cpp, TabbyAPI, KoboldCPP) need no key. |
-| **Model** (`model`) | Model id. Never validated — anything goes, which is what you want for proxies and fine-tunes. See [Listing Models](#listing-models). |
+| **API Key** (`apiKey`) | Raw key or a vault reference (`secret:<key>`) — see [API Keys & Secrets](#api-keys--secrets). Never validated, so proxy and local setups with unusual keys work. Local providers (llama.cpp, TabbyAPI, KoboldCPP) need no key.                   |
+| **Model** (`model`)    | Model id. Never validated — anything goes, which is what you want for proxies and fine-tunes. See [Listing Models](#listing-models).                                                                                                             |
 
 ### Provider Quirks
 
-- **OpenRouter.** When the model list is loaded, an **OpenRouter Provider** dropdown appears, built from the vendor prefixes of the model ids (`anthropic/…`, `google/…`, …). Choosing one sets the routing provider order to that vendor and filters the model list to match. The **OpenRouter Reasoning** section below the editor sets **Reasoning Effort** and **Reasoning Summary**; these two are *global* settings, not per-config.
+- **OpenRouter.** When the model list is loaded, an **OpenRouter Provider** dropdown appears, built from the vendor prefixes of the model ids (`anthropic/…`, `google/…`, …). Choosing one sets the routing provider order to that vendor and filters the model list to match. The **OpenRouter Reasoning** section below the editor sets **Reasoning Effort** and **Reasoning Summary**; these two are _global_ settings, not per-config.
 - **Claude.** Prompt caching is controlled globally by **Settings → Generation → Claude Prompt Caching** (Off / Auto / Manual — off by default). When caching is on, tamari disables it automatically for any generation whose inputs contain non-deterministic macros (`{{random}}`, `{{pick}}`, `{{roll}}`, time/date macros — see [Macro System](./macros.md)). The same applies to Claude models routed through OpenRouter.
 - **Custom (Lua).** No API URL or key — instead you pick a custom-backend script and an optional delegate backend config. See [Custom Backends](./custom-backends.md).
 - **Media Support.** The **Images / Audio / Video** checkboxes (all on by default) declare what the provider can consume. Media it can't consume is dropped from the prompt — or replaced with `[Attached image]`-style placeholders when **Settings → Display → Verbose media mode** is on.
@@ -69,16 +69,16 @@ Two rules govern what actually reaches the provider:
 
 The collapsible **Advanced Sampling** section exposes provider-native knobs, gated by which adapter your provider and mode select. Chat providers (OpenAI, OpenRouter, Claude, Gemini) see only **Seed**; local and text-completion providers get the full set, grouped as:
 
-| Group | Knobs |
-|-------|-------|
-| Mirostat | Mode, Tau, Eta |
-| Alternative Samplers | Typical P, Tail Free Sampling, Penalty Alpha |
-| DRY | Multiplier, Base, Allowed Length, Penalty Last N, Sequence Breakers |
-| XTC | Threshold, Probability |
-| Smoothing | Factor, Curve |
-| Dynamic Temperature | Dynatemp, Min/Max Temp, Dynatemp Exponent |
-| Decoding | Seed, Ban EOS Token, Skip Special Tokens, Add BOS Token, Banned Tokens |
-| Structured Output | Grammar (GBNF) |
+| Group                | Knobs                                                                  |
+| -------------------- | ---------------------------------------------------------------------- |
+| Mirostat             | Mode, Tau, Eta                                                         |
+| Alternative Samplers | Typical P, Tail Free Sampling, Penalty Alpha                           |
+| DRY                  | Multiplier, Base, Allowed Length, Penalty Last N, Sequence Breakers    |
+| XTC                  | Threshold, Probability                                                 |
+| Smoothing            | Factor, Curve                                                          |
+| Dynamic Temperature  | Dynatemp, Min/Max Temp, Dynatemp Exponent                              |
+| Decoding             | Seed, Ban EOS Token, Skip Special Tokens, Add BOS Token, Banned Tokens |
+| Structured Output    | Grammar (GBNF)                                                         |
 
 Values are stored in `providerParams` under their **wire names** — the exact key the provider's API expects — and sent verbatim. Wire names differ per provider for the same knob: Tail Free Sampling is `tfs_z` on llama.cpp but `tfs` elsewhere, Typical P is `typical` on KoboldCPP but `typical_p` elsewhere, Seed is `sampler_seed` on KoboldCPP, and Grammar is `grammar_string` in text-completion mode but `grammar` on llama.cpp/KoboldCPP. You never need to know these to use the UI — they matter when you edit configs through the workbench or read a config JSON.
 

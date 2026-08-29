@@ -25,9 +25,7 @@ function assertDistIsFresh(repoRoot: string): void {
   for (const artifact of artifacts) {
     const full = join(repoRoot, artifact);
     if (!existsSync(full)) {
-      throw new Error(
-        `[e2e] ${artifact} does not exist. E2E tests run the BUILT app — run \`npm run build\` first.`,
-      );
+      throw new Error(`[e2e] ${artifact} does not exist. E2E tests run the BUILT app — run \`npm run build\` first.`);
     }
     const mtime = statSync(full).mtimeMs;
     if (mtime < oldestArtifact) {

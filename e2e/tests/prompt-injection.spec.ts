@@ -1,13 +1,8 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { getLastLlmRequest, resetLlmRequests, waitForNextLlmRequest } from '../helpers/llm.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import type { App } from '../helpers/app.js';
+import { uniqueName } from '../helpers/names.js';
 
 /** Flatten the captured chat-completion request into one searchable string. */
 function promptText(captured: { body: unknown }): string {
@@ -71,10 +66,17 @@ async function createBookWithEntries(app: App, bookName: string, entries: EntryS
  * fields so every debounced auto-save includes worldInfoId (the 'Saved'
  * indicator then proves the link reached the server) — see wi-decorators.spec.
  */
-async function createLinkedCharacter(page: App['page'], charName: string, bookName: string, entriesCount: number): Promise<void> {
+async function createLinkedCharacter(
+  page: App['page'],
+  charName: string,
+  bookName: string,
+  entriesCount: number,
+): Promise<void> {
   await page.locator('[title="Create character"]').click();
   const charEditor = page.locator('.character-editor-modal');
-  await charEditor.locator('.lorebook-selector select').selectOption({ label: `${bookName} (${entriesCount} entries)` });
+  await charEditor
+    .locator('.lorebook-selector select')
+    .selectOption({ label: `${bookName} (${entriesCount} entries)` });
   await charEditor.locator('.text-input').first().fill(charName);
   await charEditor.locator('.textarea-input').nth(0).fill('Test character.');
   await charEditor.locator('.textarea-input').nth(3).fill(`Hello! I am ${charName}.`);
@@ -83,22 +85,15 @@ async function createLinkedCharacter(page: App['page'], charName: string, bookNa
 }
 
 test.describe('Prompt Assembly', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test("author's note is injected into the prompt", async ({ page }) => {
-    const app = new App(page);
+  test("author's note is injected into the prompt", async ({ page, app }) => {
     await app.createCharacterAndChat({ name: uniqueName('AN Char'), firstMes: 'Ready.' });
 
     await page.locator('.chat-header button[title="Menu"]').click();
-    await page.locator(".dropdown-item:has-text(\"Author's Note\")").click();
+    await page.locator('.dropdown-item:has-text("Author\'s Note")').click();
     const noteInput = page.locator('.authors-note-content-input');
     await expect(noteInput).toBeVisible();
     await noteInput.fill('[AN] AN_NOTE_TOKEN');
@@ -111,8 +106,7 @@ test.describe('Prompt Assembly', () => {
     expect(promptText(await getLastLlmRequest())).toContain('AN_NOTE_TOKEN');
   });
 
-  test('recursive world-info entries chain-activate', async ({ page }) => {
-    const app = new App(page);
+  test('recursive world-info entries chain-activate', async ({ page, app }) => {
     const bookName = uniqueName('RecurBook');
     // Entry A is recursive: its content joins the next scan round, so the
     // 'bravokey' inside it triggers entry B even though the user never typed it.
@@ -130,8 +124,7 @@ test.describe('Prompt Assembly', () => {
     expect(all).toContain('RECUR_B');
   });
 
-  test('selective entry requires primary AND secondary keys', async ({ page }) => {
-    const app = new App(page);
+  test('selective entry requires primary AND secondary keys', async ({ page, app }) => {
     const bookName = uniqueName('SelBook');
     await createBookWithEntries(app, bookName, [
       { keys: 'magic', content: '[WI] SELECTIVE_TOKEN', selective: true, secondaryKeys: 'wand' },
@@ -150,8 +143,7 @@ test.describe('Prompt Assembly', () => {
     expect(promptText(await waitForNextLlmRequest(before))).toContain('SELECTIVE_TOKEN');
   });
 
-  test('hidden messages are excluded from the prompt', async ({ page }) => {
-    const app = new App(page);
+  test('hidden messages are excluded from the prompt', async ({ app }) => {
     await app.createCharacterAndChat({ name: uniqueName('Hide Char'), firstMes: 'Ready.' });
 
     const userBubble = await app.sendUserMessage('secretphrase', { expectReply: true });
@@ -161,8 +153,7 @@ test.describe('Prompt Assembly', () => {
     expect(promptText(await getLastLlmRequest())).not.toContain('secretphrase');
   });
 
-  test('edited message text reaches the next prompt', async ({ page }) => {
-    const app = new App(page);
+  test('edited message text reaches the next prompt', async ({ app }) => {
     await app.createCharacterAndChat({ name: uniqueName('Edit Char'), firstMes: 'Ready.' });
 
     const userBubble = await app.sendUserMessage('original text', { expectReply: true });

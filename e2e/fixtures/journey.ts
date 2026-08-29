@@ -10,20 +10,16 @@
  * The active backend config is reset on teardown so other specs never see the
  * mock URL. Journey specs use `journeyTest` + the re-exported `expect` instead
  * of the raw `@playwright/test` pair.
+ *
+ * The wiring itself is shared with smokeTest (fixtures/smoke.ts) via
+ * `appWiring` — same login → mock backend → App → reset core.
  */
 import { test as base, expect } from './base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
 import { App } from '../helpers/app.js';
+import { appWiring } from './smoke.js';
 
 export const journeyTest = base.extend<{ app: App }>({
-  app: async ({ page }, use) => {
-    await login(page);
-    await configureMockBackend(page);
-    const app = new App(page);
-    await use(app);
-    await resetBackendConfig(page);
-  },
+  app: appWiring,
 });
 
 export { expect };

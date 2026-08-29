@@ -25,11 +25,41 @@ const fs = require('fs');
 const path = require('path');
 
 const CHECK_TAGS = new Set([
-  'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-  'section', 'header', 'footer', 'nav', 'article', 'aside', 'main',
-  'ul', 'ol', 'li', 'form', 'label', 'table', 'tr', 'td', 'th',
-  'a', 'button', 'textarea', 'select', 'blockquote',
-  'pre', 'input', 'img', 'iframe', 'canvas',
+  'div',
+  'span',
+  'p',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'section',
+  'header',
+  'footer',
+  'nav',
+  'article',
+  'aside',
+  'main',
+  'ul',
+  'ol',
+  'li',
+  'form',
+  'label',
+  'table',
+  'tr',
+  'td',
+  'th',
+  'a',
+  'button',
+  'textarea',
+  'select',
+  'blockquote',
+  'pre',
+  'input',
+  'img',
+  'iframe',
+  'canvas',
 ]);
 
 const IS_TEST_FILE = /\.(test|spec)\.(t|j)sx?$/;
@@ -110,9 +140,25 @@ function stripComments(content) {
       const prevCh = prev[prev.length - 1];
       const prevWord = (prev.match(/([A-Za-z_$][\w$]*)$/) ?? [])[1];
       const regexPrevChars = '(,=:[!&|?{};+-*%^~<>';
-      const regexPrevWords = new Set(['return', 'typeof', 'case', 'delete', 'void', 'throw', 'yield', 'await', 'in', 'of', 'instanceof', 'else', 'do']);
+      const regexPrevWords = new Set([
+        'return',
+        'typeof',
+        'case',
+        'delete',
+        'void',
+        'throw',
+        'yield',
+        'await',
+        'in',
+        'of',
+        'instanceof',
+        'else',
+        'do',
+      ]);
       const isRegex =
-        prevCh === undefined || regexPrevChars.includes(prevCh) || (prevWord !== undefined && regexPrevWords.has(prevWord));
+        prevCh === undefined ||
+        regexPrevChars.includes(prevCh) ||
+        (prevWord !== undefined && regexPrevWords.has(prevWord));
       if (isRegex) {
         // Consume the literal verbatim: /pattern/flags, honoring escapes and
         // character classes (`/` inside [...] does not close the regex).
@@ -270,8 +316,7 @@ function findViolations(content) {
       const hasHook = /\b(class|classList|id)=/.test(tagText);
       // Native toggle controls (radio/checkbox) are styled via their
       // container/group, not as individual chrome — exempt them.
-      const isNativeToggle =
-        tagName === 'input' && /\btype\s*=\s*["']?(?:radio|checkbox)\b/.test(tagText);
+      const isNativeToggle = tagName === 'input' && /\btype\s*=\s*["']?(?:radio|checkbox)\b/.test(tagText);
       if (!hasHook && !isNativeToggle) {
         let snippet = tagText.replace(/\n/g, ' ');
         if (snippet.length > 120) snippet = snippet.slice(0, 117) + '...';
@@ -306,7 +351,7 @@ function walk(dir, ext, files = []) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       walk(full, ext, files);
-    } else if (ext.some(e => entry.name.endsWith(e)) && !IS_TEST_FILE.test(entry.name)) {
+    } else if (ext.some((e) => entry.name.endsWith(e)) && !IS_TEST_FILE.test(entry.name)) {
       files.push(full);
     }
   }
@@ -360,7 +405,9 @@ function main() {
   // until the remaining input-atom selectors consolidate onto `.text-input`.
   const scoped = scanCssScopedAtoms();
   if (scoped.length) {
-    console.log(`\n§22 advisory — ${scoped.length} scoped element selector(s) for atoms (review for per-component proliferation):`);
+    console.log(
+      `\n§22 advisory — ${scoped.length} scoped element selector(s) for atoms (review for per-component proliferation):`,
+    );
     for (const s of scoped) {
       console.log(`  ${s.file}:${s.lineNo}  ${s.selector}`);
     }
@@ -379,7 +426,11 @@ function scanCssScopedAtoms() {
   const findings = [];
   for (const f of cssFiles.sort()) {
     let content;
-    try { content = fs.readFileSync(f, 'utf-8'); } catch { continue; }
+    try {
+      content = fs.readFileSync(f, 'utf-8');
+    } catch {
+      continue;
+    }
     const lines = content.split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];

@@ -175,7 +175,9 @@ export const UTILITY_PROMPT_IDENTIFIERS = new Set(['impersonation', 'memorySumma
  *  Used when seeding/migrating lists so every stored list carries them. */
 export function ensureUtilityPrompts(prompts: PromptDef[]): PromptDef[] {
   const present = new Set(prompts.map((p) => p.identifier));
-  const missing = DEFAULT_PROMPTS.filter((p) => UTILITY_PROMPT_IDENTIFIERS.has(p.identifier) && !present.has(p.identifier));
+  const missing = DEFAULT_PROMPTS.filter(
+    (p) => UTILITY_PROMPT_IDENTIFIERS.has(p.identifier) && !present.has(p.identifier),
+  );
   return missing.length === 0 ? prompts : [...prompts, ...missing.map((p) => ({ ...p }))];
 }
 

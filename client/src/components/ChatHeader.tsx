@@ -43,7 +43,13 @@ export function ChatHeader() {
   });
 
   // Switching chats closes the menu too.
-  createEffect(on(() => activeChat()?.id, () => setShowMenu(false), { defer: true }));
+  createEffect(
+    on(
+      () => activeChat()?.id,
+      () => setShowMenu(false),
+      { defer: true },
+    ),
+  );
 
   const activeCharacter = createMemo(() => {
     const chat = activeChat();
@@ -85,7 +91,9 @@ export function ChatHeader() {
     <header class="chat-header">
       <Show when={state.activeChat} fallback={<div class="chat-header-placeholder" />}>
         <div class="chat-header-info">
-          <h2 class="chat-header-title" title={title()}>{title()}</h2>
+          <h2 class="chat-header-title" title={title()}>
+            {title()}
+          </h2>
           <Show when={subtitle()}>
             <span class="chat-header-subtitle">{subtitle()}</span>
           </Show>
@@ -109,7 +117,8 @@ export function ChatHeader() {
               setShowSearch((v) => !v);
               if (showSearch()) setChatSearchQuery('');
             }}
-            title={t('chatHeader.searchMessages')} aria-label={t('chatHeader.searchMessages')}
+            title={t('chatHeader.searchMessages')}
+            aria-label={t('chatHeader.searchMessages')}
             aria-expanded={showSearch()}
             aria-controls="chat-search-input"
             type="button"
@@ -117,7 +126,15 @@ export function ChatHeader() {
             <i class="bi bi-search" />
           </button>
           <div class="chat-header-menu" ref={menuRef}>
-            <button class="icon-btn" onClick={() => setShowMenu((v) => !v)} title={t('chatHeader.menu')} aria-label={t('chatHeader.menu')} aria-expanded={showMenu()} aria-controls="chat-header-dropdown" type="button">
+            <button
+              class="icon-btn"
+              onClick={() => setShowMenu((v) => !v)}
+              title={t('chatHeader.menu')}
+              aria-label={t('chatHeader.menu')}
+              aria-expanded={showMenu()}
+              aria-controls="chat-header-dropdown"
+              type="button"
+            >
               <i class="bi bi-three-dots-vertical" />
             </button>
             <Show when={showMenu()}>

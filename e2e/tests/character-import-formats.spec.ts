@@ -20,21 +20,16 @@
  */
 import { test, expect } from '../fixtures/base.js';
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
-import { login } from '../helpers/auth.js';
+import { login, authHeaders } from '../helpers/auth.js';
 import { App } from '../helpers/app.js';
 import { wsDeleteByPrefix } from '../helpers/cleanup.js';
+import { uniqueName } from '../helpers/names.js';
 
 /** The e2e webServer pins TAMARI_SECRET to this value (playwright.config.ts). */
-const AUTH = { Authorization: 'Bearer e2e-test-secret' };
 
 // Minimal 1x1 transparent PNG (same fixture as attachments.spec.ts).
-const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 const PNG_BYTES = new Uint8Array(Buffer.from(PNG_BASE64, 'base64'));
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
 
 /** Build an in-memory .charx archive mirroring the server's export layout. */
 function buildCharX(name: string): Buffer {
@@ -117,7 +112,7 @@ test.describe('Character Import Formats', () => {
   test('import error paths return 400/500 with the documented messages', async ({ request }) => {
     // No file at all → 400.
     const noFile = await request.post('/api/characters/import', {
-      headers: AUTH,
+      headers: authHeaders(),
       multipart: { note: 'no file field here' },
     });
     expect(noFile.status()).toBe(400);
@@ -125,7 +120,7 @@ test.describe('Character Import Formats', () => {
 
     // Garbage bytes (no PNG/ZIP signature, not JSON) → 400 with exact message.
     const garbage = await request.post('/api/characters/import', {
-      headers: AUTH,
+      headers: authHeaders(),
       multipart: {
         file: { name: 'card.bin', mimeType: 'application/octet-stream', buffer: Buffer.from('not a card at all!!!') },
       },
@@ -136,7 +131,7 @@ test.describe('Character Import Formats', () => {
     // Starts with '{' so it takes the JSON branch, but the JSON is malformed →
     // JSON.parse throws inside the route → 500 (not a ZodError, so no 400).
     const malformed = await request.post('/api/characters/import', {
-      headers: AUTH,
+      headers: authHeaders(),
       multipart: {
         file: { name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from('{"name": "Broken Card",') },
       },
@@ -147,7 +142,7 @@ test.describe('Character Import Formats', () => {
   test('imports a CharX archive via REST (card, icon avatar, assets)', async ({ page, request }) => {
     const charName = uniqueName('CharX REST');
     const res = await request.post('/api/characters/import', {
-      headers: AUTH,
+      headers: authHeaders(),
       multipart: { file: { name: 'card.charx', mimeType: 'application/zip', buffer: buildCharX(charName) } },
     });
     expect(res.ok()).toBe(true);
@@ -162,7 +157,7 @@ test.describe('Character Import Formats', () => {
 
     // The embedded `icon` asset named `main` becomes the character avatar.
     expect(body.character.avatarUrl).toMatch(/^\/files\/avatars\/.+\.png$/);
-    const avatarRes = await request.get(body.character.avatarUrl!, { headers: AUTH });
+    const avatarRes = await request.get(body.character.avatarUrl!, { headers: authHeaders() });
     expect(avatarRes.ok()).toBe(true);
     expect(avatarRes.headers()['content-type']).toContain('image/');
 
@@ -180,23 +175,29 @@ test.describe('Character Import Formats', () => {
     expect(bg).toBeTruthy();
 
     // Fast path: URL includes the file extension → served straight from disk.
-    const fast = await request.get(`/api/characters/${charxCharId}/assets/${bg!.id}.${bg!.ext}`, { headers: AUTH });
+    const fast = await request.get(`/api/characters/${charxCharId}/assets/${bg!.id}.${bg!.ext}`, {
+      headers: authHeaders(),
+    });
     expect(fast.ok()).toBe(true);
     expect(fast.headers()['content-type']).toContain('image/png');
     expect((await fast.body()).subarray(1, 4).toString('latin1')).toBe('PNG');
 
     // Fallback path: extension-less asset id → DB lookup.
-    const fallback = await request.get(`/api/characters/${charxCharId}/assets/${bg!.id}`, { headers: AUTH });
+    const fallback = await request.get(`/api/characters/${charxCharId}/assets/${bg!.id}`, { headers: authHeaders() });
     expect(fallback.ok()).toBe(true);
     expect(fallback.headers()['content-type']).toContain('image/png');
 
     // Bogus asset id → 404.
-    const bogusAsset = await request.get(`/api/characters/${charxCharId}/assets/does-not-exist.png`, { headers: AUTH });
+    const bogusAsset = await request.get(`/api/characters/${charxCharId}/assets/does-not-exist.png`, {
+      headers: authHeaders(),
+    });
     expect(bogusAsset.status()).toBe(404);
     expect((await bogusAsset.json()).error).toBe('Asset not found');
 
     // Bogus character id → also 404 (fast path misses, DB lookup misses).
-    const bogusChar = await request.get('/api/characters/no-such-character/assets/does-not-exist.png', { headers: AUTH });
+    const bogusChar = await request.get('/api/characters/no-such-character/assets/does-not-exist.png', {
+      headers: authHeaders(),
+    });
     expect(bogusChar.status()).toBe(404);
   });
 
@@ -226,7 +227,7 @@ test.describe('Character Import Formats', () => {
     expect(charId).toBeTruthy();
 
     // v3 PNG export embeds the linked lorebook as data.character_book.
-    const pngRes = await request.get(`/api/characters/${charId}/export?format=v3`, { headers: AUTH });
+    const pngRes = await request.get(`/api/characters/${charId}/export?format=v3`, { headers: authHeaders() });
     expect(pngRes.ok()).toBe(true);
     const b64 = extractPngTextChunk(await pngRes.body(), 'ccv3');
     expect(b64).toBeTruthy();
@@ -237,7 +238,7 @@ test.describe('Character Import Formats', () => {
     expect(v3Card.data.character_book?.entries).toHaveLength(1);
 
     // CharX export of the same character carries the book in card.json.
-    const bookCharX = await request.get(`/api/characters/${charId}/export?format=charx`, { headers: AUTH });
+    const bookCharX = await request.get(`/api/characters/${charId}/export?format=charx`, { headers: authHeaders() });
     expect(bookCharX.ok()).toBe(true);
     const bookZip = unzipSync(new Uint8Array(await bookCharX.body()));
     const bookCard = JSON.parse(strFromU8(bookZip['card.json']!)) as {
@@ -248,7 +249,9 @@ test.describe('Character Import Formats', () => {
     // CharX export of the REST-imported character (test 2) bundles its assets
     // under <type>s/<name>.<ext> next to card.json.
     expect(charxCharId, 'CharX import test ran first').toBeTruthy();
-    const assetCharX = await request.get(`/api/characters/${charxCharId}/export?format=charx`, { headers: AUTH });
+    const assetCharX = await request.get(`/api/characters/${charxCharId}/export?format=charx`, {
+      headers: authHeaders(),
+    });
     expect(assetCharX.ok()).toBe(true);
     const assetZip = unzipSync(new Uint8Array(await assetCharX.body()));
     expect(Object.keys(assetZip)).toEqual(
@@ -264,7 +267,7 @@ test.describe('Character Import Formats', () => {
     expect(charId).toBeTruthy();
 
     const upload = await request.post(`/api/characters/${charId}/avatar`, {
-      headers: AUTH,
+      headers: authHeaders(),
       multipart: { avatar: { name: 'avatar.png', mimeType: 'image/png', buffer: Buffer.from(PNG_BASE64, 'base64') } },
     });
     expect(upload.status()).toBe(200);
@@ -278,7 +281,7 @@ test.describe('Character Import Formats', () => {
     const src = await avatarImg.getAttribute('src');
     expect(src).toBeTruthy();
 
-    const avatarRes = await request.get(src!, { headers: AUTH });
+    const avatarRes = await request.get(src!, { headers: authHeaders() });
     expect(avatarRes.ok()).toBe(true);
     expect(avatarRes.headers()['content-type']).toContain('image/');
     expect((await avatarRes.body()).subarray(1, 4).toString('latin1')).toBe('PNG');

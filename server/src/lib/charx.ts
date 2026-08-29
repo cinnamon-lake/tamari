@@ -13,7 +13,6 @@ import { strFromU8 } from 'fflate';
 import { unzipWithCap } from './zipGuard.js';
 import { str } from './coerce.js';
 
-
 // ZIP local file header signature: PK\x03\x04
 const ZIP_SIGNATURE = new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
 
@@ -160,10 +159,7 @@ export function parseCharX(buffer: Buffer): CharXParseResult {
   return { card, avatarBuffer, assets, moduleBuffer };
 }
 
-export function extractCharXAssets(
-  buffer: Buffer,
-  assetDefs: CharXAssetDef[],
-): Map<string, Buffer> {
+export function extractCharXAssets(buffer: Buffer, assetDefs: CharXAssetDef[]): Map<string, Buffer> {
   const u8 = new Uint8Array(buffer);
   const zipOffset = findZipOffset(u8);
   if (zipOffset === -1) {
@@ -188,9 +184,10 @@ export function buildAssetUri(zipPath: string): string {
 }
 
 export function sanitizeAssetName(name: string): string {
-  return name
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
-    .replace(/_{2,}/g, '_')
-    .replace(/(^_+|_+$)/g, '')
-    || 'asset';
+  return (
+    name
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .replace(/_{2,}/g, '_')
+      .replace(/(^_+|_+$)/g, '') || 'asset'
+  );
 }

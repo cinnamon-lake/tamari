@@ -37,7 +37,6 @@ const QuickReplyUpdateArgs = z.object({
 });
 
 export class QuickReplyWorkbench {
-
   constructor(private deps: QuickReplyWorkbenchDeps) {}
 
   async execute(toolName: string, args: Record<string, unknown>, _context?: ToolContext): Promise<ToolExecuteResult> {

@@ -5,7 +5,6 @@ import { bus } from '../bus/WebSocketBus.js';
 import { useI18n } from '../i18n/index.js';
 import './AuthModal.css';
 
-
 export function AuthGate(props: { children: JSX.Element }) {
   const { t } = useI18n();
   const [tokenInput, setTokenInput] = createSignal('');
@@ -73,15 +72,21 @@ export function AuthGate(props: { children: JSX.Element }) {
       fallback={
         <div class="auth-overlay">
           <div class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
-            <h2 class="auth-modal-title" id="auth-modal-title">{t('auth.title')}</h2>
+            <h2 class="auth-modal-title" id="auth-modal-title">
+              {t('auth.title')}
+            </h2>
             <p class="auth-modal-description">{t('auth.description')}</p>
             <p class="auth-hint">
               {t('auth.hintPrefix')} <code class="auth-modal-env-var">TAMARI_SECRET</code> {t('auth.hintSuffix')}
             </p>
             <Show when={authError()}>
-              <div class="auth-error" id="auth-error">{authError()}</div>
+              <div class="auth-error" id="auth-error">
+                {authError()}
+              </div>
             </Show>
-            <label for="auth-token" class="sr-only">{t('auth.secretTokenLabel')}</label>
+            <label for="auth-token" class="sr-only">
+              {t('auth.secretTokenLabel')}
+            </label>
             <input
               id="auth-token"
               type="password"

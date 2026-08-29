@@ -39,9 +39,7 @@ export async function deleteNonDefaultPersonas(page: Page): Promise<void> {
         const msg = JSON.parse(event.data as string);
         if (msg.type === 'persona.listed' && !listed) {
           listed = true;
-          const ids = ((msg.personas ?? []) as Array<{ id: string }>)
-            .map((p) => p.id)
-            .filter((id) => id !== 'default');
+          const ids = ((msg.personas ?? []) as Array<{ id: string }>).map((p) => p.id).filter((id) => id !== 'default');
           if (ids.length === 0) {
             finish();
             return;

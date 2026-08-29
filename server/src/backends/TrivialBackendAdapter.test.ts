@@ -7,19 +7,14 @@ import { getMessageText } from '@tamari/types';
 
 describe('TrivialBackendAdapter', () => {
   it('emits predefined content blocks as streaming tokens', async () => {
-    const backend = new TrivialBackendAdapter([
-      [{ type: 'content', content: 'Hello!' }],
-    ]);
+    const backend = new TrivialBackendAdapter([[{ type: 'content', content: 'Hello!' }]]);
 
     const prompt = {
       messages: [{ role: 'user' as const, content: 'Hi' }],
       tokenUsage: { prompt: 2, completion: 6 },
     };
 
-    const { items, result } = await consumeStream(backend.stream(
-      prompt,
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(backend.stream(prompt, new AbortController().signal));
     const tokens = items.filter((i) => i.type === 'text').map((i) => i.token);
 
     expect(tokens.join('')).toBe('Hello!');
@@ -35,10 +30,9 @@ describe('TrivialBackendAdapter', () => {
       ],
     ]);
 
-    const { items, result } = await consumeStream(backend.stream(
-      { messages: [], tokenUsage: { prompt: 1, completion: 20 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      backend.stream({ messages: [], tokenUsage: { prompt: 1, completion: 20 } }, new AbortController().signal),
+    );
     const tokens = items.filter((i) => i.type === 'text').map((i) => i.token);
     const reasoning = items.filter((i) => i.type === 'reasoning').map((i) => i.token);
 
@@ -49,15 +43,12 @@ describe('TrivialBackendAdapter', () => {
 
   it('returns toolCalls for tool_use blocks', async () => {
     const backend = new TrivialBackendAdapter([
-      [
-        { type: 'tool_use', id: 'call_1', name: 'get_weather', input: { city: 'Paris' } },
-      ],
+      [{ type: 'tool_use', id: 'call_1', name: 'get_weather', input: { city: 'Paris' } }],
     ]);
 
-    const { result } = await consumeStream(backend.stream(
-      { messages: [], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      backend.stream({ messages: [], tokenUsage: { prompt: 1, completion: 10 } }, new AbortController().signal),
+    );
 
     expect(result.toolCalls).toHaveLength(1);
     expect(result.toolCalls![0]).toEqual({
@@ -75,33 +66,28 @@ describe('TrivialBackendAdapter', () => {
     ]);
 
     for (const expected of ['First', 'Second', 'Third']) {
-      const { items } = await consumeStream(backend.stream(
-        { messages: [], tokenUsage: { prompt: 1, completion: 10 } },
-        new AbortController().signal,
-      ));
+      const { items } = await consumeStream(
+        backend.stream({ messages: [], tokenUsage: { prompt: 1, completion: 10 } }, new AbortController().signal),
+      );
       const tokens = items.filter((i) => i.type === 'text').map((i) => i.token);
       expect(tokens.join('')).toBe(expected);
     }
   });
 
   it('returns empty result when responses are exhausted', async () => {
-    const backend = new TrivialBackendAdapter([
-      [{ type: 'content', content: 'Only' }],
-    ]);
+    const backend = new TrivialBackendAdapter([[{ type: 'content', content: 'Only' }]]);
 
     // First call
-    const { items: items1 } = await consumeStream(backend.stream(
-      { messages: [], tokenUsage: { prompt: 1, completion: 4 } },
-      new AbortController().signal,
-    ));
+    const { items: items1 } = await consumeStream(
+      backend.stream({ messages: [], tokenUsage: { prompt: 1, completion: 4 } }, new AbortController().signal),
+    );
     const tokens1 = items1.filter((i) => i.type === 'text').map((i) => i.token);
     expect(tokens1.join('')).toBe('Only');
 
     // Second call — no more responses
-    const { items: items2, result } = await consumeStream(backend.stream(
-      { messages: [], tokenUsage: { prompt: 1, completion: 0 } },
-      new AbortController().signal,
-    ));
+    const { items: items2, result } = await consumeStream(
+      backend.stream({ messages: [], tokenUsage: { prompt: 1, completion: 0 } }, new AbortController().signal),
+    );
     const tokens2 = items2.filter((i) => i.type === 'text').map((i) => i.token);
     expect(tokens2).toHaveLength(0);
     expect(result.finishReason).toBe('stop');
@@ -204,7 +190,6 @@ describe('TrivialBackendAdapter through bus mock', () => {
     expect(done.finishReason).toBe('stop');
   });
 });
-
 
 describe('TrivialBackendAdapter tool-use through bus mock', () => {
   let h: TestHarness;
@@ -309,9 +294,22 @@ describe('TrivialBackendAdapter tool-use through bus mock', () => {
     });
 
     // Collect generation lifecycle broadcasts
-    const allStarted = client.messages.filter((m: any) => m.type === 'generation.started') as Array<{ type: 'generation.started'; generationId: string; chatId: string; messageId: number }>;
-    const allDone = client.messages.filter((m: any) => m.type === 'generation.done') as Array<{ type: 'generation.done'; generationId: string; finishReason: string }>;
-    const allPatched = client.messages.filter((m: any) => m.type === 'message.snapshot') as Array<{ type: 'message.snapshot'; chatId: string; message: any }>;
+    const allStarted = client.messages.filter((m: any) => m.type === 'generation.started') as Array<{
+      type: 'generation.started';
+      generationId: string;
+      chatId: string;
+      messageId: number;
+    }>;
+    const allDone = client.messages.filter((m: any) => m.type === 'generation.done') as Array<{
+      type: 'generation.done';
+      generationId: string;
+      finishReason: string;
+    }>;
+    const allPatched = client.messages.filter((m: any) => m.type === 'message.snapshot') as Array<{
+      type: 'message.snapshot';
+      chatId: string;
+      message: any;
+    }>;
 
     expect(allStarted).toHaveLength(2);
     expect(allDone).toHaveLength(1);
@@ -469,7 +467,10 @@ describe('endsTurn tool through bus mock', () => {
     // follow-up round (and its generation record) never happened. The control
     // case — a normal tool still triggering a second generation.started — is
     // covered by 'executes tool calls and runs a follow-up generation' above.
-    const allStarted = client.messages.filter((m: any) => m.type === 'generation.started') as Array<{ generationId: string; messageId: number }>;
+    const allStarted = client.messages.filter((m: any) => m.type === 'generation.started') as Array<{
+      generationId: string;
+      messageId: number;
+    }>;
     const allDone = client.messages.filter((m: any) => m.type === 'generation.done');
     expect(allStarted).toHaveLength(1);
     expect(allDone).toHaveLength(1);
@@ -489,7 +490,12 @@ describe('endsTurn tool through bus mock', () => {
     expect(finalMsg).toBeDefined();
     const dbParts = finalMsg!.extra.parts ?? [];
     expect(dbParts).toHaveLength(2);
-    expect(dbParts[0]).toEqual({ type: 'tool_use', id: 'call_1', name: 'present_choices', input: { options: ['A', 'B'] } });
+    expect(dbParts[0]).toEqual({
+      type: 'tool_use',
+      id: 'call_1',
+      name: 'present_choices',
+      input: { options: ['A', 'B'] },
+    });
     const resultPart = dbParts[1]!;
     if (resultPart.type !== 'tool_result') throw new Error('expected tool_result part');
     expect(resultPart.toolUseId).toBe('call_1');

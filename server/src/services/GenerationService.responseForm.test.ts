@@ -19,12 +19,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TestHarness } from '../testing/TestHarness.js';
-import type {
-  BackendAdapter,
-  BackendStreamItem,
-  GenerationResult,
-  Prompt,
-} from '../backends/BackendAdapter.js';
+import type { BackendAdapter, BackendStreamItem, GenerationResult, Prompt } from '../backends/BackendAdapter.js';
 import { getMessageText } from '@tamari/types';
 
 // ---------------------------------------------------------------------------

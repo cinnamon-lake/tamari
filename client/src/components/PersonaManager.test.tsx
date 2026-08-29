@@ -63,11 +63,13 @@ describe('PersonaManager', () => {
     setState('personas', [{ id: 'p1', name: 'Alice', description: '' }]);
     render(() => <PersonaManager onClose={() => {}} />);
     screen.getByText('Alice').click();
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'chat.update',
-      chatId: 'chat-1',
-      patch: { personaId: 'p1' },
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'chat.update',
+        chatId: 'chat-1',
+        patch: { personaId: 'p1' },
+      }),
+    );
   });
 
   it('does not select persona when no active chat', () => {
@@ -82,10 +84,12 @@ describe('PersonaManager', () => {
     const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
     render(() => <PersonaManager onClose={() => {}} />);
     screen.getByText('New Persona').click();
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'persona.create',
-      data: { name: 'New Persona', description: '' },
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'persona.create',
+        data: { name: 'New Persona', description: '' },
+      }),
+    );
   });
 
   it('opens editor when edit clicked', () => {
@@ -131,11 +135,13 @@ describe('PersonaManager', () => {
 
       vitest.advanceTimersByTime(700);
 
-      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'persona.update',
-        personaId: 'p1',
-        patch: { name: 'Alicia', description: 'Test desc' },
-      }));
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'persona.update',
+          personaId: 'p1',
+          patch: { name: 'Alicia', description: 'Test desc' },
+        }),
+      );
       vi.useRealTimers();
     });
 
@@ -170,10 +176,12 @@ describe('PersonaManager', () => {
       simulateSnapshot();
       screen.getByText('Delete').click();
       await new Promise((r) => setTimeout(r, 10));
-      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'persona.delete',
-        personaId: 'p1',
-      }));
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'persona.delete',
+          personaId: 'p1',
+        }),
+      );
     });
   });
 });

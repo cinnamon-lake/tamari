@@ -22,15 +22,26 @@ function makeDeps(overrides?: { enabled?: boolean; workbenchExecute?: McpRouterD
   const cardTestRun = vi.fn(async (args: Record<string, unknown>) => ({ content: JSON.stringify({ ok: true, args }) }));
   const testSessions = {
     start: vi.fn(async (args: Record<string, unknown>) => ({ sessionId: 'sess-1', ...args })),
-    message: vi.fn(async (args: Record<string, unknown>) => ({ reply: 'hi', generationId: 'gen-1', finishReason: 'stop', ...args })),
-    state: vi.fn(async (args: Record<string, unknown>) => ({ sessionId: args.sessionId, messages: [], generations: [] })),
+    message: vi.fn(async (args: Record<string, unknown>) => ({
+      reply: 'hi',
+      generationId: 'gen-1',
+      finishReason: 'stop',
+      ...args,
+    })),
+    state: vi.fn(async (args: Record<string, unknown>) => ({
+      sessionId: args.sessionId,
+      messages: [],
+      generations: [],
+    })),
     end: vi.fn(async (_args: Record<string, unknown>) => ({ ended: true })),
   };
   const deps: McpRouterDeps = {
     workbench: { execute: workbenchExecute } as unknown as McpRouterDeps['workbench'],
     cardTest: { run: cardTestRun } as unknown as McpRouterDeps['cardTest'],
     testSessions: testSessions as unknown as McpRouterDeps['testSessions'],
-    settings: { get: async (key?: string) => (key === 'mcp.enabled' ? (overrides?.enabled ?? true) : undefined) } as unknown as McpRouterDeps['settings'],
+    settings: {
+      get: async (key?: string) => (key === 'mcp.enabled' ? (overrides?.enabled ?? true) : undefined),
+    } as unknown as McpRouterDeps['settings'],
   };
   return { deps, workbenchExecute, cardTestRun, testSessions };
 }
@@ -65,7 +76,10 @@ function rpcResult(res: request.Response): Record<string, unknown> {
 }
 
 function post(app: express.Express, body: unknown, withAuth?: boolean) {
-  return request(app).post(MCP_PATH(withAuth)).set('Accept', ACCEPT).send(body as Record<string, unknown>);
+  return request(app)
+    .post(MCP_PATH(withAuth))
+    .set('Accept', ACCEPT)
+    .send(body as Record<string, unknown>);
 }
 
 describe('createMcpRouter', () => {
@@ -120,7 +134,10 @@ describe('createMcpRouter', () => {
       method: 'tools/call',
       params: { name: 'test_regex', arguments: { text: 'hello', characterId: 'unpacked/x' } },
     }).expect(200);
-    expect(workbenchExecute).toHaveBeenCalledWith('run', { verb: 'test_regex', args: { text: 'hello', characterId: 'unpacked/x' } });
+    expect(workbenchExecute).toHaveBeenCalledWith('run', {
+      verb: 'test_regex',
+      args: { text: 'hello', characterId: 'unpacked/x' },
+    });
     const rpc = rpcResult(res);
     const content = (rpc.result as { content: { text: string }[] }).content[0]!.text;
     expect(content).toContain('workbench:run:');

@@ -38,7 +38,7 @@ describe('e2e tool calling', () => {
           },
         ],
       }),
-      execute: (_toolName, args) => Promise.resolve({ content: `Weather for ${args.city}: sunny, 25°C` }),
+      execute: (_toolName, args) => Promise.resolve({ content: `Weather for ${String(args.city)}: sunny, 25°C` }),
       serialize: () => '',
       deserialize: () => {},
     });
@@ -237,7 +237,7 @@ describe('e2e tool calling', () => {
           },
         ],
       }),
-      execute: (_toolName, args) => Promise.resolve({ content: `Weather for ${args.city}: sunny, 25°C` }),
+      execute: (_toolName, args) => Promise.resolve({ content: `Weather for ${String(args.city)}: sunny, 25°C` }),
       serialize: () => '',
       deserialize: () => {},
     });
@@ -307,7 +307,9 @@ describe('e2e tool calling', () => {
           },
         ],
       }),
-      execute: () => { throw new Error('Intentional failure'); },
+      execute: () => {
+        throw new Error('Intentional failure');
+      },
       serialize: () => '',
       deserialize: () => {},
     });
@@ -393,7 +395,8 @@ describe('e2e tool calling', () => {
     h.expectBroadcast('generation.done');
 
     // Verify the tool_result has isError=true
-    const parts = patched.message.extra!.parts as Array<{ type: string; isError?: boolean; content?: string }> | undefined;
+    const parts = patched.message.extra!.parts as
+      Array<{ type: string; isError?: boolean; content?: string }> | undefined;
     expect(parts).toBeDefined();
     const toolResult = parts!.find((p) => p.type === 'tool_result');
     expect(toolResult).toBeDefined();

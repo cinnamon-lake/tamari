@@ -12,20 +12,14 @@
  * messages carrying attachment content-part arrays get the default reply.
  * These tests therefore assert on the captured request, not the reply text.
  */
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { setSetting } from '../helpers/settings.js';
 import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // Minimal 1x1 transparent PNG in base64 (same fixture as attachments.spec.ts).
-const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 /** Minimal valid WAV: 44-byte PCM header + 100 samples of 16-bit silence
  *  (byte-identical recipe to the mock server's tinyWav()). */
@@ -68,23 +62,28 @@ function lastUserParts(body: unknown): WireContentPart[] {
 }
 
 test.describe('Attachments in prompts', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
+  test.beforeEach(async ({ app: _app, page }) => {
+    // mediaVerboseMode is a UI setting orthogonal to the backend config.
+    // Requesting `app` forces the fixture's login + configureMockBackend to
+    // run first — a page-only hook would evaluate against about:blank, where
+    // localStorage access throws SecurityError.
     await setSetting(page, 'mediaVerboseMode', false);
-    await configureMockBackend(page);
   });
 
   test.afterEach(async ({ page }) => {
-    // resetBackendConfig does not touch capability flags — restore explicitly.
+    // The fixture's resetBackendConfig does not touch capability flags —
+    // restore explicitly.
     await patchActiveBackendConfig(page, { supportsImages: true, supportsAudio: true });
     await setSetting(page, 'mediaVerboseMode', false);
-    await resetBackendConfig(page);
   });
 
-  test('image attachment is sent as a base64 data URI image part', async ({ page }) => {
-    const app = new App(page);
+  test('image attachment is sent as a base64 data URI image part', async ({ page, app }) => {
     const charName = uniqueName('Image Attachment Character');
-    await app.createCharacterAndChat({ name: charName, description: 'Image attachment test character.', firstMes: 'Hello from Image attachment !' });
+    await app.createCharacterAndChat({
+      name: charName,
+      description: 'Image attachment test character.',
+      firstMes: 'Hello from Image attachment !',
+    });
 
     await page.locator('.message-input-area .hidden-file-input').setInputFiles({
       name: 'test-image.png',
@@ -108,10 +107,13 @@ test.describe('Attachments in prompts', () => {
     await app.waitForAssistantText(/deterministic mock response/);
   });
 
-  test('supportsImages off + verbose mode sends the [Attached image] placeholder', async ({ page }) => {
-    const app = new App(page);
+  test('supportsImages off + verbose mode sends the [Attached image] placeholder', async ({ page, app }) => {
     const charName = uniqueName('Image Placeholder Character');
-    await app.createCharacterAndChat({ name: charName, description: 'Image placeholder test character.', firstMes: 'Hello from Image placeholder !' });
+    await app.createCharacterAndChat({
+      name: charName,
+      description: 'Image placeholder test character.',
+      firstMes: 'Hello from Image placeholder !',
+    });
 
     await patchActiveBackendConfig(page, { supportsImages: false });
     await setSetting(page, 'mediaVerboseMode', true);
@@ -134,10 +136,13 @@ test.describe('Attachments in prompts', () => {
     expect(texts.some((t) => t.includes('[Attached image]'))).toBe(true);
   });
 
-  test('audio attachment is sent as an input_audio content part', async ({ page }) => {
-    const app = new App(page);
+  test('audio attachment is sent as an input_audio content part', async ({ page, app }) => {
     const charName = uniqueName('Audio Attachment Character');
-    await app.createCharacterAndChat({ name: charName, description: 'Audio attachment test character.', firstMes: 'Hello from Audio attachment !' });
+    await app.createCharacterAndChat({
+      name: charName,
+      description: 'Audio attachment test character.',
+      firstMes: 'Hello from Audio attachment !',
+    });
 
     await page.locator('.message-input-area .hidden-file-input').setInputFiles({
       name: 'test-audio.wav',

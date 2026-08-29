@@ -48,6 +48,7 @@ jest.config.*
 # ─── Old / reference codebases (not part of the v2 build) ───
 /old
 /Risuai
+/repos
 
 # ─── Docs & meta ───
 /docs
@@ -57,7 +58,7 @@ LICENSE
 # ─── Dev tooling & agent configs ───
 .editorconfig
 .eslintrc*
-eslint-base.cjs
+eslint-base.config.js
 audit_css_hooks.cjs
 .prettierrc*
 .stylelintrc*

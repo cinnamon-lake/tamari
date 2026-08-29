@@ -98,7 +98,7 @@ const CustomBackendCreateArgs = z.object({
     .string()
     .min(1)
     .describe(
-      'Lua source implementing generate(prompt, ctx) — returns a string, { text = ... }, { toolCalls = ... }, or { __passthrough = true }. backends.generate(prompt):await() delegates to the config\'s default backend; state/serialize()/deserialize() persist per-chat state.',
+      "Lua source implementing generate(prompt, ctx) — returns a string, { text = ... }, { toolCalls = ... }, or { __passthrough = true }. backends.generate(prompt):await() delegates to the config's default backend; state/serialize()/deserialize() persist per-chat state.",
     ),
 });
 
@@ -119,7 +119,10 @@ const CustomBackendDeleteArgs = z.object({
 
 const CustomBackendTestArgs = z.object({
   id: z.string().optional().describe('Custom backend id to test. Omit when passing luaSource directly.'),
-  luaSource: z.string().optional().describe('Test this Lua source instead of a stored script — iterate without saving.'),
+  luaSource: z
+    .string()
+    .optional()
+    .describe('Test this Lua source instead of a stored script — iterate without saving.'),
   input: z.string().min(1).describe('Sample user message fed to generate() as the last prompt message.'),
   state: z
     .union([z.string(), z.record(z.string(), z.unknown())])
@@ -127,17 +130,23 @@ const CustomBackendTestArgs = z.object({
     // Models keep passing the snapshot as a parsed object — accept both and
     // normalize to the raw string format dryRunBackendScript expects.
     .transform((v) => (typeof v === 'string' || v === undefined ? v : JSON.stringify(v)))
-    .describe('Canned script-state snapshot injected as the `state` global — a JSON string OR a plain object (serialized for you), e.g. the stateOut of a previous dry-run.'),
+    .describe(
+      'Canned script-state snapshot injected as the `state` global — a JSON string OR a plain object (serialized for you), e.g. the stateOut of a previous dry-run.',
+    ),
   delegateResponse: z
     .union([z.string(), z.object({ error: z.string() }), z.object({ text: z.string() })])
     .optional()
     // { text } unwraps to a plain canned-text response.
     .transform((v) => (typeof v === 'object' && 'text' in v ? v.text : v))
-    .describe('Canned answer for every delegated backends.generate() call — text, { "text": "..." }, or { "error": "..." } to test delegation failures. Defaults to a placeholder.'),
+    .describe(
+      'Canned answer for every delegated backends.generate() call — text, { "text": "..." }, or { "error": "..." } to test delegation failures. Defaults to a placeholder.',
+    ),
   history: z
     .array(z.object({ role: z.enum(['system', 'user', 'assistant', 'tool']), content: z.string() }))
     .optional()
-    .describe('Canned full branch history (oldest first) backing the `chat` global. Omit → `chat` is nil in the dry-run.'),
+    .describe(
+      'Canned full branch history (oldest first) backing the `chat` global. Omit → `chat` is nil in the dry-run.',
+    ),
 });
 
 /** Replace the apiKey with a boolean marker so secrets never reach the model. */
@@ -166,7 +175,6 @@ function describeRequest(url: string, init: RequestInit): Record<string, unknown
 }
 
 export class BackendWorkbench {
-
   constructor(private deps: BackendWorkbenchDeps) {}
 
   async execute(toolName: string, args: Record<string, unknown>, _context?: ToolContext): Promise<ToolExecuteResult> {
@@ -239,7 +247,8 @@ export class BackendWorkbench {
     return { content: JSON.stringify(redactConfig(backendConfig)) };
   }
 
-  private async updateConfig(args: Record<string, unknown>): Promise<ToolExecuteResult> {    const parsed = BackendUpdateArgs.safeParse(args);
+  private async updateConfig(args: Record<string, unknown>): Promise<ToolExecuteResult> {
+    const parsed = BackendUpdateArgs.safeParse(args);
     if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
 
     const config = await this.resolveConfig(parsed.data.configId);
@@ -289,7 +298,8 @@ export class BackendWorkbench {
 
     const backendSettings = buildBackendSettings(await this.deps.settings.list(), candidate);
     await resolveSecretSettings(backendSettings, this.deps.secretService, this.deps.secretsPassword);
-    const createAdapter = this.deps.createAdapter ?? ((s: SettingsMap) => createBackendAdapter(buildAdapterFactoryInput(s)));
+    const createAdapter =
+      this.deps.createAdapter ?? ((s: SettingsMap) => createBackendAdapter(buildAdapterFactoryInput(s)));
     const adapter = createAdapter(backendSettings as SettingsMap);
     if (!adapter) {
       return { content: 'Error: no API key configured for this backend (adapter could not be created)' };

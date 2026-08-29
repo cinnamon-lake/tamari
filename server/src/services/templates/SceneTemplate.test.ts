@@ -125,9 +125,7 @@ describe('SceneTemplate', () => {
       { chatId: 'chat-1' },
     );
     const scene = result.extra!.scene as { sprites: Array<Record<string, unknown>> };
-    expect(scene.sprites).toEqual([
-      { name: 'Bram', position: 'right', url: '/files/avatars/char-2.png' },
-    ]);
+    expect(scene.sprites).toEqual([{ name: 'Bram', position: 'right', url: '/files/avatars/char-2.png' }]);
   });
 
   it('falls back to the avatar when the emotion asset is missing, and notes it', async () => {
@@ -174,11 +172,7 @@ describe('SceneTemplate', () => {
   });
 
   it('does not leak state across chats without a snapshot', async () => {
-    await template.execute(
-      'scene_set',
-      { background: { source: 'attachment', id: 'att-1' } },
-      { chatId: 'chat-1' },
-    );
+    await template.execute('scene_set', { background: { source: 'attachment', id: 'att-1' } }, { chatId: 'chat-1' });
     // A different chat with no snapshot in its branch history starts empty.
     const got = await template.execute('scene_get', {}, { chatId: 'chat-2' });
     expect(got.content).toBe('No scene set.');

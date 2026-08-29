@@ -8,7 +8,15 @@ function sampleModule(): RisuModuleData {
     id: 'dd4769dc-caa2-4c84-9fff-675585abd1d3',
     namespace: 'testns',
     lorebook: [
-      { key: 'reimu, hakurei', secondkey: '', selective: false, content: 'Shrine maiden.', insertorder: 50, alwaysActive: false, mode: 'normal' },
+      {
+        key: 'reimu, hakurei',
+        secondkey: '',
+        selective: false,
+        content: 'Shrine maiden.',
+        insertorder: 50,
+        alwaysActive: false,
+        mode: 'normal',
+      },
     ],
     regex: [{ comment: 'fix typo', in: 'teh', out: 'the', type: 'edittrans', ableFlag: false }],
     trigger: [

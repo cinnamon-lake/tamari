@@ -1,23 +1,11 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { App } from '../helpers/app.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { uniqueName } from '../helpers/names.js';
 
 // Minimal 1x1 transparent PNG in base64 (same fixture as attachments.spec.ts)
-const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 test.describe('UI Surfaces', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-  });
-
-  test('hotswap bar lists recent characters and switches the selection', async ({ page }) => {
-    const app = new App(page);
+  test('hotswap bar lists recent characters and switches the selection', async ({ page, app }) => {
     const nameA = uniqueName('Hotswap A');
     const nameB = uniqueName('Hotswap B');
     // A chat shows the (virtual) greeting without any generation, so no mock
@@ -39,8 +27,7 @@ test.describe('UI Surfaces', () => {
     await expect(page.locator('.character-list li.selected')).toContainText(nameA);
   });
 
-  test('character context menu opens on right-click and dismisses on Escape', async ({ page }) => {
-    const app = new App(page);
+  test('character context menu opens on right-click and dismisses on Escape', async ({ page, app }) => {
     const name = uniqueName('Context Menu');
     await app.createCharacter({ name });
 
@@ -58,38 +45,31 @@ test.describe('UI Surfaces', () => {
     await expect(menu).not.toBeVisible();
   });
 
-  test('chat message search filters the visible messages', async ({ page }) => {
-    const app = new App(page);
+  test('chat message search filters the visible messages', async ({ page, app }) => {
     const name = uniqueName('Search');
-    await configureMockBackend(page);
-    try {
-      await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}` });
-      // Virtual greetings bypass search filtering entirely (ChatView renders
-      // them outside the filtered message list), so send a real message to
-      // materialize the chat before searching.
-      await app.sendUserMessage('needle in the haystack', { expectReply: true });
+    await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}` });
+    // Virtual greetings bypass search filtering entirely (ChatView renders
+    // them outside the filtered message list), so send a real message to
+    // materialize the chat before searching.
+    await app.sendUserMessage('needle in the haystack', { expectReply: true });
 
-      await page.locator('.chat-header button[title="Search messages"]').click();
-      const searchInput = page.locator('.chat-header .chat-search');
-      await expect(searchInput).toBeVisible();
+    await page.locator('.chat-header button[title="Search messages"]').click();
+    const searchInput = page.locator('.chat-header .chat-search');
+    await expect(searchInput).toBeVisible();
 
-      // Matching query keeps the user bubble visible.
-      await searchInput.fill('needle');
-      await expect(page.locator('.message-bubble.user').last()).toContainText('needle');
+    // Matching query keeps the user bubble visible.
+    await searchInput.fill('needle');
+    await expect(page.locator('.message-bubble.user').last()).toContainText('needle');
 
-      // Non-matching query filters the user bubble (and the greeting) out.
-      // Note: the chat's active-child swipe (the last assistant reply) renders
-      // outside the search-filtered list in ChatView, so one assistant bubble
-      // remains — assert on the user bubble, not a total of zero.
-      await searchInput.fill('zz-no-such-text-zz');
-      await expect(page.locator('.message-bubble.user')).toHaveCount(0);
-    } finally {
-      await resetBackendConfig(page);
-    }
+    // Non-matching query filters the user bubble (and the greeting) out.
+    // Note: the chat's active-child swipe (the last assistant reply) renders
+    // outside the search-filtered list in ChatView, so one assistant bubble
+    // remains — assert on the user bubble, not a total of zero.
+    await searchInput.fill('zz-no-such-text-zz');
+    await expect(page.locator('.message-bubble.user')).toHaveCount(0);
   });
 
-  test('chat header menu lists enabled export items and closes on Escape', async ({ page }) => {
-    const app = new App(page);
+  test('chat header menu lists enabled export items and closes on Escape', async ({ page, app }) => {
     const name = uniqueName('Export Menu');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}` });
 
@@ -109,8 +89,7 @@ test.describe('UI Surfaces', () => {
     await expect(menu).not.toBeVisible();
   });
 
-  test('character tag filtering and grid view toggle', async ({ page }) => {
-    const app = new App(page);
+  test('character tag filtering and grid view toggle', async ({ page, app }) => {
     const tagged = uniqueName('TagTarget');
     const untagged = uniqueName('TagBystander');
     const tag = `e2e-tag-${Date.now()}`;
@@ -118,7 +97,6 @@ test.describe('UI Surfaces', () => {
     await app.createCharacter({ name: untagged });
 
     // Open the tagged character's editor and add a tag.
-    await app.revealHoverButtons();
     await page.locator('input[placeholder="Search characters..."]').fill(tagged);
     const row = app.characterRow(tagged);
     await row.waitFor({ state: 'visible' });
@@ -154,40 +132,34 @@ test.describe('UI Surfaces', () => {
     await expect(page.locator('.character-list.grid')).toHaveCount(0);
   });
 
-  test('clicking an image attachment opens and closes the lightbox', async ({ page }) => {
-    const app = new App(page);
+  test('clicking an image attachment opens and closes the lightbox', async ({ page, app }) => {
     const name = uniqueName('Lightbox');
-    await configureMockBackend(page);
-    try {
-      await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}` });
+    await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}` });
 
-      await page.locator('.message-input-area .hidden-file-input').setInputFiles({
-        name: 'test-image.png',
-        mimeType: 'image/png',
-        buffer: Buffer.from(PNG_BASE64, 'base64'),
-      });
-      await expect(page.locator('.attachment-previews .attachment-preview')).toBeVisible({
-        timeout: 5000,
-      });
-      await app.sendUserMessage('here is an image', { expectReply: true });
+    await page.locator('.message-input-area .hidden-file-input').setInputFiles({
+      name: 'test-image.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(PNG_BASE64, 'base64'),
+    });
+    await expect(page.locator('.attachment-previews .attachment-preview')).toBeVisible({
+      timeout: 5000,
+    });
+    await app.sendUserMessage('here is an image', { expectReply: true });
 
-      const imageButton = app.lastBubble('user').locator('button[aria-label="Image attachment"]');
-      await expect(imageButton).toBeVisible();
-      await imageButton.click();
+    const imageButton = app.lastBubble('user').locator('button[aria-label="Image attachment"]');
+    await expect(imageButton).toBeVisible();
+    await imageButton.click();
 
-      await expect(page.locator('.lightbox-overlay')).toBeVisible();
-      await expect(page.locator('.lightbox-img')).toBeVisible();
-      await page.locator('.lightbox-overlay button[aria-label="Close"]').click();
-      await expect(page.locator('.lightbox-overlay')).not.toBeVisible();
-    } finally {
-      await resetBackendConfig(page);
-    }
+    await expect(page.locator('.lightbox-overlay')).toBeVisible();
+    await expect(page.locator('.lightbox-img')).toBeVisible();
+    await page.locator('.lightbox-overlay button[aria-label="Close"]').click();
+    await expect(page.locator('.lightbox-overlay')).not.toBeVisible();
   });
 
   test.describe('mobile navigation', () => {
     test.use({ viewport: { width: 390, height: 844 } });
 
-    test('sidebar opens/closes via menu button, overlay, and close button', async ({ page }) => {
+    test('sidebar opens/closes via menu button, overlay, and close button', async ({ page, app: _app }) => {
       // Off-canvas at mobile width: the hamburger is visible and the sidebar
       // carries no `open` class.
       const menuButton = page.locator('.mobile-menu-btn');

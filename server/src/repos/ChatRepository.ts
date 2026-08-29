@@ -14,7 +14,14 @@
 import { safeParseJson } from '../lib/safeJson.js';
 import type { Client, Transaction } from '@libsql/client';
 import type { InValue } from '@libsql/core/api';
-import { ChatSchema, MessageSchema, ChatRowSchema, ChatSummaryRowSchema, MessageRowSchema, MessageExtraSchema } from '@tamari/types';
+import {
+  ChatSchema,
+  MessageSchema,
+  ChatRowSchema,
+  ChatSummaryRowSchema,
+  MessageRowSchema,
+  MessageExtraSchema,
+} from '@tamari/types';
 import type { Chat, ChatInsert, Message, MessageInsert, MessageUpdate } from '@tamari/types';
 import { ConflictError, NotFoundError } from '../errors.js';
 import { z } from 'zod';
@@ -35,12 +42,7 @@ export interface IChatRepository {
     limit?: number;
     offset?: number;
   }): Promise<{ items: Chat[]; total: number }>;
-  listChatSummaries(opts?: {
-    characterId?: string;
-    personaId?: string;
-    limit?: number;
-    offset?: number;
-  }): Promise<{
+  listChatSummaries(opts?: { characterId?: string; personaId?: string; limit?: number; offset?: number }): Promise<{
     items: Array<
       Pick<Chat, 'id' | 'characterId' | 'name' | 'createdAt' | 'updatedAt' | 'forkedFromChatId' | 'forkedAtMessageId'>
     >;
@@ -91,7 +93,10 @@ export interface IChatRepository {
    * - If the message is the head with children, reparents children to the message's parent.
    * - If the message was the active_child, rolls up to siblings or ancestors per the tree rules.
    */
-  deleteMessageAndRepair(chatId: string, messageId: number): Promise<{
+  deleteMessageAndRepair(
+    chatId: string,
+    messageId: number,
+  ): Promise<{
     chat: Chat | undefined;
     wasActiveChild: boolean;
     wasHead: boolean;
@@ -106,7 +111,10 @@ export interface IChatRepository {
    * Atomically delete the last `count` messages from the active branch
    * and recalculate head / active_child pointers.
    */
-  cutMessages(chatId: string, count: number): Promise<{
+  cutMessages(
+    chatId: string,
+    count: number,
+  ): Promise<{
     deletedIds: number[];
     newHeadId: number | null;
     newActiveChildId: number | null;
@@ -174,7 +182,10 @@ export class ChatRepository implements IChatRepository {
    */
   private async hydrateParts<T extends Message>(messages: T[], q: SqlExecutor = this.client): Promise<T[]> {
     if (messages.length === 0) return messages;
-    const byId = await fetchPartsByMessageId(q, messages.map((m) => m.id));
+    const byId = await fetchPartsByMessageId(
+      q,
+      messages.map((m) => m.id),
+    );
     for (const m of messages) {
       const parts = byId.get(m.id);
       if (parts && parts.length > 0) m.extra.parts = parts;
@@ -420,7 +431,10 @@ export class ChatRepository implements IChatRepository {
         `,
         args: [messageId],
       });
-      const ancestors = await this.hydrateParts(ancestorsRs.rows.map((r) => rowToMessage(r)), tx);
+      const ancestors = await this.hydrateParts(
+        ancestorsRs.rows.map((r) => rowToMessage(r)),
+        tx,
+      );
 
       const id = crypto.randomUUID();
       const now = Math.floor(Date.now() / 1000);
@@ -475,7 +489,10 @@ export class ChatRepository implements IChatRepository {
             sql: `SELECT * FROM messages WHERE parent_id = ? ORDER BY created_at ASC, id ASC`,
             args: [sourceHeadId],
           });
-          const swipes = await this.hydrateParts(swipesRs.rows.map((r) => rowToMessage(r)), tx);
+          const swipes = await this.hydrateParts(
+            swipesRs.rows.map((r) => rowToMessage(r)),
+            tx,
+          );
           for (const swipe of swipes) {
             // The active child (the forked assistant) was already cloned as the
             // tip of the spine — skip it so it isn't duplicated.
@@ -547,9 +564,7 @@ export class ChatRepository implements IChatRepository {
           args: toDelete.map((m) => m.id),
         });
         if (childrenRs.rows.length > 0) {
-          throw new Error(
-            `Cannot cut: one or more messages have replies or swipes. Remove those first.`,
-          );
+          throw new Error(`Cannot cut: one or more messages have replies or swipes. Remove those first.`);
         }
       }
 
@@ -760,8 +775,14 @@ export class ChatRepository implements IChatRepository {
         });
         const chatPeek = chatRs.rows[0];
         parentId =
-          z.coerce.number().nullable().parse(chatPeek?.active_child_id ?? null) ??
-          z.coerce.number().nullable().parse(chatPeek?.head_message_id ?? null) ??
+          z.coerce
+            .number()
+            .nullable()
+            .parse(chatPeek?.active_child_id ?? null) ??
+          z.coerce
+            .number()
+            .nullable()
+            .parse(chatPeek?.head_message_id ?? null) ??
           null;
       }
 
@@ -778,9 +799,7 @@ export class ChatRepository implements IChatRepository {
       await insertMessageParts(tx, insertedId, parts);
 
       const updateSql = `UPDATE chats SET head_message_id = ?, active_child_id = ?, updated_at = ? WHERE id = ?`;
-      const updateArgs = isUser
-        ? [insertedId, null, now, chatId]
-        : [parentId, insertedId, now, chatId];
+      const updateArgs = isUser ? [insertedId, null, now, chatId] : [parentId, insertedId, now, chatId];
 
       await tx.execute({
         sql: updateSql,
@@ -950,7 +969,10 @@ export class ChatRepository implements IChatRepository {
                 sql: 'SELECT parent_id FROM messages WHERE id = ?',
                 args: [message.parentId],
               });
-              const parentParentId = z.coerce.number().nullable().parse(parentParentRs.rows[0]?.parent_id ?? null);
+              const parentParentId = z.coerce
+                .number()
+                .nullable()
+                .parse(parentParentRs.rows[0]?.parent_id ?? null);
               await tx.execute({
                 sql: 'UPDATE chats SET active_child_id = ?, head_message_id = ? WHERE id = ?',
                 args: [message.parentId, parentParentId, chatId],

@@ -96,7 +96,6 @@
 
 /* Older messages loading indicator */
 
-
 /* Persona manager modal */
 .modal.persona-modal {
   max-width: 480px;
@@ -116,4 +115,3 @@
   border-color: var(--color-accent);
   box-shadow: var(--shadow-focus);
 }
-

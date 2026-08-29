@@ -4,11 +4,7 @@ function sanitizeAssetName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
-function findAssetUrl(
-  filename: string,
-  assets: CharacterAsset[],
-  characterId: string,
-): string | null {
+function findAssetUrl(filename: string, assets: CharacterAsset[], characterId: string): string | null {
   const sanitized = sanitizeAssetName(filename);
   const base = sanitized.replace(/\.[^.]+$/, '');
   if (!base) return null;
@@ -38,21 +34,14 @@ function findAssetUrl(
  * (DisplayRenderer.renderTextPart, virtual-greeting rendering), never before
  * persisting a message, so stored text keeps the original card markup.
  */
-export function resolveHtmlImages(
-  content: string,
-  assets: CharacterAsset[],
-  characterId: string,
-): string {
+export function resolveHtmlImages(content: string, assets: CharacterAsset[], characterId: string): string {
   if (!assets.length) return content;
 
-  return content.replace(
-    /src=["']([^"']+\.(?:png|jpe?g|gif|webp|bmp))["']/gi,
-    (match: string, filename: string) => {
-      const url = findAssetUrl(filename, assets, characterId);
-      if (url) {
-        return `src="${url}"`;
-      }
-      return match;
-    },
-  );
+  return content.replace(/src=["']([^"']+\.(?:png|jpe?g|gif|webp|bmp))["']/gi, (match: string, filename: string) => {
+    const url = findAssetUrl(filename, assets, characterId);
+    if (url) {
+      return `src="${url}"`;
+    }
+    return match;
+  });
 }

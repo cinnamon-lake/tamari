@@ -10,11 +10,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { LuaRuntime } from '../scripting/LuaRuntime.js';
-import {
-  LuaBackendAdapter,
-  type CustomBackendDelegate,
-  type DelegatedGenerateResult,
-} from './LuaBackendAdapter.js';
+import { LuaBackendAdapter, type CustomBackendDelegate, type DelegatedGenerateResult } from './LuaBackendAdapter.js';
 import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
 import type { GenerationType } from './BackendAdapter.js';
 import type { MessageRole } from '@tamari/types';
@@ -24,7 +20,20 @@ const luaSource = readFileSync(new URL('../../../docs/design/examples/guildhall/
 
 // The card VFS: main.lua requires all twelve vendored game-lib modules.
 const LIB_FILES: Record<string, string> = Object.fromEntries(
-  ['loop', 'sanitize', 'chrome', 'ledger', 'toolset', 'todo', 'registry', 'summarize', 'maptag', 'events', 'rolling', 'layout'].map((m) => [
+  [
+    'loop',
+    'sanitize',
+    'chrome',
+    'ledger',
+    'toolset',
+    'todo',
+    'registry',
+    'summarize',
+    'maptag',
+    'events',
+    'rolling',
+    'layout',
+  ].map((m) => [
     `lib/${m}.lua`,
     readFileSync(new URL(`../../../docs/design/examples/game-lib/${m}.lua`, import.meta.url), 'utf8'),
   ]),
@@ -38,7 +47,14 @@ interface DunState {
   atk: number;
   inventory: Record<string, number>;
   room: string;
-  combat?: { name: string; hp: number; maxHp: number; atk: number; lines: { intro: string; hit: string; death: string }; reward: number };
+  combat?: {
+    name: string;
+    hp: number;
+    maxHp: number;
+    atk: number;
+    lines: { intro: string; hit: string; death: string };
+    reward: number;
+  };
   seen: Record<string, true>;
   escalations: number;
   fightLog?: Array<{ role: string; content: string }>;
@@ -61,7 +77,14 @@ interface MergeState {
   _regq?: unknown; // the registry mutation queue — empty after the end-of-turn registry.flush()
   bricked?: string; // set after a hard failure: the branch refuses further input
   promises?: Array<{ id: string; what: string; due: number; status?: string }>;
-  event?: { id: string; kind: string; context: string; participants: string[]; spanId?: string; closed?: { gist: string } };
+  event?: {
+    id: string;
+    kind: string;
+    context: string;
+    participants: string[];
+    spanId?: string;
+    closed?: { gist: string };
+  };
   characters?: Array<{ id: string; name: string; role?: string; personality?: string }>;
   dossiers?: Record<string, RollingChannel>;
   story?: RollingChannel;
@@ -97,7 +120,11 @@ function neverDelegate(): CustomBackendDelegate {
 /** Always answers plain prose, never calls a tool — exercises content-outcome paths (fallback gist). */
 function textOnlyDelegate(): CustomBackendDelegate {
   return {
-    generate: vi.fn(async (): Promise<DelegatedGenerateResult> => ({ text: 'She nods and turns away.', finishReason: 'stop', usage: USAGE })),
+    generate: vi.fn(async (): Promise<DelegatedGenerateResult> => ({
+      text: 'She nods and turns away.',
+      finishReason: 'stop',
+      usage: USAGE,
+    })),
     resolveAdapter: noPassthrough(),
   };
 }
@@ -149,55 +176,200 @@ async function runTurn(
   return { text, state: JSON.parse(result.scriptState!) as MergeState, scriptState: result.scriptState! };
 }
 
-const sysOf = (p: Prompt): string => (typeof p.messages[0]?.content === 'string' ? (p.messages[0].content as string) : '');
+const sysOf = (p: Prompt): string =>
+  typeof p.messages[0]?.content === 'string' ? (p.messages[0].content as string) : '';
 const clone = (p: Prompt): Prompt => JSON.parse(JSON.stringify(p)) as Prompt;
 
 /** A floor pack blob in the registry shape: one section per partitioned registry. */
 interface PackBlob {
-  floors?: Array<{ id: string; floor: string; name: string; description: string; entrance: string; stairsDown?: string; ambient: string[] }>;
-  rooms?: Array<{ id: string; floor: string; name: string; desc: string; x?: number; y?: number; section?: string; exits: Record<string, string> }>;
-  enemies?: Array<{ id: string; floor: string; name: string; hp: number; maxHp: number; atk: number; reward: number; lines: { intro: string; hit: string; death: string } }>;
-  interactables?: Array<{ id: string; key: string; floor: string; responses: string[]; effect?: Record<string, unknown> }>;
+  floors?: Array<{
+    id: string;
+    floor: string;
+    name: string;
+    description: string;
+    entrance: string;
+    stairsDown?: string;
+    ambient: string[];
+  }>;
+  rooms?: Array<{
+    id: string;
+    floor: string;
+    name: string;
+    desc: string;
+    x?: number;
+    y?: number;
+    section?: string;
+    exits: Record<string, string>;
+  }>;
+  enemies?: Array<{
+    id: string;
+    floor: string;
+    name: string;
+    hp: number;
+    maxHp: number;
+    atk: number;
+    reward: number;
+    lines: { intro: string; hit: string; death: string };
+  }>;
+  interactables?: Array<{
+    id: string;
+    key: string;
+    floor: string;
+    responses: string[];
+    effect?: Record<string, unknown>;
+  }>;
 }
 
 /** The floor-1 pack as a bare store blob (what the registries resolve via the pointer).
  *  Grid geometry: r1(0,1)—r2(0,0)—r3(1,0) with the stairs down; r5(1,1) is a sealed
  *  annex with no exits — the add_exit tests' adjacency target (east of r1, south of r3). */
 const F1_PACK = JSON.stringify({
-  floors: [{ id: 'f1', floor: 'f1', name: 'The Upper Halls', description: 'Dust and old bones, galleries collapsing inward.', entrance: 'r1', stairsDown: 'r3', ambient: ['Water drips below.'] }],
+  floors: [
+    {
+      id: 'f1',
+      floor: 'f1',
+      name: 'The Upper Halls',
+      description: 'Dust and old bones, galleries collapsing inward.',
+      entrance: 'r1',
+      stairsDown: 'r3',
+      ambient: ['Water drips below.'],
+    },
+  ],
   rooms: [
-    { id: 'r1', floor: 'f1', name: 'Collapsed Nave', desc: 'Dust and old bones.', x: 0, y: 1, section: 'A', exits: { north: 'r2' } },
-    { id: 'r2', floor: 'f1', name: 'Ossuary', desc: 'Stacked femurs like cordwood.', x: 0, y: 0, section: 'A', exits: { south: 'r1', east: 'r3' } },
-    { id: 'r3', floor: 'f1', name: 'Silent Choir', desc: 'Stone seats in rows.', x: 1, y: 0, section: 'B', exits: { west: 'r2', down: 'down' } },
+    {
+      id: 'r1',
+      floor: 'f1',
+      name: 'Collapsed Nave',
+      desc: 'Dust and old bones.',
+      x: 0,
+      y: 1,
+      section: 'A',
+      exits: { north: 'r2' },
+    },
+    {
+      id: 'r2',
+      floor: 'f1',
+      name: 'Ossuary',
+      desc: 'Stacked femurs like cordwood.',
+      x: 0,
+      y: 0,
+      section: 'A',
+      exits: { south: 'r1', east: 'r3' },
+    },
+    {
+      id: 'r3',
+      floor: 'f1',
+      name: 'Silent Choir',
+      desc: 'Stone seats in rows.',
+      x: 1,
+      y: 0,
+      section: 'B',
+      exits: { west: 'r2', down: 'down' },
+    },
     { id: 'r5', floor: 'f1', name: 'Sealed Annex', desc: 'A sealed annex.', x: 1, y: 1, section: 'B', exits: {} },
   ],
-  enemies: [{ id: 'crypt-rat', floor: 'f1', name: 'Crypt Rat', hp: 3, maxHp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat sinks its teeth in.', death: 'The rat twitches and is still.' } }],
-  interactables: [{ id: 'r1-crate', key: 'r1:crate', floor: 'f1', responses: ['Inside: a few coins and a rat nest.', 'Just the rat nest now.'], effect: { gold: 5 } }],
+  enemies: [
+    {
+      id: 'crypt-rat',
+      floor: 'f1',
+      name: 'Crypt Rat',
+      hp: 3,
+      maxHp: 3,
+      atk: 1,
+      reward: 5,
+      lines: { intro: 'It lunges.', hit: 'The rat sinks its teeth in.', death: 'The rat twitches and is still.' },
+    },
+  ],
+  interactables: [
+    {
+      id: 'r1-crate',
+      key: 'r1:crate',
+      floor: 'f1',
+      responses: ['Inside: a few coins and a rat nest.', 'Just the rat nest now.'],
+      effect: { gold: 5 },
+    },
+  ],
 } satisfies PackBlob);
 
 /** Floor pack whose r1 interactable grants the relic (the WIN item). */
 const RELIC_PACK = JSON.stringify({
-  floors: [{ id: 'f1', floor: 'f1', name: 'The Upper Halls', description: 'Dust and old bones.', entrance: 'r1', stairsDown: 'r3', ambient: [] }],
+  floors: [
+    {
+      id: 'f1',
+      floor: 'f1',
+      name: 'The Upper Halls',
+      description: 'Dust and old bones.',
+      entrance: 'r1',
+      stairsDown: 'r3',
+      ambient: [],
+    },
+  ],
   rooms: [
-    { id: 'r1', floor: 'f1', name: 'Collapsed Nave', desc: 'Dust and old bones.', x: 0, y: 1, section: 'A', exits: { north: 'r2' } },
+    {
+      id: 'r1',
+      floor: 'f1',
+      name: 'Collapsed Nave',
+      desc: 'Dust and old bones.',
+      x: 0,
+      y: 1,
+      section: 'A',
+      exits: { north: 'r2' },
+    },
     { id: 'r2', floor: 'f1', name: 'Ossuary', desc: 'Femurs.', x: 0, y: 0, section: 'A', exits: { south: 'r1' } },
     { id: 'r3', floor: 'f1', name: 'Silent Choir', desc: 'Seats.', x: 1, y: 0, section: 'B', exits: { west: 'r2' } },
   ],
   enemies: [],
-  interactables: [{ id: 'r1-relic', key: 'r1:relic', floor: 'f1', responses: ['You take the relic. It hums in your grip.'], effect: { item: 'relic' } }],
+  interactables: [
+    {
+      id: 'r1-relic',
+      key: 'r1:relic',
+      floor: 'f1',
+      responses: ['You take the relic. It hums in your grip.'],
+      effect: { item: 'relic' },
+    },
+  ],
 } satisfies PackBlob);
 
 /** The journey's floor: relic in the entrance room (grab it after the fight), one rat
  *  in the roster. Planning can't place the relic on f1 anymore (deepest floor only),
  *  so the journey seeds its pack — the planning boundary is covered by the delve test. */
 const JOURNEY_PACK = JSON.stringify({
-  floors: [{ id: 'f1', floor: 'f1', name: 'The Upper Halls', description: 'Dust and old bones.', entrance: 'r1', stairsDown: '', ambient: [] }],
+  floors: [
+    {
+      id: 'f1',
+      floor: 'f1',
+      name: 'The Upper Halls',
+      description: 'Dust and old bones.',
+      entrance: 'r1',
+      stairsDown: '',
+      ambient: [],
+    },
+  ],
   rooms: [
     { id: 'r1', floor: 'f1', name: 'Collapsed Nave', desc: 'Dust.', x: 0, y: 1, section: 'A', exits: { north: 'r2' } },
     { id: 'r2', floor: 'f1', name: 'Ossuary', desc: 'Femurs.', x: 0, y: 0, section: 'A', exits: { south: 'r1' } },
   ],
-  enemies: [{ id: 'crypt-rat', floor: 'f1', name: 'Crypt Rat', hp: 3, maxHp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'It bites.', death: 'It dies.' } }],
-  interactables: [{ id: 'r1-relic', key: 'r1:relic', floor: 'f1', responses: ['You take the relic. It hums.'], effect: { item: 'relic' } }],
+  enemies: [
+    {
+      id: 'crypt-rat',
+      floor: 'f1',
+      name: 'Crypt Rat',
+      hp: 3,
+      maxHp: 3,
+      atk: 1,
+      reward: 5,
+      lines: { intro: 'It lunges.', hit: 'It bites.', death: 'It dies.' },
+    },
+  ],
+  interactables: [
+    {
+      id: 'r1-relic',
+      key: 'r1:relic',
+      floor: 'f1',
+      responses: ['You take the relic. It hums.'],
+      effect: { item: 'relic' },
+    },
+  ],
 } satisfies PackBlob);
 
 /** The pointer every floor-1 test state carries (matches the beforeEach seed). */
@@ -206,7 +378,12 @@ const F1_POINTER = { f1: 'pack:f1#1' };
 /** Shared per-test blob heap — seeded with floor 1 under the default pointer. */
 let testBlobs: MemoryScriptBlobRepository;
 
-const ALDRIC = { id: 'ser-aldric', name: 'Ser Aldric', role: 'old knight', personality: 'grizzled, debt-hungry, quietly honorable' };
+const ALDRIC = {
+  id: 'ser-aldric',
+  name: 'Ser Aldric',
+  role: 'old knight',
+  personality: 'grizzled, debt-hungry, quietly honorable',
+};
 
 /** Dungeon mode, standing in r1 of floor 1, full hp. Pack pointers live at the TOP level (state.packIds). */
 function dungeonState(extra: Record<string, unknown> = {}): string {
@@ -248,14 +425,23 @@ function eventState(extra: Record<string, unknown> = {}): string {
     playerName: 'Tester',
     dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1', seen: {}, escalations: 0 },
     characters: [ALDRIC],
-    event: { id: 'e1', kind: 'recruitment', context: 'A barbarian recruiting an old knight', participants: ['ser-aldric'] },
+    event: {
+      id: 'e1',
+      kind: 'recruitment',
+      context: 'A barbarian recruiting an old knight',
+      participants: ['ser-aldric'],
+    },
     ...extra,
   });
 }
 
 // loop.lua rebuilds rounds as assistant messages with typed tool_use/tool_result blocks.
 const hasToolResult = (p: Prompt): boolean =>
-  p.messages.some((m) => Array.isArray(m.content) && m.content.some((b) => typeof b === 'object' && b !== null && (b as { type?: string }).type === 'tool_result'));
+  p.messages.some(
+    (m) =>
+      Array.isArray(m.content) &&
+      m.content.some((b) => typeof b === 'object' && b !== null && (b as { type?: string }).type === 'tool_result'),
+  );
 
 /** Delegate that themes the fixed layout via tool calls, then finishes with the intro. */
 function planningDelegate(): CustomBackendDelegate {
@@ -269,24 +455,75 @@ function planningDelegate(): CustomBackendDelegate {
           const rooms = [...new Set([...sys.matchAll(/\br(\d+)\b/g)].map((m) => `r${m[1]}`))];
           const sections = [...new Set([...sys.matchAll(/^\s*([A-D]): /gm)].map((m) => m[1]))];
           return {
-            text: '', finishReason: 'stop', usage: USAGE,
+            text: '',
+            finishReason: 'stop',
+            usage: USAGE,
             toolCalls: [
-              { id: 'd1', name: 'add_description', arguments: { text: 'Dust and old bones, galleries collapsing inward.' } },
-              ...sections.map((s, i) => ({ id: `s${i}`, name: 'theme_section', arguments: { section: s, name: `Wing ${s}`, vibe: 'Old stone, older dust.' } })),
-              { id: 'f1', name: 'furnish_rooms', arguments: { rooms: rooms.map((r) => ({ room: r, name: r === 'r1' ? 'Collapsed Nave' : `Gallery ${r}`, desc: `Dust and dark in ${r}.` })) } },
-              { id: 'e1', name: 'add_encounter', arguments: { name: 'Crypt Rat', hp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat sinks its teeth in.', death: 'The rat twitches and is still.' } } },
-              { id: 'i1', name: 'add_interactable', arguments: { room: 'r1', name: 'crate', responses: ['Inside: a few coins and a rat nest.', 'Just the rat nest now.'], effect: { gold: 5 } } },
+              {
+                id: 'd1',
+                name: 'add_description',
+                arguments: { text: 'Dust and old bones, galleries collapsing inward.' },
+              },
+              ...sections.map((s, i) => ({
+                id: `s${i}`,
+                name: 'theme_section',
+                arguments: { section: s, name: `Wing ${s}`, vibe: 'Old stone, older dust.' },
+              })),
+              {
+                id: 'f1',
+                name: 'furnish_rooms',
+                arguments: {
+                  rooms: rooms.map((r) => ({
+                    room: r,
+                    name: r === 'r1' ? 'Collapsed Nave' : `Gallery ${r}`,
+                    desc: `Dust and dark in ${r}.`,
+                  })),
+                },
+              },
+              {
+                id: 'e1',
+                name: 'add_encounter',
+                arguments: {
+                  name: 'Crypt Rat',
+                  hp: 3,
+                  atk: 1,
+                  reward: 5,
+                  lines: {
+                    intro: 'It lunges.',
+                    hit: 'The rat sinks its teeth in.',
+                    death: 'The rat twitches and is still.',
+                  },
+                },
+              },
+              {
+                id: 'i1',
+                name: 'add_interactable',
+                arguments: {
+                  room: 'r1',
+                  name: 'crate',
+                  responses: ['Inside: a few coins and a rat nest.', 'Just the rat nest now.'],
+                  effect: { gold: 5 },
+                },
+              },
               { id: 'a1', name: 'add_ambient', arguments: { lines: ['Water drips below.'] } },
             ],
           };
         }
         if (!finished) {
           finished = true;
-          return { text: '', finishReason: 'stop', usage: USAGE,
-            toolCalls: [{ id: 'fin', name: 'finish_floor', arguments: { intro: 'You stand in the Collapsed Nave.' } }] };
+          return {
+            text: '',
+            finishReason: 'stop',
+            usage: USAGE,
+            toolCalls: [{ id: 'fin', name: 'finish_floor', arguments: { intro: 'You stand in the Collapsed Nave.' } }],
+          };
         }
         // The planner's raw final text is backstage design — never served.
-        return { text: 'FULL DESIGN DUMP: the roster, the rewards, every hidden room.', finishReason: 'stop', usage: USAGE };
+        return {
+          text: 'FULL DESIGN DUMP: the roster, the rewards, every hidden room.',
+          finishReason: 'stop',
+          usage: USAGE,
+        };
       }
       return { text: 'You stand in the Collapsed Nave.', finishReason: 'stop', usage: USAGE };
     }),
@@ -305,20 +542,34 @@ function hallEventDelegate(prompts: Prompt[] = []): CustomBackendDelegate {
       const sys = sysOf(prompt);
       if (sys.includes('idle hall')) {
         if (!JSON.stringify(prompt.messages).includes('"open_event"')) {
-          return { text: 'You cross the hall to the quest board.', finishReason: 'stop', usage: USAGE,
-            toolCalls: [{ id: 'o1', name: 'open_event', arguments: { kind: 'recruitment', context: 'A barbarian recruiting an old knight' } }] };
+          return {
+            text: 'You cross the hall to the quest board.',
+            finishReason: 'stop',
+            usage: USAGE,
+            toolCalls: [
+              {
+                id: 'o1',
+                name: 'open_event',
+                arguments: { kind: 'recruitment', context: 'A barbarian recruiting an old knight' },
+              },
+            ],
+          };
         }
         return { text: 'You cross the hall to the quest board.', finishReason: 'stop', usage: USAGE };
       }
       prompts.push(clone(prompt));
       const js = JSON.stringify(prompt.messages);
       if (!js.includes('ser-aldric')) {
-        return { text: '', finishReason: 'stop', usage: USAGE,
+        return {
+          text: '',
+          finishReason: 'stop',
+          usage: USAGE,
           toolCalls: [
             { id: 'l1', name: 'list_characters', arguments: {} },
             { id: 'g1', name: 'register_character', arguments: { name: 'Ser Aldric', role: 'old knight' } },
             { id: 'a1', name: 'add_to_chat', arguments: { id: 'ser-aldric' } },
-          ] };
+          ],
+        };
       }
       return { text: '"What\'s the offer?" the knight rumbles.', finishReason: 'stop', usage: USAGE };
     }),
@@ -333,11 +584,21 @@ function closeDelegate(): CustomBackendDelegate {
     generate: vi.fn(async (_cfg: string | null, _prompt: Prompt): Promise<DelegatedGenerateResult> => {
       round++;
       if (round === 1) {
-        return { text: '', finishReason: 'stop', usage: USAGE,
-          toolCalls: [{ id: 'c1', name: 'close_event', arguments: {
-            gist: 'Recruited Ser Aldric at the quest board.',
-            takes: { 'ser-aldric': 'Hired by a barbarian who paid up front.' },
-          } }] };
+        return {
+          text: '',
+          finishReason: 'stop',
+          usage: USAGE,
+          toolCalls: [
+            {
+              id: 'c1',
+              name: 'close_event',
+              arguments: {
+                gist: 'Recruited Ser Aldric at the quest board.',
+                takes: { 'ser-aldric': 'Hired by a barbarian who paid up front.' },
+              },
+            },
+          ],
+        };
       }
       return { text: '"Done, then."', finishReason: 'stop', usage: USAGE };
     }),
@@ -354,8 +615,18 @@ function dungeonDmOpensEventDelegate(): CustomBackendDelegate {
         // Like a real model: open the event once, then narrate — the tool
         // result is in the messages on later rounds.
         if (!JSON.stringify(prompt.messages).includes('"open_event"')) {
-          return { text: 'The rat chitters, head cocked.', finishReason: 'stop', usage: USAGE,
-            toolCalls: [{ id: 'o1', name: 'open_event', arguments: { kind: 'parley', context: 'A barbarian sizing up a crypt rat' } }] };
+          return {
+            text: 'The rat chitters, head cocked.',
+            finishReason: 'stop',
+            usage: USAGE,
+            toolCalls: [
+              {
+                id: 'o1',
+                name: 'open_event',
+                arguments: { kind: 'parley', context: 'A barbarian sizing up a crypt rat' },
+              },
+            ],
+          };
         }
         return { text: 'The rat chitters, head cocked.', finishReason: 'stop', usage: USAGE };
       }
@@ -373,17 +644,25 @@ function dungeonEconomyDelegate(): CustomBackendDelegate {
     generate: vi.fn(async (_cfg: string | null, _prompt: Prompt): Promise<DelegatedGenerateResult> => {
       round++;
       if (round === 1) {
-        return { text: '', finishReason: 'stop', usage: USAGE,
-          toolCalls: [{ id: 'a1', name: 'attempt', arguments: { action: 'force the door', difficulty: 12 } }] };
+        return {
+          text: '',
+          finishReason: 'stop',
+          usage: USAGE,
+          toolCalls: [{ id: 'a1', name: 'attempt', arguments: { action: 'force the door', difficulty: 12 } }],
+        };
       }
       if (round === 2) {
-        return { text: '', finishReason: 'stop', usage: USAGE,
+        return {
+          text: '',
+          finishReason: 'stop',
+          usage: USAGE,
           toolCalls: [
             { id: 'r1', name: 'remove_item', arguments: { name: 'bomb' } },
             // No direction param: the destination must be GRID-ADJACENT to the
             // current room (r1 here); the compass label is derived from the geometry.
             { id: 'x1', name: 'add_exit', arguments: { to: 'r5', via: 'blown wall' } },
-          ] };
+          ],
+        };
       }
       return { text: 'The way opens.', finishReason: 'stop', usage: USAGE };
     }),
@@ -417,7 +696,13 @@ describe('The Guildhall (merged card)', () => {
     });
 
     it('generation types: impersonate is a hard error too', async () => {
-      const { result } = await runTurnRaw(makeAdapter(neverDelegate()), 'speak for me', hallState(), undefined, 'impersonate');
+      const { result } = await runTurnRaw(
+        makeAdapter(neverDelegate()),
+        'speak for me',
+        hallState(),
+        undefined,
+        'impersonate',
+      );
       expect(result.finishReason).toBe('error');
       expect(result.error).toContain('does not support impersonate');
       expect(result.scriptState).toBeUndefined();
@@ -469,16 +754,43 @@ describe('The Guildhall (merged card)', () => {
           if (sysOf(prompt).includes('content designer')) {
             if (!hasToolResult(prompt)) {
               const rooms = [...new Set([...sysOf(prompt).matchAll(/\br(\d+)\b/g)].map((m) => `r${m[1]}`))];
-              return { text: '', finishReason: 'stop', usage: USAGE,
+              return {
+                text: '',
+                finishReason: 'stop',
+                usage: USAGE,
                 toolCalls: [
-                  { id: 'f', name: 'furnish_rooms', arguments: { rooms: rooms.map((r) => ({ room: r, name: `Vault ${r}`, desc: 'Sealed stone.' })) } },
-                  { id: 'i', name: 'add_interactable', arguments: { room: 'r1', name: 'relic', responses: ['You take the relic.'], effect: { item: 'relic' } } },
-                ] };
+                  {
+                    id: 'f',
+                    name: 'furnish_rooms',
+                    arguments: { rooms: rooms.map((r) => ({ room: r, name: `Vault ${r}`, desc: 'Sealed stone.' })) },
+                  },
+                  {
+                    id: 'i',
+                    name: 'add_interactable',
+                    arguments: {
+                      room: 'r1',
+                      name: 'relic',
+                      responses: ['You take the relic.'],
+                      effect: { item: 'relic' },
+                    },
+                  },
+                ],
+              };
             }
             if (!finished) {
               finished = true;
-              return { text: '', finishReason: 'stop', usage: USAGE,
-                toolCalls: [{ id: 'fin', name: 'finish_floor', arguments: { intro: 'Sealed vaults; something glints on a plinth.' } }] };
+              return {
+                text: '',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [
+                  {
+                    id: 'fin',
+                    name: 'finish_floor',
+                    arguments: { intro: 'Sealed vaults; something glints on a plinth.' },
+                  },
+                ],
+              };
             }
             return { text: 'Design notes, backstage.', finishReason: 'stop', usage: USAGE };
           }
@@ -486,7 +798,9 @@ describe('The Guildhall (merged card)', () => {
         }),
         resolveAdapter: noPassthrough(),
       };
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f3', seen: {}, escalations: 0 } });
+      const start = dungeonState({
+        dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f3', seen: {}, escalations: 0 },
+      });
       const t = await runTurn(makeAdapter(delegate), 'look', start);
       expect(t.text).toContain('Sealed vaults'); // the finish_floor intro is the reply
       // The pack blob lives in the store, not the message — assert on it.
@@ -509,8 +823,25 @@ describe('The Guildhall (merged card)', () => {
     });
 
     it('combat: a kill is served from canned lines with zero delegate calls', async () => {
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0,
-        combat: { name: 'Crypt Rat', hp: 3, maxHp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat sinks its teeth in.', death: 'The rat twitches and is still.' } } } });
+      const start = dungeonState({
+        dun: {
+          maxHp: 20,
+          hp: 20,
+          atk: 4,
+          inventory: {},
+          room: 'f1:r2',
+          seen: { 'f1:r2': true },
+          escalations: 0,
+          combat: {
+            name: 'Crypt Rat',
+            hp: 3,
+            maxHp: 3,
+            atk: 1,
+            reward: 5,
+            lines: { intro: 'It lunges.', hit: 'The rat sinks its teeth in.', death: 'The rat twitches and is still.' },
+          },
+        },
+      });
       const delegate = neverDelegate();
       const t = await runTurn(makeAdapter(delegate), 'attack', start);
       expect(t.text).toContain('The rat twitches and is still.');
@@ -521,8 +852,25 @@ describe('The Guildhall (merged card)', () => {
     });
 
     it('combat is a mode: movement is gated, only attack/flee buttons', async () => {
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0,
-        combat: { name: 'Crypt Rat', hp: 30, maxHp: 30, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat bites.', death: 'It dies.' } } } });
+      const start = dungeonState({
+        dun: {
+          maxHp: 20,
+          hp: 20,
+          atk: 4,
+          inventory: {},
+          room: 'f1:r2',
+          seen: { 'f1:r2': true },
+          escalations: 0,
+          combat: {
+            name: 'Crypt Rat',
+            hp: 30,
+            maxHp: 30,
+            atk: 1,
+            reward: 5,
+            lines: { intro: 'It lunges.', hit: 'The rat bites.', death: 'It dies.' },
+          },
+        },
+      });
       const t = await runTurn(makeAdapter(neverDelegate()), 'go south', start);
       expect(t.text).toContain('between you and everything else');
       expect(t.state.dun.room).toBe('f1:r2'); // no move
@@ -531,8 +879,26 @@ describe('The Guildhall (merged card)', () => {
     });
 
     it('flee: failure costs a hit, success returns to the entrance', async () => {
-      const combat = { name: 'Crypt Rat', hp: 30, maxHp: 30, atk: 2, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat bites.', death: 'It dies.' } };
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, combat } });
+      const combat = {
+        name: 'Crypt Rat',
+        hp: 30,
+        maxHp: 30,
+        atk: 2,
+        reward: 5,
+        lines: { intro: 'It lunges.', hit: 'The rat bites.', death: 'It dies.' },
+      };
+      const start = dungeonState({
+        dun: {
+          maxHp: 20,
+          hp: 20,
+          atk: 4,
+          inventory: {},
+          room: 'f1:r2',
+          seen: { 'f1:r2': true },
+          escalations: 0,
+          combat,
+        },
+      });
       const noEscape = luaSource.replace('local FLEE_DC = 8', 'local FLEE_DC = 100');
       const t1 = await runTurn(makeAdapter(neverDelegate(), noEscape), 'flee', start);
       expect(t1.text).toContain('no escape');
@@ -546,7 +912,17 @@ describe('The Guildhall (merged card)', () => {
     });
 
     it('escalation: the dungeon DM resolves novelty; costs are deducted by Lua', async () => {
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: { bomb: 1 }, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0 } });
+      const start = dungeonState({
+        dun: {
+          maxHp: 20,
+          hp: 20,
+          atk: 4,
+          inventory: { bomb: 1 },
+          room: 'f1:r1',
+          seen: { 'f1:r1': true },
+          escalations: 0,
+        },
+      });
       const t = await runTurn(makeAdapter(dungeonEconomyDelegate()), 'I blow the door open', start);
       expect(t.state.dun.escalations).toBe(1);
       expect(t.state.dun.inventory.bomb).toBeUndefined(); // consumed by the engine
@@ -572,17 +948,23 @@ describe('The Guildhall (merged card)', () => {
         generate: vi.fn(async (_cfg: string | null, _prompt: Prompt): Promise<DelegatedGenerateResult> => {
           round++;
           if (round === 1) {
-            return { text: '', finishReason: 'stop', usage: USAGE,
+            return {
+              text: '',
+              finishReason: 'stop',
+              usage: USAGE,
               toolCalls: [
                 { id: 'x1', name: 'add_exit', arguments: { to: 'r5', via: 'blown wall' } },
                 { id: 's1', name: 'spawn_enemy', arguments: { name: 'Crypt Thing', hp: 4, atk: 1 } },
-              ] };
+              ],
+            };
           }
           return { text: 'The wall comes down; something steps through.', finishReason: 'stop', usage: USAGE };
         }),
         resolveAdapter: noPassthrough(),
       };
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0 } });
+      const start = dungeonState({
+        dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0 },
+      });
       const t = await runTurn(makeAdapter(delegate), 'I blast the wall', start);
       expect(t.state.dun.combat?.name).toBe('Crypt Thing'); // the spawn is live at once
       expect(Object.keys(t.state.packIds ?? {})).toEqual(['f1']); // still ONE pack for the floor
@@ -596,8 +978,25 @@ describe('The Guildhall (merged card)', () => {
     });
 
     it('death ends the delve and returns you to the hall — not the game', async () => {
-      const start = dungeonState({ dun: { maxHp: 20, hp: 1, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0,
-        combat: { name: 'Crypt Rat', hp: 30, maxHp: 30, atk: 5, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat savages you.', death: 'It dies.' } } } });
+      const start = dungeonState({
+        dun: {
+          maxHp: 20,
+          hp: 1,
+          atk: 4,
+          inventory: {},
+          room: 'f1:r2',
+          seen: { 'f1:r2': true },
+          escalations: 0,
+          combat: {
+            name: 'Crypt Rat',
+            hp: 30,
+            maxHp: 30,
+            atk: 5,
+            reward: 5,
+            lines: { intro: 'It lunges.', hit: 'The rat savages you.', death: 'It dies.' },
+          },
+        },
+      });
       const t1 = await runTurn(makeAdapter(neverDelegate()), 'attack', start);
       expect(t1.state.dun.delveOver).toBe('dead');
       expect(t1.text).toContain('Return to the hall');
@@ -611,7 +1010,10 @@ describe('The Guildhall (merged card)', () => {
 
     it('the relic wins the delve and returns you to the hall with the flag set', async () => {
       testBlobs.seed('pack:f1#1', RELIC_PACK); // the floor where r1 holds the relic
-      const start = dungeonState({ flags: {}, dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0 } });
+      const start = dungeonState({
+        flags: {},
+        dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0 },
+      });
       const t1 = await runTurn(makeAdapter(neverDelegate()), 'take the relic', start);
       expect(t1.state.dun.delveOver).toBe('won');
       expect(t1.state.flags.relic).toBe(true);
@@ -650,8 +1052,18 @@ describe('The Guildhall (merged card)', () => {
           const sys = sysOf(prompt);
           if (sys.includes('idle hall')) {
             if (!JSON.stringify(prompt.messages).includes('"open_event"')) {
-              return { text: 'You cross the hall.', finishReason: 'stop', usage: USAGE,
-                toolCalls: [{ id: 'o1', name: 'open_event', arguments: { kind: 'recruitment', context: 'A barbarian recruiting an old knight' } }] };
+              return {
+                text: 'You cross the hall.',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [
+                  {
+                    id: 'o1',
+                    name: 'open_event',
+                    arguments: { kind: 'recruitment', context: 'A barbarian recruiting an old knight' },
+                  },
+                ],
+              };
             }
             return { text: 'You cross the hall.', finishReason: 'stop', usage: USAGE };
           }
@@ -683,7 +1095,7 @@ describe('The Guildhall (merged card)', () => {
     });
 
     it('close_event: the gist files the STORY entry; takes file the dossiers', async () => {
-      const t = await runTurn(makeAdapter(closeDelegate()), 'Great. Let\'s go.', eventState());
+      const t = await runTurn(makeAdapter(closeDelegate()), "Great. Let's go.", eventState());
       // The gist is NOT re-appended after the closing prose (that read as the
       // same summary twice) — its home is the STORY entry, zoomable via
       // inspect_summary.
@@ -737,12 +1149,24 @@ describe('The Guildhall (merged card)', () => {
       const delegate: CustomBackendDelegate = {
         generate: vi.fn(async (_cfg: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
           const sys = sysOf(prompt);
-          const names = (((prompt as unknown as { tools?: Array<{ function: { name: string } }> }).tools) ?? []).map((t) => t.function.name);
+          const names = ((prompt as unknown as { tools?: Array<{ function: { name: string } }> }).tools ?? []).map(
+            (t) => t.function.name,
+          );
           if (sys.includes('idle hall')) {
             dmTools = names;
             if (!JSON.stringify(prompt.messages).includes('"open_event"')) {
-              return { text: 'You cross the hall.', finishReason: 'stop', usage: USAGE,
-                toolCalls: [{ id: 'o1', name: 'open_event', arguments: { kind: 'recruitment', context: 'A barbarian recruiting an old knight' } }] };
+              return {
+                text: 'You cross the hall.',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [
+                  {
+                    id: 'o1',
+                    name: 'open_event',
+                    arguments: { kind: 'recruitment', context: 'A barbarian recruiting an old knight' },
+                  },
+                ],
+              };
             }
             return { text: 'You cross the hall.', finishReason: 'stop', usage: USAGE };
           }
@@ -752,7 +1176,15 @@ describe('The Guildhall (merged card)', () => {
         resolveAdapter: noPassthrough(),
       };
       await runTurn(makeAdapter(delegate), 'I go recruit the old knight', hallState());
-      for (const name of ['open_event', 'close_event', 'register_character', 'update_character', 'list_characters', 'get_character', 'add_to_chat']) {
+      for (const name of [
+        'open_event',
+        'close_event',
+        'register_character',
+        'update_character',
+        'list_characters',
+        'get_character',
+        'add_to_chat',
+      ]) {
         expect(dmTools).toContain(name); // the DM phase…
         expect(sceneTools).toContain(name); // …and the scene phase share ONE toolset
       }
@@ -772,8 +1204,18 @@ describe('The Guildhall (merged card)', () => {
           const sys = sysOf(prompt);
           if (sys.includes('idle hall')) {
             if (!JSON.stringify(prompt.messages).includes('"open_event"')) {
-              return { text: 'You cross the hall to the quest board.', finishReason: 'stop', usage: USAGE,
-                toolCalls: [{ id: 'o1', name: 'open_event', arguments: { kind: 'recruitment', context: 'A barbarian recruiting an old knight' } }] };
+              return {
+                text: 'You cross the hall to the quest board.',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [
+                  {
+                    id: 'o1',
+                    name: 'open_event',
+                    arguments: { kind: 'recruitment', context: 'A barbarian recruiting an old knight' },
+                  },
+                ],
+              };
             }
             return { text: 'You cross the hall.', finishReason: 'stop', usage: USAGE };
           }
@@ -815,8 +1257,18 @@ describe('The Guildhall (merged card)', () => {
           const sys = sysOf(prompt);
           if (sys.includes('idle hall')) {
             if (!JSON.stringify(prompt.messages).includes('"open_event"')) {
-              return { text: 'You cross the hall to the quest board.', finishReason: 'stop', usage: USAGE,
-                toolCalls: [{ id: 'o1', name: 'open_event', arguments: { kind: 'recruitment', context: 'A barbarian recruiting an old knight' } }] };
+              return {
+                text: 'You cross the hall to the quest board.',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [
+                  {
+                    id: 'o1',
+                    name: 'open_event',
+                    arguments: { kind: 'recruitment', context: 'A barbarian recruiting an old knight' },
+                  },
+                ],
+              };
             }
             return { text: 'You cross the hall.', finishReason: 'stop', usage: USAGE };
           }
@@ -855,14 +1307,25 @@ describe('The Guildhall (merged card)', () => {
 
     it('/leave files the finished scene into the story (span as zoomable content)', async () => {
       // Seed a span for the fixture event (openEvent would normally spanStart it).
-      testBlobs.seed('arr#1', JSON.stringify({
-        item: [
-          { role: 'user', content: 'I need a knight.\n\n(In the scene with you: ser-aldric)' },
-          { role: 'assistant', content: '"State your business."' },
-        ],
-        prev: null,
-      }));
-      const start = eventState({ event: { id: 'e1', kind: 'recruitment', context: 'A barbarian recruiting an old knight', participants: ['ser-aldric'], spanId: 'arr#1' } });
+      testBlobs.seed(
+        'arr#1',
+        JSON.stringify({
+          item: [
+            { role: 'user', content: 'I need a knight.\n\n(In the scene with you: ser-aldric)' },
+            { role: 'assistant', content: '"State your business."' },
+          ],
+          prev: null,
+        }),
+      );
+      const start = eventState({
+        event: {
+          id: 'e1',
+          kind: 'recruitment',
+          context: 'A barbarian recruiting an old knight',
+          participants: ['ser-aldric'],
+          spanId: 'arr#1',
+        },
+      });
       const t = await runTurn(makeAdapter(textOnlyDelegate()), '/leave', start);
       expect(t.state.event).toBeUndefined();
       const ids = t.state.story?.ids ?? [];
@@ -875,8 +1338,25 @@ describe('The Guildhall (merged card)', () => {
 
   describe('merge: events + dungeon coexist', () => {
     it('mid-combat free text escalates to the dungeon DM, which opens an event; combat persists', async () => {
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0,
-        combat: { name: 'Crypt Rat', hp: 10, maxHp: 10, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'It bites.', death: 'It dies.' } } } });
+      const start = dungeonState({
+        dun: {
+          maxHp: 20,
+          hp: 20,
+          atk: 4,
+          inventory: {},
+          room: 'f1:r2',
+          seen: { 'f1:r2': true },
+          escalations: 0,
+          combat: {
+            name: 'Crypt Rat',
+            hp: 10,
+            maxHp: 10,
+            atk: 1,
+            reward: 5,
+            lines: { intro: 'It lunges.', hit: 'It bites.', death: 'It dies.' },
+          },
+        },
+      });
       const t = await runTurn(makeAdapter(dungeonDmOpensEventDelegate()), 'I try to intimidate the rat', start);
       // The combat gate did NOT swallow the free text — the dungeon DM was reached.
       expect(t.state.dun.escalations).toBe(1);
@@ -891,8 +1371,14 @@ describe('The Guildhall (merged card)', () => {
         generate: vi.fn(async (_cfg: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
           if (sysOf(prompt).includes('terse dungeon crawler')) {
             if (!JSON.stringify(prompt.messages).includes('"open_event"')) {
-              return { text: '', finishReason: 'stop', usage: USAGE,
-                toolCalls: [{ id: 'o1', name: 'open_event', arguments: { kind: 'parley', context: 'A barbarian and a rat' } }] };
+              return {
+                text: '',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [
+                  { id: 'o1', name: 'open_event', arguments: { kind: 'parley', context: 'A barbarian and a rat' } },
+                ],
+              };
             }
             return { text: '', finishReason: 'stop', usage: USAGE };
           }
@@ -900,8 +1386,26 @@ describe('The Guildhall (merged card)', () => {
         }),
         resolveAdapter: noPassthrough(),
       };
-      const combat = { name: 'Crypt Rat', hp: 10, maxHp: 10, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'It bites.', death: 'It dies.' } };
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, combat } });
+      const combat = {
+        name: 'Crypt Rat',
+        hp: 10,
+        maxHp: 10,
+        atk: 1,
+        reward: 5,
+        lines: { intro: 'It lunges.', hit: 'It bites.', death: 'It dies.' },
+      };
+      const start = dungeonState({
+        dun: {
+          maxHp: 20,
+          hp: 20,
+          atk: 4,
+          inventory: {},
+          room: 'f1:r2',
+          seen: { 'f1:r2': true },
+          escalations: 0,
+          combat,
+        },
+      });
       const t1 = await runTurn(makeAdapter(openDelegate), 'I parley with the rat', start);
       expect(t1.state.event?.kind).toBe('parley');
       expect(t1.state.dun.combat?.name).toBe('Crypt Rat');
@@ -920,13 +1424,32 @@ describe('The Guildhall (merged card)', () => {
 
   describe('the story channel (lib/rolling)', () => {
     it('a fight gist lands in the story; the next DM sees STORY SO FAR and can inspect_summary into the raw span', async () => {
-      const combat = { name: 'Crypt Rat', hp: 3, maxHp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat bites.', death: 'The rat twitches and is still.' } };
-      const start = dungeonState({ dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r2': true }, escalations: 0, combat, fightName: 'fight Crypt Rat',
-        fightLog: [
-          { role: 'assistant', content: 'It lunges.' },
-          { role: 'user', content: 'attack' },
-          { role: 'assistant', content: 'The rat bites. You hit for 4; it answers for 1.' },
-        ] } });
+      const combat = {
+        name: 'Crypt Rat',
+        hp: 3,
+        maxHp: 3,
+        atk: 1,
+        reward: 5,
+        lines: { intro: 'It lunges.', hit: 'The rat bites.', death: 'The rat twitches and is still.' },
+      };
+      const start = dungeonState({
+        dun: {
+          maxHp: 20,
+          hp: 20,
+          atk: 4,
+          inventory: {},
+          room: 'f1:r2',
+          seen: { 'f1:r2': true },
+          escalations: 0,
+          combat,
+          fightName: 'fight Crypt Rat',
+          fightLog: [
+            { role: 'assistant', content: 'It lunges.' },
+            { role: 'user', content: 'attack' },
+            { role: 'assistant', content: 'The rat bites. You hit for 4; it answers for 1.' },
+          ],
+        },
+      });
       const fightHistory: Array<{ role: MessageRole; content: string }> = [
         { role: 'assistant', content: 'It lunges.\n[fight Crypt Rat]' },
         { role: 'user', content: 'attack' },
@@ -944,7 +1467,12 @@ describe('The Guildhall (merged card)', () => {
             dmRound++;
             dmPrompts.push(clone(prompt));
             if (dmRound === 1) {
-              return { text: '', finishReason: 'stop', usage: USAGE, toolCalls: [{ id: 'i1', name: 'inspect_summary', arguments: { id: 'roll#2' } }] };
+              return {
+                text: '',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [{ id: 'i1', name: 'inspect_summary', arguments: { id: 'roll#2' } }],
+              };
             }
             return { text: 'Noted — the rat fight was recent.', finishReason: 'stop', usage: USAGE };
           }
@@ -997,7 +1525,12 @@ describe('The Guildhall (merged card)', () => {
         generate: vi.fn(async (_cfg: string | null, prompt: Prompt): Promise<DelegatedGenerateResult> => {
           if (sysOf(prompt).includes('terse dungeon crawler')) {
             if (!JSON.stringify(prompt.messages).includes('"promise"')) {
-              return { text: '', finishReason: 'stop', usage: USAGE, toolCalls: [{ id: 'p1', name: 'promise', arguments: { id: 'vague', what: 'something later' } }] };
+              return {
+                text: '',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [{ id: 'p1', name: 'promise', arguments: { id: 'vague', what: 'something later' } }],
+              };
             }
             return { text: 'rejected, fine.', finishReason: 'stop', usage: USAGE };
           }
@@ -1020,18 +1553,30 @@ describe('The Guildhall (merged card)', () => {
           if (sysOf(prompt).includes('terse dungeon crawler')) {
             r1++;
             first.push(clone(prompt));
-            if (r1 === 1) return { text: '', finishReason: 'stop', usage: USAGE, toolCalls: [{ id: 'rp', name: 'resolve_promise', arguments: { id: 'rising_water', outcome: 'kept' } }] };
+            if (r1 === 1)
+              return {
+                text: '',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [{ id: 'rp', name: 'resolve_promise', arguments: { id: 'rising_water', outcome: 'kept' } }],
+              };
             return { text: 'done', finishReason: 'stop', usage: USAGE };
           }
           return { text: 'done', finishReason: 'stop', usage: USAGE };
         }),
         resolveAdapter: noPassthrough(),
       };
-      const start = dungeonState({ turn: 5, promises: [{ id: 'rising_water', what: 'The water keeps rising.', due: 5 }] });
+      const start = dungeonState({
+        turn: 5,
+        promises: [{ id: 'rising_water', what: 'The water keeps rising.', due: 5 }],
+      });
       const t1 = await runTurn(makeAdapter(dm1), 'i deal with the water', start);
       expect(sysOf(first[0]!)).toContain('DUE NOW');
       expect(sysOf(first[0]!)).toContain('rising_water');
-      expect((t1.state.promises as Array<{ id: string; status?: string }> | undefined)?.find((p) => p.id === 'rising_water')?.status).toBe('kept');
+      expect(
+        (t1.state.promises as Array<{ id: string; status?: string }> | undefined)?.find((p) => p.id === 'rising_water')
+          ?.status,
+      ).toBe('kept');
 
       // Second escalation: a freshly-built DM prompt no longer carries it.
       const next: Prompt[] = [];
@@ -1069,12 +1614,22 @@ describe('The Guildhall (merged card)', () => {
           if (sys.includes('Compress these episode summaries')) {
             if (failFold) throw new Error('backend down');
             foldPrompts?.push(clone(prompt));
-            return { text: 'A grizzled knight, debt-hungry, who remembers the barbarian.', finishReason: 'stop', usage: USAGE };
+            return {
+              text: 'A grizzled knight, debt-hungry, who remembers the barbarian.',
+              finishReason: 'stop',
+              usage: USAGE,
+            };
           }
           if (sys.includes('scene-runner')) {
             sceneRound++;
             scenePrompts?.push(clone(prompt));
-            if (sceneRound === 1) return { text: '', finishReason: 'stop', usage: USAGE, toolCalls: [{ id: 'g1', name: 'get_character', arguments: { id: 'ser-aldric' } }] };
+            if (sceneRound === 1)
+              return {
+                text: '',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [{ id: 'g1', name: 'get_character', arguments: { id: 'ser-aldric' } }],
+              };
             return { text: '"Back again?"', finishReason: 'stop', usage: USAGE };
           }
           return { text: 'ok', finishReason: 'stop', usage: USAGE };
@@ -1135,7 +1690,21 @@ describe('The Guildhall (merged card)', () => {
           // /leave finalize: file a take for Aldric
           if (sys.includes('Close it properly') || sys.includes('walked out')) {
             if (!js.includes('"close_event"')) {
-              return { text: '', finishReason: 'stop', usage: USAGE, toolCalls: [{ id: 'c1', name: 'close_event', arguments: { gist: 'Recruited Ser Aldric.', takes: { 'ser-aldric': 'Hired by a barbarian who meant business.' } } }] };
+              return {
+                text: '',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [
+                  {
+                    id: 'c1',
+                    name: 'close_event',
+                    arguments: {
+                      gist: 'Recruited Ser Aldric.',
+                      takes: { 'ser-aldric': 'Hired by a barbarian who meant business.' },
+                    },
+                  },
+                ],
+              };
             }
             return { text: 'Safe travels.', finishReason: 'stop', usage: USAGE };
           }
@@ -1143,7 +1712,23 @@ describe('The Guildhall (merged card)', () => {
           if (sys.includes('idle hall')) {
             if (!js.includes('"open_event"')) {
               const reunion = sys.includes('relic');
-              return { text: 'You cross the hall.', finishReason: 'stop', usage: USAGE, toolCalls: [{ id: 'o1', name: 'open_event', arguments: { kind: reunion ? 'reunion' : 'recruitment', context: reunion ? 'The barbarian returns with the relic' : 'A barbarian recruiting an old knight' } }] };
+              return {
+                text: 'You cross the hall.',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [
+                  {
+                    id: 'o1',
+                    name: 'open_event',
+                    arguments: {
+                      kind: reunion ? 'reunion' : 'recruitment',
+                      context: reunion
+                        ? 'The barbarian returns with the relic'
+                        : 'A barbarian recruiting an old knight',
+                    },
+                  },
+                ],
+              };
             }
             return { text: 'You cross the hall.', finishReason: 'stop', usage: USAGE };
           }
@@ -1152,15 +1737,27 @@ describe('The Guildhall (merged card)', () => {
             if (sys.includes('reunion')) {
               reunionRound++;
               reunionScene.push(clone(prompt));
-              if (reunionRound === 1) return { text: '', finishReason: 'stop', usage: USAGE, toolCalls: [{ id: 'g1', name: 'get_character', arguments: { id: 'ser-aldric' } }] };
+              if (reunionRound === 1)
+                return {
+                  text: '',
+                  finishReason: 'stop',
+                  usage: USAGE,
+                  toolCalls: [{ id: 'g1', name: 'get_character', arguments: { id: 'ser-aldric' } }],
+                };
               return { text: '"The crypt suits you," the knight notes.', finishReason: 'stop', usage: USAGE };
             }
             // recruitment: cast, then write a line (event stays open)
-            if (!js.includes('ser-aldric')) return { text: '', finishReason: 'stop', usage: USAGE, toolCalls: [
-              { id: 'l1', name: 'list_characters', arguments: {} },
-              { id: 'g1', name: 'register_character', arguments: { name: 'Ser Aldric', role: 'old knight' } },
-              { id: 'a1', name: 'add_to_chat', arguments: { id: 'ser-aldric' } },
-            ] };
+            if (!js.includes('ser-aldric'))
+              return {
+                text: '',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [
+                  { id: 'l1', name: 'list_characters', arguments: {} },
+                  { id: 'g1', name: 'register_character', arguments: { name: 'Ser Aldric', role: 'old knight' } },
+                  { id: 'a1', name: 'add_to_chat', arguments: { id: 'ser-aldric' } },
+                ],
+              };
             return { text: '"What\'s the offer?"', finishReason: 'stop', usage: USAGE };
           }
           return { text: 'ok', finishReason: 'stop', usage: USAGE };
@@ -1261,8 +1858,29 @@ describe('The Guildhall (merged card)', () => {
           if (sysOf(prompt).includes('scene-runner')) {
             scenePrompts.push(clone(prompt));
             round++;
-            if (round === 1) return { text: '', finishReason: 'stop', usage: USAGE, toolCalls: [{ id: 'rp', name: 'register_player', arguments: { name: 'Grok' } }] };
-            if (round === 2) return { text: '', finishReason: 'stop', usage: USAGE, toolCalls: [{ id: 'c1', name: 'close_event', arguments: { gist: 'Registered Grok the barbarian.', takes: { receptionist: 'A brusque welcome and a donut.' } } }] };
+            if (round === 1)
+              return {
+                text: '',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [{ id: 'rp', name: 'register_player', arguments: { name: 'Grok' } }],
+              };
+            if (round === 2)
+              return {
+                text: '',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [
+                  {
+                    id: 'c1',
+                    name: 'close_event',
+                    arguments: {
+                      gist: 'Registered Grok the barbarian.',
+                      takes: { receptionist: 'A brusque welcome and a donut.' },
+                    },
+                  },
+                ],
+              };
             return { text: '"Welcome to the Guildhall, Grok."', finishReason: 'stop', usage: USAGE };
           }
           return { text: 'ok', finishReason: 'stop', usage: USAGE };
@@ -1298,9 +1916,20 @@ describe('The Guildhall (merged card)', () => {
             scenePrompts.push(clone(prompt));
             call++;
             if (call === 1) return { text: '"Your name, traveler?"', finishReason: 'stop', usage: USAGE };
-            if (call === 2) return { text: '', finishReason: 'stop', usage: USAGE,
-              toolCalls: [{ id: 'rp', name: 'register_player', arguments: { name: 'Grok' } },
-                { id: 'c1', name: 'close_event', arguments: { gist: 'Registered Grok.', takes: { receptionist: 'A brusque welcome.' } } }] };
+            if (call === 2)
+              return {
+                text: '',
+                finishReason: 'stop',
+                usage: USAGE,
+                toolCalls: [
+                  { id: 'rp', name: 'register_player', arguments: { name: 'Grok' } },
+                  {
+                    id: 'c1',
+                    name: 'close_event',
+                    arguments: { gist: 'Registered Grok.', takes: { receptionist: 'A brusque welcome.' } },
+                  },
+                ],
+              };
             return { text: '"Welcome, Grok."', finishReason: 'stop', usage: USAGE };
           }
           return { text: 'ok', finishReason: 'stop', usage: USAGE };

@@ -104,7 +104,9 @@ export async function dryRunBackendScript(runtime: LuaRuntime, opts: DryRunOptio
       };
     },
     resolveAdapter: async () => {
-      throw new Error('passthrough (__passthrough) is not supported in a dry-run — there is no real backend to stream from');
+      throw new Error(
+        'passthrough (__passthrough) is not supported in a dry-run — there is no real backend to stream from',
+      );
     },
   };
 

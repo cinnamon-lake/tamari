@@ -143,7 +143,10 @@ export class PromptBuilder {
   readonly exampleBuilder: ExampleBuilder;
   private readonly stages: PromptStage[];
 
-  constructor(private worldInfo?: WorldInfoInjector, stages?: PromptStage[]) {
+  constructor(
+    private worldInfo?: WorldInfoInjector,
+    stages?: PromptStage[],
+  ) {
     this.macroResolver = MacroResolver.createPromptResolver();
     this.chatRenderer = new ChatCompletionRenderer();
     this.exampleBuilder = new ExampleBuilder();
@@ -210,14 +213,22 @@ export class PromptBuilder {
     if (opts.caching?.appendOnly) {
       const constantOnly = (items: typeof wiResult.before) => items.filter((i) => i.entry.constant);
       const totalBefore =
-        wiResult.before.length + wiResult.after.length + wiResult.top.length + wiResult.bottom.length + wiResult.atDepth.length;
+        wiResult.before.length +
+        wiResult.after.length +
+        wiResult.top.length +
+        wiResult.bottom.length +
+        wiResult.atDepth.length;
       wiResult.before = constantOnly(wiResult.before);
       wiResult.after = constantOnly(wiResult.after);
       wiResult.top = constantOnly(wiResult.top);
       wiResult.bottom = constantOnly(wiResult.bottom);
       wiResult.atDepth = constantOnly(wiResult.atDepth);
       const totalAfter =
-        wiResult.before.length + wiResult.after.length + wiResult.top.length + wiResult.bottom.length + wiResult.atDepth.length;
+        wiResult.before.length +
+        wiResult.after.length +
+        wiResult.top.length +
+        wiResult.bottom.length +
+        wiResult.atDepth.length;
       if (totalAfter < totalBefore) result.excludedNonConstant = true;
       result.activatedEntryIds = wiResult.activatedEntryIds.filter((id) =>
         entries.some((e) => e.id === id && e.constant),
@@ -245,12 +256,14 @@ export class PromptBuilder {
         if (promptRules.length === 0) return msg;
         const parts = msg.extra.parts ?? [];
         let changed = false;
-        const newParts = await Promise.all(parts.map(async (p) => {
-          if (p.type !== 'text') return p;
-          const processed = await applyRules(p.text, promptRules);
-          if (processed !== p.text) changed = true;
-          return { ...p, text: processed };
-        }));
+        const newParts = await Promise.all(
+          parts.map(async (p) => {
+            if (p.type !== 'text') return p;
+            const processed = await applyRules(p.text, promptRules);
+            if (processed !== p.text) changed = true;
+            return { ...p, text: processed };
+          }),
+        );
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- TS does not track mutation across async closures
         if (!changed) return msg;
         return { ...msg, extra: { ...msg.extra, parts: newParts } };
@@ -307,11 +320,7 @@ export class PromptBuilder {
   }
 
   /** Stage: inject atDepth World Info entries as synthetic messages. @internal */
-  spliceAtDepthWorldInfo(
-    chatHistory: Message[],
-    atDepthEntries: WorldInfoEntry[],
-    macroCtx: MacroContext,
-  ): Message[] {
+  spliceAtDepthWorldInfo(chatHistory: Message[], atDepthEntries: WorldInfoEntry[], macroCtx: MacroContext): Message[] {
     for (const entry of atDepthEntries) {
       const resolved = this.macroResolver.resolve(entry.content, macroCtx).trim();
       if (!resolved) continue;
@@ -362,11 +371,7 @@ export class PromptBuilder {
    * non-deterministic macros detected, or dynamic WI entries present).
    * @internal
    */
-  computeCacheDepth(
-    opts: BuildOptions,
-    promptManager: PromptManager,
-    authorsNoteInChat: boolean,
-  ): number | undefined {
+  computeCacheDepth(opts: BuildOptions, promptManager: PromptManager, authorsNoteInChat: boolean): number | undefined {
     const mode = opts.caching?.mode ?? 'off';
     if (mode === 'off') return undefined;
 

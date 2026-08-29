@@ -38,7 +38,7 @@ describe('chat.list', () => {
     // Check the raw mock WebSocket messages
     const ws = client.connection.ws as any;
     console.log('WS SENT MESSAGES:', JSON.stringify(ws.sentMessages.map((s: string) => JSON.parse(s).type)));
-    console.log('CLIENT MESSAGES:', JSON.stringify(client.messages.map(m => m.type)));
+    console.log('CLIENT MESSAGES:', JSON.stringify(client.messages.map((m) => m.type)));
 
     const listed = client.messages.find((m) => m.type === 'chat.listed');
     expect(listed).toBeDefined();

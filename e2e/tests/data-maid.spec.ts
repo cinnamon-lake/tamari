@@ -19,18 +19,12 @@
  */
 import { test, expect } from '../fixtures/base.js';
 import type { APIRequestContext } from '@playwright/test';
-import { login } from '../helpers/auth.js';
+import { login, authHeaders } from '../helpers/auth.js';
 import { App } from '../helpers/app.js';
-
-const AUTH = { Authorization: 'Bearer e2e-test-secret' };
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // Minimal 1x1 transparent PNG (same fixture as attachments.spec.ts).
-const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 interface MaidReport {
   sqlOrphans: {
@@ -51,7 +45,7 @@ interface MaidReport {
 }
 
 async function scan(request: APIRequestContext): Promise<MaidReport> {
-  const res = await request.get('/api/maid/scan', { headers: AUTH });
+  const res = await request.get('/api/maid/scan', { headers: authHeaders() });
   expect(res.ok()).toBe(true);
   return (await res.json()) as MaidReport;
 }
@@ -107,7 +101,7 @@ test.describe('Data Maid', () => {
     for (let i = 0; i < 5; i++) {
       const pre = await scan(request);
       if (pre.summary.totalIssues === 0) break;
-      const res = await request.post('/api/maid/clean', { headers: AUTH });
+      const res = await request.post('/api/maid/clean', { headers: authHeaders() });
       expect(res.ok()).toBe(true);
     }
     const baseline = await scan(request);
@@ -124,12 +118,10 @@ test.describe('Data Maid', () => {
 
     // Scan: the unlinked attachment is reported.
     const dirty = await scan(request);
-    expect(dirty.sqlOrphans.unlinkedAttachments.length).toBe(
-      baseline.sqlOrphans.unlinkedAttachments.length + 1,
-    );
+    expect(dirty.sqlOrphans.unlinkedAttachments.length).toBe(baseline.sqlOrphans.unlinkedAttachments.length + 1);
 
     // Clean: the row is deleted and the response reports the counts.
-    const cleanRes = await request.post('/api/maid/clean', { headers: AUTH });
+    const cleanRes = await request.post('/api/maid/clean', { headers: authHeaders() });
     expect(cleanRes.ok()).toBe(true);
     const clean = (await cleanRes.json()) as {
       ok: boolean;
@@ -141,23 +133,19 @@ test.describe('Data Maid', () => {
     expect(typeof clean.deletedSql).toBe('number');
     expect(typeof clean.deletedFiles).toBe('number');
     expect(clean.deletedSql).toBeGreaterThanOrEqual(1);
-    expect(clean.report.sqlOrphans.unlinkedAttachments.length).toBe(
-      dirty.sqlOrphans.unlinkedAttachments.length,
-    );
+    expect(clean.report.sqlOrphans.unlinkedAttachments.length).toBe(dirty.sqlOrphans.unlinkedAttachments.length);
 
     // Re-scan: the SQL orphan is gone. The uploaded file is now unreferenced,
     // so it shows up as a filesystem orphan (clean uses a single pre-scan
     // report — the file isn't orphaned at scan time).
     const after = await scan(request);
-    expect(after.sqlOrphans.unlinkedAttachments.length).toBe(
-      baseline.sqlOrphans.unlinkedAttachments.length,
-    );
+    expect(after.sqlOrphans.unlinkedAttachments.length).toBe(baseline.sqlOrphans.unlinkedAttachments.length);
     expect(after.filesystemOrphans.orphanedAttachmentFiles.length).toBe(
       baseline.filesystemOrphans.orphanedAttachmentFiles.length + 1,
     );
 
     // A second clean removes the orphan file, exercising deletedFiles.
-    const clean2Res = await request.post('/api/maid/clean', { headers: AUTH });
+    const clean2Res = await request.post('/api/maid/clean', { headers: authHeaders() });
     expect(clean2Res.ok()).toBe(true);
     const clean2 = (await clean2Res.json()) as { ok: boolean; deletedSql: number; deletedFiles: number };
     expect(clean2.deletedFiles).toBeGreaterThanOrEqual(1);

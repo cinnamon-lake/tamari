@@ -1,18 +1,12 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
 import { getLastLlmRequest, resetLlmRequests } from '../helpers/llm.js';
 import { setSetting } from '../helpers/settings.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // Minimal 1x1 transparent PNG in base64 (same as attachments.spec.ts).
-const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 interface WireMessage {
   role?: string;
@@ -33,9 +27,7 @@ function wireMessages(body: unknown): WireMessage[] {
 test.describe('Generation Tools — history serialization', () => {
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
@@ -43,7 +35,6 @@ test.describe('Generation Tools — history serialization', () => {
     // These persist on the shared e2e server — restore defaults unconditionally.
     await setSetting(page, 'reasoningAddToPrompts', false);
     await setSetting(page, 'mediaVerboseMode', false);
-    await resetBackendConfig(page);
     await patchActiveBackendConfig(page, { supportsImages: true });
     if (toolsetId) {
       await deleteToolset(page, toolsetId);
@@ -51,8 +42,7 @@ test.describe('Generation Tools — history serialization', () => {
     }
   });
 
-  test('serializes tool calls and tool results into the follow-up request', async ({ page }) => {
-    const app = new App(page);
+  test('serializes tool calls and tool results into the follow-up request', async ({ page, app }) => {
     // ChatCompletionRenderer strips tool_use/tool_result parts from OLD
     // assistant messages unless reasoningAddToPrompts is on (default: off) —
     // enable it so the follow-up request carries the full tool history.
@@ -80,7 +70,9 @@ test.describe('Generation Tools — history serialization', () => {
     const cap = await getLastLlmRequest();
     const messages = wireMessages(cap.body);
 
-    const withToolCalls = messages.filter((m) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0);
+    const withToolCalls = messages.filter(
+      (m) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
+    );
     expect(withToolCalls.length).toBeGreaterThan(0);
     const call = withToolCalls[0]!.tool_calls![0]!;
     expect(call.type).toBe('function');
@@ -93,8 +85,10 @@ test.describe('Generation Tools — history serialization', () => {
     expect(String(toolMessages[0]!.content ?? '')).toContain('Rolled 1d6');
   });
 
-  test('image attachment degrades to a text placeholder when the backend lacks image support', async ({ page }) => {
-    const app = new App(page);
+  test('image attachment degrades to a text placeholder when the backend lacks image support', async ({
+    page,
+    app,
+  }) => {
     // supportsImages off + mediaVerboseMode on -> ChatCompletionRenderer emits
     // the '[Attached image]' text placeholder instead of an image part.
     await setSetting(page, 'mediaVerboseMode', true);

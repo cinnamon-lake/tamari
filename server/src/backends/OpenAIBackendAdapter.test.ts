@@ -50,10 +50,12 @@ describe('OpenAIBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Hello' }], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Hello' }], tokenUsage: { prompt: 10, completion: 100 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -80,10 +82,9 @@ describe('OpenAIBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -108,10 +109,9 @@ describe('OpenAIBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     const emitted = items.filter((i) => i.type === 'text').map((i) => i.token);
     expect(emitted).toEqual(['Hello', ' world']);
@@ -131,21 +131,23 @@ describe('OpenAIBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          {
-            role: 'assistant',
-            content: [
-              { type: 'text', text: 'Let me check that.' },
-              { type: 'tool_use', id: 'call_1', name: 'get_weather', input: { city: 'Paris' } },
-            ],
-          },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: [
+                { type: 'text', text: 'Let me check that.' },
+                { type: 'tool_use', id: 'call_1', name: 'get_weather', input: { city: 'Paris' } },
+              ],
+            },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -175,18 +177,20 @@ describe('OpenAIBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          {
-            role: 'tool',
-            content: [{ type: 'tool_result', toolUseId: 'call_1', content: 'Sunny', isError: false }],
-          },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            {
+              role: 'tool',
+              content: [{ type: 'tool_result', toolUseId: 'call_1', content: 'Sunny', isError: false }],
+            },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -210,26 +214,28 @@ describe('OpenAIBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          {
-            role: 'assistant',
-            content: [
-              { type: 'reasoning', text: 'Need weather.' },
-              { type: 'tool_use', id: 'call_1', name: 'get_weather', input: { city: 'Paris' } },
-              { type: 'tool_result', toolUseId: 'call_1', name: 'get_weather', content: 'Sunny', isError: false },
-              { type: 'reasoning', text: 'Need time.' },
-              { type: 'tool_use', id: 'call_2', name: 'get_time', input: { tz: 'CET' } },
-              { type: 'tool_result', toolUseId: 'call_2', name: 'get_time', content: '15:00', isError: false },
-              { type: 'text', text: 'It is sunny and 15:00.' },
-            ],
-          },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: [
+                { type: 'reasoning', text: 'Need weather.' },
+                { type: 'tool_use', id: 'call_1', name: 'get_weather', input: { city: 'Paris' } },
+                { type: 'tool_result', toolUseId: 'call_1', name: 'get_weather', content: 'Sunny', isError: false },
+                { type: 'reasoning', text: 'Need time.' },
+                { type: 'tool_use', id: 'call_2', name: 'get_time', input: { tz: 'CET' } },
+                { type: 'tool_result', toolUseId: 'call_2', name: 'get_time', content: '15:00', isError: false },
+                { type: 'text', text: 'It is sunny and 15:00.' },
+              ],
+            },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -287,21 +293,23 @@ describe('OpenAIBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Describe this:' },
-              { type: 'image', source: 'https://example.com/img.png', detail: 'high' },
-            ],
-          },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Describe this:' },
+                { type: 'image', source: 'https://example.com/img.png', detail: 'high' },
+              ],
+            },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -325,10 +333,12 @@ describe('OpenAIBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 }, params: { temperature: 0.8 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [], tokenUsage: { prompt: 10, completion: 100 }, params: { temperature: 0.8 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -363,10 +373,9 @@ describe('OpenAIBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -398,14 +407,16 @@ describe('OpenAIBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [],
-        tokenUsage: { prompt: 10, completion: 100 },
-        responseFormat: { type: 'json_schema', schema: { type: 'object', properties: { name: { type: 'string' } } } },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [],
+          tokenUsage: { prompt: 10, completion: 100 },
+          responseFormat: { type: 'json_schema', schema: { type: 'object', properties: { name: { type: 'string' } } } },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -429,10 +440,9 @@ describe('OpenAIBackendAdapter', () => {
       text: async () => 'Invalid credentials',
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('401');
@@ -455,10 +465,9 @@ describe('OpenAIBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -477,10 +486,9 @@ describe('OpenAIBackendAdapter', () => {
       requestScript: `error("bad syntax")`,
     });
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('Request script error');
@@ -506,10 +514,9 @@ describe('OpenAIBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     expect(result.finishReason).toBe('stop');
     expect(result.toolCalls).toHaveLength(1);
@@ -535,10 +542,9 @@ describe('OpenAIBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     const emitted = items.filter((i) => i.type === 'text').map((i) => i.token);
     const reasoning = items.filter((i) => i.type === 'reasoning').map((i) => i.token);
@@ -563,10 +569,9 @@ describe('OpenAIBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     const emitted = items.filter((i) => i.type === 'text').map((i) => i.token);
     const reasoning = items.filter((i) => i.type === 'reasoning').map((i) => i.token);
@@ -592,10 +597,9 @@ describe('OpenAIBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     const emitted = items.filter((i) => i.type === 'text').map((i) => i.token);
     const reasoning = items.filter((i) => i.type === 'reasoning').map((i) => i.token);
@@ -623,10 +627,9 @@ describe('OpenAIBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     const emitted = items.filter((i) => i.type === 'text').map((i) => i.token);
     const reasoning = items.filter((i) => i.type === 'reasoning').map((i) => i.token);

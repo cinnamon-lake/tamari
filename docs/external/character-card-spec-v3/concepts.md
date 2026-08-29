@@ -7,7 +7,7 @@ Character Card V3 specification is for standarlizing and expending advanced feat
 
 # New Features
 
-This is a list of new features that are added to the CCv3 specification. 
+This is a list of new features that are added to the CCv3 specification.
 
 ## New Embedding Methods
 
@@ -191,7 +191,6 @@ this would be helpful for fallbacks, or just making lorebook entry as a note.
 This decorator makes lorebook entry activate in any case, even if the key values are not matched, or other decorators' conditions are not met.
 
 this would be helpful for fallbacks.
-
 
 ### @@disable_ui_prompt
 

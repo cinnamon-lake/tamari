@@ -3,7 +3,7 @@ import type { IChatRepository } from '../repos/ChatRepository.js';
 import { getLogger } from '../lib/logger.js';
 import type { ActivationStrategy } from '@tamari/types';
 
-const log = getLogger('GroupChatService');
+const log = getLogger('services/GroupChatService');
 
 // Re-exported for existing server-side importers; the union itself is shared
 // with the client via @tamari/types (chat metadata vocabulary).
@@ -63,7 +63,7 @@ export class GroupChatService {
    */
   async getSettings(chatId: string): Promise<GroupChatSettings> {
     const chat = await this.chats.getChatById(chatId);
-    const meta = (chat?.metadata) ?? {};
+    const meta = chat?.metadata ?? {};
     const settings = meta.groupChatSettings as Partial<GroupChatSettings> | undefined;
     return { ...DEFAULT_GROUP_SETTINGS, ...settings };
   }
@@ -111,9 +111,7 @@ export class GroupChatService {
   }
 
   /** NATURAL: All active members respond. */
-  private resolveNatural(
-    activeMembers: Awaited<ReturnType<IChatMemberRepository['getMembers']>>,
-  ): string[] {
+  private resolveNatural(activeMembers: Awaited<ReturnType<IChatMemberRepository['getMembers']>>): string[] {
     return activeMembers.map((m) => m.characterId);
   }
 
@@ -126,7 +124,7 @@ export class GroupChatService {
     if (activeMembers.length === 0) return [];
 
     const chat = await this.chats.getChatById(chatId);
-    const meta = (chat?.metadata) ?? {};
+    const meta = chat?.metadata ?? {};
     const lastListIndex = (meta.lastListIndex as number | undefined) ?? -1;
 
     // On user send, advance to next member

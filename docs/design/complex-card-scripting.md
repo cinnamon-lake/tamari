@@ -16,6 +16,7 @@
 **Entry point stays `luaSource`.** No data migration: the existing single-blob script keeps working unchanged. `require` pulls from `files`; a script that never calls `require` is exactly today's behavior.
 
 **Require semantics:**
+
 - `require('lib/utils')` resolves to `files['lib/utils.lua']` — strip leading `./`, append `.lua` if absent, no `..`, no leading `/`, Lua identifiers + `-`/`_` per segment.
 - Modules are standard Lua: the chunk's return value is the module; `module = true` semantics. Circular requires throw a named error.
 - Cache per runtime invocation (one card generation = one module cache) — no cross-generation state leakage beyond the existing scriptState channel.

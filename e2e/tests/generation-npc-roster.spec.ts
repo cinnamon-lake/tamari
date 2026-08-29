@@ -1,32 +1,19 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 test.describe('NPC Roster Widget', () => {
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     if (toolsetId) {
       await deleteToolset(page, toolsetId);
       toolsetId = undefined;
     }
   });
 
-  test('renders npc_register as a roster card and promote creates a character', async ({ page }) => {
-    const app = new App(page);
+  test('renders npc_register as a roster card and promote creates a character', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'lua_npc_registry');
 
     await app.createCharacterAndChat({
@@ -43,9 +30,7 @@ test.describe('NPC Roster Widget', () => {
     // then its plain-text round streams the actual reply. The tool result part
     // carries extra.renderType = "npc_roster" plus the full registry, so the
     // client hydrates the interactive roster inline in the parts flow.
-    await app.sendUserMessage(
-      `tool:npc_register{"name":"${npcName}","description":"Innkeeper","personality":"Gruff"}`,
-    );
+    await app.sendUserMessage(`tool:npc_register{"name":"${npcName}","description":"Innkeeper","personality":"Gruff"}`);
 
     const assistantBubble = app.lastBubble('assistant');
     // The plain-text reply round pushes the roster widget into the tool-activity

@@ -1,12 +1,6 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // Compact Lua template source (whitespace-separated statements). Defines an
 // `echo_live` tool that echoes the text it receives.
@@ -22,20 +16,13 @@ const ECHO_LUA =
 test.describe('Toolset Workbench', () => {
   const toolsetIds: string[] = [];
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     while (toolsetIds.length > 0) {
       await deleteToolset(page, toolsetIds.pop()!);
     }
   });
 
-  test('full loop: model authors a Lua tool, enables it via a toolset, then calls it', async ({ page }) => {
-    const app = new App(page);
+  test('full loop: model authors a Lua tool, enables it via a toolset, then calls it', async ({ page, app }) => {
     // The single workbench template covers both halves: /luatools authoring
     // and /toolsets enabling.
     toolsetIds.push(await enableBuiltinToolset(page, 'workbench'));
@@ -90,8 +77,7 @@ test.describe('Toolset Workbench', () => {
     await expect(echoResult).toContainText('live-echo:it works', { timeout: 15000 });
   });
 
-  test('a write to /luatools/new.json rejects a broken Lua template instead of saving it', async ({ page }) => {
-    const app = new App(page);
+  test('a write to /luatools/new.json rejects a broken Lua template instead of saving it', async ({ page, app }) => {
     toolsetIds.push(await enableBuiltinToolset(page, 'workbench'));
 
     await app.createCharacterAndChat({

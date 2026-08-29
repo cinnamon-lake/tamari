@@ -1,17 +1,11 @@
-import { test, expect, type Page } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Page } from '../fixtures/base.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // Minimal 1x1 transparent PNG in base64
-const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 /** Upload a 1px PNG via the attachments route; returns the new attachment id. */
 async function uploadPngAttachment(page: Page): Promise<string> {
@@ -31,21 +25,14 @@ async function uploadPngAttachment(page: Page): Promise<string> {
 test.describe('Scene Stage', () => {
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     if (toolsetId) {
       await deleteToolset(page, toolsetId);
       toolsetId = undefined;
     }
   });
 
-  test('scene_set renders the stage panel and an inline scene chip', async ({ page }) => {
-    const app = new App(page);
+  test('scene_set renders the stage panel and an inline scene chip', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'scene');
     const attachmentId = await uploadPngAttachment(page);
 
@@ -75,7 +62,10 @@ test.describe('Scene Stage', () => {
 
     const stage = page.locator('.scene-stage');
     await expect(stage).toBeVisible();
-    await expect(stage.locator('.scene-stage-bg')).toHaveAttribute('src', new RegExp(`/api/attachments/${attachmentId}\\?token=`));
+    await expect(stage.locator('.scene-stage-bg')).toHaveAttribute(
+      'src',
+      new RegExp(`/api/attachments/${attachmentId}\\?token=`),
+    );
     // Regression: the image must actually load — Express's sendFile used to 404
     // on dataDir paths containing a dot segment (like server/.test-data).
     await expect
@@ -88,6 +78,9 @@ test.describe('Scene Stage', () => {
     await stage.locator('.scene-stage-toggle').click();
     await expect(stage.locator('.scene-stage-bg')).toHaveCount(0);
     await stage.locator('.scene-stage-toggle').click();
-    await expect(stage.locator('.scene-stage-bg')).toHaveAttribute('src', new RegExp(`/api/attachments/${attachmentId}\\?token=`));
+    await expect(stage.locator('.scene-stage-bg')).toHaveAttribute(
+      'src',
+      new RegExp(`/api/attachments/${attachmentId}\\?token=`),
+    );
   });
 });

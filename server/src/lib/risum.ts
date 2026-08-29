@@ -119,10 +119,7 @@ export class RisumParseError extends Error {}
  * Asset payloads are returned decoded but otherwise untouched (they may be large —
  * callers that only need the module JSON should pass `skipAssetPayloads`).
  */
-export function parseRisum(
-  buffer: Buffer,
-  options: { skipAssetPayloads?: boolean } = {},
-): RisumParseResult {
+export function parseRisum(buffer: Buffer, options: { skipAssetPayloads?: boolean } = {}): RisumParseResult {
   if (buffer.length < 6) {
     throw new RisumParseError('Not a .risum file: too short for header');
   }
@@ -182,10 +179,7 @@ export function parseRisum(
 }
 
 /** Encode a module back into a .risum container. Used by tests; kept for parity with the decoder. */
-export function buildRisum(
-  module: RisuModuleData,
-  assetPayloads: Buffer[] = [],
-): Buffer {
+export function buildRisum(module: RisuModuleData, assetPayloads: Buffer[] = []): Buffer {
   const mainJson = Buffer.from(JSON.stringify({ module, type: 'risuModule' }), 'utf-8');
   const mainEncoded = encodeRPack(mainJson);
 

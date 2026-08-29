@@ -1,13 +1,8 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { App } from '../helpers/app.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { setSetting } from '../helpers/settings.js';
 import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // Covers ReasoningEngine (extractReasoning / reconstructWithReasoning) and the
 // text-level think-tag parse — all of which only run in text-completion mode:
@@ -29,9 +24,9 @@ function uniqueName(base: string): string {
 test.describe('Reasoning — Text Completion Mode', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  // Requesting `app` forces the fixture's login + configureMockBackend to run
+  // BEFORE this hook, so the provider patch lands on the mock backend.
+  test.beforeEach(async ({ app: _app, page }) => {
     await patchActiveBackendConfig(page, {
       generationMode: 'text',
       instructTemplate: 'deepseek-v4-pro-thinking',
@@ -40,12 +35,10 @@ test.describe('Reasoning — Text Completion Mode', () => {
 
   test.afterEach(async ({ page }) => {
     await setSetting(page, 'reasoningAddToPrompts', false);
-    await resetBackendConfig(page);
     await patchActiveBackendConfig(page, { instructTemplate: '' });
   });
 
-  test('extracts a reasoning block from a text-mode reply via the instruct template', async ({ page }) => {
-    const app = new App(page);
+  test('extracts a reasoning block from a text-mode reply via the instruct template', async ({ app }) => {
     await app.createCharacterAndChat({ name: uniqueName('RT Extract'), firstMes: 'Ready.' });
 
     // userText: the user's own bubble renders without the tags (DOMPurify
@@ -66,18 +59,16 @@ test.describe('Reasoning — Text Completion Mode', () => {
     await expect(bubble.locator('.message-content p')).toHaveText('The answer is 42.');
   });
 
-  test('re-injects prior reasoning into the flat prompt when reasoningAddToPrompts is on', async ({ page }) => {
-    const app = new App(page);
+  test('re-injects prior reasoning into the flat prompt when reasoningAddToPrompts is on', async ({ page, app }) => {
     await app.createCharacterAndChat({ name: uniqueName('RT Reconstruct'), firstMes: 'Ready.' });
 
     await app.sendUserMessage(
       'First question.\nrespond:<think>I pondered deeply</think>The answer is 42.\nEnd of turn.',
       { expectReply: true, userText: 'respond:I pondered deeplyThe answer is 42.' },
     );
-    await expect(app.lastBubble('assistant').locator('.reasoning-block')).toContainText(
-      'I pondered deeply',
-      { timeout: 10000 },
-    );
+    await expect(app.lastBubble('assistant').locator('.reasoning-block')).toContainText('I pondered deeply', {
+      timeout: 10000,
+    });
 
     // Control: with the setting off, the prior assistant turn in the flat
     // prompt carries only the visible content — no reconstructed think block.

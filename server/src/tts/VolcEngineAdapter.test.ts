@@ -13,7 +13,12 @@ describe('VolcEngineAdapter', () => {
     });
     fetchSpy = vi.fn();
     globalThis.fetch = fetchSpy as typeof fetch;
-    fetchSpy.mockResolvedValue({ ok: true, status: 200, text: vi.fn().mockResolvedValue(''), json: vi.fn().mockResolvedValue({}) });
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: vi.fn().mockResolvedValue(''),
+      json: vi.fn().mockResolvedValue({}),
+    });
   });
 
   afterEach(() => {

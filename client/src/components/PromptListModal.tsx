@@ -4,8 +4,7 @@ import { activePromptListId, setActivePromptListId } from '../stores/uiStore.js'
 import { bus } from '../bus/WebSocketBus.js';
 import { confirmPopup, alertPopup } from '../stores/popupStore.js';
 import { useI18n } from '../i18n/index.js';
-import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
-import { createBackdropDismiss } from '../lib/backdropDismiss.js';
+import { Modal } from './Modal.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import type { PresetPromptDef, PresetPromptOrderEntry } from '@tamari/types';
 import './PromptListModal.css';
@@ -170,7 +169,9 @@ const UTILITY_PROMPT_IDENTIFIERS = new Set(['impersonation', 'memorySummary']);
  *  ensureUtilityPrompts / migration 016). */
 const withUtilityPrompts = (defs: PresetPromptDef[]): PresetPromptDef[] => {
   const present = new Set(defs.map((p) => p.identifier));
-  const missing = DEFAULT_PROMPTS.filter((p) => UTILITY_PROMPT_IDENTIFIERS.has(p.identifier) && !present.has(p.identifier));
+  const missing = DEFAULT_PROMPTS.filter(
+    (p) => UTILITY_PROMPT_IDENTIFIERS.has(p.identifier) && !present.has(p.identifier),
+  );
   return missing.length === 0 ? defs : [...defs, ...missing.map((p) => ({ ...p }))];
 };
 
@@ -180,14 +181,15 @@ export function PromptListModal(props: { onClose: () => void }) {
 
   const close = () => {
     if (dirty()) saveList();
-    restoreFocus();
     props.onClose();
   };
 
   // Prompt list editor signals
   const [listName, setListName] = createSignal(activePromptList()?.name ?? t('promptList.defaultName'));
   const [prompts, setPrompts] = createSignal<PresetPromptDef[]>(
-    activePromptList() ? withUtilityPrompts(activePromptList()!.prompts.map((p) => ({ ...p }))) : DEFAULT_PROMPTS.map((p) => ({ ...p })),
+    activePromptList()
+      ? withUtilityPrompts(activePromptList()!.prompts.map((p) => ({ ...p })))
+      : DEFAULT_PROMPTS.map((p) => ({ ...p })),
   );
   const [promptOrder, setPromptOrder] = createSignal<PresetPromptOrderEntry[]>(
     activePromptList()?.promptOrder ?? DEFAULT_ORDER.map((o) => ({ ...o })),
@@ -201,7 +203,6 @@ export function PromptListModal(props: { onClose: () => void }) {
   const [loadedListId, setLoadedListId] = createSignal<string | null>(null);
 
   onMount(() => {
-    saveFocus();
     // Fall back to the first list when no active list was persisted — mirrors
     // BackendConfigModal and keeps the selector in sync with the edit section.
     const listId = state.settings['activePromptListId'] ?? state.promptLists[0]?.id;
@@ -402,223 +403,245 @@ export function PromptListModal(props: { onClose: () => void }) {
   };
 
   return (
-    <div class="modal-overlay" {...createBackdropDismiss(close)}>
-      <div class="modal settings-modal" role="dialog" aria-modal="true" aria-label={t('promptList.modalAriaLabel')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
-        <h2 class="modal-title">{t('promptList.title')} {saving() && <span class="text-sm text-muted">{t('promptList.saving')}</span>}</h2>
-
-        {/* List Selector */}
-        <section class="settings-section">
-          <h3 class="section-heading">{t('promptList.activeListHeading')}</h3>
-          <label class="field-label">
-            {t('promptList.listLabel')}
-            {/* `selected` per option, not just value= on the select: right after
+    <Modal
+      title={
+        <>
+          {t('promptList.title')} {saving() && <span class="text-sm text-muted">{t('promptList.saving')}</span>}
+        </>
+      }
+      onClose={close}
+      class="modal settings-modal"
+      ariaLabel={t('promptList.modalAriaLabel')}
+    >
+      {/* List Selector */}
+      <section class="settings-section">
+        <h3 class="section-heading">{t('promptList.activeListHeading')}</h3>
+        <label class="field-label">
+          {t('promptList.listLabel')}
+          {/* `selected` per option, not just value= on the select: right after
               duplicating, the active id switches on promptList.created while
               the new <option> only appears with the later listed broadcast —
               by then the one-shot value assignment has already failed to match. */}
-            <select class="select" value={activePromptListId() ?? ''} onChange={(e) => switchList(e.currentTarget.value)}>
-              <For each={state.promptLists}>
-                {(list) => (
-                  <option class="select-option" id={list.id} value={list.id} selected={list.id === activePromptListId()}>
-                    {list.name}
-                  </option>
-                )}
-              </For>
-            </select>
-          </label>
-
-          <div class="preset-actions">
-            <button class="text-btn" onClick={duplicateList} type="button">
-              <i class="bi bi-copy" /> {t('promptList.duplicateList')}
-            </button>
-            <button class="text-btn danger" onClick={deleteList}>
-              {t('promptList.deleteList')}
-            </button>
-          </div>
-        </section>
-
-        {/* List Editor */}
-        <section class="settings-section">
-          <h3 class="section-heading">{t('promptList.editHeading', { name: listName() })}</h3>
-          <label class="field-label">
-            {t('common.name')}
-            <input class="input" value={listName()} onInput={(e) => markDirty(setListName)(e.currentTarget.value)} />
-          </label>
-        </section>
-
-        {/* Prompt Manager */}
-        <section class="settings-section">
-          <h3 class="section-heading">{t('promptList.promptsHeading')}</h3>
-          <div class="flex-row-sm">
-            <button class="text-btn small" onClick={() => setShowAddPrompt((v) => !v)} type="button">
-              <i class="bi bi-plus-lg" /> {showAddPrompt() ? t('common.cancel') : t('promptList.addPrompt')}
-            </button>
-            <button class="text-btn small" onClick={resetPrompts} type="button">
-              <i class="bi bi-arrow-counterclockwise" /> {t('promptList.resetToDefaults')}
-            </button>
-          </div>
-
-          <Show when={showAddPrompt()}>
-            <div class="prompt-add-row">
-              <label class="field-label">
-                {t('common.name')}
-                <input
-                  class="input"
-                  value={newPromptName()}
-                  onInput={(e) => setNewPromptName(e.currentTarget.value)}
-                  placeholder={t('promptList.namePlaceholder')}
-                />
-              </label>
-              <label class="field-label">
-                {t('promptList.roleLabel')}
-                <select
-                  class="select"
-                  value={newPromptRole()}
-                  onChange={(e) => setNewPromptRole(e.currentTarget.value as PresetPromptDef['role'])}
-                >
-                  <option class="select-option" value="system">{t('promptList.roleSystem')}</option>
-                  <option class="select-option" value="user">{t('promptList.roleUser')}</option>
-                  <option class="select-option" value="assistant">{t('promptList.roleAssistant')}</option>
-                </select>
-              </label>
-              <label class="field-label">
-                {t('promptList.contentLabel')}
-                <textarea
-                  rows={3}
-                  value={newPromptContent()}
-                  onInput={(e) => setNewPromptContent(e.currentTarget.value)}
-                  placeholder={t('promptList.contentPlaceholder')}
-                  class="resize-v"
-                />
-              </label>
-              <button class="text-btn" onClick={addPrompt} disabled={!newPromptName().trim()}>
-                {t('common.add')}
-              </button>
-            </div>
-          </Show>
-
-          <div class="prompt-list">
-            <For each={promptOrder()}>
-              {(entry, index) => {
-                const def = prompts().find((p) => p.identifier === entry.identifier);
-                if (!def) return null;
-                const isBuiltin = BUILTIN_IDENTIFIERS.has(def.identifier);
-                const isMarker = def.marker;
-                return (
-                  <div id={`prompt-order-${index()}`} class={`prompt-item ${entry.enabled ? '' : 'disabled'}`}>
-                    <div class="prompt-item-header">
-                      <span class="prompt-name" title={def.name}>
-                        {def.name}
-                      </span>
-                      <Show when={isMarker}>
-                        <span class="prompt-badge">{t('promptList.autoFilled')}</span>
-                      </Show>
-                      <input
-                        class="input"
-                        type="checkbox"
-                        checked={entry.enabled}
-                        onChange={() => togglePromptEnabled(index())}
-                        title={t('popups.enabled')}
-                        aria-label={t('promptList.enablePrompt', { name: def.name })}
-                      />
-                      <select
-                        class="select select-sm"
-                        value={def.role}
-                        onChange={(e) =>
-                          updatePrompt(def.identifier, { role: e.currentTarget.value as PresetPromptDef['role'] })
-                        }
-                        disabled={def.identifier === 'dialogueExamples' || def.identifier === 'chatHistory'}
-                        title={
-                          def.identifier === 'dialogueExamples' || def.identifier === 'chatHistory'
-                            ? t('promptList.roleFixed')
-                            : t('promptList.promptRole')
-                        }
-                        aria-label={t('promptList.roleForPrompt', { name: def.name })}
-                      >
-                        <option class="select-option" value="system">{t('promptList.roleSystem')}</option>
-                        <option class="select-option" value="user">{t('promptList.roleUser')}</option>
-                        <option class="select-option" value="assistant">{t('promptList.roleAssistant')}</option>
-                      </select>
-                      <button
-                        class="icon-btn small"
-                        onClick={() => movePrompt(index(), 'up')}
-                        disabled={index() === 0}
-                        type="button"
-                        title={t('promptList.moveUp')} aria-label={t('promptList.moveUp')}
-                      >
-                        <i class="bi bi-arrow-up" />
-                      </button>
-                      <button
-                        class="icon-btn small"
-                        onClick={() => movePrompt(index(), 'down')}
-                        disabled={index() === promptOrder().length - 1}
-                        type="button"
-                        title={t('promptList.moveDown')} aria-label={t('promptList.moveDown')}
-                      >
-                        <i class="bi bi-arrow-down" />
-                      </button>
-                      <Show when={!isBuiltin}>
-                        <button
-                          class="icon-btn small danger"
-                          onClick={() => deletePrompt(def.identifier)}
-                          type="button"
-                          title={t('common.delete')} aria-label={t('common.delete')}
-                        >
-                          <i class="bi bi-trash" />
-                        </button>
-                      </Show>
-                    </div>
-                    <div class="prompt-item-body">
-                      <textarea
-                        class="textarea"
-                        rows={2}
-                        value={def.content}
-                        onInput={(e) => updatePrompt(def.identifier, { content: e.currentTarget.value })}
-                        placeholder={isMarker ? t('promptList.contentAutoInjected') : t('promptList.contentPlaceholder')}
-                        disabled={isMarker}
-                        classList={{ 'preset-prompt-marker': isMarker, 'resize-v': true }}
-                      />
-                    </div>
-                  </div>
-                );
-              }}
+          <select class="select" value={activePromptListId() ?? ''} onChange={(e) => switchList(e.currentTarget.value)}>
+            <For each={state.promptLists}>
+              {(list) => (
+                <option class="select-option" id={list.id} value={list.id} selected={list.id === activePromptListId()}>
+                  {list.name}
+                </option>
+              )}
             </For>
-          </div>
-        </section>
+          </select>
+        </label>
 
-        {/* Utility Prompts — builtin, per-list editable, never in the order */}
-        <section class="settings-section">
-          <h3 class="section-heading">{t('promptList.utilityPromptsHeading')}</h3>
-          <p class="text-sm text-muted">{t('promptList.utilityPromptsHint')}</p>
-          <div class="prompt-list">
-            <For each={utilityPrompts()}>
-              {(def) => (
-                <div class="prompt-item" id={`utility-prompt-${def.identifier}`}>
+        <div class="preset-actions">
+          <button class="text-btn" onClick={duplicateList} type="button">
+            <i class="bi bi-copy" /> {t('promptList.duplicateList')}
+          </button>
+          <button class="text-btn danger" onClick={deleteList}>
+            {t('promptList.deleteList')}
+          </button>
+        </div>
+      </section>
+
+      {/* List Editor */}
+      <section class="settings-section">
+        <h3 class="section-heading">{t('promptList.editHeading', { name: listName() })}</h3>
+        <label class="field-label">
+          {t('common.name')}
+          <input class="input" value={listName()} onInput={(e) => markDirty(setListName)(e.currentTarget.value)} />
+        </label>
+      </section>
+
+      {/* Prompt Manager */}
+      <section class="settings-section">
+        <h3 class="section-heading">{t('promptList.promptsHeading')}</h3>
+        <div class="flex-row-sm">
+          <button class="text-btn small" onClick={() => setShowAddPrompt((v) => !v)} type="button">
+            <i class="bi bi-plus-lg" /> {showAddPrompt() ? t('common.cancel') : t('promptList.addPrompt')}
+          </button>
+          <button class="text-btn small" onClick={resetPrompts} type="button">
+            <i class="bi bi-arrow-counterclockwise" /> {t('promptList.resetToDefaults')}
+          </button>
+        </div>
+
+        <Show when={showAddPrompt()}>
+          <div class="prompt-add-row">
+            <label class="field-label">
+              {t('common.name')}
+              <input
+                class="input"
+                value={newPromptName()}
+                onInput={(e) => setNewPromptName(e.currentTarget.value)}
+                placeholder={t('promptList.namePlaceholder')}
+              />
+            </label>
+            <label class="field-label">
+              {t('promptList.roleLabel')}
+              <select
+                class="select"
+                value={newPromptRole()}
+                onChange={(e) => setNewPromptRole(e.currentTarget.value as PresetPromptDef['role'])}
+              >
+                <option class="select-option" value="system">
+                  {t('promptList.roleSystem')}
+                </option>
+                <option class="select-option" value="user">
+                  {t('promptList.roleUser')}
+                </option>
+                <option class="select-option" value="assistant">
+                  {t('promptList.roleAssistant')}
+                </option>
+              </select>
+            </label>
+            <label class="field-label">
+              {t('promptList.contentLabel')}
+              <textarea
+                rows={3}
+                value={newPromptContent()}
+                onInput={(e) => setNewPromptContent(e.currentTarget.value)}
+                placeholder={t('promptList.contentPlaceholder')}
+                class="resize-v"
+              />
+            </label>
+            <button class="text-btn" onClick={addPrompt} disabled={!newPromptName().trim()}>
+              {t('common.add')}
+            </button>
+          </div>
+        </Show>
+
+        <div class="prompt-list">
+          <For each={promptOrder()}>
+            {(entry, index) => {
+              const def = prompts().find((p) => p.identifier === entry.identifier);
+              if (!def) return null;
+              const isBuiltin = BUILTIN_IDENTIFIERS.has(def.identifier);
+              const isMarker = def.marker;
+              return (
+                <div id={`prompt-order-${index()}`} class={`prompt-item ${entry.enabled ? '' : 'disabled'}`}>
                   <div class="prompt-item-header">
-                    <span class="prompt-name" title={utilityPromptName(def)}>
-                      {utilityPromptName(def)}
+                    <span class="prompt-name" title={def.name}>
+                      {def.name}
                     </span>
+                    <Show when={isMarker}>
+                      <span class="prompt-badge">{t('promptList.autoFilled')}</span>
+                    </Show>
+                    <input
+                      class="input"
+                      type="checkbox"
+                      checked={entry.enabled}
+                      onChange={() => togglePromptEnabled(index())}
+                      title={t('popups.enabled')}
+                      aria-label={t('promptList.enablePrompt', { name: def.name })}
+                    />
+                    <select
+                      class="select select-sm"
+                      value={def.role}
+                      onChange={(e) =>
+                        updatePrompt(def.identifier, { role: e.currentTarget.value as PresetPromptDef['role'] })
+                      }
+                      disabled={def.identifier === 'dialogueExamples' || def.identifier === 'chatHistory'}
+                      title={
+                        def.identifier === 'dialogueExamples' || def.identifier === 'chatHistory'
+                          ? t('promptList.roleFixed')
+                          : t('promptList.promptRole')
+                      }
+                      aria-label={t('promptList.roleForPrompt', { name: def.name })}
+                    >
+                      <option class="select-option" value="system">
+                        {t('promptList.roleSystem')}
+                      </option>
+                      <option class="select-option" value="user">
+                        {t('promptList.roleUser')}
+                      </option>
+                      <option class="select-option" value="assistant">
+                        {t('promptList.roleAssistant')}
+                      </option>
+                    </select>
+                    <button
+                      class="icon-btn small"
+                      onClick={() => movePrompt(index(), 'up')}
+                      disabled={index() === 0}
+                      type="button"
+                      title={t('promptList.moveUp')}
+                      aria-label={t('promptList.moveUp')}
+                    >
+                      <i class="bi bi-arrow-up" />
+                    </button>
+                    <button
+                      class="icon-btn small"
+                      onClick={() => movePrompt(index(), 'down')}
+                      disabled={index() === promptOrder().length - 1}
+                      type="button"
+                      title={t('promptList.moveDown')}
+                      aria-label={t('promptList.moveDown')}
+                    >
+                      <i class="bi bi-arrow-down" />
+                    </button>
+                    <Show when={!isBuiltin}>
+                      <button
+                        class="icon-btn small danger"
+                        onClick={() => deletePrompt(def.identifier)}
+                        type="button"
+                        title={t('common.delete')}
+                        aria-label={t('common.delete')}
+                      >
+                        <i class="bi bi-trash" />
+                      </button>
+                    </Show>
                   </div>
                   <div class="prompt-item-body">
                     <textarea
                       class="textarea"
-                      rows={3}
+                      rows={2}
                       value={def.content}
                       onInput={(e) => updatePrompt(def.identifier, { content: e.currentTarget.value })}
-                      placeholder={t('promptList.contentPlaceholder')}
-                      aria-label={utilityPromptName(def)}
-                      classList={{ 'resize-v': true }}
+                      placeholder={isMarker ? t('promptList.contentAutoInjected') : t('promptList.contentPlaceholder')}
+                      disabled={isMarker}
+                      classList={{ 'preset-prompt-marker': isMarker, 'resize-v': true }}
                     />
                   </div>
                 </div>
-              )}
-            </For>
-          </div>
-        </section>
-
-        <div class="modal-actions">
-          <button class="text-btn" onClick={close}>{t('common.close')}</button>
+              );
+            }}
+          </For>
         </div>
+      </section>
+
+      {/* Utility Prompts — builtin, per-list editable, never in the order */}
+      <section class="settings-section">
+        <h3 class="section-heading">{t('promptList.utilityPromptsHeading')}</h3>
+        <p class="text-sm text-muted">{t('promptList.utilityPromptsHint')}</p>
+        <div class="prompt-list">
+          <For each={utilityPrompts()}>
+            {(def) => (
+              <div class="prompt-item" id={`utility-prompt-${def.identifier}`}>
+                <div class="prompt-item-header">
+                  <span class="prompt-name" title={utilityPromptName(def)}>
+                    {utilityPromptName(def)}
+                  </span>
+                </div>
+                <div class="prompt-item-body">
+                  <textarea
+                    class="textarea"
+                    rows={3}
+                    value={def.content}
+                    onInput={(e) => updatePrompt(def.identifier, { content: e.currentTarget.value })}
+                    placeholder={t('promptList.contentPlaceholder')}
+                    aria-label={utilityPromptName(def)}
+                    classList={{ 'resize-v': true }}
+                  />
+                </div>
+              </div>
+            )}
+          </For>
+        </div>
+      </section>
+
+      <div class="modal-actions">
+        <button class="text-btn" onClick={close}>
+          {t('common.close')}
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }

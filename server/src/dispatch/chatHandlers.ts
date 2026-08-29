@@ -106,7 +106,12 @@ export function buildChatHandlers(
 
       const selectedIndex = Number(chat.metadata.selectedGreetingIndex ?? 0);
       const settingsUserName = (await settings.get('userName')) as string | undefined;
-      await materializeGreetings({ bus, chats, chatBroadcast, assets: characterAssets, personas, userName: settingsUserName }, chat.id, character, selectedIndex);
+      await materializeGreetings(
+        { bus, chats, chatBroadcast, assets: characterAssets, personas, userName: settingsUserName },
+        chat.id,
+        character,
+        selectedIndex,
+      );
       await quickReplyService.runAutoExecute(msg.chatId, QuickReplyAutoExecute.NEW_CHAT, client.id);
     },
 
@@ -168,7 +173,10 @@ export function buildChatHandlers(
       quickReplyService.abortChat(msg.chatId);
       const msgs = await chats.getActiveBranch(msg.chatId, { limit: 10000 });
       // Delete newest-first (leaves first) to avoid FK violations
-      const idsToDelete = msgs.slice().reverse().map((m) => m.id);
+      const idsToDelete = msgs
+        .slice()
+        .reverse()
+        .map((m) => m.id);
       if (idsToDelete.length > 0) {
         await chats.deleteMessages(idsToDelete);
       }

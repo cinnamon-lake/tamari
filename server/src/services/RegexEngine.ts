@@ -74,9 +74,7 @@ export function compileRule(rule: RegexRule): RegExp | null {
 
 function getWorkerPath(): URL {
   // In compiled dist/ the file is .js; in vitest/dev it stays .ts
-  const workerFile = import.meta.url.endsWith('.js')
-    ? './RegexEngine.worker.js'
-    : './RegexEngine.worker.ts';
+  const workerFile = import.meta.url.endsWith('.js') ? './RegexEngine.worker.js' : './RegexEngine.worker.ts';
   return new URL(workerFile, import.meta.url);
 }
 
@@ -188,10 +186,7 @@ async function applyLuaRule(text: string, rule: RegexRule, lua: LuaEngine): Prom
   return result;
 }
 
-export function filterRules(
-  rules: RegexRule[],
-  placement: 'prompt' | 'display',
-): RegexRule[] {
+export function filterRules(rules: RegexRule[], placement: 'prompt' | 'display'): RegexRule[] {
   return rules.filter((r) => !r.disabled && r[placement]);
 }
 

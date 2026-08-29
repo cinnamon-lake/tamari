@@ -6,6 +6,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BackendConfigInsert, PromptListInsert, PresetPromptDef, PresetPromptOrderEntry } from '@tamari/types';
 import { DEFAULT_PROMPTS, DEFAULT_ORDER, ensureUtilityPrompts } from '../pipeline/PromptManager.js';
+import { getLogger } from './logger.js';
+
+const log = getLogger('lib/loadDefaultConfigs');
 
 const PRESETS_DIR = join(process.cwd(), 'default', 'presets');
 
@@ -119,7 +122,8 @@ export function loadDefaultConfigs(): DefaultConfigs[] {
   let files: string[];
   try {
     files = readdirSync(PRESETS_DIR).filter((f) => f.endsWith('.json'));
-  } catch {
+  } catch (err) {
+    log.debug({ err, dir: PRESETS_DIR }, 'Default presets directory unreadable; no seed configs loaded');
     return [];
   }
 

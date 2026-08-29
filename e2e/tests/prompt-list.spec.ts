@@ -25,7 +25,9 @@ test.describe('Prompt List', () => {
     await checkbox.click();
     await expect(checkbox).toBeChecked({ checked: !before });
 
-    await page.locator('.modal-overlay:has(.modal.settings-modal:has-text("Prompt List"))').click({ position: { x: 0, y: 0 } });
+    await page
+      .locator('.modal-overlay:has(.modal.settings-modal:has-text("Prompt List"))')
+      .click({ position: { x: 0, y: 0 } });
     await expect(modal).not.toBeVisible();
   });
 });

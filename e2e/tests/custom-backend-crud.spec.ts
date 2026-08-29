@@ -19,10 +19,7 @@
 import { test, expect } from '../fixtures/base.js';
 import type { Page, Locator } from '@playwright/test';
 import { login } from '../helpers/auth.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 async function openModal(page: Page): Promise<Locator> {
   const btn = page.locator('button.settings-btn:has-text("Custom Backends")');
@@ -41,12 +38,7 @@ async function closeModal(page: Page, modal: Locator): Promise<void> {
 }
 
 /** Open the add form and fill name + Lua source (description optional). */
-async function openAddForm(
-  modal: Locator,
-  name: string,
-  luaSource: string,
-  description?: string,
-): Promise<void> {
+async function openAddForm(modal: Locator, name: string, luaSource: string, description?: string): Promise<void> {
   await modal.locator('button:has-text("Add Custom Backend")').click();
   await modal.locator('input[placeholder="my-backend"]').fill(name);
   if (description !== undefined) {
@@ -125,7 +117,7 @@ test.describe('Custom Backends', () => {
     const panel = modal.locator('.backend-dry-run-panel');
     await panel.locator('label:has-text("Sample Input") textarea').fill('hello world');
     await panel.locator('label:has-text("Delegate Response") input').fill('canned reply');
-    await panel.locator("button.primary-btn").click();
+    await panel.locator('button.primary-btn').click();
 
     const result = panel.locator('.backend-dry-run-result');
     await expect(result).toBeVisible({ timeout: 15000 });
@@ -163,7 +155,7 @@ test.describe('Custom Backends', () => {
     const stateInput = panel.locator('label:has-text("State (JSON") input');
     await panel.locator('label:has-text("Sample Input") textarea').fill('hello world');
     await stateInput.fill('{"turn": 1}');
-    await panel.locator("button.primary-btn").click();
+    await panel.locator('button.primary-btn').click();
 
     const result = panel.locator('.backend-dry-run-result');
     await expect(result).toBeVisible({ timeout: 15000 });
@@ -175,7 +167,7 @@ test.describe('Custom Backends', () => {
     // Feed the returned state back as the next run's input state, then re-run.
     await result.locator('button:has-text("Use as state for next run")').click();
     await expect(stateInput).toHaveValue(/"turn":\s*2/);
-    await panel.locator("button.primary-btn").click();
+    await panel.locator('button.primary-btn').click();
     await expect(result.locator('span:has-text("Output") + pre')).toHaveText('turn 3', { timeout: 15000 });
     await expect(stateOut).toContainText(/"turn":\s*3/);
 
@@ -192,7 +184,7 @@ test.describe('Custom Backends', () => {
 
     const panel = modal.locator('.backend-dry-run-panel');
     await panel.locator('label:has-text("Sample Input") textarea').fill('hello world');
-    await panel.locator("button.primary-btn").click();
+    await panel.locator('button.primary-btn').click();
 
     const result = panel.locator('.backend-dry-run-result');
     await expect(result).toBeVisible({ timeout: 15000 });
@@ -218,7 +210,7 @@ test.describe('Custom Backends', () => {
     const panel = modal.locator('.backend-dry-run-panel');
     await panel.locator('label:has-text("Sample Input") textarea').fill('hello world');
     await panel.locator('label:has-text("Delegate Response") input').fill('canned reply');
-    await panel.locator("button.primary-btn").click();
+    await panel.locator('button.primary-btn').click();
 
     const result = panel.locator('.backend-dry-run-result');
     await expect(result).toBeVisible({ timeout: 15000 });

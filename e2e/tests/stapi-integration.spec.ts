@@ -5,10 +5,7 @@ import { expectNoAxeViolations } from '../helpers/a11y.js';
 // (`+` button → QuickReplyEditor, scope defaults to global) — the bar only
 // exists with a chat open, so each test creates its character/chat FIRST.
 import { createLuaQuickReply as createGlobalQuickReply } from '../helpers/quickReplies.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 async function createCharacterAndChat(page: any, charName: string) {
   await page.locator('[title="Create character"]').click();
@@ -34,7 +31,10 @@ async function createCharacterAndChat(page: any, charName: string) {
   await newChatBtn.click({ force: true });
 
   // The client auto-selects new chats, but explicit selection is more reliable under load.
-  const chatItem = page.locator('.chat-item').filter({ hasText: new RegExp(charName) }).first();
+  const chatItem = page
+    .locator('.chat-item')
+    .filter({ hasText: new RegExp(charName) })
+    .first();
   await expect(chatItem).toBeVisible({ timeout: 10000 });
   await chatItem.click();
 
@@ -125,11 +125,7 @@ test.describe('StApi Integration', () => {
     const charName = uniqueName('StApi Delete Character');
 
     await createCharacterAndChat(page, charName);
-    await createGlobalQuickReply(
-      page,
-      label,
-      'local msgs = st.get_messages(10):await() st.delete(msgs[#msgs].id)',
-    );
+    await createGlobalQuickReply(page, label, 'local msgs = st.get_messages(10):await() st.delete(msgs[#msgs].id)');
 
     const input = page.locator('.message-textarea');
     await input.fill('Delete me');
@@ -201,5 +197,4 @@ test.describe('StApi Integration', () => {
 
     await expectNoAxeViolations(page);
   });
-
 });

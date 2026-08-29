@@ -1,10 +1,7 @@
 import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 async function createCharacterAndChat(page: any, charName: string) {
   await page.locator('[title="Create character"]').click();
@@ -30,7 +27,10 @@ async function createCharacterAndChat(page: any, charName: string) {
   await newChatBtn.click({ force: true });
 
   // The client auto-selects new chats, but explicit selection is more reliable under load.
-  const chatItem = page.locator('.chat-item').filter({ hasText: new RegExp(charName) }).first();
+  const chatItem = page
+    .locator('.chat-item')
+    .filter({ hasText: new RegExp(charName) })
+    .first();
   await expect(chatItem).toBeVisible({ timeout: 10000 });
   await chatItem.click();
 
@@ -39,8 +39,7 @@ async function createCharacterAndChat(page: any, charName: string) {
 }
 
 // Minimal 1x1 transparent PNG in base64
-const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 test.describe('Attachments', () => {
   test.beforeEach(async ({ page }) => {

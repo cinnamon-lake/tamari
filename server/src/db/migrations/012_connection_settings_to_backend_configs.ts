@@ -16,7 +16,7 @@ import { BackendConfigRepository } from '../../repos/BackendConfigRepository.js'
 import { SettingsRepository } from '../../repos/SettingsRepository.js';
 import type { Migration } from '../runMigrations.js';
 
-const log = getLogger('db');
+const log = getLogger('db/migrations/012_connection_settings_to_backend_configs');
 
 const migration: Migration = {
   async up({ db }) {
@@ -27,14 +27,11 @@ const migration: Migration = {
     const globalApiUrl = allSettings['api_url'];
     const globalApiKey = allSettings['api_key'];
     const hasGlobalConnection =
-      (globalApiUrl && str(globalApiUrl).trim().length > 0) ||
-      (globalApiKey && str(globalApiKey).trim().length > 0);
+      (globalApiUrl && str(globalApiUrl).trim().length > 0) || (globalApiKey && str(globalApiKey).trim().length > 0);
     if (!hasGlobalConnection) return;
 
     const activeBackendConfigId = allSettings['activeBackendConfigId'];
-    let backendConfig = activeBackendConfigId
-      ? await backendConfigs.getById(String(activeBackendConfigId))
-      : undefined;
+    let backendConfig = activeBackendConfigId ? await backendConfigs.getById(String(activeBackendConfigId)) : undefined;
 
     if (!backendConfig) {
       // No active config to receive the legacy settings — create the default

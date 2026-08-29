@@ -42,10 +42,12 @@ describe('GeminiBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Hello' }], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Hello' }], tokenUsage: { prompt: 10, completion: 100 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -71,10 +73,9 @@ describe('GeminiBackendAdapter', () => {
       body: createMockStream([]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -93,16 +94,18 @@ describe('GeminiBackendAdapter', () => {
       body: createMockStream([]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          { role: 'system', content: 'Be helpful.' },
-          { role: 'user', content: 'Hello' },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            { role: 'system', content: 'Be helpful.' },
+            { role: 'user', content: 'Hello' },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -126,10 +129,9 @@ describe('GeminiBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
     const emitted = items.filter((i) => i.type === 'text').map((i) => i.token);
 
     expect(emitted).toEqual(['Hello', ' world']);
@@ -150,22 +152,24 @@ describe('GeminiBackendAdapter', () => {
       body: createMockStream([]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Describe:' },
-              { type: 'image', source: 'data:image/png;base64,ABC123' },
-              { type: 'image', source: 'https://example.com/img.png' },
-            ],
-          },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Describe:' },
+                { type: 'image', source: 'data:image/png;base64,ABC123' },
+                { type: 'image', source: 'https://example.com/img.png' },
+              ],
+            },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -189,23 +193,25 @@ describe('GeminiBackendAdapter', () => {
       body: createMockStream([]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [],
-        tokenUsage: { prompt: 10, completion: 100 },
-        tools: [
-          {
-            type: 'function',
-            function: {
-              name: 'get_weather',
-              description: 'Get weather',
-              parameters: { type: 'object', properties: { city: { type: 'string' } } },
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [],
+          tokenUsage: { prompt: 10, completion: 100 },
+          tools: [
+            {
+              type: 'function',
+              function: {
+                name: 'get_weather',
+                description: 'Get weather',
+                parameters: { type: 'object', properties: { city: { type: 'string' } } },
+              },
             },
-          },
-        ],
-      },
-      new AbortController().signal,
-    ));
+          ],
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -235,22 +241,24 @@ describe('GeminiBackendAdapter', () => {
       body: createMockStream([]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          {
-            role: 'assistant',
-            content: [{ type: 'tool_use', id: 'tu_1', name: 'get_weather', input: { city: 'Paris' } }],
-          },
-          {
-            role: 'user',
-            content: [{ type: 'tool_result', toolUseId: 'tu_1', name: 'get_weather', content: 'Sunny' }],
-          },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: [{ type: 'tool_use', id: 'tu_1', name: 'get_weather', input: { city: 'Paris' } }],
+            },
+            {
+              role: 'user',
+              content: [{ type: 'tool_result', toolUseId: 'tu_1', name: 'get_weather', content: 'Sunny' }],
+            },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -273,14 +281,16 @@ describe('GeminiBackendAdapter', () => {
       body: createMockStream([]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [],
-        tokenUsage: { prompt: 10, completion: 100 },
-        responseFormat: { type: 'json_schema', schema: { type: 'object', properties: { name: { type: 'string' } } } },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [],
+          tokenUsage: { prompt: 10, completion: 100 },
+          responseFormat: { type: 'json_schema', schema: { type: 'object', properties: { name: { type: 'string' } } } },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -305,10 +315,12 @@ describe('GeminiBackendAdapter', () => {
       body: createMockStream([]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 }, params: { topK: 5 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [], tokenUsage: { prompt: 10, completion: 100 }, params: { topK: 5 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -329,15 +341,17 @@ describe('GeminiBackendAdapter', () => {
       body: createMockStream([]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [],
-        tokenUsage: { prompt: 10, completion: 100 },
-        // minP has no Gemini field: dropped, not dumped onto the body.
-        params: { stop: ['###'], minP: 0.05 },
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [],
+          tokenUsage: { prompt: 10, completion: 100 },
+          // minP has no Gemini field: dropped, not dumped onto the body.
+          params: { stop: ['###'], minP: 0.05 },
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -361,10 +375,9 @@ describe('GeminiBackendAdapter', () => {
       text: async () => 'Invalid API key',
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('400');
@@ -394,10 +407,9 @@ describe('GeminiBackendAdapter', () => {
       body: null,
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 1, completion: 10 } }, new AbortController().signal),
+    );
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('No response body');
   });
@@ -413,10 +425,9 @@ describe('GeminiBackendAdapter', () => {
       requestScript: 'request.url = "http://10.0.0.5/internal"',
     });
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 1, completion: 10 } }, new AbortController().signal),
+    );
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('Request script error');
   });
@@ -436,10 +447,9 @@ describe('GeminiBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 1, completion: 10 } }, new AbortController().signal),
+    );
     const reasoning = items.filter((i) => i.type === 'reasoning').map((i) => i.token);
     const text = items.filter((i) => i.type === 'text').map((i) => i.token);
     expect(reasoning).toEqual(['thinking...']);
@@ -461,17 +471,18 @@ describe('GeminiBackendAdapter', () => {
         ok: true,
         body: new ReadableStream({
           pull(controller) {
-            controller.enqueue(new TextEncoder().encode('data: {"candidates":[{"content":{"parts":[{"text":"x"}]}}]}\n'));
+            controller.enqueue(
+              new TextEncoder().encode('data: {"candidates":[{"content":{"parts":[{"text":"x"}]}}]}\n'),
+            );
             controller.close();
           },
         }),
       } as Response;
     });
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 1, completion: 10 } },
-      controller.signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 1, completion: 10 } }, controller.signal),
+    );
     expect(result.finishReason).toBe('error');
     expect(result.error).toBe('Aborted');
   });
@@ -492,10 +503,9 @@ describe('GeminiBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 1, completion: 10 } }, new AbortController().signal),
+    );
     expect(items.filter((i) => i.type === 'text').map((i) => i.token)).toEqual(['ok']);
     expect(result.finishReason).toBe('stop');
   });
@@ -507,18 +517,20 @@ describe('GeminiBackendAdapter', () => {
       model: 'gemini-2.0-flash',
     });
 
-    for (const [raw, expected] of [['MAX_TOKENS', 'length'], ['SAFETY', 'content_filter'], ['RECITATION', 'content_filter'], ['OTHER', 'error']] as const) {
+    for (const [raw, expected] of [
+      ['MAX_TOKENS', 'length'],
+      ['SAFETY', 'content_filter'],
+      ['RECITATION', 'content_filter'],
+      ['OTHER', 'error'],
+    ] as const) {
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        body: createMockStream([
-          `data: {"candidates":[{"content":{"parts":[{"text":"x"}]},"finishReason":"${raw}"}]}`,
-        ]),
+        body: createMockStream([`data: {"candidates":[{"content":{"parts":[{"text":"x"}]},"finishReason":"${raw}"}]}`]),
       } as Response);
 
-      const { result } = await consumeStream(adapter.stream(
-        { messages: [], tokenUsage: { prompt: 1, completion: 10 } },
-        new AbortController().signal,
-      ));
+      const { result } = await consumeStream(
+        adapter.stream({ messages: [], tokenUsage: { prompt: 1, completion: 10 } }, new AbortController().signal),
+      );
       expect(result.finishReason).toBe(expected);
     }
   });
@@ -537,10 +549,9 @@ describe('GeminiBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     expect(result.finishReason).toBe('stop');
     expect(result.toolCalls).toHaveLength(1);

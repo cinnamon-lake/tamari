@@ -13,7 +13,7 @@
  */
 
 import { logger } from '../lib/logger.js';
-import { applyRequestScript } from '../backends/RequestScript.js';
+import { BaseTtsAdapter } from './BaseTtsAdapter.js';
 import type { TtsAdapter, TtsVoice, TtsGenerateOptions, TtsResult } from './TtsAdapter.js';
 
 export interface SileroConfig {
@@ -23,20 +23,9 @@ export interface SileroConfig {
 
 const DEFAULT_SPEAKER = 'en_0';
 
-export class SileroAdapter implements TtsAdapter {
+export class SileroAdapter extends BaseTtsAdapter<SileroConfig> implements TtsAdapter {
   readonly id = 'silero';
   readonly name = 'Silero';
-
-  constructor(private config: SileroConfig) {}
-
-  private get baseUrl(): string {
-    return this.config.baseUrl.replace(/\/$/, '');
-  }
-
-  private async applyScript(url: string, init: RequestInit): Promise<{ url: string; init: RequestInit }> {
-    if (!this.config.requestScript) return { url, init };
-    return applyRequestScript(url, init, this.config.requestScript);
-  }
 
   async healthCheck(signal?: AbortSignal): Promise<boolean> {
     try {
@@ -53,11 +42,18 @@ export class SileroAdapter implements TtsAdapter {
     const { url, init } = await this.applyScript(`${this.baseUrl}/tts/speakers`, { signal });
     const res = await fetch(url, init);
     if (!res.ok) {
-      const text = await res.text().catch((err) => { logger.debug({ err }, 'TTS error body read failed'); return 'Unknown error'; });
+      const text = await res.text().catch((err) => {
+        logger.debug({ err }, 'TTS error body read failed');
+        return 'Unknown error';
+      });
       throw new Error(`Failed to list voices: HTTP ${res.status} - ${text}`);
     }
     const data = (await res.json()) as Array<{ name?: string; voice_id?: string; preview_url?: string }>;
-    return data.map((v) => ({ id: v.voice_id ?? v.name ?? '', name: v.name ?? v.voice_id ?? '', previewUrl: v.preview_url }));
+    return data.map((v) => ({
+      id: v.voice_id ?? v.name ?? '',
+      name: v.name ?? v.voice_id ?? '',
+      previewUrl: v.preview_url,
+    }));
   }
 
   async generate(
@@ -80,7 +76,10 @@ export class SileroAdapter implements TtsAdapter {
     });
     const res = await fetch(url, init);
     if (!res.ok) {
-      const t = await res.text().catch((err) => { logger.debug({ err }, 'TTS error body read failed'); return 'Unknown error'; });
+      const t = await res.text().catch((err) => {
+        logger.debug({ err }, 'TTS error body read failed');
+        return 'Unknown error';
+      });
       throw new Error(`TTS generation failed: HTTP ${res.status} - ${t}`);
     }
     const contentType = res.headers.get('content-type') ?? 'audio/wav';

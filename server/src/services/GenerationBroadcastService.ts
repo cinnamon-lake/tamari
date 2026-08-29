@@ -24,28 +24,12 @@ export interface GenerationBroadcastServiceDeps {
 export class GenerationBroadcastService {
   constructor(private deps: GenerationBroadcastServiceDeps) {}
 
-  broadcastGenerationStarted(
-    chatId: string,
-    generationId: string,
-    messageId?: number,
-    excludeClientId?: string,
-  ): void {
-    this.deps.bus.broadcast(
-      { type: 'generation.started', generationId, chatId, messageId },
-      excludeClientId,
-    );
+  broadcastGenerationStarted(chatId: string, generationId: string, messageId?: number, excludeClientId?: string): void {
+    this.deps.bus.broadcast({ type: 'generation.started', generationId, chatId, messageId }, excludeClientId);
   }
 
-  broadcastGenerationToken(
-    _chatId: string,
-    generationId: string,
-    token: string,
-    excludeClientId?: string,
-  ): void {
-    this.deps.bus.broadcast(
-      { type: 'generation.token', generationId, token },
-      excludeClientId,
-    );
+  broadcastGenerationToken(_chatId: string, generationId: string, token: string, excludeClientId?: string): void {
+    this.deps.bus.broadcast({ type: 'generation.token', generationId, token }, excludeClientId);
   }
 
   broadcastGenerationReasoningToken(
@@ -54,34 +38,15 @@ export class GenerationBroadcastService {
     token: string,
     excludeClientId?: string,
   ): void {
-    this.deps.bus.broadcast(
-      { type: 'generation.reasoningToken', generationId, token },
-      excludeClientId,
-    );
+    this.deps.bus.broadcast({ type: 'generation.reasoningToken', generationId, token }, excludeClientId);
   }
 
-  broadcastGenerationDebugToken(
-    _chatId: string,
-    generationId: string,
-    token: string,
-    excludeClientId?: string,
-  ): void {
-    this.deps.bus.broadcast(
-      { type: 'generation.debugToken', generationId, token },
-      excludeClientId,
-    );
+  broadcastGenerationDebugToken(_chatId: string, generationId: string, token: string, excludeClientId?: string): void {
+    this.deps.bus.broadcast({ type: 'generation.debugToken', generationId, token }, excludeClientId);
   }
 
-  broadcastPromptAnnounced(
-    _chatId: string,
-    generationId: string,
-    prompt: Prompt,
-    excludeClientId?: string,
-  ): void {
-    this.deps.bus.broadcast(
-      { type: 'prompt.announced', generationId, prompt },
-      excludeClientId,
-    );
+  broadcastPromptAnnounced(_chatId: string, generationId: string, prompt: Prompt, excludeClientId?: string): void {
+    this.deps.bus.broadcast({ type: 'prompt.announced', generationId, prompt }, excludeClientId);
   }
 
   broadcastGenerationDone(
@@ -90,44 +55,18 @@ export class GenerationBroadcastService {
     finishReason: FinishReason,
     excludeClientId?: string,
   ): void {
-    this.deps.bus.broadcast(
-      { type: 'generation.done', generationId, finishReason },
-      excludeClientId,
-    );
+    this.deps.bus.broadcast({ type: 'generation.done', generationId, finishReason }, excludeClientId);
   }
 
-  broadcastGenerationAborted(
-    _chatId: string,
-    generationId: string,
-    excludeClientId?: string,
-  ): void {
-    this.deps.bus.broadcast(
-      { type: 'generation.aborted', generationId },
-      excludeClientId,
-    );
+  broadcastGenerationAborted(_chatId: string, generationId: string, excludeClientId?: string): void {
+    this.deps.bus.broadcast({ type: 'generation.aborted', generationId }, excludeClientId);
   }
 
-  broadcastGenerationError(
-    _chatId: string,
-    generationId: string,
-    error: string,
-    excludeClientId?: string,
-  ): void {
-    this.deps.bus.broadcast(
-      { type: 'generation.error', generationId, error },
-      excludeClientId,
-    );
+  broadcastGenerationError(_chatId: string, generationId: string, error: string, excludeClientId?: string): void {
+    this.deps.bus.broadcast({ type: 'generation.error', generationId, error }, excludeClientId);
   }
 
-  broadcastImpersonationComplete(
-    _chatId: string,
-    generationId: string,
-    text: string,
-    excludeClientId?: string,
-  ): void {
-    this.deps.bus.broadcast(
-      { type: 'impersonation.complete', generationId, text },
-      excludeClientId,
-    );
+  broadcastImpersonationComplete(_chatId: string, generationId: string, text: string, excludeClientId?: string): void {
+    this.deps.bus.broadcast({ type: 'impersonation.complete', generationId, text }, excludeClientId);
   }
 }

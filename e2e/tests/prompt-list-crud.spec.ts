@@ -11,16 +11,10 @@
  * processed. waitForPromptListSave() observes that title with a
  * MutationObserver so the 300ms indicator window can't be missed by polling.
  */
-import { test, expect } from '../fixtures/base.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import type { Locator, Page } from '@playwright/test';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
 import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 async function openPromptListModal(page: Page): Promise<Locator> {
   const btn = page.locator('button.settings-btn:has-text("Prompt List")');
@@ -34,7 +28,9 @@ async function openPromptListModal(page: Page): Promise<Locator> {
 
 async function closePromptListModal(page: Page, modal: Locator): Promise<void> {
   // Clicking the overlay invokes close(), which also flushes a pending dirty save.
-  await page.locator('.modal-overlay:has(.modal.settings-modal:has-text("Prompt List"))').click({ position: { x: 0, y: 0 } });
+  await page
+    .locator('.modal-overlay:has(.modal.settings-modal:has-text("Prompt List"))')
+    .click({ position: { x: 0, y: 0 } });
   await expect(modal).not.toBeVisible();
 }
 
@@ -80,9 +76,7 @@ async function selectedListLabel(modal: Locator): Promise<string> {
 }
 
 async function optionLabels(modal: Locator): Promise<string[]> {
-  return listSelect(modal).evaluate((el: HTMLSelectElement) =>
-    Array.from(el.options).map((o) => o.textContent ?? ''),
-  );
+  return listSelect(modal).evaluate((el: HTMLSelectElement) => Array.from(el.options).map((o) => o.textContent ?? ''));
 }
 
 /** Add a custom prompt via the Add Prompt row. Does not wait for the save. */
@@ -98,31 +92,15 @@ async function addCustomPrompt(modal: Locator, name: string, content: string): P
 }
 
 test.describe('Prompt List CRUD', () => {
-  test.beforeEach(async ({ page }) => {
-    // The app's WS bus reconnects after the auth submit and login() returns
-    // before the post-auth snapshot lands. PromptListModal.onMount sends its
-    // one-shot promptList.select immediately — if the socket isn't open yet
-    // the send is dropped, state.activePromptList stays null, and every
+  test.beforeEach(async ({ app }) => {
+    // The app's WS bus reconnects after the auth submit and the fixture's
+    // login() returns before the post-auth snapshot lands. PromptListModal.onMount
+    // sends its one-shot promptList.select immediately — if the socket isn't
+    // open yet the send is dropped, state.activePromptList stays null, and every
     // debounced save silently no-ops (saveList early-returns). Wait for the
-    // snapshot frame before touching the modal.
-    let resolveSync!: () => void;
-    const synced = new Promise<void>((r) => (resolveSync = r));
-    page.on('websocket', (ws) => {
-      ws.on('framereceived', (f) => {
-        if (typeof f.payload === 'string' && f.payload.includes('"type":"snapshot"')) resolveSync();
-      });
-    });
-    await login(page);
-    await Promise.race([
-      synced,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('app bus sync timeout')), 15000)),
-    ]);
-  });
-
-  test.afterEach(async ({ page }) => {
-    // Only the generation-impact test points the backend at the mock; resetting
-    // unconditionally keeps that from leaking into other specs.
-    await resetBackendConfig(page);
+    // snapshot to be applied before touching the modal. Requesting `app` here
+    // also forces the fixture's login + configureMockBackend to run first.
+    await app.waitForInitialSnapshot();
   });
 
   test('duplicates the active list and activates the copy', async ({ page }) => {
@@ -133,9 +111,7 @@ test.describe('Prompt List CRUD', () => {
     await modal.locator('button.text-btn:has-text("Duplicate List")').click();
 
     // promptList.create → promptList.listed broadcast adds the copy to the dropdown.
-    await expect
-      .poll(async () => (await optionLabels(modal)).includes(copyLabel), { timeout: 10000 })
-      .toBe(true);
+    await expect.poll(async () => (await optionLabels(modal)).includes(copyLabel), { timeout: 10000 }).toBe(true);
 
     // The self-originated promptList.created broadcast switches the selection
     // onto the copy without a user-driven selectOption...
@@ -165,7 +141,7 @@ test.describe('Prompt List CRUD', () => {
     await closePromptListModal(page, reopened);
   });
 
-  test('a saved custom prompt reaches the outgoing LLM request', async ({ page }) => {
+  test('a saved custom prompt reaches the outgoing LLM request', async ({ page, app }) => {
     const modal = await openPromptListModal(page);
     const name = uniqueName('E2E Inject Prompt');
     const token = `E2E_INJECT_${Date.now()}`;
@@ -173,8 +149,6 @@ test.describe('Prompt List CRUD', () => {
     await waitForPromptListSave(page);
     await closePromptListModal(page, modal);
 
-    await configureMockBackend(page);
-    const app = new App(page);
     const charName = uniqueName('Prompt List Char');
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -184,9 +158,7 @@ test.describe('Prompt List CRUD', () => {
 
     const body = cap.body as { messages?: Array<{ role?: string; content?: unknown }> };
     const messages = Array.isArray(body.messages) ? body.messages : [];
-    const hit = messages.find(
-      (m) => typeof m.content === 'string' && (m.content as string).includes(token),
-    );
+    const hit = messages.find((m) => typeof m.content === 'string' && (m.content as string).includes(token));
     expect(hit, 'custom prompt entry should be in the outgoing request').toBeTruthy();
     expect(hit!.role).toBe('system');
   });
@@ -221,9 +193,7 @@ test.describe('Prompt List CRUD', () => {
     const copyLabel = `${originalLabel} (Copy)`;
 
     await modal.locator('button.text-btn:has-text("Duplicate List")').click();
-    await expect
-      .poll(async () => (await optionLabels(modal)).includes(copyLabel), { timeout: 10000 })
-      .toBe(true);
+    await expect.poll(async () => (await optionLabels(modal)).includes(copyLabel), { timeout: 10000 }).toBe(true);
     await listSelect(modal).selectOption({ label: copyLabel });
     await expect(modal.locator('h3.section-heading', { hasText: `Edit: ${copyLabel}` })).toBeVisible();
 

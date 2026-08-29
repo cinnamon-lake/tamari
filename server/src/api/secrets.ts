@@ -10,12 +10,10 @@
 import { Router } from 'express';
 import type { Request } from 'express';
 import { z } from 'zod';
-import { getLogger } from '../lib/logger.js';
+import { apiError } from '../middleware/errorHandler.js';
 import type { SecretService, SecretEntry } from '../services/SecretService.js';
 import { extractBearerToken, type AuthedRequest } from '../middleware/auth.js';
 import type { AuthService, AuthKind } from '../services/AuthService.js';
-
-const log = getLogger('api/secrets');
 
 const SecretSetSchema = z.object({
   key: z.string().min(1).max(256),
@@ -31,11 +29,7 @@ export interface MaskedSecretEntry {
   hint: string;
 }
 
-export function createSecretsRouter(
-  secretService: SecretService,
-  secretsPassword: string,
-  auth?: AuthService,
-): Router {
+export function createSecretsRouter(secretService: SecretService, secretsPassword: string, auth?: AuthService): Router {
   const router = Router();
 
   async function kindFor(req: Request): Promise<AuthKind | null> {
@@ -62,24 +56,25 @@ export function createSecretsRouter(
       }));
       res.json(masked);
     } catch (err) {
-      log.error({ err }, 'secrets: list error');
-      res.status(500).json({ error: 'Failed to list secrets' });
+      // Redaction boundary: service errors can embed vault plaintext (cipher
+      // failures quote the value), so answer a fixed generic message at every
+      // NODE_ENV. The central handler logs the original via `cause`.
+      throw apiError('SECRET_LIST_FAILED', 'Failed to list secrets', 500, { cause: err });
     }
   });
 
   router.post('/', async (req, res) => {
+    const parsed = SecretSetSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw apiError('INVALID_REQUEST', 'Invalid request body', 400, { details: parsed.error.flatten() });
+    }
     try {
-      const parsed = SecretSetSchema.safeParse(req.body);
-      if (!parsed.success) {
-        res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
-        return;
-      }
       const { key, value, label } = parsed.data;
       await secretService.set(key, value, secretsPassword, label);
       res.json({ ok: true });
     } catch (err) {
-      log.error({ err }, 'secrets: set error');
-      res.status(500).json({ error: 'Failed to set secret' });
+      // Redaction boundary — see GET /.
+      throw apiError('SECRET_SET_FAILED', 'Failed to set secret', 500, { cause: err });
     }
   });
 
@@ -88,8 +83,8 @@ export function createSecretsRouter(
       await secretService.delete(z.string().parse(req.params.key), secretsPassword);
       res.json({ ok: true });
     } catch (err) {
-      log.error({ err }, 'secrets: delete error');
-      res.status(500).json({ error: 'Failed to delete secret' });
+      // Redaction boundary — see GET /.
+      throw apiError('SECRET_DELETE_FAILED', 'Failed to delete secret', 500, { cause: err });
     }
   });
 

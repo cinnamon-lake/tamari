@@ -8,10 +8,7 @@
  */
 
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
-import { getLogger } from '../lib/logger.js';
 import type { AuthService, AuthKind } from '../services/AuthService.js';
-
-const log = getLogger('middleware/auth');
 
 const PUBLIC_ASSET_PATH = /^\/characters\/[^/]+\/assets\/[^/]+$/;
 
@@ -34,29 +31,24 @@ export interface AuthedRequest extends Request {
 
 export function createAuthMiddleware(auth: AuthService): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      // Allow health checks without auth
-      if (req.path === '/health') {
-        next();
-        return;
-      }
-
-      // Character assets are public content referenced in message markdown
-      if (PUBLIC_ASSET_PATH.test(req.path)) {
-        next();
-        return;
-      }
-
-      const kind = await auth.classify(peerOf(req), extractBearerToken(req));
-      if (!kind) {
-        res.status(401).json({ error: 'Unauthorized' });
-        return;
-      }
-      (req as AuthedRequest).authKind = kind;
+    // Allow health checks without auth
+    if (req.path === '/health') {
       next();
-    } catch (err) {
-      log.error({ err }, 'auth middleware error');
-      res.status(500).json({ error: 'Authentication failed' });
+      return;
     }
+
+    // Character assets are public content referenced in message markdown
+    if (PUBLIC_ASSET_PATH.test(req.path)) {
+      next();
+      return;
+    }
+
+    const kind = await auth.classify(peerOf(req), extractBearerToken(req));
+    if (!kind) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    (req as AuthedRequest).authKind = kind;
+    next();
   };
 }

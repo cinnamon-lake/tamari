@@ -18,7 +18,14 @@
  *   generation records.
  */
 
-import type { BackendAdapter, BackendStreamItem, ContentPart, GenerationResult, Prompt, ToolCall } from '../backends/BackendAdapter.js';
+import type {
+  BackendAdapter,
+  BackendStreamItem,
+  ContentPart,
+  GenerationResult,
+  Prompt,
+  ToolCall,
+} from '../backends/BackendAdapter.js';
 import type { Character, GenerationType, SettingsMap, BackendConfig, PromptList } from '@tamari/types';
 import type { ToolResult } from '../services/ToolRegistry.js';
 import type { ToolContextMessage } from '../services/ToolTemplate.js';

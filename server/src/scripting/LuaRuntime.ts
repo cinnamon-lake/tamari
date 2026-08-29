@@ -185,11 +185,7 @@ export class LuaRuntime {
     return { lua, cleanup };
   }
 
-  async run(
-    lua: LuaEngine,
-    script: string,
-    signal?: AbortSignal,
-  ): Promise<{ result: unknown; error?: string }> {
+  async run(lua: LuaEngine, script: string, signal?: AbortSignal): Promise<{ result: unknown; error?: string }> {
     try {
       if (signal?.aborted) {
         return { result: null, error: 'Script aborted' };

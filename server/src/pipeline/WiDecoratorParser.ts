@@ -140,11 +140,7 @@ function isKnownDecorator(line: string): boolean {
   return false;
 }
 
-function applyDecorator(
-  dec: string,
-  overrides: DecoratorOverrides,
-  flags: DecoratorFlags,
-): void {
+function applyDecorator(dec: string, overrides: DecoratorOverrides, flags: DecoratorFlags): void {
   const [name, ...rest] = dec.split(/\s+/);
   const value = rest.join(' ');
 
@@ -185,10 +181,16 @@ function applyDecorator(
       break;
     }
     case '@@additional_keys':
-      flags.additionalKeys = value.split(',').map((s) => s.trim()).filter(Boolean);
+      flags.additionalKeys = value
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       break;
     case '@@exclude_keys':
-      flags.excludeKeys = value.split(',').map((s) => s.trim()).filter(Boolean);
+      flags.excludeKeys = value
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       break;
     case '@@scan_depth': {
       const n = Number(value);

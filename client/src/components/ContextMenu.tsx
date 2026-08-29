@@ -45,11 +45,7 @@ export function ContextMenu(props: ContextMenuProps) {
   // A dropdown of action buttons is a plain <div> — no role="menu", which would
   // obligate arrow-key navigation (AGENTS.md §10).
   return (
-    <div
-      ref={menuRef}
-      class="context-menu"
-      style={{ left: `${props.x}px`, top: `${props.y}px` }}
-    >
+    <div ref={menuRef} class="context-menu" style={{ left: `${props.x}px`, top: `${props.y}px` }}>
       <For each={props.items}>
         {(item) => (
           <button

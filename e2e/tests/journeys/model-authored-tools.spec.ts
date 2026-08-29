@@ -34,7 +34,7 @@ const DOCS_LUA =
   `local res = fetch("http://127.0.0.1:${MOCK_PORT}/sacred-scrolls.md"):await() ` +
   'if res.status ~= 200 then return "Error: fetch failed with status " .. tostring(res.status) end ' +
   'local att = attachments.create(base64.encode(res.body), "text/markdown"):await() ' +
-      `local back = fetch("http://127.0.0.1:${APP_PORT}/api/attachments/" .. att.id .. "?token=${encodeURIComponent(TEST_SECRET)}"):await() ` +
+  `local back = fetch("http://127.0.0.1:${APP_PORT}/api/attachments/" .. att.id .. "?token=${encodeURIComponent(TEST_SECRET)}"):await() ` +
   'local excerpt = string.sub(back.body or "", 1, 400) ' +
   'return "Downloaded " .. tostring(#res.body) .. " chars. Saved as {{attachment::" .. att.id .. "}} at " .. att.url .. ". ' +
   'Excerpt re-read from the attachment: " .. excerpt ' +
@@ -62,7 +62,11 @@ test.describe('Model-Authored Tools Journey', () => {
         await app.sendUserMessage(
           `tool:write${JSON.stringify({
             path: '/luatools/new.json',
-            content: JSON.stringify({ name: `Sacred Scrolls ${stamp}`, code: DOCS_LUA, sandbox: { allowNet: true, allowFiles: true } }),
+            content: JSON.stringify({
+              name: `Sacred Scrolls ${stamp}`,
+              code: DOCS_LUA,
+              sandbox: { allowNet: true, allowFiles: true },
+            }),
           })}`,
           { expectReply: true, userText: 'write' },
         );
@@ -108,7 +112,9 @@ test.describe('Model-Authored Tools Journey', () => {
       });
 
       await test.step('the attachment bytes are independently verifiable over HTTP', async () => {
-        const response = await page.request.get(`http://127.0.0.1:${APP_PORT}/api/attachments/${attachmentId}?token=${encodeURIComponent(TEST_SECRET)}`);
+        const response = await page.request.get(
+          `http://127.0.0.1:${APP_PORT}/api/attachments/${attachmentId}?token=${encodeURIComponent(TEST_SECRET)}`,
+        );
         expect(response.status()).toBe(200);
         expect(response.headers()['content-type']).toContain('text/markdown');
         const body = await response.text();

@@ -52,12 +52,7 @@ export const ChoicesResult: Component<ToolResultProps> = (props) => {
           <div class="choices-list" role="group" aria-label={t('tools.choices')}>
             <For each={list()}>
               {(choice) => (
-                <button
-                  type="button"
-                  class="btn choice-btn"
-                  disabled={props.disabled}
-                  onClick={() => pick(choice)}
-                >
+                <button type="button" class="btn choice-btn" disabled={props.disabled} onClick={() => pick(choice)}>
                   {choice}
                 </button>
               )}

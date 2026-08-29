@@ -22,35 +22,22 @@
  *     turn and restored (json.decode into `state`, or the script's own
  *     deserialize(raw)) at the start of the next turn.
  */
-import { test, expect } from '../fixtures/base.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import type { Page } from '@playwright/test';
-import { login } from '../helpers/auth.js';
-import { App } from '../helpers/app.js';
-import {
-  configureMockBackend,
-  resetBackendConfig,
-  patchActiveBackendConfig,
-} from '../helpers/backendConfig.js';
+import { authHeaders } from '../helpers/auth.js';
+import { resetBackendConfig, patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
+import { uniqueName } from '../helpers/names.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
 /** The e2e webServer pins TAMARI_SECRET to this value (playwright.config.ts). */
-const AUTH = { Authorization: 'Bearer e2e-test-secret' };
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
 
 /**
  * Set (or clear, with null) a character's extensions.contextualBackend over
  * the WS bus. Merges into the existing extensions blob (read back via
  * character.select) so other extension keys survive the patch.
  */
-async function setContextualBackend(
-  page: Page,
-  characterName: string,
-  luaSource: string | null,
-): Promise<void> {
+async function setContextualBackend(page: Page, characterName: string, luaSource: string | null): Promise<void> {
   await page.evaluate(
     ({ name, source }) =>
       new Promise<void>((resolve, reject) => {
@@ -61,9 +48,7 @@ async function setContextualBackend(
         ws.onmessage = (event) => {
           const msg = JSON.parse(event.data as string);
           if (msg.type === 'snapshot') {
-            const char = (msg.state?.characters ?? []).find(
-              (c: { id: string; name: string }) => c.name === name,
-            );
+            const char = (msg.state?.characters ?? []).find((c: { id: string; name: string }) => c.name === name);
             if (!char) {
               ws.close();
               reject(new Error(`character "${name}" not found`));
@@ -115,11 +100,7 @@ interface TypeAIds {
  * delegate backend config pointing at the mock LLM (backendConfig.create),
  * over one WS connection. Returns both ids for patching + cleanup.
  */
-async function createCustomBackendAndDelegate(
-  page: Page,
-  name: string,
-  luaSource: string,
-): Promise<TypeAIds> {
+async function createCustomBackendAndDelegate(page: Page, name: string, luaSource: string): Promise<TypeAIds> {
   return await page.evaluate(
     ({ cbName, source, mockUrl }) =>
       new Promise<TypeAIds>((resolve, reject) => {
@@ -205,17 +186,7 @@ async function deleteCustomBackendAndDelegate(page: Page, ids: TypeAIds): Promis
 }
 
 test.describe('Lua custom backends', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('contextual backend transforms delegate output (blocking string return)', async ({ page }) => {
-    const app = new App(page);
+  test('contextual backend transforms delegate output (blocking string return)', async ({ page, app }) => {
     const charName = uniqueName('Lua Transform');
     await app.createCharacterAndChat({
       name: charName,
@@ -236,8 +207,7 @@ test.describe('Lua custom backends', () => {
     await setContextualBackend(page, charName, null);
   });
 
-  test('contextual backend passthrough streams the delegate reply untouched', async ({ page }) => {
-    const app = new App(page);
+  test('contextual backend passthrough streams the delegate reply untouched', async ({ page, app }) => {
     const charName = uniqueName('Lua Passthrough');
     await app.createCharacterAndChat({
       name: charName,
@@ -245,11 +215,7 @@ test.describe('Lua custom backends', () => {
       firstMes: 'Hello from the card.',
     });
 
-    await setContextualBackend(
-      page,
-      charName,
-      'function generate(prompt, ctx) return { __passthrough = true } end',
-    );
+    await setContextualBackend(page, charName, 'function generate(prompt, ctx) return { __passthrough = true } end');
 
     await app.sendUserMessage('respond: marco', { expectReply: true });
     // Native streaming from the delegate: the reply is NOT post-processed.
@@ -259,8 +225,7 @@ test.describe('Lua custom backends', () => {
     await setContextualBackend(page, charName, null);
   });
 
-  test('contextual backend toolCalls run the GenerationService tool loop', async ({ page }) => {
-    const app = new App(page);
+  test('contextual backend toolCalls run the GenerationService tool loop', async ({ page, app }) => {
     const charName = uniqueName('Lua Tools');
     await app.createCharacterAndChat({
       name: charName,
@@ -305,8 +270,7 @@ end`,
     }
   });
 
-  test('contextual backend script state round-trips across turns', async ({ page }) => {
-    const app = new App(page);
+  test('contextual backend script state round-trips across turns', async ({ page, app }) => {
     const charName = uniqueName('Lua State');
     await app.createCharacterAndChat({
       name: charName,
@@ -337,8 +301,7 @@ end`,
     await setContextualBackend(page, charName, null);
   });
 
-  test('contextual backend error contract surfaces script failures', async ({ page }) => {
-    const app = new App(page);
+  test('contextual backend error contract surfaces script failures', async ({ page, app }) => {
     const charName = uniqueName('Lua Errors');
     await app.createCharacterAndChat({
       name: charName,
@@ -367,8 +330,7 @@ end`,
     await setContextualBackend(page, charName, null);
   });
 
-  test('registry custom backend delegates to its delegate config', async ({ page }) => {
-    const app = new App(page);
+  test('registry custom backend delegates to its delegate config', async ({ page, app }) => {
     const cbName = uniqueName('Registry CB');
     const ids = await createCustomBackendAndDelegate(
       page,
@@ -400,7 +362,7 @@ end`,
     }
   });
 
-  test('custom backend list_models surfaces through GET /api/models', async ({ page, request }) => {
+  test('custom backend list_models surfaces through GET /api/models', async ({ app: _app, page, request }) => {
     const cbName = uniqueName('Models CB');
     const ids = await createCustomBackendAndDelegate(
       page,
@@ -417,7 +379,7 @@ function list_models() return { { id = "cb-model-1", name = "CB Model 1" } } end
         },
       });
 
-      const res = await request.get('/api/models', { headers: AUTH });
+      const res = await request.get('/api/models', { headers: authHeaders() });
       expect(res.ok()).toBe(true);
       const body = (await res.json()) as { items: Array<{ id: string; name: string }> };
       expect(body.items).toContainEqual({ id: 'cb-model-1', name: 'CB Model 1' });

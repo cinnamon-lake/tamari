@@ -13,7 +13,6 @@ import type {
   ModelInfo,
   PipelineMessage,
   Prompt,
-
   BackendStreamItem,
   TextPart,
   ToolCall,
@@ -30,18 +29,16 @@ import {
   type ClaudeMessageRequest,
   type ClaudeMessage,
   type ClaudeTool,
-
   INTERNAL_PARAM_KEYS,
 } from './types.js';
-import { resolveLocalAttachmentUrl } from './resolveLocalAttachment.js';
+import { resolveLocalAttachmentUrl, parseDataUrl } from './resolveLocalAttachment.js';
+import { readSseEvents } from './sseReader.js';
 
 export interface ClaudeAdapterConfig extends BaseAdapterConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
 }
-
-
 
 export class ClaudeBackendAdapter implements BackendAdapter {
   readonly id = 'claude';
@@ -60,9 +57,6 @@ export class ClaudeBackendAdapter implements BackendAdapter {
     });
     if (!outcome.ok) return outcome.result;
 
-    const reader = outcome.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
     let completionTokens = 0;
     let finishReason: string | null = null;
     let reasoningText = '';
@@ -77,111 +71,90 @@ export class ClaudeBackendAdapter implements BackendAdapter {
     let currentToolJson = '';
     const toolCalls: ToolCall[] = [];
 
-    try {
-      while (true) {
-        if (signal.aborted) {
-          return {
-            finishReason: 'error',
-            usage: {
-              promptTokens: inputTokens || prompt.tokenUsage.prompt,
-              completionTokens: outputTokens || completionTokens,
-            },
-            error: 'Aborted',
-            reasoningText: reasoningText || undefined,
-            reasoningSignature: reasoningSignature || undefined,
-          };
-        }
-
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        let currentEventType = '';
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith('event: ')) {
-            currentEventType = trimmed.slice(7);
-            continue;
-          }
-          if (!trimmed.startsWith('data:')) continue;
-          const data = trimmed.slice(5).trimStart();
-
-          try {
-            const raw: unknown = JSON.parse(data);
-            const parsed = ClaudeStreamEventSchema.safeParse(raw);
-            if (!parsed.success) continue;
-            const event: ClaudeStreamEvent = parsed.data;
-            logDelta(this.id, event);
-            // Some events carry their type inside the JSON as well
-            const eventType = event.type || currentEventType;
-
-            switch (eventType) {
-              case 'message_start':
-                if (event.message?.usage) {
-                  inputTokens = event.message.usage.input_tokens ?? 0;
-                }
-                break;
-              case 'content_block_start':
-                if (event.content_block?.type) {
-                  currentBlockType = event.content_block.type;
-                  if (currentBlockType === 'tool_use') {
-                    currentToolId = event.content_block.id ?? '';
-                    currentToolName = event.content_block.name ?? '';
-                    currentToolJson = '';
-                  }
-                }
-                break;
-              case 'content_block_delta':
-                if (event.delta?.type === 'text_delta' && event.delta.text) {
-                  yield { type: 'text', token: event.delta.text };
-                  completionTokens++;
-                } else if (event.delta?.type === 'thinking_delta' && event.delta.thinking) {
-                  reasoningText += event.delta.thinking;
-                  yield { type: 'reasoning', token: event.delta.thinking };
-                } else if (event.delta?.type === 'signature_delta' && event.delta.signature) {
-                  reasoningSignature += event.delta.signature;
-                  yield { type: 'reasoningSignature', signature: event.delta.signature };
-                } else if (event.delta?.type === 'input_json_delta' && event.delta.partial_json) {
-                  currentToolJson += event.delta.partial_json;
-                }
-                break;
-              case 'content_block_stop':
-                if (currentBlockType === 'tool_use' && currentToolId) {
-                  let args: Record<string, unknown> = {};
-                  if (currentToolJson) {
-                    try {
-                      args = JSON.parse(currentToolJson) as Record<string, unknown>;
-                    } catch (err) {
-                      logger.warn({ err, rawArgs: currentToolJson }, 'Failed to parse Claude tool-use arguments');
-                      args = {};
-                    }
-                  }
-                  toolCalls.push({ id: currentToolId, name: currentToolName, arguments: args });
-                  currentToolId = '';
-                  currentToolName = '';
-                  currentToolJson = '';
-                }
-                currentBlockType = '';
-                break;
-              case 'message_delta':
-                if (event.delta?.stop_reason) {
-                  finishReason = event.delta.stop_reason;
-                }
-                if (event.usage) {
-                  outputTokens = event.usage.output_tokens ?? 0;
-                }
-                break;
-            }
-          } catch (err) {
-            logger.debug({ err, line: line.trim() }, 'Malformed SSE line in Claude stream');
-          }
-        }
+    for await (const item of readSseEvents(outcome.body, signal)) {
+      if (item.type === 'aborted') {
+        return {
+          finishReason: 'error',
+          usage: {
+            promptTokens: inputTokens || prompt.tokenUsage.prompt,
+            completionTokens: outputTokens || completionTokens,
+          },
+          error: 'Aborted',
+          reasoningText: reasoningText || undefined,
+          reasoningSignature: reasoningSignature || undefined,
+        };
       }
-    } finally {
-      reader.releaseLock();
+      if (item.type === 'done') continue;
+
+      try {
+        const raw: unknown = JSON.parse(item.data);
+        const parsed = ClaudeStreamEventSchema.safeParse(raw);
+        if (!parsed.success) continue;
+        const event: ClaudeStreamEvent = parsed.data;
+        logDelta(this.id, event);
+        // Some events carry their type inside the JSON as well
+        const eventType = event.type || item.eventType;
+
+        switch (eventType) {
+          case 'message_start':
+            if (event.message?.usage) {
+              inputTokens = event.message.usage.input_tokens ?? 0;
+            }
+            break;
+          case 'content_block_start':
+            if (event.content_block?.type) {
+              currentBlockType = event.content_block.type;
+              if (currentBlockType === 'tool_use') {
+                currentToolId = event.content_block.id ?? '';
+                currentToolName = event.content_block.name ?? '';
+                currentToolJson = '';
+              }
+            }
+            break;
+          case 'content_block_delta':
+            if (event.delta?.type === 'text_delta' && event.delta.text) {
+              yield { type: 'text', token: event.delta.text };
+              completionTokens++;
+            } else if (event.delta?.type === 'thinking_delta' && event.delta.thinking) {
+              reasoningText += event.delta.thinking;
+              yield { type: 'reasoning', token: event.delta.thinking };
+            } else if (event.delta?.type === 'signature_delta' && event.delta.signature) {
+              reasoningSignature += event.delta.signature;
+              yield { type: 'reasoningSignature', signature: event.delta.signature };
+            } else if (event.delta?.type === 'input_json_delta' && event.delta.partial_json) {
+              currentToolJson += event.delta.partial_json;
+            }
+            break;
+          case 'content_block_stop':
+            if (currentBlockType === 'tool_use' && currentToolId) {
+              let args: Record<string, unknown> = {};
+              if (currentToolJson) {
+                try {
+                  args = JSON.parse(currentToolJson) as Record<string, unknown>;
+                } catch (err) {
+                  logger.warn({ err, rawArgs: currentToolJson }, 'Failed to parse Claude tool-use arguments');
+                  args = {};
+                }
+              }
+              toolCalls.push({ id: currentToolId, name: currentToolName, arguments: args });
+              currentToolId = '';
+              currentToolName = '';
+              currentToolJson = '';
+            }
+            currentBlockType = '';
+            break;
+          case 'message_delta':
+            if (event.delta?.stop_reason) {
+              finishReason = event.delta.stop_reason;
+            }
+            if (event.usage) {
+              outputTokens = event.usage.output_tokens ?? 0;
+            }
+            break;
+        }
+      } catch (err) {
+        logger.debug({ err, line: item.line }, 'Malformed SSE line in Claude stream');
+      }
     }
 
     return {
@@ -383,7 +356,7 @@ export class ClaudeBackendAdapter implements BackendAdapter {
         case 'image': {
           const resolved = resolveLocalAttachmentUrl(part.source, part.mimeType);
           if (resolved.startsWith('data:')) {
-            const parsed = this.parseDataUrl(resolved);
+            const parsed = parseDataUrl(resolved);
             if (parsed) {
               return {
                 type: 'image',
@@ -428,14 +401,6 @@ export class ClaudeBackendAdapter implements BackendAdapter {
           return part;
       }
     });
-  }
-
-  private parseDataUrl(url: string): { mediaType: string; data: string } | null {
-    const match = /^data:([^;]+);base64,(.+)$/.exec(url);
-    const mediaType = match?.[1];
-    const data = match?.[2];
-    if (mediaType === undefined || data === undefined) return null;
-    return { mediaType, data };
   }
 
   private convertTools(tools: ToolDefinition[], strict: boolean): unknown[] {

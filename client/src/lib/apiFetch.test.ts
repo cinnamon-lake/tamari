@@ -4,7 +4,10 @@ import { setAuthToken, clearAuthToken } from './auth.js';
 
 describe('apiFetch', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('ok'))));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response('ok'))),
+    );
     clearAuthToken();
   });
 

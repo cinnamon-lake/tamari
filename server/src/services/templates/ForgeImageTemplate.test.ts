@@ -16,14 +16,26 @@ function makeMockDeps(): {
       }),
     } as unknown as FileStorage,
     attachments: {
-      create: vi.fn(async ({ id, messageId, mimeType, filePath }: { id: string; messageId: number | null; mimeType: string; filePath: string }) => ({
-        id,
-        messageId,
-        mimeType,
-        filePath,
-        url: `/api/attachments/${id}`,
-        meta: {},
-      })),
+      create: vi.fn(
+        async ({
+          id,
+          messageId,
+          mimeType,
+          filePath,
+        }: {
+          id: string;
+          messageId: number | null;
+          mimeType: string;
+          filePath: string;
+        }) => ({
+          id,
+          messageId,
+          mimeType,
+          filePath,
+          url: `/api/attachments/${id}`,
+          meta: {},
+        }),
+      ),
     } as unknown as IAttachmentRepository,
   };
 }
@@ -43,17 +55,22 @@ describe('ForgeImageTemplate', () => {
 
   it('returns error when prompt is missing', async () => {
     const result = await template.execute('generate_image', {}, {});
-    expect(typeof result.content === 'string' ? result.content : (result.content[0] as { text: string }).text).toContain('prompt is required');
+    expect(
+      typeof result.content === 'string' ? result.content : (result.content[0] as { text: string }).text,
+    ).toContain('prompt is required');
   });
 
   it('builds correct request body and returns image parts', async () => {
     const base64Image = Buffer.from('fake-png-bytes').toString('base64');
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ images: [base64Image], parameters: {}, info: '{}' }),
-      text: async () => '',
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ images: [base64Image], parameters: {}, info: '{}' }),
+          text: async () => '',
+        }) as Response,
+    );
 
     const result = await template.execute('generate_image', { prompt: 'a cat' }, { config: {} });
 
@@ -82,17 +99,24 @@ describe('ForgeImageTemplate', () => {
     expect(typeof result.extra!.attachmentId).toBe('string');
     expect(typeof result.extra!.attachmentUrl).toBe('string');
 
-    expect(deps.storage.write).toHaveBeenCalledWith('attachments', expect.stringMatching(/^[\w-]+\.png$/), expect.any(Uint8Array));
+    expect(deps.storage.write).toHaveBeenCalledWith(
+      'attachments',
+      expect.stringMatching(/^[\w-]+\.png$/),
+      expect.any(Uint8Array),
+    );
     expect(deps.attachments.create).toHaveBeenCalledTimes(1);
   });
 
   it('maps portrait orientation to 832x1216', async () => {
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ images: ['aW1hZ2U='], parameters: {}, info: '{}' }),
-      text: async () => '',
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ images: ['aW1hZ2U='], parameters: {}, info: '{}' }),
+          text: async () => '',
+        }) as Response,
+    );
 
     await template.execute('generate_image', { prompt: 'a dog', orientation: 'portrait' }, { config: {} });
 
@@ -103,12 +127,15 @@ describe('ForgeImageTemplate', () => {
   });
 
   it('maps landscape orientation to 1216x832', async () => {
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ images: ['aW1hZ2U='], parameters: {}, info: '{}' }),
-      text: async () => '',
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ images: ['aW1hZ2U='], parameters: {}, info: '{}' }),
+          text: async () => '',
+        }) as Response,
+    );
 
     await template.execute('generate_image', { prompt: 'a tree', orientation: 'landscape' }, { config: {} });
 
@@ -119,14 +146,21 @@ describe('ForgeImageTemplate', () => {
   });
 
   it('passes negative_prompt through', async () => {
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ images: ['aW1hZ2U='], parameters: {}, info: '{}' }),
-      text: async () => '',
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ images: ['aW1hZ2U='], parameters: {}, info: '{}' }),
+          text: async () => '',
+        }) as Response,
+    );
 
-    await template.execute('generate_image', { prompt: 'a bird', negative_prompt: 'blurry, low quality' }, { config: {} });
+    await template.execute(
+      'generate_image',
+      { prompt: 'a bird', negative_prompt: 'blurry, low quality' },
+      { config: {} },
+    );
 
     const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const body = JSON.parse(init.body as string);
@@ -134,12 +168,15 @@ describe('ForgeImageTemplate', () => {
   });
 
   it('mutates body via requestScript', async () => {
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ images: ['aW1hZ2U='], parameters: {}, info: '{}' }),
-      text: async () => '',
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ images: ['aW1hZ2U='], parameters: {}, info: '{}' }),
+          text: async () => '',
+        }) as Response,
+    );
 
     const script = 'request.body.steps = 50\nrequest.body.cfg_scale = 12';
     await template.execute('generate_image', { prompt: 'a bird' }, { config: { requestScript: script } });
@@ -151,15 +188,22 @@ describe('ForgeImageTemplate', () => {
   });
 
   it('passes files as Lua globals for requestScript', async () => {
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ images: ['aW1hZ2U='], parameters: {}, info: '{}' }),
-      text: async () => '',
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ images: ['aW1hZ2U='], parameters: {}, info: '{}' }),
+          text: async () => '',
+        }) as Response,
+    );
 
     const script = 'request.body.init_images = { files[1] }\nrequest.body.denoising_strength = 0.75';
-    await template.execute('generate_image', { prompt: 'a bird' }, { config: { requestScript: script, files: ['base64abc'] } });
+    await template.execute(
+      'generate_image',
+      { prompt: 'a bird' },
+      { config: { requestScript: script, files: ['base64abc'] } },
+    );
 
     const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const body = JSON.parse(init.body as string);
@@ -169,18 +213,29 @@ describe('ForgeImageTemplate', () => {
 
   it('returns error on Lua script error', async () => {
     const script = 'error("bad syntax")';
-    const result = await template.execute('generate_image', { prompt: 'a bird' }, { config: { requestScript: script } });
-    expect(typeof result.content === 'string' ? result.content : (result.content[0] as { text: string }).text).toContain('Request script error');
+    const result = await template.execute(
+      'generate_image',
+      { prompt: 'a bird' },
+      { config: { requestScript: script } },
+    );
+    expect(
+      typeof result.content === 'string' ? result.content : (result.content[0] as { text: string }).text,
+    ).toContain('Request script error');
   });
 
   it('returns error on fetch failure', async () => {
-    global.fetch = vi.fn(async () => ({
-      ok: false,
-      status: 500,
-      text: async () => 'Internal Server Error',
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: false,
+          status: 500,
+          text: async () => 'Internal Server Error',
+        }) as Response,
+    );
 
     const result = await template.execute('generate_image', { prompt: 'a fish' }, { config: {} });
-    expect(typeof result.content === 'string' ? result.content : (result.content[0] as { text: string }).text).toContain('Forge returned 500');
+    expect(
+      typeof result.content === 'string' ? result.content : (result.content[0] as { text: string }).text,
+    ).toContain('Forge returned 500');
   });
 });

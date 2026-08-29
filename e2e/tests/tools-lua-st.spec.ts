@@ -1,12 +1,6 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // Compact Lua template using the curated st API (allowSt): chat-scoped vars,
 // a chat query, and an entity write — plus proof that chat actions (st.send)
@@ -27,21 +21,14 @@ const ST_LUA =
 test.describe('Lua st API (allowSt)', () => {
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     if (toolsetId) {
       await deleteToolset(page, toolsetId);
       toolsetId = undefined;
     }
   });
 
-  test('allowSt template uses the st subset in a live chat; chat actions stay excluded', async ({ page }) => {
-    const app = new App(page);
+  test('allowSt template uses the st subset in a live chat; chat actions stay excluded', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -71,8 +58,7 @@ test.describe('Lua st API (allowSt)', () => {
     await expect(page.locator('.character-list li', { hasText: charName })).toBeVisible({ timeout: 10000 });
   });
 
-  test('st is unavailable without the allowSt flag', async ({ page }) => {
-    const app = new App(page);
+  test('st is unavailable without the allowSt flag', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({

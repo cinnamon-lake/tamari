@@ -59,9 +59,12 @@ describe('GenerationTracesModal', () => {
   });
 
   it('renders rows with kind, backend, status, and meta details', async () => {
-    vi.stubGlobal('fetch', mockFetch([
-      makeGeneration({ meta: { layer: 'trivial', depth: 0, rounds: 2, toolCalls: [{ name: 'get_weather' }] } }),
-    ]));
+    vi.stubGlobal(
+      'fetch',
+      mockFetch([
+        makeGeneration({ meta: { layer: 'trivial', depth: 0, rounds: 2, toolCalls: [{ name: 'get_weather' }] } }),
+      ]),
+    );
     render(() => <GenerationTracesModal open={true} onClose={() => {}} />);
 
     await waitFor(() => expect(screen.getByText('send')).toBeInTheDocument());
@@ -72,10 +75,13 @@ describe('GenerationTracesModal', () => {
   });
 
   it('indents sub-agent rows under their parent', async () => {
-    vi.stubGlobal('fetch', mockFetch([
-      makeGeneration({ id: 'gen-child', kind: 'subagent', parentId: 'gen-parent', meta: { depth: 1 } }),
-      makeGeneration({ id: 'gen-parent', kind: 'send' }),
-    ]));
+    vi.stubGlobal(
+      'fetch',
+      mockFetch([
+        makeGeneration({ id: 'gen-child', kind: 'subagent', parentId: 'gen-parent', meta: { depth: 1 } }),
+        makeGeneration({ id: 'gen-parent', kind: 'send' }),
+      ]),
+    );
     render(() => <GenerationTracesModal open={true} onClose={() => {}} />);
 
     await waitFor(() => expect(screen.getByText('sub-agent')).toBeInTheDocument());
@@ -85,20 +91,23 @@ describe('GenerationTracesModal', () => {
   });
 
   it('renders the composed error chain for failed rows', async () => {
-    vi.stubGlobal('fetch', mockFetch([
-      makeGeneration({
-        status: 'error',
-        errorMessage: 'plain failure',
-        meta: {
-          traceError: {
-            code: 'DELEGATE_ERROR',
-            layer: 'delegate(default)',
-            message: 'boom',
-            cause: { code: 'LUA_ERROR', layer: 'inner-lua', message: 'inner boom' },
+    vi.stubGlobal(
+      'fetch',
+      mockFetch([
+        makeGeneration({
+          status: 'error',
+          errorMessage: 'plain failure',
+          meta: {
+            traceError: {
+              code: 'DELEGATE_ERROR',
+              layer: 'delegate(default)',
+              message: 'boom',
+              cause: { code: 'LUA_ERROR', layer: 'inner-lua', message: 'inner boom' },
+            },
           },
-        },
-      }),
-    ]));
+        }),
+      ]),
+    );
     render(() => <GenerationTracesModal open={true} onClose={() => {}} />);
 
     await waitFor(() => expect(screen.getByText('Error chain')).toBeInTheDocument());
@@ -106,13 +115,21 @@ describe('GenerationTracesModal', () => {
   });
 
   it('shows the prompt expander only when meta.prompt is captured', async () => {
-    vi.stubGlobal('fetch', mockFetch([
-      makeGeneration({ id: 'gen-plain' }),
-      makeGeneration({
-        id: 'gen-with-prompt',
-        meta: { prompt: { messages: [{ role: 'user', content: 'PROMPT-MARKER' }], tokenUsage: { prompt: 1, completion: 1 } } },
-      }),
-    ]));
+    vi.stubGlobal(
+      'fetch',
+      mockFetch([
+        makeGeneration({ id: 'gen-plain' }),
+        makeGeneration({
+          id: 'gen-with-prompt',
+          meta: {
+            prompt: {
+              messages: [{ role: 'user', content: 'PROMPT-MARKER' }],
+              tokenUsage: { prompt: 1, completion: 1 },
+            },
+          },
+        }),
+      ]),
+    );
     render(() => <GenerationTracesModal open={true} onClose={() => {}} />);
 
     await waitFor(() => expect(screen.getByText('Prompt snapshot (debugPrompts)')).toBeInTheDocument());

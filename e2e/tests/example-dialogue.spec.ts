@@ -1,12 +1,8 @@
-import { test, expect, type Page } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Page } from '../fixtures/base.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { getLastLlmRequest, resetLlmRequests } from '../helpers/llm.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 const MES_EXAMPLE = '<START>\n{{user}}: Example question\n{{char}}: Example answer EXTOK1';
 
@@ -27,31 +23,37 @@ async function patchCharacter(page: Page, name: string, patch: Record<string, un
           const msg = JSON.parse(event.data);
           if (msg.type === 'snapshot') {
             const char = (msg.state?.characters ?? []).find((c: { name: string }) => c.name === name);
-            if (!char) { ws.close(); reject(new Error('character not found')); return; }
+            if (!char) {
+              ws.close();
+              reject(new Error('character not found'));
+              return;
+            }
             ws.send(JSON.stringify({ type: 'character.update', characterId: char.id, patch }));
           }
-          if (msg.type === 'character.updated') { ws.close(); resolve(); }
-          if (msg.type === 'error') { ws.close(); reject(new Error(msg.message)); }
+          if (msg.type === 'character.updated') {
+            ws.close();
+            resolve();
+          }
+          if (msg.type === 'error') {
+            ws.close();
+            reject(new Error(msg.message));
+          }
         };
-        setTimeout(() => { ws.close(); reject(new Error('patchCharacter timeout')); }, 10000);
+        setTimeout(() => {
+          ws.close();
+          reject(new Error('patchCharacter timeout'));
+        }, 10000);
       }),
     { name, patch },
   );
 }
 
 test.describe('Example Dialogue (mesExample)', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('chat mode: <START> blocks become user/assistant messages before the real history', async ({ page }) => {
-    const app = new App(page);
+  test('chat mode: <START> blocks become user/assistant messages before the real history', async ({ page, app }) => {
     const charName = uniqueName('Example Char');
     await app.createCharacter({ name: charName, description: 'An example-driven bot.', firstMes: 'Ready.' });
     await patchCharacter(page, charName, { mesExample: MES_EXAMPLE });
@@ -73,8 +75,7 @@ test.describe('Example Dialogue (mesExample)', () => {
     expect(realUserIdx).toBeGreaterThan(exCharIdx);
   });
 
-  test('text mode: example dialogue lands in the flat prompt string', async ({ page }) => {
-    const app = new App(page);
+  test('text mode: example dialogue lands in the flat prompt string', async ({ page, app }) => {
     await patchActiveBackendConfig(page, { generationMode: 'text' });
     const charName = uniqueName('Example Text Char');
     await app.createCharacter({ name: charName, description: 'An example-driven bot.', firstMes: 'Ready.' });

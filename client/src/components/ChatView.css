@@ -323,15 +323,6 @@
      the [HUD|…] panel, and the [MAP|…] fog-of-war map (docs topic
      `game_cards_example`). The cards emit these classes via scoped regex
      rules; the client owns their look. */
-  .plot-log {
-    font-size: var(--text-sm);
-    color: var(--color-text-muted);
-    font-style: italic;
-    border-left: 3px solid var(--color-border);
-    padding-left: var(--space-sm);
-    margin-top: var(--space-sm);
-  }
-
   .hud {
     background: var(--color-bg-tertiary);
     border: 1px solid var(--color-border-subtle);
@@ -736,8 +727,6 @@
 /* Edit Save/Cancel use the shared `.btn` system (`.btn-ghost` / `.btn-primary`),
    not a local reimplementation — see ChatView.tsx. */
 
-
-
 /* Group Chat */
 .group-chat-toolbar {
   display: flex;
@@ -852,12 +841,6 @@
   border-top: 1px solid var(--color-bg-tertiary);
 }
 
-/* Placeholder the client hydrates an interactive tool widget into */
-.tool-widget-slot {
-  display: block;
-  margin-top: var(--space-sm);
-}
-
 /* Message input */
 .message-input-area {
   display: flex;
@@ -870,7 +853,6 @@
   border-top: 1px solid var(--color-border-subtle);
   width: 100%;
 }
-
 
 @media (max-width: 768px) {
   .message-actions {

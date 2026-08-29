@@ -1,12 +1,6 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // Compact Lua media tool (whitespace-separated statements). Fetches audio from
 // the mock LLM server's /audio/speech endpoint, saves it as an attachment via
@@ -28,21 +22,14 @@ const TTS_LUA =
 test.describe('Lua Media Capabilities (fetch + attachments)', () => {
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     if (toolsetId) {
       await deleteToolset(page, toolsetId);
       toolsetId = undefined;
     }
   });
 
-  test('Lua tool fetches media over HTTP, saves an attachment, returns inline parts', async ({ page }) => {
-    const app = new App(page);
+  test('Lua tool fetches media over HTTP, saves an attachment, returns inline parts', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -64,8 +51,7 @@ test.describe('Lua Media Capabilities (fetch + attachments)', () => {
     await expect(result).toContainText('audio/wav');
   });
 
-  test('fetch stays sandboxed without allowNet', async ({ page }) => {
-    const app = new App(page);
+  test('fetch stays sandboxed without allowNet', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({

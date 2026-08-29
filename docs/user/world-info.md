@@ -1,6 +1,6 @@
 # World Info (Lorebooks)
 
-World Info is tamari's lorebook system: a collection of keyword-triggered text entries that get injected into the prompt when their keys show up in the chat. Use it for world lore, character backstory, faction rules, locations — anything the model should know *only when it's relevant*, without permanently burning context tokens.
+World Info is tamari's lorebook system: a collection of keyword-triggered text entries that get injected into the prompt when their keys show up in the chat. Use it for world lore, character backstory, faction rules, locations — anything the model should know _only when it's relevant_, without permanently burning context tokens.
 
 You manage books in the **World Info** modal (sidebar → **World Info**). Each book is a named collection of entries; a character links one book, and that book is scanned on every generation in that character's chats.
 
@@ -10,28 +10,28 @@ Open the **World Info** modal to see your books. Click **New Lorebook** to creat
 
 An entry has these fields:
 
-| Field | Default | What it does |
-|-------|---------|--------------|
-| **Keys** (`keys`) | `[]` | Trigger keywords, comma-separated. An entry fires when any key matches the chat history. |
-| **Content** (`content`) | `""` | The text injected into the prompt. Supports the full [macro system](./macros.md) and `@@` decorators (see below). |
-| **Comment** (`comment`) | `""` | A note for you — never injected. (Not editable in the modal; set it through the [workbench](./workbench.md) per-field files.) |
-| **Order** (`order`) | `0` | Injection sequence within an activation round — lower numbers are injected first. New entries created in the modal default to `100` (matching card imports). |
-| **Position** (`position`) | `before_char` | Where the content lands — see [Placement](#placement). |
-| **Depth** (`depth`) / **Role** (`role`) | — | Only for the **At Depth** position — see [At-Depth Injection](#at-depth-injection). |
-| **Probability** (`probability`) | `100` | 0–100; the chance the entry fires when its keys match. Rolled fresh on every generation. (Constant entries skip the roll.) |
-| **Constant** (`constant`) | off | Always injected — no key match needed. |
-| **Selective** + **Secondary Keys** (`selective`, `secondaryKeys`) | off | Require a primary key **and** a secondary key to both match (AND-logic only). |
-| **Regex** (`regex`) | off | Treat *all* keys (primary and secondary) as JavaScript regex patterns. Invalid patterns are silently skipped. |
-| **Recursive** (`recursive`) | off | This entry's content becomes the scan text for the next recursion round — see [Recursion](#recursion). |
-| **Sticky / Cooldown / Delay** (`sticky`, `cooldown`, `delay`) | `0` | Time-based activation controls, in messages — see below. |
-| **Disable** (`disable`) | off | Turn the entry off without deleting it. (Set through the workbench or the API; the modal has no checkbox for it.) |
-| **Retrieval mode** (`retrievalMode`) | `keyword` | `keyword`, `semantic` (vector search), or `constant` — see [Semantic World Info](#semantic-world-info-rag). |
+| Field                                                             | Default       | What it does                                                                                                                                                 |
+| ----------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Keys** (`keys`)                                                 | `[]`          | Trigger keywords, comma-separated. An entry fires when any key matches the chat history.                                                                     |
+| **Content** (`content`)                                           | `""`          | The text injected into the prompt. Supports the full [macro system](./macros.md) and `@@` decorators (see below).                                            |
+| **Comment** (`comment`)                                           | `""`          | A note for you — never injected. (Not editable in the modal; set it through the [workbench](./workbench.md) per-field files.)                                |
+| **Order** (`order`)                                               | `0`           | Injection sequence within an activation round — lower numbers are injected first. New entries created in the modal default to `100` (matching card imports). |
+| **Position** (`position`)                                         | `before_char` | Where the content lands — see [Placement](#placement).                                                                                                       |
+| **Depth** (`depth`) / **Role** (`role`)                           | —             | Only for the **At Depth** position — see [At-Depth Injection](#at-depth-injection).                                                                          |
+| **Probability** (`probability`)                                   | `100`         | 0–100; the chance the entry fires when its keys match. Rolled fresh on every generation. (Constant entries skip the roll.)                                   |
+| **Constant** (`constant`)                                         | off           | Always injected — no key match needed.                                                                                                                       |
+| **Selective** + **Secondary Keys** (`selective`, `secondaryKeys`) | off           | Require a primary key **and** a secondary key to both match (AND-logic only).                                                                                |
+| **Regex** (`regex`)                                               | off           | Treat _all_ keys (primary and secondary) as JavaScript regex patterns. Invalid patterns are silently skipped.                                                |
+| **Recursive** (`recursive`)                                       | off           | This entry's content becomes the scan text for the next recursion round — see [Recursion](#recursion).                                                       |
+| **Sticky / Cooldown / Delay** (`sticky`, `cooldown`, `delay`)     | `0`           | Time-based activation controls, in messages — see below.                                                                                                     |
+| **Disable** (`disable`)                                           | off           | Turn the entry off without deleting it. (Set through the workbench or the API; the modal has no checkbox for it.)                                            |
+| **Retrieval mode** (`retrievalMode`)                              | `keyword`     | `keyword`, `semantic` (vector search), or `constant` — see [Semantic World Info](#semantic-world-info-rag).                                                  |
 
 ### Sticky, Cooldown, Delay
 
 These three are measured in **messages** and are **branch-aware** — tamari records which entries fired on each message (`_wiActivations` in the message extras), so swipes and chat forks each carry their own activation timeline:
 
-- **Sticky** — keep injecting the entry for N messages after its last genuine key match. Sticky carry-over does *not* re-trigger the entry: the window always counts from the last real match and simply expires.
+- **Sticky** — keep injecting the entry for N messages after its last genuine key match. Sticky carry-over does _not_ re-trigger the entry: the window always counts from the last real match and simply expires.
 - **Cooldown** — after firing, the entry can't fire again for N messages.
 - **Delay** — the entry can't fire at all until the chat is at least N messages long.
 
@@ -48,23 +48,23 @@ On every generation, tamari scans the **full chat history** (a macro-resolved co
 
 - Matching is **case-insensitive substring** matching: a key `dragon` matches "Dragon", "dragonfly", and "a DRAGON attacks". Whole-word and case-sensitive modes exist in the engine but are not wired up to generation.
 - With **Regex** on, each key is compiled as a JavaScript regex (case-insensitive flag). A key that fails to compile is skipped silently — test regex keys with the **Test Triggers** panel.
-- **Selective** entries need one primary key *and* one secondary key to both match somewhere in the scan text.
+- **Selective** entries need one primary key _and_ one secondary key to both match somewhere in the scan text.
 
 ### Recursion
 
-Entries with **Recursive** enabled feed the next round: their *content* replaces the scan text, so activated lore can trigger further entries (e.g. an entry about a tavern mentions a character, whose own entry then fires). This repeats for up to 3 extra rounds and stops early when a round activates nothing new or no recursive content was added.
+Entries with **Recursive** enabled feed the next round: their _content_ replaces the scan text, so activated lore can trigger further entries (e.g. an entry about a tavern mentions a character, whose own entry then fires). This repeats for up to 3 extra rounds and stops early when a round activates nothing new or no recursive content was added.
 
 There is no token budget on activation: every entry whose keys match is injected, every time. The bounding knobs are the deterministic ones — **Constant**, **Probability**, **Sticky / Cooldown / Delay**, and the recursion-round limit.
 
 ### Placement
 
-| Position | Where it goes |
-|----------|---------------|
+| Position                             | Where it goes                                                                                                                            |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | **Before Character** (`before_char`) | The `worldInfoBefore` prompt marker ("World Info (before)" in prompt lists) — the system-prompt area before the character's description. |
-| **After Character** (`after_char`) | The `worldInfoAfter` marker ("World Info (after)") — after the character card fields. |
-| **Top** (`top`) | Appended to the *before* content. |
-| **Bottom** (`bottom`) | Appended to the *after* content. |
-| **At Depth** (`atDepth`) | Spliced into the chat history as a synthetic message — see [At-Depth Injection](#at-depth-injection). |
+| **After Character** (`after_char`)   | The `worldInfoAfter` marker ("World Info (after)") — after the character card fields.                                                    |
+| **Top** (`top`)                      | Appended to the _before_ content.                                                                                                        |
+| **Bottom** (`bottom`)                | Appended to the _after_ content.                                                                                                         |
+| **At Depth** (`atDepth`)             | Spliced into the chat history as a synthetic message — see [At-Depth Injection](#at-depth-injection).                                    |
 
 > **Warning:** Non-constant entries in static positions (everything except **At Depth**) inject into the system prompt, which changes the cache prefix every time a different set of entries fires — so their presence **disables Claude prompt caching for that generation**. If caching matters to you, prefer `constant` entries or **At Depth** placement. (When **Append-only prompt layout** is on, non-constant entries don't render at all; constant **At Depth** entries hoist to a pinned block at the top of history.)
 
@@ -78,18 +78,18 @@ Decorators are `@@`-prefixed lines at the **very top** of an entry's content (V3
 [Scenario: the festival is in full swing.]
 ```
 
-| Decorator | Effect |
-|-----------|--------|
-| `@@activate` | Makes the entry constant (always active). |
-| `@@dont_activate` | Disables the entry. |
-| `@@depth N` | Sets position to **At Depth** with depth N. |
-| `@@role system\|user\|assistant` | Role of the at-depth injected message. |
-| `@@keep_activate_after_match` | Sticky "forever" — once triggered, the entry stays active (a sticky value of 1,000,000). |
-| `@@dont_activate_after_match` | Fire at most once: if the entry has ever activated on this branch, it never activates again. |
-| `@@activate_only_after N` | Sets **Delay** to N messages. |
-| `@@activate_only_every N` | Sets **Cooldown** to N messages. |
-| `@@additional_keys a, b` | Adds keys to the entry's primary key list (comma-separated). |
-| `@@exclude_keys a, b` | Removes keys from the primary and secondary key lists. |
+| Decorator                        | Effect                                                                                       |
+| -------------------------------- | -------------------------------------------------------------------------------------------- |
+| `@@activate`                     | Makes the entry constant (always active).                                                    |
+| `@@dont_activate`                | Disables the entry.                                                                          |
+| `@@depth N`                      | Sets position to **At Depth** with depth N.                                                  |
+| `@@role system\|user\|assistant` | Role of the at-depth injected message.                                                       |
+| `@@keep_activate_after_match`    | Sticky "forever" — once triggered, the entry stays active (a sticky value of 1,000,000).     |
+| `@@dont_activate_after_match`    | Fire at most once: if the entry has ever activated on this branch, it never activates again. |
+| `@@activate_only_after N`        | Sets **Delay** to N messages.                                                                |
+| `@@activate_only_every N`        | Sets **Cooldown** to N messages.                                                             |
+| `@@additional_keys a, b`         | Adds keys to the entry's primary key list (comma-separated).                                 |
+| `@@exclude_keys a, b`            | Removes keys from the primary and secondary key lists.                                       |
 
 Also recognized but **parsed-then-ignored**: `@@scan_depth`, `@@is_greeting`, `@@ignore_on_max_context` (collected, never applied) and `@@position` (accepted as a no-op — the entry keeps its configured position).
 
@@ -113,14 +113,14 @@ Entries whose `retrievalMode` is `semantic` skip keyword matching entirely. Inst
 
 Semantic retrieval needs an **OpenAI-compatible embeddings endpoint**, configured with these server settings:
 
-| Setting | Default | Meaning |
-|---------|---------|---------|
-| `rag.enabled` | `false` | Master switch for RAG. |
-| `rag.api_url` | `http://localhost:5000/v1` | Base URL of the embeddings API; tamari POSTs to `<api_url>/embeddings`. |
-| `rag.api_key` | — | Optional bearer token. |
-| `rag.model` | `text-embedding-3-small` | Embedding model name sent with the request. |
-| `rag.top_k` | `5` | Max entries returned per query. |
-| `rag.threshold` | `0.7` | Minimum similarity score (0–1) for an entry to count as a match. |
+| Setting         | Default                    | Meaning                                                                 |
+| --------------- | -------------------------- | ----------------------------------------------------------------------- |
+| `rag.enabled`   | `false`                    | Master switch for RAG.                                                  |
+| `rag.api_url`   | `http://localhost:5000/v1` | Base URL of the embeddings API; tamari POSTs to `<api_url>/embeddings`. |
+| `rag.api_key`   | —                          | Optional bearer token.                                                  |
+| `rag.model`     | `text-embedding-3-small`   | Embedding model name sent with the request.                             |
+| `rag.top_k`     | `5`                        | Max entries returned per query.                                         |
+| `rag.threshold` | `0.7`                      | Minimum similarity score (0–1) for an entry to count as a match.        |
 
 Changes apply at runtime — the embedding client is rebuilt and cached indices are dropped (on-disk index data survives; entries re-index on next use). If the query fails (endpoint down, bad key), the generation continues without semantic matches — the error is only logged.
 
@@ -162,8 +162,8 @@ Quick Replies and Lua tools can read and write the linked book through the `st` 
 - **Keys are substrings, not words.** `art` matches "start" and "artwork". Prefer distinctive keys, or switch the entry to **Regex** and use `\bart\b` yourself.
 - **`order` is pure sequencing.** Entries activate unconditionally — `order` only decides which content appears first within a round, not whether it appears at all.
 - **`{{getvar}}` in entries makes "live state" lore.** Entry content is macro-resolved (at-depth content at injection; static content via the prompt pipeline), so an entry can read variables set by `{{setvar}}` in message text, `st.setvar` from a quick reply, or a custom backend. See [Macro System](./macros.md).
-- **Sticky expires from the last *real* trigger.** It doesn't chain: a sticky entry that stays active via carry-over won't extend its own window.
-- **Recursion is one-way fuel.** Only content from entries that *activated* in a round becomes the next round's scan text — an entry that didn't fire triggers nothing.
+- **Sticky expires from the last _real_ trigger.** It doesn't chain: a sticky entry that stays active via carry-over won't extend its own window.
+- **Recursion is one-way fuel.** Only content from entries that _activated_ in a round becomes the next round's scan text — an entry that didn't fire triggers nothing.
 - **Regex keys are case-insensitive too.** If you need case sensitivity in a key, bake it into the pattern itself with character classes like `[A-Z]`.
 - **Prefer At Depth for dynamic lore.** Static-position entries that toggle on and off disable prompt caching; at-depth entries don't.
 - **Deleting a book doesn't warn its characters.** Characters that linked it simply fall back to no world info. Re-link from the character editor's **Linked Lorebook** dropdown after recreating a book.

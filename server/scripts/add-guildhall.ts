@@ -19,7 +19,20 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DATA_DIR = process.env.DATA_DIR ?? join(ROOT, 'data-v2');
 const LUA_PATH = join(ROOT, 'docs', 'design', 'examples', 'guildhall', 'main.lua');
 const LIB_DIR = join(ROOT, 'docs', 'design', 'examples', 'game-lib');
-const LIB_MODULES = ['loop', 'sanitize', 'chrome', 'ledger', 'toolset', 'todo', 'registry', 'summarize', 'maptag', 'events', 'rolling', 'layout'];
+const LIB_MODULES = [
+  'loop',
+  'sanitize',
+  'chrome',
+  'ledger',
+  'toolset',
+  'todo',
+  'registry',
+  'summarize',
+  'maptag',
+  'events',
+  'rolling',
+  'layout',
+];
 
 const CARD_NAME = 'The Guildhall';
 
@@ -180,23 +193,49 @@ interface RegexRule {
 const REGEX_RULES: RegexRule[] = [
   // Optional: hide command messages the player posted — slash-commands AND bare
   // command words, so a typed command and a button click leave the same clean transcript.
-  { id: randomUUID(), name: 'Hide command messages',
-    findRegex: '/^\\s*(\\/\\w.*|(delve|shop|smith|look|attack|flee|up|climb|leave|help|north|south|east|west|down|go (north|south|east|west|down)))\\s*$/si',
+  {
+    id: randomUUID(),
+    name: 'Hide command messages',
+    findRegex:
+      '/^\\s*(\\/\\w.*|(delve|shop|smith|look|attack|flee|up|climb|leave|help|north|south|east|west|down|go (north|south|east|west|down)))\\s*$/si',
     replaceString: '',
-    disabled: false, userInput: true, aiOutput: false, prompt: false, display: true },
+    disabled: false,
+    userInput: true,
+    aiOutput: false,
+    prompt: false,
+    display: true,
+  },
   // HUD panel (hall: gold; dungeon: where/hp/atk/gold).
-  { id: randomUUID(), name: 'HUD panel', findRegex: '/\\[HUD\\|([^\\]]+)\\]/g', replaceString: '', replaceLua: HUD_REPLACE_LUA,
-    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
+  {
+    id: randomUUID(),
+    name: 'HUD panel',
+    findRegex: '/\\[HUD\\|([^\\]]+)\\]/g',
+    replaceString: '',
+    replaceLua: HUD_REPLACE_LUA,
+    disabled: false,
+    userInput: false,
+    aiOutput: true,
+    prompt: false,
+    display: true,
+  },
   // Fog-of-war floor map.
-  { id: randomUUID(), name: 'Floor map', findRegex: '/\\[MAP\\|([^\\]]+)\\]/g', replaceString: '', replaceLua: MAP_REPLACE_LUA,
-    disabled: false, userInput: false, aiOutput: true, prompt: false, display: true },
+  {
+    id: randomUUID(),
+    name: 'Floor map',
+    findRegex: '/\\[MAP\\|([^\\]]+)\\]/g',
+    replaceString: '',
+    replaceLua: MAP_REPLACE_LUA,
+    disabled: false,
+    userInput: false,
+    aiOutput: true,
+    prompt: false,
+    display: true,
+  },
 ];
 
 /** The vendored game lib, as the card's backend_logic/lib/*.lua VFS map. */
 function libFiles(): Record<string, string> {
-  return Object.fromEntries(
-    LIB_MODULES.map((m) => [`lib/${m}.lua`, readFileSync(join(LIB_DIR, `${m}.lua`), 'utf8')]),
-  );
+  return Object.fromEntries(LIB_MODULES.map((m) => [`lib/${m}.lua`, readFileSync(join(LIB_DIR, `${m}.lua`), 'utf8')]));
 }
 
 async function main(): Promise<void> {
@@ -231,8 +270,7 @@ async function main(): Promise<void> {
   const check = await repo.getByName(CARD_NAME);
   const rules = (check?.extensions['regexScripts'] as unknown[] | undefined) ?? [];
   const backend = check?.extensions['contextualBackend'] as
-    | { enabled?: boolean; luaSource?: string; files?: Record<string, string> }
-    | undefined;
+    { enabled?: boolean; luaSource?: string; files?: Record<string, string> } | undefined;
   console.log(
     `Verify: ${rules.length} regex rules, backend enabled=${String(backend?.enabled)}, ` +
       `lua ${backend?.luaSource?.split('\n').length ?? 0} lines, ${Object.keys(backend?.files ?? {}).length} lib modules`,

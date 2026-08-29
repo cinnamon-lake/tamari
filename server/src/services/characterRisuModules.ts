@@ -64,7 +64,12 @@ export function listRisuModuleMeta(character: Character | null | undefined): Ris
   );
 }
 
-function summarizeModule(id: string, module: RisuModuleData, source: RisuModuleMeta['source'], filePath: string): RisuModuleMeta {
+function summarizeModule(
+  id: string,
+  module: RisuModuleData,
+  source: RisuModuleMeta['source'],
+  filePath: string,
+): RisuModuleMeta {
   const triggers = Array.isArray(module.trigger) ? module.trigger : [];
   return {
     id,
@@ -150,7 +155,14 @@ export function loadRisuModule(storage: FileStorage, meta: RisuModuleMeta): Risu
 }
 
 export type RisuModuleSection = 'info' | 'triggers' | 'trigger' | 'regex' | 'lorebook' | 'assets';
-export const RISU_MODULE_SECTIONS: readonly RisuModuleSection[] = ['info', 'triggers', 'trigger', 'regex', 'lorebook', 'assets'];
+export const RISU_MODULE_SECTIONS: readonly RisuModuleSection[] = [
+  'info',
+  'triggers',
+  'trigger',
+  'regex',
+  'lorebook',
+  'assets',
+];
 
 /**
  * Extract one section of a raw module for the porting workflow. Shared by the
@@ -199,7 +211,8 @@ export function getRisuModuleSection(
       if (index === undefined) return { ok: false, error: 'section=trigger requires an index (see section=triggers)' };
       const triggers = Array.isArray(module.trigger) ? module.trigger : [];
       const trigger = triggers[index];
-      if (!trigger) return { ok: false, error: `trigger index ${index} out of range (module has ${triggers.length} triggers)` };
+      if (!trigger)
+        return { ok: false, error: `trigger index ${index} out of range (module has ${triggers.length} triggers)` };
       return { ok: true, data: trigger };
     }
     case 'regex':
@@ -213,11 +226,7 @@ export function getRisuModuleSection(
 }
 
 /** Delete the stored module file and return the metadata array with the entry removed. */
-export function removeRisuModule(
-  storage: FileStorage,
-  character: Character,
-  moduleId: string,
-): RisuModuleMeta[] {
+export function removeRisuModule(storage: FileStorage, character: Character, moduleId: string): RisuModuleMeta[] {
   const metas = listRisuModuleMeta(character);
   const target = metas.find((m) => m.id === moduleId);
   if (target && storage.exists(target.filePath)) {

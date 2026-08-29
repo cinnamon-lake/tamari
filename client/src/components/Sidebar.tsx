@@ -16,6 +16,7 @@ import {
   selectedCharacterId,
   setSelectedCharacterId,
 } from '../stores/uiStore.js';
+import { isAppModalOpen, openAppModal, closeAppModal } from '../stores/modalStore.js';
 import { CharacterEditor } from './character/CharacterEditor.js';
 import { SettingsModal } from './SettingsModal.js';
 import { BackendConfigModal } from './BackendConfigModal.js';
@@ -40,18 +41,6 @@ const SWIPE_OPEN_THRESHOLD = 60;
 
 export function Sidebar() {
   const { t } = useI18n();
-  const [showEditor, setShowEditor] = createSignal(false);
-  const [showSettings, setShowSettings] = createSignal(false);
-  const [showBackendConfigs, setShowBackendConfigs] = createSignal(false);
-  const [showSecrets, setShowSecrets] = createSignal(false);
-  const [showCustomBackends, setShowCustomBackends] = createSignal(false);
-  const [showPromptLists, setShowPromptLists] = createSignal(false);
-  const [showInstructTemplates, setShowInstructTemplates] = createSignal(false);
-  const [showRegexRules, setShowRegexRules] = createSignal(false);
-  const [showWorldInfo, setShowWorldInfo] = createSignal(false);
-  const [showPersonas, setShowPersonas] = createSignal(false);
-  const [showTools, setShowTools] = createSignal(false);
-  const [showStats, setShowStats] = createSignal(false);
   const [charSearch, setCharSearch] = createSignal('');
   const [activeTags, setActiveTags] = createSignal<Set<string>>(new Set());
   const [charSort, setCharSort] = createSignal<'name' | 'updated' | 'created'>('updated');
@@ -220,9 +209,7 @@ export function Sidebar() {
   // local list (not state.activeCharacter, which only updates on a
   // character.snapshot) so the chats-section title tracks sidebar AND
   // hotswap-bar selections without needing a bus round-trip.
-  const selectedCharacter = createMemo(
-    () => state.characters.find((c) => c.id === selectedCharacterId()) ?? null,
-  );
+  const selectedCharacter = createMemo(() => state.characters.find((c) => c.id === selectedCharacterId()) ?? null);
 
   const selectChat = (chatId: string) => {
     setActiveChatId(chatId);
@@ -276,7 +263,7 @@ export function Sidebar() {
   };
 
   const closeEditor = () => {
-    setShowEditor(false);
+    closeAppModal('characterEditor');
     setActiveCharacterId(null);
   };
 
@@ -290,8 +277,8 @@ export function Sidebar() {
   onMount(() => {
     const unsubSnapshot = bus.on('character.snapshot', (msg) => {
       if (msg.character.id !== activeCharacterId()) return;
-      if (msg.clientId === state.clientId && !showEditor()) {
-        setShowEditor(true);
+      if (msg.clientId === state.clientId && !isAppModalOpen('characterEditor')) {
+        openAppModal('characterEditor');
       }
     });
     const unsubCreated = bus.on('character.created', (msg) => {
@@ -389,7 +376,12 @@ export function Sidebar() {
 
   return (
     <>
-      <button class="mobile-menu-btn" onClick={() => setMobileOpen(true)} aria-label={t('sidebar.openMenu')} type="button">
+      <button
+        class="mobile-menu-btn"
+        onClick={() => setMobileOpen(true)}
+        aria-label={t('sidebar.openMenu')}
+        type="button"
+      >
         <i class="bi bi-list" />
       </button>
 
@@ -423,15 +415,29 @@ export function Sidebar() {
               <button
                 class="icon-btn"
                 onClick={() => bus.send({ type: 'character.create', data: { name: 'New Character' } })}
-                title={t('sidebar.createCharacter')} aria-label={t('sidebar.createCharacter')}
+                title={t('sidebar.createCharacter')}
+                aria-label={t('sidebar.createCharacter')}
                 type="button"
               >
                 <i class="bi bi-plus-lg" />
               </button>
-              <button class="icon-btn" onClick={() => importInputRef?.click()} title={t('sidebar.importCard')} aria-label={t('sidebar.importCard')} type="button">
+              <button
+                class="icon-btn"
+                onClick={() => importInputRef?.click()}
+                title={t('sidebar.importCard')}
+                aria-label={t('sidebar.importCard')}
+                type="button"
+              >
                 <i class="bi bi-upload" />
               </button>
-              <input class="hidden-file-input" ref={importInputRef} type="file" accept="image/png,.charx,.json" onChange={handleImport} hidden />
+              <input
+                class="hidden-file-input"
+                ref={importInputRef}
+                type="file"
+                accept="image/png,.charx,.json"
+                onChange={handleImport}
+                hidden
+              />
             </div>
           </div>
           <input
@@ -450,7 +456,8 @@ export function Sidebar() {
             <div class="tag-filters">
               <For each={allTags()}>
                 {(tag, index) => (
-                  <button id={`tag-${index()}`}
+                  <button
+                    id={`tag-${index()}`}
                     type="button"
                     class={`tag-chip ${activeTags().has(tag) ? 'active' : ''}`}
                     onClick={() => {
@@ -482,16 +489,23 @@ export function Sidebar() {
                 setCharPage(0);
               }}
             >
-              <option class="sort-option" value="updated">{t('sidebar.sortUpdated')}</option>
-              <option class="sort-option" value="created">{t('sidebar.sortCreated')}</option>
-              <option class="sort-option" value="name">{t('sidebar.sortNameAz')}</option>
+              <option class="sort-option" value="updated">
+                {t('sidebar.sortUpdated')}
+              </option>
+              <option class="sort-option" value="created">
+                {t('sidebar.sortCreated')}
+              </option>
+              <option class="sort-option" value="name">
+                {t('sidebar.sortNameAz')}
+              </option>
             </select>
             <button
               class={`icon-btn ${state.settings['charListGrid'] ? 'active' : ''}`}
               onClick={() =>
                 bus.send({ type: 'settings.set', key: 'charListGrid', value: !state.settings['charListGrid'] })
               }
-              title={t('sidebar.toggleGridView')} aria-label={t('sidebar.toggleGridView')}
+              title={t('sidebar.toggleGridView')}
+              aria-label={t('sidebar.toggleGridView')}
               type="button"
             >
               <i class={`bi bi-${state.settings['charListGrid'] ? 'list-ul' : 'grid-3x3-gap'}`} />
@@ -505,23 +519,34 @@ export function Sidebar() {
                   class={`character-item ${selectedCharacterId() === char.id ? 'selected' : ''}`}
                   onContextMenu={(e) => openCharacterContextMenu(e, char)}
                 >
-                  <div class="character-main" role="button" tabindex={0} onKeyDown={onEnterActivate} onClick={() => selectCharacter(char.id)}>
+                  <div
+                    class="character-main"
+                    role="button"
+                    tabindex={0}
+                    onKeyDown={onEnterActivate}
+                    onClick={() => selectCharacter(char.id)}
+                  >
                     <SafeImage
                       class="character-avatar"
-                      src={(char.thumbnailUrl ?? char.avatarUrl) ?? undefined}
+                      src={char.thumbnailUrl ?? char.avatarUrl ?? undefined}
                       alt={char.name}
                       loading="lazy"
                     />
                     <span class="character-name">{char.name}</span>
                     <Show when={char.external}>
-                      <i class="bi bi-hdd character-external-badge" title={t('sidebar.externalBadge')} aria-label={t('sidebar.externalBadge')} />
+                      <i
+                        class="bi bi-hdd character-external-badge"
+                        title={t('sidebar.externalBadge')}
+                        aria-label={t('sidebar.externalBadge')}
+                      />
                     </Show>
                   </div>
                   <div class="character-actions">
                     <button
                       class="icon-btn small"
                       onClick={() => createChat(char.id, char.name)}
-                      title={t('sidebar.newChat')} aria-label={t('sidebar.newChat')}
+                      title={t('sidebar.newChat')}
+                      aria-label={t('sidebar.newChat')}
                       type="button"
                     >
                       <i class="bi bi-chat-dots" />
@@ -529,7 +554,8 @@ export function Sidebar() {
                     <button
                       class="icon-btn small"
                       onClick={() => requestCharacterEdit(char.id)}
-                      title={t('sidebar.editCharacter')} aria-label={t('sidebar.editCharacter')}
+                      title={t('sidebar.editCharacter')}
+                      aria-label={t('sidebar.editCharacter')}
                       type="button"
                     >
                       <i class="bi bi-pencil" />
@@ -569,17 +595,37 @@ export function Sidebar() {
         <section class="sidebar-section">
           <div class="section-header">
             <h2 class="section-heading">
-              <Show when={selectedCharacterId()} fallback={<span class="section-title-text">{t('sidebar.recentChats')}</span>}>
-                <span class="section-title-text" title={t('sidebar.characterChats', { name: selectedCharacter()?.name ?? t('sidebar.character') })}>{t('sidebar.characterChats', { name: selectedCharacter()?.name ?? t('sidebar.character') })}</span>
+              <Show
+                when={selectedCharacterId()}
+                fallback={<span class="section-title-text">{t('sidebar.recentChats')}</span>}
+              >
+                <span
+                  class="section-title-text"
+                  title={t('sidebar.characterChats', { name: selectedCharacter()?.name ?? t('sidebar.character') })}
+                >
+                  {t('sidebar.characterChats', { name: selectedCharacter()?.name ?? t('sidebar.character') })}
+                </span>
               </Show>
             </h2>
             <div class="section-actions">
               <Show when={selectedCharacterId()}>
-                <button class="icon-btn" onClick={clearCharacterSelection} title={t('sidebar.showAllRecentChats')} aria-label={t('sidebar.showAllRecentChats')} type="button">
+                <button
+                  class="icon-btn"
+                  onClick={clearCharacterSelection}
+                  title={t('sidebar.showAllRecentChats')}
+                  aria-label={t('sidebar.showAllRecentChats')}
+                  type="button"
+                >
                   <i class="bi bi-arrow-counterclockwise" />
                 </button>
               </Show>
-              <button class="icon-btn" onClick={createGroupChat} title={t('sidebar.newGroupChat')} aria-label={t('sidebar.newGroupChat')} type="button">
+              <button
+                class="icon-btn"
+                onClick={createGroupChat}
+                title={t('sidebar.newGroupChat')}
+                aria-label={t('sidebar.newGroupChat')}
+                type="button"
+              >
                 <i class="bi bi-people" />
               </button>
             </div>
@@ -599,7 +645,8 @@ export function Sidebar() {
           <ul class="chat-list">
             <For each={pagedChats()}>
               {(chat) => (
-                <li id={chat.id}
+                <li
+                  id={chat.id}
                   class={`chat-item ${activeChatId() === chat.id ? 'active' : ''}`}
                   onClick={() => {
                     if (renamingChatId() !== chat.id) selectChat(chat.id);
@@ -641,7 +688,8 @@ export function Sidebar() {
                         setRenameValue(chat.name);
                         setRenamingChatId(chat.id);
                       }}
-                      title={t('sidebar.rename')} aria-label={t('sidebar.rename')}
+                      title={t('sidebar.rename')}
+                      aria-label={t('sidebar.rename')}
                       type="button"
                     >
                       <i class="bi bi-pencil" />
@@ -654,7 +702,8 @@ export function Sidebar() {
                           bus.send({ type: 'chat.delete', chatId: chat.id });
                         }
                       }}
-                      title={t('common.delete')} aria-label={t('common.delete')}
+                      title={t('common.delete')}
+                      aria-label={t('common.delete')}
                       type="button"
                     >
                       <i class="bi bi-trash" />
@@ -693,100 +742,177 @@ export function Sidebar() {
 
         <Show when={contextMenu()}>
           {(menu) => (
-            <ContextMenu
-              x={menu().x}
-              y={menu().y}
-              items={menu().items}
-              onClose={() => setContextMenu(null)}
-            />
+            <ContextMenu x={menu().x} y={menu().y} items={menu().items} onClose={() => setContextMenu(null)} />
           )}
         </Show>
 
         <div class="sidebar-footer">
-          <button class="settings-btn" onClick={() => { setShowPersonas(true); setMobileOpen(false); }} type="button">
+          <button
+            class="settings-btn"
+            onClick={() => {
+              openAppModal('personas');
+              setMobileOpen(false);
+            }}
+            type="button"
+          >
             <i class="bi bi-mask" /> {t('sidebar.personas')}
           </button>
-          <button class="settings-btn" onClick={() => { setShowWorldInfo(true); setMobileOpen(false); }} type="button">
+          <button
+            class="settings-btn"
+            onClick={() => {
+              openAppModal('worldInfo');
+              setMobileOpen(false);
+            }}
+            type="button"
+          >
             <i class="bi bi-book" /> {t('sidebar.worldInfo')}
           </button>
-          <button class="settings-btn" onClick={() => { setShowStats(true); setMobileOpen(false); }} type="button">
+          <button
+            class="settings-btn"
+            onClick={() => {
+              openAppModal('stats');
+              setMobileOpen(false);
+            }}
+            type="button"
+          >
             <i class="bi bi-bar-chart" /> {t('sidebar.stats')}
           </button>
-          <button class="settings-btn" onClick={() => { setShowBackendConfigs(true); setMobileOpen(false); }} type="button">
+          <button
+            class="settings-btn"
+            data-testid="open-backend-config"
+            onClick={() => {
+              openAppModal('backendConfigs');
+              setMobileOpen(false);
+            }}
+            type="button"
+          >
             <i class="bi bi-sliders" /> {t('sidebar.backendConfig')}
           </button>
-          <button class="settings-btn" onClick={() => { setShowSecrets(true); setMobileOpen(false); }} type="button">
+          <button
+            class="settings-btn"
+            onClick={() => {
+              openAppModal('secrets');
+              setMobileOpen(false);
+            }}
+            type="button"
+          >
             <i class="bi bi-key" /> {t('secrets.title')}
           </button>
-          <button class="settings-btn" onClick={() => { setShowCustomBackends(true); setMobileOpen(false); }} type="button">
+          <button
+            class="settings-btn"
+            onClick={() => {
+              openAppModal('customBackends');
+              setMobileOpen(false);
+            }}
+            type="button"
+          >
             <i class="bi bi-cpu" /> {t('customBackends.title')}
           </button>
-          <button class="settings-btn" onClick={() => { setShowPromptLists(true); setMobileOpen(false); }} type="button">
+          <button
+            class="settings-btn"
+            onClick={() => {
+              openAppModal('promptLists');
+              setMobileOpen(false);
+            }}
+            type="button"
+          >
             <i class="bi bi-list-check" /> {t('sidebar.promptList')}
           </button>
-          <button class="settings-btn" onClick={() => { setShowInstructTemplates(true); setMobileOpen(false); }} type="button">
+          <button
+            class="settings-btn"
+            data-testid="open-instruct-templates"
+            onClick={() => {
+              openAppModal('instructTemplates');
+              setMobileOpen(false);
+            }}
+            type="button"
+          >
             <i class="bi bi-layout-text-window-reverse" /> {t('sidebar.instructTemplates')}
           </button>
-          <button class="settings-btn" onClick={() => { setShowRegexRules(true); setMobileOpen(false); }} type="button">
+          <button
+            class="settings-btn"
+            data-testid="open-regex-rules"
+            onClick={() => {
+              openAppModal('regexRules');
+              setMobileOpen(false);
+            }}
+            type="button"
+          >
             <i class="bi bi-regex" /> {t('sidebar.regexRules')}
           </button>
-          <button class="settings-btn" onClick={() => { setShowTools(true); setMobileOpen(false); }} type="button">
+          <button
+            class="settings-btn"
+            data-testid="open-tools"
+            onClick={() => {
+              openAppModal('tools');
+              setMobileOpen(false);
+            }}
+            type="button"
+          >
             <i class="bi bi-tools" /> {t('sidebar.tools')}
           </button>
-          <button class="settings-btn" onClick={() => { setShowSettings(true); setMobileOpen(false); }} type="button">
+          <button
+            class="settings-btn"
+            data-testid="open-settings"
+            onClick={() => {
+              openAppModal('settings');
+              setMobileOpen(false);
+            }}
+            type="button"
+          >
             <i class="bi bi-gear" /> {t('settings.title')}
           </button>
         </div>
       </aside>
 
-      <Show when={showEditor()}>
+      <Show when={isAppModalOpen('characterEditor')}>
         <Show when={state.activeCharacter}>
           {(character) => <CharacterEditor character={character()} onClose={closeEditor} />}
         </Show>
       </Show>
 
-      <Show when={showSettings()}>
-        <SettingsModal onClose={() => setShowSettings(false)} />
+      <Show when={isAppModalOpen('settings')}>
+        <SettingsModal onClose={() => closeAppModal('settings')} />
       </Show>
 
-      <Show when={showBackendConfigs()}>
-        <BackendConfigModal onClose={() => setShowBackendConfigs(false)} />
+      <Show when={isAppModalOpen('backendConfigs')}>
+        <BackendConfigModal onClose={() => closeAppModal('backendConfigs')} />
       </Show>
 
-      <Show when={showSecrets()}>
-        <SecretsModal onClose={() => setShowSecrets(false)} />
+      <Show when={isAppModalOpen('secrets')}>
+        <SecretsModal onClose={() => closeAppModal('secrets')} />
       </Show>
 
-      <Show when={showCustomBackends()}>
-        <CustomBackendsModal onClose={() => setShowCustomBackends(false)} />
+      <Show when={isAppModalOpen('customBackends')}>
+        <CustomBackendsModal onClose={() => closeAppModal('customBackends')} />
       </Show>
 
-      <Show when={showPromptLists()}>
-        <PromptListModal onClose={() => setShowPromptLists(false)} />
+      <Show when={isAppModalOpen('promptLists')}>
+        <PromptListModal onClose={() => closeAppModal('promptLists')} />
       </Show>
 
-      <Show when={showInstructTemplates()}>
-        <InstructTemplatesModal onClose={() => setShowInstructTemplates(false)} />
+      <Show when={isAppModalOpen('instructTemplates')}>
+        <InstructTemplatesModal onClose={() => closeAppModal('instructTemplates')} />
       </Show>
 
-      <Show when={showRegexRules()}>
-        <RegexRulesModal onClose={() => setShowRegexRules(false)} />
+      <Show when={isAppModalOpen('regexRules')}>
+        <RegexRulesModal onClose={() => closeAppModal('regexRules')} />
       </Show>
 
-      <Show when={showWorldInfo()}>
-        <WorldInfoEditor onClose={() => setShowWorldInfo(false)} />
+      <Show when={isAppModalOpen('worldInfo')}>
+        <WorldInfoEditor onClose={() => closeAppModal('worldInfo')} />
       </Show>
 
-      <Show when={showPersonas()}>
-        <PersonaManager onClose={() => setShowPersonas(false)} />
+      <Show when={isAppModalOpen('personas')}>
+        <PersonaManager onClose={() => closeAppModal('personas')} />
       </Show>
 
-      <Show when={showTools()}>
-        <ToolsModal onClose={() => setShowTools(false)} />
+      <Show when={isAppModalOpen('tools')}>
+        <ToolsModal onClose={() => closeAppModal('tools')} />
       </Show>
 
-      <Show when={showStats()}>
-        <StatsModal onClose={() => setShowStats(false)} />
+      <Show when={isAppModalOpen('stats')}>
+        <StatsModal onClose={() => closeAppModal('stats')} />
       </Show>
     </>
   );

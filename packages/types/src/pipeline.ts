@@ -67,14 +67,7 @@ export interface BackendDebugPart {
 export type InlineContentPart = TextPart | ImagePart | AudioPart | VideoPart;
 
 export type ContentPart =
-  | TextPart
-  | ImagePart
-  | AudioPart
-  | VideoPart
-  | ToolUsePart
-  | ToolResultPart
-  | ReasoningPart
-  | BackendDebugPart;
+  TextPart | ImagePart | AudioPart | VideoPart | ToolUsePart | ToolResultPart | ReasoningPart | BackendDebugPart;
 
 export interface PipelineMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -88,14 +81,7 @@ export interface PipelineMessage {
  * `GenerationTarget.kind`, and generation records. Lives here so the
  * Lua-facing docs and the server share one definition.
  */
-export type GenerationType =
-  | 'send'
-  | 'regenerate'
-  | 'continue'
-  | 'impersonate'
-  | 'quiet'
-  | 'genraw'
-  | 'subagent';
+export type GenerationType = 'send' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw' | 'subagent';
 
 /**
  * Generation kinds that reach the macro pipeline (`{{lastGenerationType}}`).
@@ -111,14 +97,7 @@ export type MacroGenerationType = Exclude<GenerationType, 'genraw' | 'subagent'>
  * `GenerationMeta` (db.ts) and server adapters share one definition.
  */
 export type TraceErrorCode =
-  | 'LUA_ERROR'
-  | 'LUA_TIMEOUT'
-  | 'DELEGATE_ERROR'
-  | 'NO_BACKEND'
-  | 'DEPTH_CAP'
-  | 'ABORTED'
-  | 'HTTP_ERROR'
-  | 'UNKNOWN';
+  'LUA_ERROR' | 'LUA_TIMEOUT' | 'DELEGATE_ERROR' | 'NO_BACKEND' | 'DEPTH_CAP' | 'ABORTED' | 'HTTP_ERROR' | 'UNKNOWN';
 
 export interface TraceError {
   code: TraceErrorCode;

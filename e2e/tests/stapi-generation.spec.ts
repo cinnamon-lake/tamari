@@ -1,15 +1,10 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
 // Global quick replies are created from the chat view's quick reply bar
 // (`+` button → QuickReplyEditor, scope defaults to global) — the bar only
 // exists with a chat open, so the test creates its character/chat FIRST.
 import { createLuaQuickReply as createGlobalQuickReply } from '../helpers/quickReplies.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 async function createCharacterAndChat(page: any, charName: string) {
   await page.locator('[title="Create character"]').click();
@@ -32,7 +27,10 @@ async function createCharacterAndChat(page: any, charName: string) {
   await newChatBtn.waitFor({ state: 'visible' });
   await newChatBtn.click({ force: true });
 
-  const chatItem = page.locator('.chat-item').filter({ hasText: new RegExp(charName) }).first();
+  const chatItem = page
+    .locator('.chat-item')
+    .filter({ hasText: new RegExp(charName) })
+    .first();
   await expect(chatItem).toBeVisible({ timeout: 10000 });
   await chatItem.click();
 
@@ -59,16 +57,7 @@ async function sendUserMessage(page: any, text: string) {
 test.describe.configure({ mode: 'serial' });
 
 test.describe('StApi Generation Integration', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('st.add_swipe adds a swipe to the active assistant message', async ({ page }) => {
+  test('st.add_swipe adds a swipe to the active assistant message', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Add Swipe');
     const charName = uniqueName('StApi Add Swipe Character');
 

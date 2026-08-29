@@ -60,8 +60,7 @@ export const settings = {
     appendOnlyLayoutHint:
       'Snapshot-cache friendly: every turn is a strict byte-prefix of the next. Locks: whitespace handling, output post-processing, storage/prompt macros, stop-string macros, prompt/output regex, depth injections, non-constant World Info, and memory summaries; reasoning is always re-sent verbatim.',
     mediaVerbose: 'Verbose media mode',
-    mediaVerboseHint:
-      'Replace media attachments with text placeholders when sending to the LLM',
+    mediaVerboseHint: 'Replace media attachments with text placeholders when sending to the LLM',
   },
   developer: {
     heading: 'Developer',
@@ -122,19 +121,16 @@ export const settings = {
     mediaModeList: 'List',
     mediaModeGrid: 'Grid',
     showHotswapBar: 'Show recently-used character bar',
-    showHotswapBarHint:
-      'Displays a quick-switch bar of recently used characters above the chat',
+    showHotswapBarHint: 'Displays a quick-switch bar of recently used characters above the chat',
     fuzzySearch: 'Fuzzy character search',
     fuzzySearchHint: 'Use Fuse.js fuzzy matching in the character list search bar',
   },
   security: {
     heading: 'Security & content',
     strictHtml: 'Strict HTML sanitization',
-    strictHtmlHint:
-      'Blocks images, tables, code blocks, and other rich formatting in messages',
+    strictHtmlHint: 'Blocks images, tables, code blocks, and other rich formatting in messages',
     allowExternalMedia: 'Allow external images',
-    allowExternalMediaHint:
-      'Lets chat messages load images from external URLs by relaxing the CSP img-src directive',
+    allowExternalMediaHint: 'Lets chat messages load images from external URLs by relaxing the CSP img-src directive',
   },
   theme: {
     heading: 'Theme',
@@ -192,7 +188,8 @@ export const settings = {
     replaceTypeLua: 'Lua',
     luaReplaceField: 'Replace With (Lua)',
     luaReplacePlaceholder: 'function replace(match, captures)\n  return captures[1]\nend',
-    luaReplaceHint: 'Lua replacement takes precedence over the text replacement. Define replace(match, captures); captures is a 1-indexed array of capture groups. A non-string return keeps the original match.',
+    luaReplaceHint:
+      'Lua replacement takes precedence over the text replacement. Define replace(match, captures); captures is a 1-indexed array of capture groups. A non-string return keeps the original match.',
     luaNoPreview: 'Preview is unavailable for Lua replacements in the UI (runs server-side only).',
     luaBadge: 'Lua',
     disabledCheckbox: 'Disabled',

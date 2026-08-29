@@ -21,12 +21,7 @@ export interface ParseResult {
  *
  * prefix and suffix are stripped from group 1 to yield the inner reasoning text.
  */
-export function extractReasoning(
-  text: string,
-  pattern: string,
-  prefix: string,
-  suffix: string,
-): ParseResult {
+export function extractReasoning(text: string, pattern: string, prefix: string, suffix: string): ParseResult {
   const regex = new RegExp(pattern, 's');
   const match = text.match(regex);
   if (!match || !match[1]) {

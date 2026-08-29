@@ -50,10 +50,9 @@ describe('MoonshotBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://api.moonshot.ai/v1/chat/completions');
@@ -82,10 +81,9 @@ describe('MoonshotBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     expect(result.finishReason).toBe('stop');
     expect(result.toolCalls).toHaveLength(1);
@@ -112,10 +110,9 @@ describe('MoonshotBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     const reasoningChunks = items.filter((i) => i.type === 'reasoning').map((i) => i.token);
     expect(result.finishReason).toBe('stop');
@@ -136,7 +133,13 @@ describe('MoonshotBackendAdapter', () => {
         object: 'list',
         data: [
           { id: 'kimi-k2.6', object: 'model', created: 1698999496, owned_by: 'moonshot', context_length: 256000 },
-          { id: 'kimi-k2-thinking', object: 'model', created: 1698999496, owned_by: 'moonshot', context_length: 256000 },
+          {
+            id: 'kimi-k2-thinking',
+            object: 'model',
+            created: 1698999496,
+            owned_by: 'moonshot',
+            context_length: 256000,
+          },
         ],
       }),
     } as Response);

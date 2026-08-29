@@ -180,10 +180,7 @@ describe('RegexEngine', () => {
     });
 
     it('passes nil for unmatched optional capture groups', async () => {
-      const rule = luaRule(
-        'function replace(match, captures) return tostring(captures[2] == nil) end',
-        '/(a)(b)?/g',
-      );
+      const rule = luaRule('function replace(match, captures) return tostring(captures[2] == nil) end', '/(a)(b)?/g');
       expect(await applyRules('a ab', [rule])).toBe('true false');
     });
 

@@ -12,7 +12,7 @@ import type { IPersonaRepository } from '../repos/PersonaRepository.js';
 import type { FileStorage } from './FileStorage.js';
 import { getLogger } from '../lib/logger.js';
 
-const log = getLogger('services/persona');
+const log = getLogger('services/PersonaService');
 
 export type DeletePersonaResult =
   | {

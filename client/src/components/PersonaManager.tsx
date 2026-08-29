@@ -9,21 +9,16 @@ import { confirmPopup } from '../stores/popupStore.js';
 import { SafeImage } from './SafeImage.js';
 import { apiFetch } from '../lib/apiFetch.js';
 import { useI18n } from '../i18n/index.js';
-import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
-import { createBackdropDismiss } from '../lib/backdropDismiss.js';
+import { Modal } from './Modal.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import './PersonaManager.css';
 
 export function PersonaManager(props: { onClose: () => void }) {
   const { t } = useI18n();
 
-  const close = () => {
-    restoreFocus();
-    props.onClose();
-  };
+  const close = () => props.onClose();
 
   onMount(() => {
-    saveFocus();
     bus.send({ type: 'persona.list' });
 
     const unsubCreated = bus.on('persona.created', (msg) => {
@@ -55,88 +50,90 @@ export function PersonaManager(props: { onClose: () => void }) {
   };
 
   return (
-    <div class="modal-overlay" {...createBackdropDismiss(close)}>
-      <div class="modal persona-modal" role="dialog" aria-modal="true" aria-label={t('persona.modalAriaLabel')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
-        <div class="modal-header-row">
-          <h2 class="modal-title">{t('persona.title')}</h2>
-          <button class="icon-btn" onClick={close} title={t('common.close')} aria-label={t('common.close')} type="button">
-            <i class="bi bi-x-lg" />
-          </button>
-        </div>
-
-        <Show
-          when={activePersonaId()}
-          fallback={
-            <>
-              <div class="persona-list">
-                <For each={state.personas}>
-                  {(persona) => {
-                    const isSelected = () => currentChatPersonaId() === persona.id;
-                    return (
-                      <div
-                        id={persona.id}
-                        class={`selectable-item persona-item ${isSelected() ? 'active' : ''}`}
-                        onClick={() => selectPersonaForChat(persona.id)}
-                        title={isSelected() ? t('persona.selectedForChat') : t('persona.clickToSelect')}
+    <Modal
+      title={t('persona.title')}
+      onClose={close}
+      class="modal persona-modal"
+      ariaLabel={t('persona.modalAriaLabel')}
+      showCloseButton
+    >
+      <Show
+        when={activePersonaId()}
+        fallback={
+          <>
+            <div class="persona-list">
+              <For each={state.personas}>
+                {(persona) => {
+                  const isSelected = () => currentChatPersonaId() === persona.id;
+                  return (
+                    <div
+                      id={persona.id}
+                      class={`selectable-item persona-item ${isSelected() ? 'active' : ''}`}
+                      onClick={() => selectPersonaForChat(persona.id)}
+                      title={isSelected() ? t('persona.selectedForChat') : t('persona.clickToSelect')}
+                    >
+                      <Show
+                        when={persona.thumbnailUrl ?? persona.avatarUrl}
+                        fallback={
+                          <div class="persona-avatar">
+                            <i class="bi bi-person text-xl" />
+                          </div>
+                        }
                       >
-                        <Show
-                          when={persona.thumbnailUrl ?? persona.avatarUrl}
-                          fallback={
-                            <div class="persona-avatar">
-                              <i class="bi bi-person text-xl" />
-                            </div>
-                          }
-                        >
-                          <SafeImage class="persona-avatar" src={(persona.thumbnailUrl ?? persona.avatarUrl) ?? undefined} alt={persona.name} />
-                        </Show>
-                        <div class="persona-info">
-                          <span class="persona-name">
-                            {persona.name}
-                            <Show when={isSelected()}>
-                              <i class="bi bi-check-circle-fill text-accent" title={t('persona.selectedForCurrent')} />
-                            </Show>
-                          </span>
-                          <span class="persona-desc">{persona.description.slice(0, 60)}</span>
-                        </div>
-                        <button
-                          class="icon-btn small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActivePersonaId(persona.id);
-                            bus.send({ type: 'persona.select', personaId: persona.id });
-                          }}
-                          title={t('common.edit')} aria-label={t('common.edit')}
-                          type="button"
-                        >
-                          <i class="bi bi-pencil" />
-                        </button>
+                        <SafeImage
+                          class="persona-avatar"
+                          src={persona.thumbnailUrl ?? persona.avatarUrl ?? undefined}
+                          alt={persona.name}
+                        />
+                      </Show>
+                      <div class="persona-info">
+                        <span class="persona-name">
+                          {persona.name}
+                          <Show when={isSelected()}>
+                            <i class="bi bi-check-circle-fill text-accent" title={t('persona.selectedForCurrent')} />
+                          </Show>
+                        </span>
+                        <span class="persona-desc">{persona.description.slice(0, 60)}</span>
                       </div>
-                    );
-                  }}
-                </For>
+                      <button
+                        class="icon-btn small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActivePersonaId(persona.id);
+                          bus.send({ type: 'persona.select', personaId: persona.id });
+                        }}
+                        title={t('common.edit')}
+                        aria-label={t('common.edit')}
+                        type="button"
+                      >
+                        <i class="bi bi-pencil" />
+                      </button>
+                    </div>
+                  );
+                }}
+              </For>
+            </div>
+            <button class="btn btn-primary primary-btn" onClick={createPersona} type="button">
+              <i class="bi bi-plus-lg" /> {t('persona.newPersona')}
+            </button>
+          </>
+        }
+      >
+        {(id) => (
+          <Show
+            when={state.activePersona?.id === id()}
+            fallback={
+              <div class="flex items-center justify-center p-8">
+                <span class="loading-spinner" />
+                <span class="ml-2 text-muted">{t('persona.loadingPersona')}</span>
               </div>
-              <button class="btn btn-primary primary-btn" onClick={createPersona} type="button">
-                <i class="bi bi-plus-lg" /> {t('persona.newPersona')}
-              </button>
-            </>
-          }
-        >
-          {(id) => (
-            <Show
-              when={state.activePersona?.id === id()}
-              fallback={
-                <div class="flex items-center justify-center p-8">
-                  <span class="loading-spinner" />
-                  <span class="ml-2 text-muted">{t('persona.loadingPersona')}</span>
-                </div>
-              }
-            >
-              <PersonaEditor persona={state.activePersona!} onBack={() => setActivePersonaId(null)} />
-            </Show>
-          )}
-        </Show>
-      </div>
-    </div>
+            }
+          >
+            <PersonaEditor persona={state.activePersona!} onBack={() => setActivePersonaId(null)} />
+          </Show>
+        )}
+      </Show>
+    </Modal>
   );
 }
 

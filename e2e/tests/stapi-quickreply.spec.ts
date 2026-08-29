@@ -16,18 +16,12 @@
  * NOTE: quick replies are created from the chat view's quick reply bar
  * (helpers/quickReplies.ts), so each test opens its character/chat FIRST.
  */
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { deleteNonDefaultPersonas } from '../helpers/personas.js';
-import { App } from '../helpers/app.js';
 import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
-import {
-  uniqueName,
-  createLuaQuickReply,
-  clickQuickReply,
-  expectNarratorChecks,
-} from '../helpers/quickReplies.js';
+import { createLuaQuickReply, clickQuickReply, expectNarratorChecks } from '../helpers/quickReplies.js';
+import { uniqueName } from '../helpers/names.js';
 
 /** Shared Lua prelude: results accumulator + labeled check recorder. */
 const LUA_PREAMBLE = `
@@ -51,9 +45,9 @@ st.send_narrator(table.concat(out, ' ')):await()
 test.describe.configure({ mode: 'serial' });
 
 test.describe('StApi quick-reply coverage', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  // Requests `app` so the fixture's login + configureMockBackend run first:
+  // the patch must land on the already-configured mock backend.
+  test.beforeEach(async ({ app: _app, page }) => {
     // The Backend Config modal's saveConfig ALWAYS writes maxTokens (default
     // 300 when unset — BackendConfigModal.tsx loadConfigData), so any earlier
     // spec that dirtied the modal leaves maxTokens: 300 on the active config.
@@ -64,15 +58,13 @@ test.describe('StApi quick-reply coverage', () => {
   });
 
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     // 'character and persona queries' creates a persona via the UI; personas
     // are global and chat.create auto-binds the first one to new chats, so a
     // leftover would hijack {{user}} resolution in later specs.
     await deleteNonDefaultPersonas(page);
   });
 
-  test('pure utilities', async ({ page }) => {
-    const app = new App(page);
+  test('pure utilities', async ({ page, app }) => {
     const charName = uniqueName('QR Utils Char');
     const label = uniqueName('QR Utils');
 
@@ -125,8 +117,7 @@ ${LUA_NARRATE}`,
     await expect(bubble).toContainText('substitute_macros=OK');
   });
 
-  test('message and chat queries', async ({ page }) => {
-    const app = new App(page);
+  test('message and chat queries', async ({ page, app }) => {
     const charName = uniqueName('QR Msgs Char');
     const label = uniqueName('QR Msgs');
     const marker = `MARKER${Date.now()}`;
@@ -191,8 +182,7 @@ ${LUA_NARRATE}`,
     await expect(bubble).toContainText('get_message_chain=OK');
   });
 
-  test('character and persona queries', async ({ page }) => {
-    const app = new App(page);
+  test('character and persona queries', async ({ page, app }) => {
     const charName = uniqueName('QR Chars Char');
     const personaName = uniqueName('QR Persona');
     const label = uniqueName('QR Chars');
@@ -252,8 +242,7 @@ ${LUA_NARRATE}`,
     await expect(bubble).toContainText('set_persona=OK');
   });
 
-  test('settings and backend round-trips', async ({ page }) => {
-    const app = new App(page);
+  test('settings and backend round-trips', async ({ page, app }) => {
     const charName = uniqueName('QR Settings Char');
     const label = uniqueName('QR Settings');
 
@@ -301,8 +290,7 @@ ${LUA_NARRATE}`,
     await expect(bubble).toContainText('system_prompt=OK');
   });
 
-  test('sampler setters reach the outgoing LLM request', async ({ page }) => {
-    const app = new App(page);
+  test('sampler setters reach the outgoing LLM request', async ({ page, app }) => {
     const charName = uniqueName('QR Sampler Char');
     const setLabel = uniqueName('QR Sampler Set');
     const restoreLabel = uniqueName('QR Sampler Restore');
@@ -345,8 +333,7 @@ st.toast('samplers-restored-e2e')`,
     });
   });
 
-  test('variables and meta state', async ({ page }) => {
-    const app = new App(page);
+  test('variables and meta state', async ({ page, app }) => {
     const charName = uniqueName('QR Vars Char');
     const label = uniqueName('QR Vars');
 
@@ -385,8 +372,7 @@ ${LUA_NARRATE}`,
     await expect(bubble).toContainText('delete_state=OK');
   });
 
-  test('world info on a linked lorebook', async ({ page }) => {
-    const app = new App(page);
+  test('world info on a linked lorebook', async ({ page, app }) => {
     const charName = uniqueName('QR WI Char');
     const bookName = uniqueName('QR WI Book');
     const label = uniqueName('QR WI');
@@ -418,8 +404,7 @@ ${LUA_NARRATE}`,
     await expect(bubble).toContainText('wi_gone=OK');
   });
 
-  test('reasoning and generation info', async ({ page }) => {
-    const app = new App(page);
+  test('reasoning and generation info', async ({ page, app }) => {
     const charName = uniqueName('QR Reasoning Char');
     const label = uniqueName('QR Reasoning');
 
@@ -456,8 +441,7 @@ ${LUA_NARRATE}`,
     await expect(bubble).toContainText('get_generation_info=OK');
   });
 
-  test('message extras round-trip', async ({ page }) => {
-    const app = new App(page);
+  test('message extras round-trip', async ({ page, app }) => {
     const charName = uniqueName('QR Extra Char');
     const label = uniqueName('QR Extra');
     const marker = `EXTRA${Date.now()}`;
@@ -483,8 +467,7 @@ ${LUA_NARRATE}`,
     await expect(bubble).toContainText('set_message_extra=OK');
   });
 
-  test('error paths surface as error toasts', async ({ page }) => {
-    const app = new App(page);
+  test('error paths surface as error toasts', async ({ page, app }) => {
     const charName = uniqueName('QR Errors Char');
     const stateLabel = uniqueName('QR Err State');
     const wiLabel = uniqueName('QR Err WI');

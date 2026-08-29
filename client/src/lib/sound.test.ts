@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 describe('sound', () => {
-  let audioInstances: { src: string; currentTime: number; play: ReturnType<typeof vi.fn>; pause: ReturnType<typeof vi.fn> }[] = [];
+  let audioInstances: {
+    src: string;
+    currentTime: number;
+    play: ReturnType<typeof vi.fn>;
+    pause: ReturnType<typeof vi.fn>;
+  }[] = [];
 
   class MockAudio {
     src = '';
@@ -43,8 +48,18 @@ describe('sound', () => {
 
   it('handles autoplay rejection gracefully', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const inst = { src: '', currentTime: 0, play: vi.fn().mockRejectedValue(new Error('Autoplay blocked')), pause: vi.fn() };
-    vi.stubGlobal('Audio', vi.fn().mockImplementation(function () { return inst; }));
+    const inst = {
+      src: '',
+      currentTime: 0,
+      play: vi.fn().mockRejectedValue(new Error('Autoplay blocked')),
+      pause: vi.fn(),
+    };
+    vi.stubGlobal(
+      'Audio',
+      vi.fn().mockImplementation(function () {
+        return inst;
+      }),
+    );
     vi.resetModules();
 
     const { playMessageSound } = await import('./sound.js');

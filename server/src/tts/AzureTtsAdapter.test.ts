@@ -15,7 +15,11 @@ describe('AzureTtsAdapter', () => {
       headers: new Map([['content-type', 'audio/mpeg']]),
       arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(4)),
       text: vi.fn().mockResolvedValue(''),
-      json: vi.fn().mockResolvedValue([{ ShortName: 'en-US-JennyNeural', DisplayName: 'Jenny', Locale: 'en-US', Gender: 'Female' }]),
+      json: vi
+        .fn()
+        .mockResolvedValue([
+          { ShortName: 'en-US-JennyNeural', DisplayName: 'Jenny', Locale: 'en-US', Gender: 'Female' },
+        ]),
     });
   });
 

@@ -16,11 +16,11 @@ import { logDelta } from './RequestLogger.js';
 import { executeRequest, type BaseAdapterConfig } from './executeRequest.js';
 import { getInstructTemplate, type InstructTemplate } from './InstructTemplate.js';
 import { formatTextPrompt } from './formatTextPrompt.js';
+import { readSseEvents } from './sseReader.js';
 import {
   KoboldStreamEventSchema,
   type KoboldStreamEvent,
   type KoboldCppGenerateRequest,
-
   INTERNAL_PARAM_KEYS,
 } from './types.js';
 
@@ -33,8 +33,6 @@ export interface KoboldCppAdapterConfig extends BaseAdapterConfig {
   /** Inline past reasoning blocks into the flat prompt (template delimiters). */
   includeReasoning?: boolean;
 }
-
-
 
 export class KoboldCppBackendAdapter implements BackendAdapter {
   readonly id = 'koboldcpp';
@@ -60,61 +58,42 @@ export class KoboldCppBackendAdapter implements BackendAdapter {
     });
     if (!outcome.ok) return outcome.result;
 
-    const reader = outcome.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
     let completionTokens = 0;
     let finishReason: string | null = null;
 
-    try {
-      while (true) {
-        if (signal.aborted) {
-          // Notify KoboldCpp to abort the generation
-          this.sendAbort(baseUrl).catch((err) => {
-            logger.debug({ err }, 'KoboldCpp abort request failed');
-          });
-          return {
-            finishReason: 'error',
-            usage: {
-              promptTokens: prompt.tokenUsage.prompt,
-              completionTokens,
-            },
-            error: 'Aborted',
-          };
-        }
-
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data:')) continue;
-          const data = trimmed.slice(5).trimStart();
-
-          try {
-            const raw: unknown = JSON.parse(data);
-            const parsed = KoboldStreamEventSchema.safeParse(raw);
-            if (!parsed.success) continue;
-            const event: KoboldStreamEvent = parsed.data;
-            logDelta(this.id, event);
-            if (event.token) {
-              yield { type: 'text', token: event.token };
-              completionTokens++;
-            }
-            if (event.finish_reason) {
-              finishReason = event.finish_reason;
-            }
-          } catch (err) {
-            logger.debug({ err, line: line.trim() }, 'Malformed SSE line in KoboldCpp stream');
-          }
-        }
+    for await (const item of readSseEvents(outcome.body, signal)) {
+      if (item.type === 'aborted') {
+        // Notify KoboldCpp to abort the generation
+        this.sendAbort(baseUrl).catch((err) => {
+          logger.debug({ err }, 'KoboldCpp abort request failed');
+        });
+        return {
+          finishReason: 'error',
+          usage: {
+            promptTokens: prompt.tokenUsage.prompt,
+            completionTokens,
+          },
+          error: 'Aborted',
+        };
       }
-    } finally {
-      reader.releaseLock();
+      if (item.type === 'done') continue;
+
+      try {
+        const raw: unknown = JSON.parse(item.data);
+        const parsed = KoboldStreamEventSchema.safeParse(raw);
+        if (!parsed.success) continue;
+        const event: KoboldStreamEvent = parsed.data;
+        logDelta(this.id, event);
+        if (event.token) {
+          yield { type: 'text', token: event.token };
+          completionTokens++;
+        }
+        if (event.finish_reason) {
+          finishReason = event.finish_reason;
+        }
+      } catch (err) {
+        logger.debug({ err, line: item.line }, 'Malformed SSE line in KoboldCpp stream');
+      }
     }
 
     return {

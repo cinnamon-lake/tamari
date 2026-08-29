@@ -1,9 +1,9 @@
-import { test, expect, type Page, type Locator } from '../fixtures/base.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Page, Locator } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
 import { wsDeleteByPrefix } from '../helpers/cleanup.js';
-import { App } from '../helpers/app.js';
+import { uniqueName } from '../helpers/names.js';
 
 /**
  * Coverage for the character workbench verbs/paths NOT already exercised by
@@ -22,13 +22,8 @@ import { App } from '../helpers/app.js';
  * server/src/services/templates/workbench/{WorkbenchTemplate,routes/characters}.ts.
  */
 
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
-
 /** Minimal 1x1 transparent PNG (same fixture as attachments.spec.ts). */
-const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 /**
  * Create a character over the app's WS bus and return its server-generated id,
@@ -52,7 +47,9 @@ async function createCharacterViaWs(page: Page, charName: string, firstMes?: str
           try {
             const msg = JSON.parse(event.data as string);
             if (msg.type === 'snapshot') {
-              ws.send(JSON.stringify({ type: 'character.create', data: { name: cn, ...(fm ? { firstMes: fm } : {}) } }));
+              ws.send(
+                JSON.stringify({ type: 'character.create', data: { name: cn, ...(fm ? { firstMes: fm } : {}) } }),
+              );
             }
             if (msg.type === 'character.created' && msg.character?.name === cn) {
               ws.close();
@@ -63,7 +60,7 @@ async function createCharacterViaWs(page: Page, charName: string, firstMes?: str
               reject(new Error(msg.message ?? 'WS creation failed'));
             }
           } catch (err) {
-            reject(err);
+            reject(err instanceof Error ? err : new Error(String(err)));
           }
         };
 
@@ -92,13 +89,7 @@ async function resultUuid(block: Locator): Promise<string> {
 test.describe('Character Workbench (verbs & vfs)', () => {
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     if (toolsetId) {
       await deleteToolset(page, toolsetId);
       toolsetId = undefined;
@@ -129,8 +120,7 @@ test.describe('Character Workbench (verbs & vfs)', () => {
     await page.close();
   });
 
-  test('clone_character deep-copies lorebook + regex and the clone shows in the sidebar', async ({ page }) => {
-    const app = new App(page);
+  test('clone_character deep-copies lorebook + regex and the clone shows in the sidebar', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -170,8 +160,7 @@ test.describe('Character Workbench (verbs & vfs)', () => {
     });
   });
 
-  test('lorebook entry update + read-back, move_lorebook_entry, then rm', async ({ page }) => {
-    const app = new App(page);
+  test('lorebook entry update + read-back, move_lorebook_entry, then rm', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -247,8 +236,7 @@ test.describe('Character Workbench (verbs & vfs)', () => {
     await expect(rmResults.last()).toContainText('no such file');
   });
 
-  test('regex rule disable + read-back, test_regex preview, then rm', async ({ page }) => {
-    const app = new App(page);
+  test('regex rule disable + read-back, test_regex preview, then rm', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -313,8 +301,8 @@ test.describe('Character Workbench (verbs & vfs)', () => {
 
   test('greetings vfs: new greeting gets index 0, a fresh chat shows swipe arrows, rm removes it', async ({
     page,
+    app,
   }) => {
-    const app = new App(page);
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -358,8 +346,7 @@ test.describe('Character Workbench (verbs & vfs)', () => {
     await expect(rmResults.last()).toContainText('no such file');
   });
 
-  test('backend_logic.lua write/read/edit and test_backend_logic dry-run', async ({ page }) => {
-    const app = new App(page);
+  test('backend_logic.lua write/read/edit and test_backend_logic dry-run', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -421,8 +408,7 @@ test.describe('Character Workbench (verbs & vfs)', () => {
     await expect(testResult).toContainText('"stateOut":"{\\"turns\\":1}"');
   });
 
-  test('set_avatar from a UI-uploaded attachment, assets/new.json, and copy_assets', async ({ page }) => {
-    const app = new App(page);
+  test('set_avatar from a UI-uploaded attachment, assets/new.json, and copy_assets', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({

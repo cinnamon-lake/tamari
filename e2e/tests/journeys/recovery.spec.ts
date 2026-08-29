@@ -134,9 +134,11 @@ test.describe('Recovery Journey', () => {
     // Either a rejection toast appears or no preview is rendered.
     const preview = page.locator('.attachment-previews .attachment-preview');
     const toast = page.locator('.toast-container');
-    await expect.poll(
-      async () => (await toast.count()) > 0 || (await preview.count()) === 0,
-      { timeout: 10000, message: 'expected a rejection toast or no attachment preview' },
-    ).toBeTruthy();
+    await expect
+      .poll(async () => (await toast.count()) > 0 || (await preview.count()) === 0, {
+        timeout: 10000,
+        message: 'expected a rejection toast or no attachment preview',
+      })
+      .toBeTruthy();
   });
 });

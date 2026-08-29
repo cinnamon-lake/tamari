@@ -99,9 +99,7 @@ export function buildCustomBackendHandlers(
       let files = msg.files;
       if (!files && character) {
         const raw = character.extensions['contextualBackend'];
-        const rawFiles = raw && typeof raw === 'object'
-          ? (raw as Record<string, unknown>)['files']
-          : undefined;
+        const rawFiles = raw && typeof raw === 'object' ? (raw as Record<string, unknown>)['files'] : undefined;
         if (rawFiles && typeof rawFiles === 'object' && !Array.isArray(rawFiles)) {
           const stored: Record<string, string> = {};
           for (const [key, value] of Object.entries(rawFiles as Record<string, unknown>)) {
@@ -119,7 +117,12 @@ export function buildCustomBackendHandlers(
           delegateResponse: msg.delegateResponse,
           files,
           character: character
-            ? { id: character.id, name: character.name, description: character.description, firstMes: character.firstMes }
+            ? {
+                id: character.id,
+                name: character.name,
+                description: character.description,
+                firstMes: character.firstMes,
+              }
             : undefined,
         });
         bus.sendTo(client.id, { type: 'custombackend.testResult', requestId: msg.requestId, outcome });

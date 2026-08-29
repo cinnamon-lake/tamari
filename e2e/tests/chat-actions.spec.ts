@@ -1,10 +1,7 @@
 import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 async function createCharacterAndChat(page: any, charName: string) {
   await page.locator('[title="Create character"]').click();
@@ -31,7 +28,10 @@ async function createCharacterAndChat(page: any, charName: string) {
   await newChatBtn.click({ force: true });
 
   // The client auto-selects new chats, but explicit selection is more reliable under load.
-  const chatItem = page.locator('.chat-item').filter({ hasText: new RegExp(charName) }).first();
+  const chatItem = page
+    .locator('.chat-item')
+    .filter({ hasText: new RegExp(charName) })
+    .first();
   await expect(chatItem).toBeVisible({ timeout: 10000 });
   await chatItem.click();
 
@@ -71,7 +71,10 @@ test.describe('Chat Actions', () => {
     await createCharacterAndChat(page, charName);
 
     // Find the chat in the sidebar and click rename
-    const chatItem = page.locator('.chat-item').filter({ hasText: new RegExp(charName) }).first();
+    const chatItem = page
+      .locator('.chat-item')
+      .filter({ hasText: new RegExp(charName) })
+      .first();
     await chatItem.scrollIntoViewIfNeeded();
     await page.addStyleTag({ content: '.chat-actions { opacity: 1 !important; }' });
     await chatItem.locator('[title="Rename"]').evaluate((el: HTMLButtonElement) => el.click());

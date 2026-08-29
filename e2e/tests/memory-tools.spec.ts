@@ -1,14 +1,8 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
 import { getLastLlmRequest, resetLlmRequests, waitForNextLlmRequest } from '../helpers/llm.js';
 import { setSetting, getActiveBackendConfigId } from '../helpers/settings.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 /** Message ids are global (not per-chat); bubbles carry the id as their DOM id. */
 async function bubbleMessageId(locator: any): Promise<number> {
@@ -20,9 +14,7 @@ async function bubbleMessageId(locator: any): Promise<number> {
 test.describe('Memory Tools', () => {
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
@@ -36,15 +28,13 @@ test.describe('Memory Tools', () => {
     await setSetting(page, 'apiUrl', null);
     await setSetting(page, 'apiKey', null);
     await setSetting(page, 'model', '');
-    await resetBackendConfig(page);
     if (toolsetId) {
       await deleteToolset(page, toolsetId);
       toolsetId = undefined;
     }
   });
 
-  test('memory_get_raw returns the raw text of cited messages', async ({ page }) => {
-    const app = new App(page);
+  test('memory_get_raw returns the raw text of cited messages', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'memory');
     const greeting = `MemTool greeting ${Date.now()}`;
     await app.createCharacterAndChat({ name: uniqueName('MemTool Char'), firstMes: greeting });
@@ -64,8 +54,7 @@ test.describe('Memory Tools', () => {
     await expect(resultBlock).toContainText(greeting);
   });
 
-  test('memory_summarize_range triggers a second generation for the summary', async ({ page }) => {
-    const app = new App(page);
+  test('memory_summarize_range triggers a second generation for the summary', async ({ page, app }) => {
     // The memory toolset's own config schema is empty (no backendConfigId
     // field) — the summarization backend comes from the memory SETTINGS'
     // backendConfigId. Point it at the active config (already wired to the
@@ -95,8 +84,10 @@ test.describe('Memory Tools', () => {
     await expect(resultBlock).toContainText('deterministic mock response', { timeout: 10000 });
   });
 
-  test('memory summarization falls back to the active backend when the configured one is missing', async ({ page }) => {
-    const app = new App(page);
+  test('memory summarization falls back to the active backend when the configured one is missing', async ({
+    page,
+    app,
+  }) => {
     // The memory toolset's own config schema is empty (no backendConfigId
     // field) — the summarization backend comes from the memory SETTINGS'
     // backendConfigId. Point it at a bogus id: MemoryService.resolveBackend

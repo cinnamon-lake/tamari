@@ -116,7 +116,10 @@ async function listJsonFiles(dir: string, errors: string[]): Promise<Array<{ bas
   return out;
 }
 
-function parseLorebookEntry(base: string, content: string): { ok: true; entry: WorldInfoEntry } | { ok: false; error: string } {
+function parseLorebookEntry(
+  base: string,
+  content: string,
+): { ok: true; entry: WorldInfoEntry } | { ok: false; error: string } {
   const body = parseJsonObjectBody(content);
   if (!body.ok) return { ok: false, error: body.error };
   // The file name is the entry id, same as the workbench VFS layout; an

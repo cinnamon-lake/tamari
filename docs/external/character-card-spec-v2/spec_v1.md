@@ -7,12 +7,12 @@ This exists for reference in case of ambiguity, or for future new implementers.
 
 - [Embedding methods](#embedding-methods)
 - [Fields](#fields)
-  * [name](#name)
-  * [description](#description)
-  * [personality](#personality)
-  * [scenario](#scenario)
-  * [first_mes](#first_mes)
-  * [mes_example](#mes_example)
+  - [name](#name)
+  - [description](#description)
+  - [personality](#personality)
+  - [scenario](#scenario)
+  - [first_mes](#first_mes)
+  - [mes_example](#mes_example)
 
 ## Embedding methods
 
@@ -26,18 +26,19 @@ The current format can be represented as this TypeScript type:
 
 ```ts
 type TavernCard = {
-  name: string
-  description: string
-  personality: string
-  scenario: string
-  first_mes: string
-  mes_example: string
-}
+  name: string;
+  description: string;
+  personality: string;
+  scenario: string;
+  first_mes: string;
+  mes_example: string;
+};
 ```
 
 All fields are mandatory and **MUST** default to the empty string, not null or absent/undefined.
 
 In prompts sent to the AI, the fields `description`, `personality`, `scenario`, `first_mes`, and `mes_example` **MUST** replace the following magic strings, with a **case-insensitive** search (e.g. `<BOT>` and `<bot>` both work):
+
 - {{char}} or `<BOT>` to the value of the card's `name` field
 - {{user}} or `<USER>` to the application's set display name.
 

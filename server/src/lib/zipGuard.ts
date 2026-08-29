@@ -13,10 +13,7 @@ import { unzipSync } from 'fflate';
 export const MAX_ZIP_TOTAL_UNCOMPRESSED_BYTES = 512 * 1024 * 1024;
 export const MAX_ZIP_ENTRY_UNCOMPRESSED_BYTES = 64 * 1024 * 1024;
 
-export function unzipWithCap(
-  data: Uint8Array,
-  opts?: { skipDirectories?: boolean },
-): Record<string, Uint8Array> {
+export function unzipWithCap(data: Uint8Array, opts?: { skipDirectories?: boolean }): Record<string, Uint8Array> {
   let total = 0;
   return unzipSync(data, {
     filter: (file) => {

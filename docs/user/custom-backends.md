@@ -1,6 +1,6 @@
 # Custom Backends (Lua)
 
-A custom backend is a Lua script that *owns the prompt*. When one is active, tamari runs your script instead of a built-in provider adapter: the script receives the fully-built prompt, does whatever it wants with it — inspect, rewrite, rebuild, answer directly — and optionally delegates generation to a real backend. This is how you build middleware (transform prompts or output on the fly), game engines with hidden state, simulator cards, or whole protocol adapters in Lua.
+A custom backend is a Lua script that _owns the prompt_. When one is active, tamari runs your script instead of a built-in provider adapter: the script receives the fully-built prompt, does whatever it wants with it — inspect, rewrite, rebuild, answer directly — and optionally delegates generation to a real backend. This is how you build middleware (transform prompts or output on the fly), game engines with hidden state, simulator cards, or whole protocol adapters in Lua.
 
 The design rationale (three scriptable layers, why credentials never enter Lua, why displayed history is immutable) lives in [docs/design/scriptable-layers.md](../design/scriptable-layers.md) — this page is the practical guide.
 
@@ -123,7 +123,7 @@ local ok, res = pcall(function() return backends.generate(prompt):await() end)
 if not ok then return "The writer model is unavailable: " .. tostring(res) end
 ```
 
-> **Warning (Type A):** if the config's **Delegate Backend** is left unset and the script calls `backends.generate(prompt)` without an id, the delegation fails with *"no delegate configured"*. Set a delegate on the config, or pass explicit config ids in the script.
+> **Warning (Type A):** if the config's **Delegate Backend** is left unset and the script calls `backends.generate(prompt)` without an id, the delegation fails with _"no delegate configured"_. Set a delegate on the config, or pass explicit config ids in the script.
 
 ### A complete example
 
@@ -184,7 +184,7 @@ function generate(prompt, ctx)
 end
 ```
 
-Copy the incoming prompt table and swap in your own `messages` (as above) rather than hand-rolling a partial prompt — that keeps token usage and generation params intact. Because the rebuild happens every turn, changing state mid-chat retroactively reshapes the *whole* prompt the writer model sees.
+Copy the incoming prompt table and swap in your own `messages` (as above) rather than hand-rolling a partial prompt — that keeps token usage and generation params intact. Because the rebuild happens every turn, changing state mid-chat retroactively reshapes the _whole_ prompt the writer model sees.
 
 ## Recipe: Injecting into the Prompt
 
@@ -240,7 +240,7 @@ The snapshot key is the adapter's id — `custom:<id>` for Type A, `character-ba
 
 ## Requesting Tools from Lua
 
-While a custom backend is active, **no tool schemas are advertised** — the script owns the turn and decides everything itself. But a blocking return may *request* tool execution:
+While a custom backend is active, **no tool schemas are advertised** — the script owns the turn and decides everything itself. But a blocking return may _request_ tool execution:
 
 ```lua
 return {
@@ -285,7 +285,7 @@ See [The Workbench](./workbench.md#run-verbs) for the full verb list.
 
 A `delegateConfigId`, and any explicit id passed to `backends.generate("<id>", …)`, refers to a backend config row **on your install** — the id means nothing on anyone else's. Therefore:
 
-- **Cards you plan to share should delegate by default**: `backends.generate(prompt)`. For a Type B card script, the default delegate is the *recipient's own active backend*, so the card works wherever it's imported.
+- **Cards you plan to share should delegate by default**: `backends.generate(prompt)`. For a Type B card script, the default delegate is the _recipient's own active backend_, so the card works wherever it's imported.
 - **Explicit ids are for single-install setups only** — personal simulator rigs with a fixed main + auxiliary model pair.
 - Type B scripts travel inside the card (`extensions.contextualBackend`) and export with it; remember that `enabled` stays opt-in on the recipient's side too.
 
@@ -301,7 +301,7 @@ A `delegateConfigId`, and any explicit id passed to `backends.generate("<id>", �
 
 `print(...)` in a backend script is captured, not lost. Each call is stringified with real Lua semantics (arguments `tostring`ed, tab-joined) and streamed live during the turn:
 
-- **In chat**, it lands on the assistant message as a collapsed **Backend debug** block. It is stored as a `backend_debug` part, which is *never* part of the dialogue the model sees — history and prompts include text parts only — so debug freely without polluting the context.
+- **In chat**, it lands on the assistant message as a collapsed **Backend debug** block. It is stored as a `backend_debug` part, which is _never_ part of the dialogue the model sees — history and prompts include text parts only — so debug freely without polluting the context.
 - **In dry runs**, it comes back as the `debug` field (the test panel shows it as **Debug**), including anything printed before the script errored — often the only clue a failing script leaves behind.
 
 ## Tips & Gotchas

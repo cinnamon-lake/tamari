@@ -23,7 +23,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { Client } from '@libsql/client';
 import { getLogger } from '../lib/logger.js';
 
-const log = getLogger('db');
+const log = getLogger('db/runMigrations');
 
 const defaultMigrationsDir = join(dirname(fileURLToPath(import.meta.url)), 'migrations');
 
@@ -61,11 +61,7 @@ function discoverMigrations(dir: string): MigrationFile[] {
       continue;
     }
     const codeMatch = codeRe.exec(file);
-    if (
-      codeMatch?.[1] !== undefined &&
-      !file.endsWith('.d.ts') &&
-      !file.includes('.test.')
-    ) {
+    if (codeMatch?.[1] !== undefined && !file.endsWith('.d.ts') && !file.includes('.test.')) {
       found.push({ version: parseInt(codeMatch[1], 10), file, kind: 'code' });
     }
   }

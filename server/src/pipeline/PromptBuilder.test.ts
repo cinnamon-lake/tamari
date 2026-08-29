@@ -17,7 +17,12 @@ describe('PromptBuilder reasoning reconstruction', () => {
   it('includes reasoning in assistant messages as ordered parts', async () => {
     const chatHistory: Message[] = [
       makeMsg('user', 'Hello'),
-      makeMsg('assistant', 'Hi there', { parts: [{ type: 'reasoning', text: 'The user said hello' }, { type: 'text', text: 'Hi there' }] }),
+      makeMsg('assistant', 'Hi there', {
+        parts: [
+          { type: 'reasoning', text: 'The user said hello' },
+          { type: 'text', text: 'Hi there' },
+        ],
+      }),
     ];
 
     const prompt = await builder.build({
@@ -40,7 +45,12 @@ describe('PromptBuilder reasoning reconstruction', () => {
   it('always includes reasoning for chat-completion mode regardless of addToPrompts', async () => {
     const chatHistory: Message[] = [
       makeMsg('user', 'Hello'),
-      makeMsg('assistant', 'Hi there', { parts: [{ type: 'reasoning', text: 'The user said hello' }, { type: 'text', text: 'Hi there' }] }),
+      makeMsg('assistant', 'Hi there', {
+        parts: [
+          { type: 'reasoning', text: 'The user said hello' },
+          { type: 'text', text: 'Hi there' },
+        ],
+      }),
     ];
 
     const prompt = await builder.build({
@@ -58,7 +68,14 @@ describe('PromptBuilder reasoning reconstruction', () => {
   });
 
   it('leaves user messages unchanged', async () => {
-    const chatHistory: Message[] = [makeMsg('user', 'Hello', { parts: [{ type: 'reasoning', text: 'Some reasoning' }, { type: 'text', text: 'Hello' }] })];
+    const chatHistory: Message[] = [
+      makeMsg('user', 'Hello', {
+        parts: [
+          { type: 'reasoning', text: 'Some reasoning' },
+          { type: 'text', text: 'Hello' },
+        ],
+      }),
+    ];
 
     const prompt = await builder.build({
       chatHistory,
@@ -181,26 +198,28 @@ describe('PromptBuilder reasoning reconstruction', () => {
       maxContext: 4096,
       maxResponseTokens: 100,
       caching: { mode: 'auto' },
-      worldInfo: { entries: [
-        {
-          id: 'wi-1',
-          keys: ['test'],
-          content: 'Dynamic info',
-          comment: '',
-          order: 0,
-          position: 'atDepth',
-          depth: 4,
-          role: 'system',
-          probability: 100,
-          constant: false,
-          selective: false,
-          secondaryKeys: [],
-          addMemo: false,
-          disable: false,
-          regex: false,
-          recursive: false,
-        },
-      ] },
+      worldInfo: {
+        entries: [
+          {
+            id: 'wi-1',
+            keys: ['test'],
+            content: 'Dynamic info',
+            comment: '',
+            order: 0,
+            position: 'atDepth',
+            depth: 4,
+            role: 'system',
+            probability: 100,
+            constant: false,
+            selective: false,
+            secondaryKeys: [],
+            addMemo: false,
+            disable: false,
+            regex: false,
+            recursive: false,
+          },
+        ],
+      },
     });
 
     // depth 4 + safety margin 2 = 6
@@ -214,24 +233,26 @@ describe('PromptBuilder reasoning reconstruction', () => {
       maxContext: 4096,
       maxResponseTokens: 100,
       caching: { mode: 'auto' },
-      worldInfo: { entries: [
-        {
-          id: 'wi-1',
-          keys: ['test'],
-          content: 'Dynamic info',
-          comment: '',
-          order: 0,
-          position: 'before_char',
-          probability: 100,
-          constant: false,
-          selective: false,
-          secondaryKeys: [],
-          addMemo: false,
-          disable: false,
-          regex: false,
-          recursive: false,
-        },
-      ] },
+      worldInfo: {
+        entries: [
+          {
+            id: 'wi-1',
+            keys: ['test'],
+            content: 'Dynamic info',
+            comment: '',
+            order: 0,
+            position: 'before_char',
+            probability: 100,
+            constant: false,
+            selective: false,
+            secondaryKeys: [],
+            addMemo: false,
+            disable: false,
+            regex: false,
+            recursive: false,
+          },
+        ],
+      },
     });
 
     expect(prompt.cacheDepth).toBeUndefined();
@@ -244,24 +265,26 @@ describe('PromptBuilder reasoning reconstruction', () => {
       maxContext: 4096,
       maxResponseTokens: 100,
       caching: { mode: 'auto' },
-      worldInfo: { entries: [
-        {
-          id: 'wi-1',
-          keys: ['test'],
-          content: 'Constant info',
-          comment: '',
-          order: 0,
-          position: 'before_char',
-          probability: 100,
-          constant: true,
-          selective: false,
-          secondaryKeys: [],
-          addMemo: false,
-          disable: false,
-          regex: false,
-          recursive: false,
-        },
-      ] },
+      worldInfo: {
+        entries: [
+          {
+            id: 'wi-1',
+            keys: ['test'],
+            content: 'Constant info',
+            comment: '',
+            order: 0,
+            position: 'before_char',
+            probability: 100,
+            constant: true,
+            selective: false,
+            secondaryKeys: [],
+            addMemo: false,
+            disable: false,
+            regex: false,
+            recursive: false,
+          },
+        ],
+      },
     });
 
     expect(prompt.cacheDepth).toBe(2);
@@ -366,10 +389,7 @@ describe('PromptBuilder memory summary injection', () => {
   const builder = new PromptBuilder();
 
   it('injects memory summary as the first system message before chat history', async () => {
-    const chatHistory: Message[] = [
-      makeMsg('user', 'Hello'),
-      makeMsg('assistant', 'Hi'),
-    ];
+    const chatHistory: Message[] = [makeMsg('user', 'Hello'), makeMsg('assistant', 'Hi')];
 
     const prompt = await builder.build({
       chatHistory,
@@ -385,7 +405,9 @@ describe('PromptBuilder memory summary injection', () => {
 
     const userIndex = prompt.messages.findIndex((m) => m.role === 'user' && m.content === 'Hello');
     expect(userIndex).toBeGreaterThan(0);
-    const memoryIndex = prompt.messages.findIndex((m) => m.role === 'system' && m.content === 'Alice greeted Bob [msg:1].');
+    const memoryIndex = prompt.messages.findIndex(
+      (m) => m.role === 'system' && m.content === 'Alice greeted Bob [msg:1].',
+    );
     expect(memoryIndex).toBeGreaterThanOrEqual(0);
     expect(memoryIndex).toBeLessThan(userIndex);
   });

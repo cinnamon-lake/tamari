@@ -1,14 +1,10 @@
 import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
+import { login, authHeaders } from '../helpers/auth.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
 import { App } from '../helpers/app.js';
+import { uniqueName } from '../helpers/names.js';
 
 /** The e2e webServer pins TAMARI_SECRET to this value (playwright.config.ts). */
-const AUTH = { Authorization: 'Bearer e2e-test-secret' };
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
 
 /** Extract a tEXt chunk (e.g. `ccv3`) from a PNG buffer. Returns null if absent. */
 function extractPngTextChunk(buf: Buffer, keyword: string): string | null {
@@ -48,7 +44,7 @@ test.describe('Character Export', () => {
     const charId = await page.locator('.character-list li', { hasText: charName }).getAttribute('id');
     expect(charId).toBeTruthy();
 
-    const res = await request.get(`/api/characters/${charId}/export?format=v3`, { headers: AUTH });
+    const res = await request.get(`/api/characters/${charId}/export?format=v3`, { headers: authHeaders() });
     expect(res.ok()).toBe(true);
 
     // The export is a PNG with the card JSON (base64) in the `ccv3` tEXt chunk.
@@ -56,7 +52,10 @@ test.describe('Character Export', () => {
     expect(body.subarray(1, 4).toString('latin1')).toBe('PNG');
     const b64 = extractPngTextChunk(body, 'ccv3');
     expect(b64).toBeTruthy();
-    const card = JSON.parse(Buffer.from(b64!, 'base64').toString('utf8')) as { spec: string; data: Record<string, unknown> };
+    const card = JSON.parse(Buffer.from(b64!, 'base64').toString('utf8')) as {
+      spec: string;
+      data: Record<string, unknown>;
+    };
     expect(card.spec).toBe('chara_card_v3');
     expect(card.data['name']).toBe(charName);
     expect(card.data['description']).toBe('A test character for export.');
@@ -69,7 +68,7 @@ test.describe('Character Export', () => {
     await app.createCharacter({ name: charName, description: 'CharX test.', firstMes: 'Hi.' });
 
     const charId = await page.locator('.character-list li', { hasText: charName }).getAttribute('id');
-    const res = await request.get(`/api/characters/${charId}/export?format=charx`, { headers: AUTH });
+    const res = await request.get(`/api/characters/${charId}/export?format=charx`, { headers: authHeaders() });
     expect(res.ok()).toBe(true);
     const body = await res.body();
     // ZIP magic bytes + non-trivial payload (card.json bundled in the archive).

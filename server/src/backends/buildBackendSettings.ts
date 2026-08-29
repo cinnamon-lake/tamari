@@ -122,8 +122,12 @@ export function buildBackendSettings(
     // (e.g. the v1 settings dumps on migrated configs) is not a wire param —
     // drop it (@tamari/types providerParams contract).
     if (
-      key === 'requestScript' || key === 'custom.requestScript' || key === 'samplerDisabled' || key === 'mockScript' ||
-      key === 'cacheMode' || key === 'cacheDepth'
+      key === 'requestScript' ||
+      key === 'custom.requestScript' ||
+      key === 'samplerDisabled' ||
+      key === 'mockScript' ||
+      key === 'cacheMode' ||
+      key === 'cacheDepth'
     )
       continue;
     if (!isDeclaredProviderParamKey(key)) continue;

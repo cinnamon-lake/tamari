@@ -95,7 +95,9 @@ describe('card VFS require (contextual backend)', () => {
 
   it('an unknown module surfaces as a generation error, not a crash', async () => {
     const client = h.connectClient();
-    const { chatId } = await makeCharAndChat(`function generate(p, c) return require('nope') end`, { 'lib/other.lua': 'return 1' });
+    const { chatId } = await makeCharAndChat(`function generate(p, c) return require('nope') end`, {
+      'lib/other.lua': 'return 1',
+    });
     // require fires with an EMPTY files map — module not found → error result.
     await h.deps.generationService.handleSend(chatId, 'hello');
     await h.deps.generationService.handleGenerate(chatId);

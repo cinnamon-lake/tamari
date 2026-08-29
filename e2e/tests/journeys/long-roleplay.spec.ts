@@ -71,19 +71,26 @@ test.describe('Long Roleplay Journey', () => {
       let expected = 1;
       const seenTurns: string[] = [];
       for (const text of turns) {
-        const diag = await page
-          .locator('.message-input-area .send-btn')
-          .evaluateAll((btns) =>
-            btns.map((b) => ({
-              title: b.getAttribute('title'),
-              cls: b.className,
-              disabled: (b as HTMLButtonElement).disabled,
-            })),
-          );
+        const diag = await page.locator('.message-input-area .send-btn').evaluateAll((btns) =>
+          btns.map((b) => ({
+            title: b.getAttribute('title'),
+            cls: b.className,
+            disabled: (b as HTMLButtonElement).disabled,
+          })),
+        );
         const busState = await page.evaluate(() => {
-          const b = (window as unknown as { __stBus?: { ws?: { readyState: number }; pending?: unknown[]; connected: boolean; authError: boolean } }).__stBus;
+          const b = (
+            window as unknown as {
+              __stBus?: { ws?: { readyState: number }; pending?: unknown[]; connected: boolean; authError: boolean };
+            }
+          ).__stBus;
           return b
-            ? { readyState: b.ws?.readyState, pending: b.pending?.length, connected: b.connected, authError: b.authError }
+            ? {
+                readyState: b.ws?.readyState,
+                pending: b.pending?.length,
+                connected: b.connected,
+                authError: b.authError,
+              }
             : null;
         });
         fs.appendFileSync('/tmp/stall-diag.log', `turn btn=${JSON.stringify(diag)} bus=${JSON.stringify(busState)}\n`);
@@ -155,9 +162,7 @@ test.describe('Long Roleplay Journey', () => {
 
       // Switch back to the original and confirm the whole session survived.
       await app.selectChatById(originalChatId as string);
-      await expect(page.locator('.message-bubble.assistant').first()).toContainText(
-        `I am ${charName}`,
-      );
+      await expect(page.locator('.message-bubble.assistant').first()).toContainText(`I am ${charName}`);
       // Greeting + several conversational turns should still be present.
       const bubbleCount = await page.locator('.message-bubble').count();
       expect(bubbleCount).toBeGreaterThanOrEqual(3);

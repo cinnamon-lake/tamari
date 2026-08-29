@@ -52,9 +52,7 @@ export function validateVfsPath(path: string): string | null {
 }
 
 /** Tolerant parse of the contextualBackend extension blob. */
-export function parseCharacterBackendLogic(
-  extensions: Record<string, unknown> | undefined,
-): CharacterBackendLogic {
+export function parseCharacterBackendLogic(extensions: Record<string, unknown> | undefined): CharacterBackendLogic {
   const raw = extensions?.['contextualBackend'];
   if (!raw || typeof raw !== 'object') return { enabled: false, luaSource: '', files: {} };
   const ext = raw as Record<string, unknown>;
@@ -84,9 +82,7 @@ export function CharacterBackendEditor(props: CharacterBackendEditorProps) {
   const sortedPaths = createMemo(() => Object.keys(props.value.files).sort());
   const isMain = createMemo(() => activeTab() === MAIN_TAB);
   // A tab can vanish under us (delete) — fall back to main for the textarea.
-  const activeSource = createMemo(() =>
-    isMain() ? props.value.luaSource : (props.value.files[activeTab()] ?? ''),
-  );
+  const activeSource = createMemo(() => (isMain() ? props.value.luaSource : (props.value.files[activeTab()] ?? '')));
 
   const setFile = (path: string, content: string) => {
     props.onChange({ ...props.value, files: { ...props.value.files, [path]: content } });
@@ -135,7 +131,11 @@ export function CharacterBackendEditor(props: CharacterBackendEditorProps) {
         </button>
         <For each={sortedPaths()}>
           {(path) => (
-            <span class={`backend-file-tab${activeTab() === path ? ' active' : ''}`} role="tab" aria-selected={activeTab() === path}>
+            <span
+              class={`backend-file-tab${activeTab() === path ? ' active' : ''}`}
+              role="tab"
+              aria-selected={activeTab() === path}
+            >
               <button type="button" class="backend-file-tab-name" onClick={() => setActiveTab(path)}>
                 {path}
               </button>
@@ -213,13 +213,7 @@ export function CharacterBackendEditor(props: CharacterBackendEditorProps) {
         </span>
       </label>
       <Show when={props.characterId}>
-        {(id) => (
-          <BackendDryRunPanel
-            luaSource={props.value.luaSource}
-            characterId={id()}
-            files={props.value.files}
-          />
-        )}
+        {(id) => <BackendDryRunPanel luaSource={props.value.luaSource} characterId={id()} files={props.value.files} />}
       </Show>
     </div>
   );

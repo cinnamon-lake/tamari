@@ -68,15 +68,17 @@ describe('AuthorsNotePanel', () => {
     expect(sendSpy).not.toHaveBeenCalled();
     vi.advanceTimersByTime(600);
 
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'chat.update',
-      chatId: 'chat-1',
-      patch: expect.objectContaining({
-        metadata: expect.objectContaining({
-          authorsNote: expect.objectContaining({ content: 'New note' }),
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'chat.update',
+        chatId: 'chat-1',
+        patch: expect.objectContaining({
+          metadata: expect.objectContaining({
+            authorsNote: expect.objectContaining({ content: 'New note' }),
+          }),
         }),
       }),
-    }));
+    );
   });
 
   it('auto-saves on position change', () => {
@@ -87,14 +89,16 @@ describe('AuthorsNotePanel', () => {
     fireEvent.change(select, { target: { value: 'before_prompt' } });
 
     vi.advanceTimersByTime(600);
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'chat.update',
-      patch: expect.objectContaining({
-        metadata: expect.objectContaining({
-          authorsNote: expect.objectContaining({ position: 'before_prompt' }),
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'chat.update',
+        patch: expect.objectContaining({
+          metadata: expect.objectContaining({
+            authorsNote: expect.objectContaining({ position: 'before_prompt' }),
+          }),
         }),
       }),
-    }));
+    );
   });
 
   it('shows depth and role fields for in_chat position', () => {

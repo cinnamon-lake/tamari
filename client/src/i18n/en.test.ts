@@ -51,9 +51,7 @@ describe('English source dictionary', () => {
   it('every leaf path resolves in the flattened dictionary', () => {
     // The real invariant: every string we authored must be reachable via t().
     const flat = i18n.flatten(dict);
-    const missing = leaves
-      .filter((l) => typeof l.value === 'string' && flat[l.path] !== l.value)
-      .map((l) => l.path);
+    const missing = leaves.filter((l) => typeof l.value === 'string' && flat[l.path] !== l.value).map((l) => l.path);
     expect(missing, `unreachable leaves: ${missing.slice(0, 20).join(', ')}`).toEqual([]);
   });
 });

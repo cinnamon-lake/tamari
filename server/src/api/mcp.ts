@@ -91,13 +91,22 @@ function buildMcpServer(deps: McpRouterDeps): McpServer {
         folderPath: z
           .string()
           .optional()
-          .describe('Alternative to characterId: path of an unpacked card folder (absolute, or relative to <dataDir>/unpacked-cards).'),
+          .describe(
+            'Alternative to characterId: path of an unpacked card folder (absolute, or relative to <dataDir>/unpacked-cards).',
+          ),
         personaId: z.string().optional().describe('Persona to chat as. Default: the first persona.'),
-        greetingIndex: z.number().int().min(0).optional().describe('Greeting to materialize (0 = firstMes, then alternateGreetings). Default 0.'),
+        greetingIndex: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe('Greeting to materialize (0 = firstMes, then alternateGreetings). Default 0.'),
         backendConfigId: z
           .string()
           .optional()
-          .describe('Backend config to run against. Default: the ACTIVE config (real LLM, real cost). Pass a mock-provider config id for deterministic runs.'),
+          .describe(
+            'Backend config to run against. Default: the ACTIVE config (real LLM, real cost). Pass a mock-provider config id for deterministic runs.',
+          ),
       },
     },
     async (args) => textResult(await toToolResult(deps.testSessions.start(args))),
@@ -128,7 +137,10 @@ function buildMcpServer(deps: McpRouterDeps): McpServer {
         'prompt (prompts can be big — hence opt-in).',
       inputSchema: {
         sessionId: z.string().describe('Session id from test_session_start or test_card.'),
-        generationId: z.string().optional().describe('Fetch this generation’s full record (incl. captured prompts) instead of the lean session state.'),
+        generationId: z
+          .string()
+          .optional()
+          .describe('Fetch this generation’s full record (incl. captured prompts) instead of the lean session state.'),
       },
     },
     async (args) => textResult(await toToolResult(deps.testSessions.state(args))),
@@ -150,7 +162,8 @@ function buildMcpServer(deps: McpRouterDeps): McpServer {
   server.registerTool(
     'test_backend_logic',
     {
-      description: "Dry-run a card's backend_logic.lua (main.lua + required modules) against a recording delegate — no real backend calls.",
+      description:
+        "Dry-run a card's backend_logic.lua (main.lua + required modules) against a recording delegate — no real backend calls.",
       inputSchema: {
         characterId: z.string(),
         input: z.string(),
@@ -209,7 +222,8 @@ function buildMcpServer(deps: McpRouterDeps): McpServer {
   server.registerTool(
     'test_backend',
     {
-      description: 'Dry-run or live-test a backend config (configId defaults to the active backend; patch applies in memory only).',
+      description:
+        'Dry-run or live-test a backend config (configId defaults to the active backend; patch applies in memory only).',
       inputSchema: {
         configId: z.string().optional(),
         patch: z.record(z.string(), z.unknown()).optional(),
@@ -250,7 +264,8 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
         if (enabled === true) next();
         else
           res.status(404).json({
-            error: 'The MCP server is unavailable! Please ask the user to enable it in the settings menu (Settings → Developer → MCP server).',
+            error:
+              'The MCP server is unavailable! Please ask the user to enable it in the settings menu (Settings → Developer → MCP server).',
           });
       })
       .catch(next);
@@ -271,7 +286,11 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
 
   // Stateless server: no SSE stream, no session termination.
   const methodNotAllowed = (_req: unknown, res: { status: (n: number) => { json: (b: unknown) => void } }) =>
-    res.status(405).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed — stateless MCP server, POST only' }, id: null });
+    res.status(405).json({
+      jsonrpc: '2.0',
+      error: { code: -32000, message: 'Method not allowed — stateless MCP server, POST only' },
+      id: null,
+    });
   router.get('/', methodNotAllowed);
   router.delete('/', methodNotAllowed);
 

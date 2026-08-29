@@ -4,6 +4,7 @@ import request from 'supertest';
 import { TestHarness } from '../testing/TestHarness.js';
 import type { DataMaid } from '../services/DataMaid.js';
 import { createMaidRouter } from './maid.js';
+import { errorHandler } from '../middleware/errorHandler.js';
 
 const fakeReport = {
   sql: { orphanMessages: 2, orphanChats: 1 },
@@ -23,6 +24,7 @@ function createDataMaid(overrides?: Partial<{ scanError: Error; cleanError: Erro
 function createApp(harness: TestHarness, dataMaid: DataMaid) {
   const app = express();
   app.use('/maid', createMaidRouter(dataMaid, harness.deps.chats, harness.bus));
+  app.use(errorHandler);
   return app;
 }
 
@@ -78,7 +80,9 @@ describe('createMaidRouter', () => {
 
     const res = await request(createApp(h, dataMaid)).get('/maid/scan').expect(500);
 
-    expect(res.body.error).toBe('Scan failed');
+    // Unexpected 5xx forwards to the central handler: raw message outside
+    // production (redacted in production).
+    expect(res.body.error).toBe('db gone');
     expect(broadcast).not.toHaveBeenCalled();
   });
 });

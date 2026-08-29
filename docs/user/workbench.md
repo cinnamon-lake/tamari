@@ -33,7 +33,7 @@ Error: cannot list collections — ids come from the user or chat context
 
 Entity ids come from **you** (paste the id into chat) or from **chat context** (the model knows which character the current chat belongs to), or from the result of creating something new. `grep` follows the same rule: it searches inside one entity and refuses to scan across them.
 
-What `ls` *can* list:
+What `ls` _can_ list:
 
 - `/` — the seven domain names
 - One specific entity directory, e.g. `/characters/<id>/`
@@ -130,7 +130,7 @@ Output is `path:line:text`, capped at 50 matches.
 
 ### `edit`
 
-`edit { path, oldString, newString, replaceAll? }` — surgical search-and-replace inside a text or `.lua` file. `oldString` must match **exactly once** unless `replaceAll: true` is set. Whole `.json` files are refused (`Error: use write for JSON files`), but `edit` *does* work on per-field files (below) — the precise way to tweak one regex pattern or one paragraph.
+`edit { path, oldString, newString, replaceAll? }` — surgical search-and-replace inside a text or `.lua` file. `oldString` must match **exactly once** unless `replaceAll: true` is set. Whole `.json` files are refused (`Error: use write for JSON files`), but `edit` _does_ work on per-field files (below) — the precise way to tweak one regex pattern or one paragraph.
 
 Edited `.lua` source is re-validated before saving: `backend_logic/main.lua` (and its `backend_logic.lua` alias) must load and define `generate`, a `backend_logic/` module must load (top-level `return` allowed — modules don't need `generate`), and a luatool `code.lua` must load. Invalid edits are **not** saved.
 
@@ -180,18 +180,18 @@ Examples:
 
 A `write` whose last path segment is `new` or `new.json` creates a new entity, and the result includes the real assigned path — this is where new ids come from:
 
-| Path | Body |
-|------|------|
-| `/characters/new` | `{ "name": ..., ...card fields }` — `name` required; duplicate names fail |
-| `/backends/new.json` | Backend config fields; `"activate": true` makes it the active config |
-| `/custom-backends/new.json` | `{ name, description?, luaSource }` |
-| `/toolsets/new.json` | `{ templateId, name?, config?, toolOverrides?, enabled? }` — builtin template ids work |
-| `/quickreplies/<scope>/<scopeId>/new.json` | Quick reply fields; scope/scopeId are forced from the path (global → `_`) |
-| `/luatools/new.json` | `{ name, code, sandbox?, configSchema? }` — invalid code is rejected before saving |
-| `/characters/<id>/lorebook/new.json` | Add an entry (the first add auto-creates and links the book) |
-| `/characters/<id>/greetings/new` | Append an alternate greeting |
-| `/characters/<id>/regex/new.json` | Add a rule |
-| `/characters/<id>/assets/new.json` | `{ attachmentId, name?, type? }` — imports an attachment as an asset |
+| Path                                       | Body                                                                                   |
+| ------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `/characters/new`                          | `{ "name": ..., ...card fields }` — `name` required; duplicate names fail              |
+| `/backends/new.json`                       | Backend config fields; `"activate": true` makes it the active config                   |
+| `/custom-backends/new.json`                | `{ name, description?, luaSource }`                                                    |
+| `/toolsets/new.json`                       | `{ templateId, name?, config?, toolOverrides?, enabled? }` — builtin template ids work |
+| `/quickreplies/<scope>/<scopeId>/new.json` | Quick reply fields; scope/scopeId are forced from the path (global → `_`)              |
+| `/luatools/new.json`                       | `{ name, code, sandbox?, configSchema? }` — invalid code is rejected before saving     |
+| `/characters/<id>/lorebook/new.json`       | Add an entry (the first add auto-creates and links the book)                           |
+| `/characters/<id>/greetings/new`           | Append an alternate greeting                                                           |
+| `/characters/<id>/regex/new.json`          | Add a rule                                                                             |
+| `/characters/<id>/assets/new.json`         | `{ attachmentId, name?, type? }` — imports an attachment as an asset                   |
 
 After creation, custom backends and Lua tools are two-file directories (`meta.json` + `source.lua` / `code.lua`) that you edit in place. Later writes to an existing `/backends/<id>.json` patch it — `providerParams` is shallow-merged into the existing record.
 
@@ -211,24 +211,24 @@ Every writable key is also a per-field file (`meta.json/name`, `meta.json/tags`,
 
 `run {"verb": "<name>", "args": {...}}` covers the non-file actions:
 
-| Verb | Args | What it does |
-|------|------|--------------|
-| `test_backend` | `{configId?, patch?, prompt?, mode: "dry"\|"live"}` | Dry-run or live-test a backend config. `configId` defaults to the active backend; `patch` applies in memory only |
-| `test_custom_backend` | `{id?\|luaSource?, input, state?, delegateResponse?}` | Dry-run a custom-backend script against a recording delegate |
-| `test_backend_logic` | `{characterId, input, luaSource?, state?, delegateResponse?}` | Dry-run a card's backend_logic (main.lua + its `require`d modules) |
-| `test_luatool` | `{id?\|code?, sandbox?, toolName, args?, config?}` | Run a tool from a stored template or ad-hoc code |
-| `test_regex` | `{characterId?, text, role?}` | Preview merged regex rules (global + character) against sample text |
-| `test_card` | `{characterId?\|folderPath?, turns: string[], keepChat?, backendConfigId?, timeoutMs?}` | Scripted multi-turn card test in an in-memory test session (no real chat created, no DB writes): sends each scripted user turn and returns the transcript + generation ids. The session is kept by default (returns `sessionId`; prompts via `test_session_state`) — pass `keepChat: false` to end it immediately. Uses the active backend config unless `backendConfigId` pins another (e.g. a deterministic `mock` config) |
-| `test_session_start` | `{characterId?\|folderPath?, personaId?, greetingIndex?, backendConfigId?}` | Open an interactive card-testing session (real generation path, in-memory state, no DB writes) and return its materialized greeting. Sessions expire after 30 min idle; continue with `test_session_message`, inspect with `test_session_state`, close with `test_session_end` |
-| `test_session_message` | `{sessionId, content, timeoutMs?}` | Send a user message in a test session and run one generation turn; returns the reply, generation id, finish reason, the card's Lua `scriptState`, and any backend `print()` output (`debug`) |
-| `test_session_state` | `{sessionId, generationId?}` | Inspect a test session: message chain (role + text), generations (id/status/meta without prompts), and the card's latest Lua `scriptState`. Pass `generationId` for that generation's full record including every captured round prompt (big — hence opt-in) |
-| `test_session_end` | `{sessionId}` | End a test session early: aborts any in-flight generation and drops all in-memory state (sessions also expire after 30 min idle) |
-| `clone_character` | `{sourceCharacterId, name?}` | Deep-copy a card: fields, lorebook, regex, modules, assets, avatar |
-| `set_avatar` | `{characterId, attachmentId?\|sourceCharacterId?}` | Set an avatar from an attachment image or another card |
-| `copy_assets` | `{characterId, sourceCharacterId, assetId?}` | Copy character assets; omit `assetId` to copy all |
-| `copy_module_assets` | `{characterId, sourceCharacterId, moduleId}` | Copy a Risu module's stored assets onto a card |
-| `move_lorebook_entry` | `{characterId, entryId, index}` | Move an entry to a 0-based position |
-| `add_game_lib` | `{characterId}` | Vendor the game-lib Lua modules (`lib/*.lua`: loop, ledger, todo, registry, …) into the card's `backend_logic/` lib/ folder |
+| Verb                   | Args                                                                                    | What it does                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test_backend`         | `{configId?, patch?, prompt?, mode: "dry"\|"live"}`                                     | Dry-run or live-test a backend config. `configId` defaults to the active backend; `patch` applies in memory only                                                                                                                                                                                                                                                                                                             |
+| `test_custom_backend`  | `{id?\|luaSource?, input, state?, delegateResponse?}`                                   | Dry-run a custom-backend script against a recording delegate                                                                                                                                                                                                                                                                                                                                                                 |
+| `test_backend_logic`   | `{characterId, input, luaSource?, state?, delegateResponse?}`                           | Dry-run a card's backend_logic (main.lua + its `require`d modules)                                                                                                                                                                                                                                                                                                                                                           |
+| `test_luatool`         | `{id?\|code?, sandbox?, toolName, args?, config?}`                                      | Run a tool from a stored template or ad-hoc code                                                                                                                                                                                                                                                                                                                                                                             |
+| `test_regex`           | `{characterId?, text, role?}`                                                           | Preview merged regex rules (global + character) against sample text                                                                                                                                                                                                                                                                                                                                                          |
+| `test_card`            | `{characterId?\|folderPath?, turns: string[], keepChat?, backendConfigId?, timeoutMs?}` | Scripted multi-turn card test in an in-memory test session (no real chat created, no DB writes): sends each scripted user turn and returns the transcript + generation ids. The session is kept by default (returns `sessionId`; prompts via `test_session_state`) — pass `keepChat: false` to end it immediately. Uses the active backend config unless `backendConfigId` pins another (e.g. a deterministic `mock` config) |
+| `test_session_start`   | `{characterId?\|folderPath?, personaId?, greetingIndex?, backendConfigId?}`             | Open an interactive card-testing session (real generation path, in-memory state, no DB writes) and return its materialized greeting. Sessions expire after 30 min idle; continue with `test_session_message`, inspect with `test_session_state`, close with `test_session_end`                                                                                                                                               |
+| `test_session_message` | `{sessionId, content, timeoutMs?}`                                                      | Send a user message in a test session and run one generation turn; returns the reply, generation id, finish reason, the card's Lua `scriptState`, and any backend `print()` output (`debug`)                                                                                                                                                                                                                                 |
+| `test_session_state`   | `{sessionId, generationId?}`                                                            | Inspect a test session: message chain (role + text), generations (id/status/meta without prompts), and the card's latest Lua `scriptState`. Pass `generationId` for that generation's full record including every captured round prompt (big — hence opt-in)                                                                                                                                                                 |
+| `test_session_end`     | `{sessionId}`                                                                           | End a test session early: aborts any in-flight generation and drops all in-memory state (sessions also expire after 30 min idle)                                                                                                                                                                                                                                                                                             |
+| `clone_character`      | `{sourceCharacterId, name?}`                                                            | Deep-copy a card: fields, lorebook, regex, modules, assets, avatar                                                                                                                                                                                                                                                                                                                                                           |
+| `set_avatar`           | `{characterId, attachmentId?\|sourceCharacterId?}`                                      | Set an avatar from an attachment image or another card                                                                                                                                                                                                                                                                                                                                                                       |
+| `copy_assets`          | `{characterId, sourceCharacterId, assetId?}`                                            | Copy character assets; omit `assetId` to copy all                                                                                                                                                                                                                                                                                                                                                                            |
+| `copy_module_assets`   | `{characterId, sourceCharacterId, moduleId}`                                            | Copy a Risu module's stored assets onto a card                                                                                                                                                                                                                                                                                                                                                                               |
+| `move_lorebook_entry`  | `{characterId, entryId, index}`                                                         | Move an entry to a 0-based position                                                                                                                                                                                                                                                                                                                                                                                          |
+| `add_game_lib`         | `{characterId}`                                                                         | Vendor the game-lib Lua modules (`lib/*.lua`: loop, ledger, todo, registry, …) into the card's `backend_logic/` lib/ folder                                                                                                                                                                                                                                                                                                  |
 
 ## Worked Examples
 

@@ -44,10 +44,7 @@ interface ProviderConnection {
 }
 
 /** Factory for one backend provider in the registry. */
-export type ProviderAdapterFactory = (
-  input: AdapterFactoryInput,
-  connection: ProviderConnection,
-) => BackendAdapter;
+export type ProviderAdapterFactory = (input: AdapterFactoryInput, connection: ProviderConnection) => BackendAdapter;
 
 const PROVIDER_REGISTRY = new Map<string, ProviderAdapterFactory>();
 
@@ -158,10 +155,7 @@ function textFormatting(input: AdapterFactoryInput): { template: InstructTemplat
   };
 }
 
-export function createBackendAdapter(
-  input: AdapterFactoryInput,
-  forModelListing = false,
-): BackendAdapter | null {
+export function createBackendAdapter(input: AdapterFactoryInput, forModelListing = false): BackendAdapter | null {
   const canonicalUrls: Record<string, string> = {
     openai: 'https://api.openai.com/v1',
     openrouter: 'https://openrouter.ai/api/v1',
@@ -224,77 +218,93 @@ const DIRECT_PROVIDERS = new Set(['openrouter', 'claude', 'gemini', 'llamacpp', 
 
 // ── Built-in providers ───────────────────────────────────────────────────
 
-registerBackendProvider('openrouter', (input, connection) =>
-  new OpenRouterBackendAdapter({
-    ...connection,
-    // OpenRouter extends OpenAIBackendAdapter and inherits its params dump;
-    // the openai.params blob carries the per-config sampler knobs
-    // (temperature, minP → min_p, topA → top_a, repetitionPenalty → …).
-    params: input.openaiParams,
-    transforms: input.openrouter.transforms,
-    plugins: input.openrouter.plugins,
-    providerOrder: input.openrouter.providerOrder,
-    allowFallbacks: input.openrouter.allowFallbacks,
-    reasoningEffort: input.openrouter.reasoningEffort,
-    reasoningSummary: input.openrouter.reasoningSummary,
-  }),
+registerBackendProvider(
+  'openrouter',
+  (input, connection) =>
+    new OpenRouterBackendAdapter({
+      ...connection,
+      // OpenRouter extends OpenAIBackendAdapter and inherits its params dump;
+      // the openai.params blob carries the per-config sampler knobs
+      // (temperature, minP → min_p, topA → top_a, repetitionPenalty → …).
+      params: input.openaiParams,
+      transforms: input.openrouter.transforms,
+      plugins: input.openrouter.plugins,
+      providerOrder: input.openrouter.providerOrder,
+      allowFallbacks: input.openrouter.allowFallbacks,
+      reasoningEffort: input.openrouter.reasoningEffort,
+      reasoningSummary: input.openrouter.reasoningSummary,
+    }),
 );
 
-registerBackendProvider('claude', (input, connection) =>
-  new ClaudeBackendAdapter({
-    ...connection,
-    params: input.claudeParams,
-  }),
+registerBackendProvider(
+  'claude',
+  (input, connection) =>
+    new ClaudeBackendAdapter({
+      ...connection,
+      params: input.claudeParams,
+    }),
 );
 
-registerBackendProvider('gemini', (input, connection) =>
-  new GeminiBackendAdapter({
-    ...connection,
-    params: input.geminiParams,
-  }),
+registerBackendProvider(
+  'gemini',
+  (input, connection) =>
+    new GeminiBackendAdapter({
+      ...connection,
+      params: input.geminiParams,
+    }),
 );
 
-registerBackendProvider('llamacpp', (input, connection) =>
-  new LlamaCppBackendAdapter({
-    ...connection,
-    params: input.textgenParams,
-    ...textFormatting(input),
-  }),
+registerBackendProvider(
+  'llamacpp',
+  (input, connection) =>
+    new LlamaCppBackendAdapter({
+      ...connection,
+      params: input.textgenParams,
+      ...textFormatting(input),
+    }),
 );
 
-registerBackendProvider('tabbyapi', (input, connection) =>
-  new TextCompletionBackendAdapter({
-    ...connection,
-    params: input.textgenParams,
-    ...textFormatting(input),
-  }),
+registerBackendProvider(
+  'tabbyapi',
+  (input, connection) =>
+    new TextCompletionBackendAdapter({
+      ...connection,
+      params: input.textgenParams,
+      ...textFormatting(input),
+    }),
 );
 
-registerBackendProvider('koboldcpp', (input, connection) =>
-  new KoboldCppBackendAdapter({
-    baseUrl: connection.baseUrl,
-    apiKey: connection.apiKey,
-    requestScript: connection.requestScript,
-    params: input.koboldcppParams ?? input.textgenParams,
-    contextLength: input.contextLength ?? 4096,
-    ...textFormatting(input),
-  }),
+registerBackendProvider(
+  'koboldcpp',
+  (input, connection) =>
+    new KoboldCppBackendAdapter({
+      baseUrl: connection.baseUrl,
+      apiKey: connection.apiKey,
+      requestScript: connection.requestScript,
+      params: input.koboldcppParams ?? input.textgenParams,
+      contextLength: input.contextLength ?? 4096,
+      ...textFormatting(input),
+    }),
 );
 
-registerBackendProvider('moonshot', (input, connection) =>
-  new MoonshotBackendAdapter({
-    ...connection,
-    // buildBackendSettings maps moonshot to the openai.params blob
-    // (paramsKeyForProvider); there is no separate moonshot.params key.
-    params: input.openaiParams,
-  }),
+registerBackendProvider(
+  'moonshot',
+  (input, connection) =>
+    new MoonshotBackendAdapter({
+      ...connection,
+      // buildBackendSettings maps moonshot to the openai.params blob
+      // (paramsKeyForProvider); there is no separate moonshot.params key.
+      params: input.openaiParams,
+    }),
 );
 
-registerBackendProvider('openai', (input, connection) =>
-  new OpenAIBackendAdapter({
-    ...connection,
-    params: input.openaiParams,
-  }),
+registerBackendProvider(
+  'openai',
+  (input, connection) =>
+    new OpenAIBackendAdapter({
+      ...connection,
+      params: input.openaiParams,
+    }),
 );
 
 // Deterministic scripted backend for headless card testing (no network; the
@@ -349,17 +359,13 @@ const REASONING_EFFORTS = new Set(['xhigh', 'high', 'medium', 'low', 'minimal', 
 const REASONING_SUMMARIES = new Set(['auto', 'concise', 'detailed']);
 
 function parseReasoningEffort(value: unknown): 'xhigh' | 'high' | 'medium' | 'low' | 'minimal' | 'none' | undefined {
-  const s = (typeof value === 'string' ? value : '')
-    .trim()
-    .toLowerCase();
+  const s = (typeof value === 'string' ? value : '').trim().toLowerCase();
   if (REASONING_EFFORTS.has(s)) return s as 'xhigh' | 'high' | 'medium' | 'low' | 'minimal' | 'none';
   return undefined;
 }
 
 function parseReasoningSummary(value: unknown): 'auto' | 'concise' | 'detailed' | undefined {
-  const s = (typeof value === 'string' ? value : '')
-    .trim()
-    .toLowerCase();
+  const s = (typeof value === 'string' ? value : '').trim().toLowerCase();
   if (REASONING_SUMMARIES.has(s)) return s as 'auto' | 'concise' | 'detailed';
   return undefined;
 }

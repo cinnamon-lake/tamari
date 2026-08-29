@@ -1,12 +1,6 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 async function createCharacterAndChat(page: any, charName: string) {
   await page.locator('[title="Create character"]').click();
@@ -29,7 +23,10 @@ async function createCharacterAndChat(page: any, charName: string) {
   await newChatBtn.waitFor({ state: 'visible' });
   await newChatBtn.click({ force: true });
 
-  const chatItem = page.locator('.chat-item').filter({ hasText: new RegExp(charName) }).first();
+  const chatItem = page
+    .locator('.chat-item')
+    .filter({ hasText: new RegExp(charName) })
+    .first();
   await expect(chatItem).toBeVisible({ timeout: 10000 });
   await chatItem.click();
 
@@ -48,16 +45,7 @@ async function sendUserMessage(page: any, text: string) {
 }
 
 test.describe('Generation Reasoning', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('streams and renders a native reasoning / thinking block', async ({ page }) => {
+  test('streams and renders a native reasoning / thinking block', async ({ page, app }) => {
     const charName = uniqueName('Reasoning Character');
     await createCharacterAndChat(page, charName);
 
@@ -68,7 +56,7 @@ test.describe('Generation Reasoning', () => {
 
     // The reasoning block should be rendered as a collapsible details element —
     // the final text part pushes it into the tool-activity dropdown.
-    await new App(page).expandToolActivity(assistantBubble);
+    await app.expandToolActivity(assistantBubble);
     const reasoningBlock = assistantBubble.locator('.reasoning-block');
     await expect(reasoningBlock).toBeVisible({ timeout: 10000 });
     await expect(reasoningBlock).toContainText('I am thinking through this carefully.');

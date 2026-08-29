@@ -70,7 +70,9 @@ export class AttachmentRepository implements IAttachmentRepository {
       sql: `SELECT * FROM attachments WHERE id IN (${placeholders})`,
       args: ids,
     });
-    const byId = new Map(mapRowsLenient(rs.rows, rowToAttachment, 'AttachmentRepository.getByIds').map((a) => [a.id, a]));
+    const byId = new Map(
+      mapRowsLenient(rs.rows, rowToAttachment, 'AttachmentRepository.getByIds').map((a) => [a.id, a]),
+    );
     return ids.map((id) => byId.get(id)).filter((a): a is Attachment => a !== undefined);
   }
 

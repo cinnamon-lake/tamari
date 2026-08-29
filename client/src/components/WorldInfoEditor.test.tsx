@@ -22,7 +22,30 @@ describe('WorldInfoEditor', () => {
 
   it('renders list of books', () => {
     setState('worldInfo', [
-      { id: 'book-1', name: 'Lore A', entries: [{ id: 'e1', keys: ['magic'], content: '', comment: '', order: 0, position: 'before_char', probability: 100, constant: false, selective: false, secondaryKeys: [], addMemo: false, disable: false, regex: false, recursive: false }], createdAt: Date.now(), updatedAt: Date.now() },
+      {
+        id: 'book-1',
+        name: 'Lore A',
+        entries: [
+          {
+            id: 'e1',
+            keys: ['magic'],
+            content: '',
+            comment: '',
+            order: 0,
+            position: 'before_char',
+            probability: 100,
+            constant: false,
+            selective: false,
+            secondaryKeys: [],
+            addMemo: false,
+            disable: false,
+            regex: false,
+            recursive: false,
+          },
+        ],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
       { id: 'book-2', name: 'Lore B', entries: [], createdAt: Date.now(), updatedAt: Date.now() },
     ]);
     render(() => <WorldInfoEditor onClose={() => {}} />);
@@ -34,25 +57,31 @@ describe('WorldInfoEditor', () => {
 
   it('clicking book sets activeWorldInfoId and sends worldinfo.select', () => {
     const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
-    setState('worldInfo', [{ id: 'book-1', name: 'Lore A', entries: [], createdAt: Date.now(), updatedAt: Date.now() }]);
+    setState('worldInfo', [
+      { id: 'book-1', name: 'Lore A', entries: [], createdAt: Date.now(), updatedAt: Date.now() },
+    ]);
     render(() => <WorldInfoEditor onClose={() => {}} />);
     screen.getByText('Lore A').click();
     // activeWorldInfoId signal should be updated
     expect(activeWorldInfoId()).toBe('book-1');
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'worldinfo.select',
-      bookId: 'book-1',
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'worldinfo.select',
+        bookId: 'book-1',
+      }),
+    );
   });
 
   it('creates new lorebook', () => {
     const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
     render(() => <WorldInfoEditor onClose={() => {}} />);
     screen.getByText('New Lorebook').click();
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'worldinfo.create',
-      data: expect.objectContaining({ name: 'New Lorebook' }),
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'worldinfo.create',
+        data: expect.objectContaining({ name: 'New Lorebook' }),
+      }),
+    );
   });
 
   it('calls onClose when overlay clicked', () => {
@@ -69,7 +98,22 @@ describe('WorldInfoEditor', () => {
         id: 'book-1',
         name: 'Test Book',
         entries: [
-          { id: 'e1', keys: ['fire'], content: 'Fire is hot', comment: '', order: 100, position: 'before_char', probability: 100, constant: false, selective: false, secondaryKeys: [], addMemo: false, disable: false, regex: false, recursive: false },
+          {
+            id: 'e1',
+            keys: ['fire'],
+            content: 'Fire is hot',
+            comment: '',
+            order: 100,
+            position: 'before_char',
+            probability: 100,
+            constant: false,
+            selective: false,
+            secondaryKeys: [],
+            addMemo: false,
+            disable: false,
+            regex: false,
+            recursive: false,
+          },
         ],
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -88,11 +132,13 @@ describe('WorldInfoEditor', () => {
       const input = screen.getByDisplayValue('Test Book');
       fireEvent.input(input, { target: { value: 'Updated Book' } });
       fireEvent.blur(input);
-      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'worldinfo.update',
-        bookId: 'book-1',
-        patch: { name: 'Updated Book' },
-      }));
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'worldinfo.update',
+          bookId: 'book-1',
+          patch: { name: 'Updated Book' },
+        }),
+      );
     });
 
     it('renders entry list', () => {
@@ -110,10 +156,12 @@ describe('WorldInfoEditor', () => {
       const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
       render(() => <WorldInfoEditor onClose={() => {}} />);
       screen.getByText('Add Entry').click();
-      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'worldinfo.entry.create',
-        bookId: 'book-1',
-      }));
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'worldinfo.entry.create',
+          bookId: 'book-1',
+        }),
+      );
     });
 
     it('sends worldinfo.test when running test', () => {
@@ -122,10 +170,12 @@ describe('WorldInfoEditor', () => {
       const textarea = document.querySelector('textarea[placeholder*="sample text"]') as HTMLTextAreaElement;
       fireEvent.input(textarea, { target: { value: 'test input' } });
       screen.getByText('Test').click();
-      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'worldinfo.test',
-        text: 'test input',
-      }));
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'worldinfo.test',
+          text: 'test input',
+        }),
+      );
     });
 
     it('deletes book when confirmed', async () => {
@@ -134,10 +184,12 @@ describe('WorldInfoEditor', () => {
       render(() => <WorldInfoEditor onClose={() => {}} />);
       screen.getByText('Delete Lorebook').click();
       await new Promise((r) => setTimeout(r, 10));
-      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'worldinfo.delete',
-        bookId: 'book-1',
-      }));
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'worldinfo.delete',
+          bookId: 'book-1',
+        }),
+      );
     });
   });
 
@@ -147,7 +199,22 @@ describe('WorldInfoEditor', () => {
         id: 'book-1',
         name: 'Test Book',
         entries: [
-          { id: 'e1', keys: ['fire'], content: 'Fire is hot', comment: '', order: 100, position: 'before_char', probability: 100, constant: false, selective: false, secondaryKeys: [], addMemo: false, disable: false, regex: false, recursive: false },
+          {
+            id: 'e1',
+            keys: ['fire'],
+            content: 'Fire is hot',
+            comment: '',
+            order: 100,
+            position: 'before_char',
+            probability: 100,
+            constant: false,
+            selective: false,
+            secondaryKeys: [],
+            addMemo: false,
+            disable: false,
+            regex: false,
+            recursive: false,
+          },
         ],
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -164,11 +231,13 @@ describe('WorldInfoEditor', () => {
       fireEvent.input(keysInput, { target: { value: 'fire, flame' } });
       fireEvent.blur(keysInput);
 
-      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'worldinfo.entry.update',
-        entryId: 'e1',
-        patch: expect.objectContaining({ keys: ['fire', 'flame'] }),
-      }));
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'worldinfo.entry.update',
+          entryId: 'e1',
+          patch: expect.objectContaining({ keys: ['fire', 'flame'] }),
+        }),
+      );
     });
 
     it('saves position atDepth with depth and role', async () => {
@@ -183,14 +252,16 @@ describe('WorldInfoEditor', () => {
       await new Promise((r) => setTimeout(r, 700));
 
       // After changing position, save should include depth/role
-      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'worldinfo.entry.update',
-        patch: expect.objectContaining({
-          position: 'atDepth',
-          depth: expect.any(Number),
-          role: expect.any(String),
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'worldinfo.entry.update',
+          patch: expect.objectContaining({
+            position: 'atDepth',
+            depth: expect.any(Number),
+            role: expect.any(String),
+          }),
         }),
-      }));
+      );
     });
 
     it('saves non-atDepth position without depth and role', async () => {
@@ -217,10 +288,12 @@ describe('WorldInfoEditor', () => {
       render(() => <WorldInfoEditor onClose={() => {}} />);
       screen.getByText('fire').click();
       screen.getByText('Delete').click();
-      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'worldinfo.entry.delete',
-        entryId: 'e1',
-      }));
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'worldinfo.entry.delete',
+          entryId: 'e1',
+        }),
+      );
     });
   });
 });

@@ -179,7 +179,10 @@ describe('e2e StApi integration', () => {
     });
 
     it('st.set_author_note writes author note metadata', async () => {
-      const id = await createQuickReply('AuthorNote', 'st.set_author_note("Think carefully", { depth = 3, position = "before_prompt" })');
+      const id = await createQuickReply(
+        'AuthorNote',
+        'st.set_author_note("Think carefully", { depth = 3, position = "before_prompt" })',
+      );
       await executeQuickReply(id);
 
       const updated = h.expectBroadcast('chat.updated');

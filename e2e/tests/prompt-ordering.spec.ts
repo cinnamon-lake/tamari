@@ -1,12 +1,6 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
-import { App } from '../helpers/app.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { getLastLlmRequest, resetLlmRequests } from '../helpers/llm.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 /** Flatten the captured request's messages into one string (mock returns OpenAI-shaped bodies). */
 function promptText(req: Awaited<ReturnType<typeof getLastLlmRequest>>): string {
@@ -17,21 +11,14 @@ function promptText(req: Awaited<ReturnType<typeof getLastLlmRequest>>): string 
 }
 
 test.describe('chatHistory marker position', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
-  });
-
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
   });
 
   // The jailbreak slot is ordered after the Chat History marker in the default
   // prompt list — before the renderer fix it silently rendered BEFORE the
   // history. This spec proves the position in a real request body.
-  test('post-history instructions render after the chat history', async ({ page }) => {
-    const app = new App(page);
+  test('post-history instructions render after the chat history', async ({ app }) => {
     await app.createCharacterAndChat({
       name: uniqueName('JB Char'),
       firstMes: 'FIRST_MES_TOKEN',

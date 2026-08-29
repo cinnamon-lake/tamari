@@ -2,10 +2,7 @@ import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
 import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 test.describe('Backend Config', () => {
   test.beforeEach(async ({ page }) => {
@@ -39,7 +36,9 @@ test.describe('Backend Config', () => {
 
     await expect(nameInput).toHaveValue(configName);
 
-    await page.locator('.modal-overlay:has(.modal.settings-modal:has-text("Backend Config"))').click({ position: { x: 0, y: 0 } });
+    await page
+      .locator('.modal-overlay:has(.modal.settings-modal:has-text("Backend Config"))')
+      .click({ position: { x: 0, y: 0 } });
     await expect(modal).not.toBeVisible();
 
     // Reopen: the rename must have persisted (autosave flush on close).
@@ -67,7 +66,9 @@ test.describe('Backend Config', () => {
 
     // Close immediately — within the old 500ms debounce window. The
     // flush-on-close must still save.
-    await page.locator('.modal-overlay:has(.modal.settings-modal:has-text("Backend Config"))').click({ position: { x: 0, y: 0 } });
+    await page
+      .locator('.modal-overlay:has(.modal.settings-modal:has-text("Backend Config"))')
+      .click({ position: { x: 0, y: 0 } });
     await expect(modal).not.toBeVisible();
 
     // The flush is fire-and-forget; on slow runners the reopen raced it and
@@ -80,7 +81,9 @@ test.describe('Backend Config', () => {
 
     // Restore the default so later specs see a clean sampler.
     await modal.locator('#sampler-temperature').fill('1');
-    await page.locator('.modal-overlay:has(.modal.settings-modal:has-text("Backend Config"))').click({ position: { x: 0, y: 0 } });
+    await page
+      .locator('.modal-overlay:has(.modal.settings-modal:has-text("Backend Config"))')
+      .click({ position: { x: 0, y: 0 } });
     await expect(modal).not.toBeVisible();
   });
 });

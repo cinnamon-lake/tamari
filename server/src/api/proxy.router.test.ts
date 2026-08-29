@@ -66,7 +66,8 @@ describe('createProxyRouter', () => {
     expect(models.body.error.type).toBe('not_found_error');
 
     await request(app)
-      .post('/v1/messages').set('x-api-key', API_KEY)
+      .post('/v1/messages')
+      .set('x-api-key', API_KEY)
       .send({ model: `${CONFIG_ID}-Test Config`, messages: [{ role: 'user', content: 'hi' }] })
       .expect(404);
     expect(createResolvedAdapter).not.toHaveBeenCalled();
@@ -119,7 +120,8 @@ describe('createProxyRouter', () => {
     const { app, createResolvedAdapter } = createApp(h, makeAdapter());
 
     const res = await request(app)
-      .post('/v1/messages').set('x-api-key', API_KEY)
+      .post('/v1/messages')
+      .set('x-api-key', API_KEY)
       .send({ model: 'not-a-proxy-model', messages: [{ role: 'user', content: 'hi' }] })
       .expect(400);
     expect(res.body).toEqual({
@@ -133,7 +135,8 @@ describe('createProxyRouter', () => {
     const { app } = createApp(h, makeAdapter());
 
     const res = await request(app)
-      .post('/v1/messages').set('x-api-key', API_KEY)
+      .post('/v1/messages')
+      .set('x-api-key', API_KEY)
       .send({ model: `${CONFIG_ID}-Missing`, messages: [{ role: 'user', content: 'hi' }] })
       .expect(404);
     expect(res.body.error.type).toBe('not_found_error');
@@ -142,7 +145,11 @@ describe('createProxyRouter', () => {
   it('rejects an invalid request body', async () => {
     const { app } = createApp(h, makeAdapter());
 
-    const res = await request(app).post('/v1/messages').set('x-api-key', API_KEY).send({ model: `${CONFIG_ID}-X` }).expect(400);
+    const res = await request(app)
+      .post('/v1/messages')
+      .set('x-api-key', API_KEY)
+      .send({ model: `${CONFIG_ID}-X` })
+      .expect(400);
     expect(res.body.error.type).toBe('invalid_request_error');
   });
 
@@ -152,7 +159,8 @@ describe('createProxyRouter', () => {
     const { app, createResolvedAdapter } = createApp(h, adapter);
 
     const res = await request(app)
-      .post('/v1/messages').set('x-api-key', API_KEY)
+      .post('/v1/messages')
+      .set('x-api-key', API_KEY)
       .send({
         model: `${CONFIG_ID}-Test Config`,
         system: 'You are terse.',
@@ -193,7 +201,8 @@ describe('createProxyRouter', () => {
     const { app } = createApp(h, adapter);
 
     await request(app)
-      .post('/v1/messages').set('x-api-key', API_KEY)
+      .post('/v1/messages')
+      .set('x-api-key', API_KEY)
       .send({
         model: `${CONFIG_ID}-Test Config`,
         system: [{ type: 'text', text: 'block system' }],
@@ -242,7 +251,8 @@ describe('createProxyRouter', () => {
     const { app } = createApp(h, adapter);
 
     const res = await request(app)
-      .post('/v1/messages').set('x-api-key', API_KEY)
+      .post('/v1/messages')
+      .set('x-api-key', API_KEY)
       .send({ model: `${CONFIG_ID}-Test Config`, messages: [{ role: 'user', content: 'weather?' }] })
       .expect(200);
 
@@ -263,7 +273,8 @@ describe('createProxyRouter', () => {
     const { app } = createApp(h, adapter);
 
     const res = await request(app)
-      .post('/v1/messages').set('x-api-key', API_KEY)
+      .post('/v1/messages')
+      .set('x-api-key', API_KEY)
       .send({ model: `${CONFIG_ID}-Test Config`, messages: [{ role: 'user', content: 'hi' }] })
       .expect(500);
     expect(res.body).toEqual({ type: 'error', error: { type: 'api_error', message: 'boom' } });
@@ -274,7 +285,8 @@ describe('createProxyRouter', () => {
     const { app } = createApp(h, null);
 
     const res = await request(app)
-      .post('/v1/messages').set('x-api-key', API_KEY)
+      .post('/v1/messages')
+      .set('x-api-key', API_KEY)
       .send({ model: `${CONFIG_ID}-Test Config`, messages: [{ role: 'user', content: 'hi' }] })
       .expect(400);
     expect(res.body.error.type).toBe('invalid_request_error');

@@ -107,9 +107,13 @@ describe('friendlyLuaError', () => {
   it('maps both deadline families and passes other messages through', () => {
     // Yield-boundary family (not reachable via doString child threads today,
     // mapped anyway should upstream surface it)…
-    expect(friendlyLuaError(new Error('thread timeout exceeded'), 300_000)).toContain('300s time limit between host calls');
+    expect(friendlyLuaError(new Error('thread timeout exceeded'), 300_000)).toContain(
+      '300s time limit between host calls',
+    );
     // …the WASM-hook abort family keeps its legacy wording…
-    expect(friendlyLuaError('Aborted(native code called abort())', 5_000)).toBe('script timed out (5s execution limit)');
+    expect(friendlyLuaError('Aborted(native code called abort())', 5_000)).toBe(
+      'script timed out (5s execution limit)',
+    );
     // …and everything else passes through untouched.
     expect(friendlyLuaError('st.send: expected string', 5_000)).toBe('st.send: expected string');
   });

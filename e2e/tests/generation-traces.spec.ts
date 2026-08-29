@@ -1,27 +1,18 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { resetLlmRequests } from '../helpers/llm.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Generation traces modal', () => {
   const toolsetIds: string[] = [];
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     while (toolsetIds.length > 0) {
       await deleteToolset(page, toolsetIds.pop()!);
     }
@@ -38,8 +29,7 @@ test.describe('Generation traces modal', () => {
     await expect(page.locator('.generation-traces-modal')).not.toBeVisible();
   }
 
-  test('send row shows ok; a run_agent turn nests a sub-agent row under its parent', async ({ page }) => {
-    const app = new App(page);
+  test('send row shows ok; a run_agent turn nests a sub-agent row under its parent', async ({ page, app }) => {
     toolsetIds.push(await enableBuiltinToolset(page, 'agent'));
     await app.createCharacterAndChat({ name: uniqueName('Trace Viewer'), firstMes: 'Ready.' });
 

@@ -201,7 +201,9 @@ export class InMemoryChatRepository implements IChatRepository {
     return unsupported();
   }
   async listChatSummaries(): Promise<{
-    items: Array<Pick<Chat, 'id' | 'characterId' | 'name' | 'createdAt' | 'updatedAt' | 'forkedFromChatId' | 'forkedAtMessageId'>>;
+    items: Array<
+      Pick<Chat, 'id' | 'characterId' | 'name' | 'createdAt' | 'updatedAt' | 'forkedFromChatId' | 'forkedAtMessageId'>
+    >;
     total: number;
   }> {
     return unsupported();

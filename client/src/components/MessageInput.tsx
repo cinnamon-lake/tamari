@@ -362,8 +362,12 @@ export function MessageInput() {
                     when={att.mimeType.startsWith('image/')}
                     fallback={
                       <div class="attachment-preview-generic">
-                        <i class={`bi bi-${att.mimeType.startsWith('audio/') ? 'music-note-beamed' : att.mimeType.startsWith('video/') ? 'film' : 'file-earmark'}`} />
-                        <span class="attachment-preview-name">{(att.meta as Record<string, string>)?.name ?? att.id}</span>
+                        <i
+                          class={`bi bi-${att.mimeType.startsWith('audio/') ? 'music-note-beamed' : att.mimeType.startsWith('video/') ? 'film' : 'file-earmark'}`}
+                        />
+                        <span class="attachment-preview-name">
+                          {(att.meta as Record<string, string>)?.name ?? att.id}
+                        </span>
                       </div>
                     }
                   >
@@ -384,7 +388,8 @@ export function MessageInput() {
         </Show>
         <div class="message-input">
           <div class="input-wrapper">
-            <textarea class="message-textarea"
+            <textarea
+              class="message-textarea"
               ref={textareaRef}
               value={text()}
               onInput={(e) => handleInput(e.currentTarget.value)}
@@ -398,7 +403,14 @@ export function MessageInput() {
               <div class="slash-autocomplete">
                 <For each={filteredCommands()}>
                   {(cmd, index) => (
-                    <div class="slash-suggestion" id={`cmd-${index()}`} role="button" tabindex={0} onKeyDown={onEnterActivate} onClick={() => insertCommand(cmd.name)}>
+                    <div
+                      class="slash-suggestion"
+                      id={`cmd-${index()}`}
+                      role="button"
+                      tabindex={0}
+                      onKeyDown={onEnterActivate}
+                      onClick={() => insertCommand(cmd.name)}
+                    >
                       <span class="slash-name">/{cmd.name}</span>
                       <span class="slash-desc">{cmd.description}</span>
                     </div>
@@ -410,7 +422,8 @@ export function MessageInput() {
               <div class="slash-autocomplete">
                 <For each={filteredMacros()}>
                   {(macro, index) => (
-                    <div id={`macro-${index()}`}
+                    <div
+                      id={`macro-${index()}`}
                       class="slash-suggestion"
                       onClick={() => insertMacro(macro.name, macro.args)}
                     >
@@ -441,22 +454,38 @@ export function MessageInput() {
             hidden
             onChange={handleFileSelect}
           />
-          <button class="icon-btn input-action-btn" onClick={impersonate} disabled={isDisabled()} title={t('messageInput.impersonate')} aria-label={t('messageInput.impersonate')} type="button">
+          <button
+            class="icon-btn input-action-btn"
+            onClick={impersonate}
+            disabled={isDisabled()}
+            title={t('messageInput.impersonate')}
+            aria-label={t('messageInput.impersonate')}
+            type="button"
+          >
             <i class="bi bi-person" />
           </button>
           <Show when={state.settings['quickImpersonate']}>
-            <button class="icon-btn input-action-btn" onClick={impersonate} disabled={isDisabled()} title={t('messageInput.quickImpersonate')} aria-label={t('messageInput.quickImpersonate')} type="button">
+            <button
+              class="icon-btn input-action-btn"
+              onClick={impersonate}
+              disabled={isDisabled()}
+              title={t('messageInput.quickImpersonate')}
+              aria-label={t('messageInput.quickImpersonate')}
+              type="button"
+            >
               <i class="bi bi-person-bounding-box" />
             </button>
           </Show>
           <Show when={state.settings['quickContinue']}>
-            <button class="icon-btn input-action-btn"
+            <button
+              class="icon-btn input-action-btn"
               onClick={() => {
                 const chatId = activeChatId();
                 if (chatId) bus.send({ type: 'action.continue', chatId });
               }}
               disabled={isDisabled()}
-              title={t('messageInput.quickContinue')} aria-label={t('messageInput.quickContinue')}
+              title={t('messageInput.quickContinue')}
+              aria-label={t('messageInput.quickContinue')}
               type="button"
             >
               <i class="bi bi-skip-end" />
@@ -465,7 +494,13 @@ export function MessageInput() {
           <Show
             when={state.generation.status === 'streaming' && state.generation.activeId}
             fallback={
-              <button class="btn btn-primary send-btn" onClick={send} disabled={isDisabled()} title={t('messageInput.send')} type="button">
+              <button
+                class="btn btn-primary send-btn"
+                onClick={send}
+                disabled={isDisabled()}
+                title={t('messageInput.send')}
+                type="button"
+              >
                 <i class="bi bi-send" /> {t('messageInput.send')}
               </button>
             }
@@ -476,7 +511,8 @@ export function MessageInput() {
                 const genId = state.generation.activeId;
                 if (genId) bus.send({ type: 'action.stop', generationId: genId });
               }}
-              title={t('messageInput.stopGeneration')} aria-label={t('messageInput.stopGeneration')}
+              title={t('messageInput.stopGeneration')}
+              aria-label={t('messageInput.stopGeneration')}
               type="button"
             >
               <i class="bi bi-stop-fill" /> {t('messageInput.stop')}

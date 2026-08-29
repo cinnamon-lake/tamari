@@ -35,7 +35,9 @@ describe('PromptManager', () => {
   });
 
   it('ensureUtilityPrompts appends only the missing utility prompts', () => {
-    const merged = ensureUtilityPrompts([{ identifier: 'main', name: 'Main', content: '', role: 'system', enabled: true }]);
+    const merged = ensureUtilityPrompts([
+      { identifier: 'main', name: 'Main', content: '', role: 'system', enabled: true },
+    ]);
     expect(merged.map((p) => p.identifier)).toEqual(['main', 'impersonation', 'memorySummary']);
 
     // Already present (possibly customized) — left untouched.

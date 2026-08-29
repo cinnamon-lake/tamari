@@ -1,13 +1,8 @@
-import { test, expect, type Page } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Page } from '../fixtures/base.js';
 import { resetLlmRequests } from '../helpers/llm.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
 
@@ -34,14 +29,26 @@ async function createTypeAConfig(page: Page, name: string, luaSource: string): P
         ws.onmessage = (event) => {
           const msg = JSON.parse(event.data as string);
           if (msg.type === 'snapshot') {
-            ws.send(JSON.stringify({ type: 'custombackend.create', data: { name: cbName, description: 'e2e', luaSource: source } }));
+            ws.send(
+              JSON.stringify({
+                type: 'custombackend.create',
+                data: { name: cbName, description: 'e2e', luaSource: source },
+              }),
+            );
           }
           if (msg.type === 'custombackend.created') {
             customBackendId = msg.item.id;
             ws.send(
               JSON.stringify({
                 type: 'backendConfig.create',
-                data: { name: `${cbName} delegate`, backendProvider: 'openai', generationMode: 'chat', model: 'mock-model', apiUrl: mockUrl, apiKey: 'mock-api-key' },
+                data: {
+                  name: `${cbName} delegate`,
+                  backendProvider: 'openai',
+                  generationMode: 'chat',
+                  model: 'mock-model',
+                  apiUrl: mockUrl,
+                  apiKey: 'mock-api-key',
+                },
               }),
             );
           }
@@ -138,26 +145,28 @@ test.describe('Debug traces', () => {
   const toolsetIds: string[] = [];
   const typeAIds: TypeAIds[] = [];
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     while (toolsetIds.length > 0) {
       await deleteToolset(page, toolsetIds.pop()!);
     }
     await deleteTypeAConfigs(page, typeAIds.splice(0));
   });
 
-  test('run_agent error renders the composed trace chain; success trace id opens in the workbench', async ({ page }) => {
-    const app = new App(page);
-
+  test('run_agent error renders the composed trace chain; success trace id opens in the workbench', async ({
+    page,
+    app,
+  }) => {
     // Inner Lua backend throws; outer delegates to it, so the sub-agent fails
     // two Lua layers deep: outer → delegate(cfg) → inner.
-    const inner = await createTypeAConfig(page, uniqueName('Inner Trace Backend'), `function generate(p, c) error('INNER_BOOM') end`);
+    const inner = await createTypeAConfig(
+      page,
+      uniqueName('Inner Trace Backend'),
+      `function generate(p, c) error('INNER_BOOM') end`,
+    );
     typeAIds.push(inner);
     const outer = await createTypeAConfig(
       page,
@@ -188,10 +197,10 @@ test.describe('Debug traces', () => {
 
     // Successful sub-agent: the result ends with a [trace: <generationId>]
     // reference, which opens read-only in the workbench at /generations/<id>/.
-    await app.sendUserMessage(
-      `tool:run_agent${JSON.stringify({ prompt: 'respond: sub agent answer' })}`,
-      { expectReply: true, userText: 'run_agent' },
-    );
+    await app.sendUserMessage(`tool:run_agent${JSON.stringify({ prompt: 'respond: sub agent answer' })}`, {
+      expectReply: true,
+      userText: 'run_agent',
+    });
     results = app.lastBubble('assistant').locator('.tool-result-block');
     await expect(results).toHaveCount(1, { timeout: 15000 });
     await expect(results.last()).toContainText('sub agent answer');
@@ -202,18 +211,17 @@ test.describe('Debug traces', () => {
     const traceId = (await results.last().innerText()).match(/\[trace: ([0-9a-f-]{36})\]/)?.[1];
     expect(traceId).toBeTruthy();
 
-    await app.sendUserMessage(
-      `tool:read${JSON.stringify({ path: `/generations/${traceId}/meta.json` })}`,
-      { expectReply: true, userText: 'read' },
-    );
+    await app.sendUserMessage(`tool:read${JSON.stringify({ path: `/generations/${traceId}/meta.json` })}`, {
+      expectReply: true,
+      userText: 'read',
+    });
     results = app.lastBubble('assistant').locator('.tool-result-block');
     await expect(results).toHaveCount(1, { timeout: 15000 });
     await expect(results.last()).toContainText('"kind": "subagent"');
     await expect(results.last()).toContainText('"depth": 1');
   });
 
-  test('backend_logic_test dry-run outcome carries the trace (delegations + modulesLoaded)', async ({ page }) => {
-    const app = new App(page);
+  test('backend_logic_test dry-run outcome carries the trace (delegations + modulesLoaded)', async ({ page, app }) => {
     toolsetIds.push(await enableBuiltinToolset(page, 'workbench'));
     await app.createCharacterAndChat({ name: uniqueName('WB Host'), firstMes: 'Ready.' });
     const cardId = await createCharacterViaWs(page, uniqueName('Dry Trace Card'));

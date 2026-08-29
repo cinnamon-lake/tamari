@@ -1,18 +1,13 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { authHeaders } from '../helpers/auth.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { getLastLlmRequest, resetLlmRequests } from '../helpers/llm.js';
 import { setSetting } from '../helpers/settings.js';
-import { App } from '../helpers/app.js';
+import { uniqueName } from '../helpers/names.js';
 
 /** The e2e webServer pins TAMARI_SECRET to this value (playwright.config.ts). */
-const AUTH = { Authorization: 'Bearer e2e-test-secret' };
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
 
 // Edge-path coverage for OpenAIBackendAdapter / MoonshotBackendAdapter.
 //
@@ -34,19 +29,15 @@ function uniqueName(base: string): string {
 //   `response_format` through the global `openai.params` settings blob, which
 //   lands in the same params merge and on the wire.
 test.describe('OpenAI backend edge paths', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
   test.afterEach(async ({ page }) => {
     await setSetting(page, 'openai.params', {});
-    await resetBackendConfig(page);
   });
 
-  test('sends response_format from the openai.params blob to the wire', async ({ page }) => {
-    const app = new App(page);
+  test('sends response_format from the openai.params blob to the wire', async ({ page, app }) => {
     await setSetting(page, 'openai.params', { response_format: { type: 'json_object' } });
     await app.createCharacterAndChat({ name: uniqueName('RF Char'), firstMes: 'Ready.' });
 
@@ -60,8 +51,7 @@ test.describe('OpenAI backend edge paths', () => {
     expect(body['response_format']).toEqual({ type: 'json_object' });
   });
 
-  test('maps a length finish reason and keeps the partial reply continuable', async ({ page }) => {
-    const app = new App(page);
+  test('maps a length finish reason and keeps the partial reply continuable', async ({ app }) => {
     await app.createCharacterAndChat({ name: uniqueName('OA Length'), firstMes: 'Ready.' });
 
     // The mock reports finish_reason 'length'; canonicalFinishReason maps it to
@@ -74,8 +64,8 @@ test.describe('OpenAI backend edge paths', () => {
     await expect(bubble.locator('button[title="Continue"]')).toHaveCount(1);
   });
 
-  test('lists models for the plain openai config (OpenAI listModels)', async ({ request }) => {
-    const res = await request.get('/api/models', { headers: AUTH });
+  test('lists models for the plain openai config (OpenAI listModels)', async ({ request, app: _app }) => {
+    const res = await request.get('/api/models', { headers: authHeaders() });
     expect(res.ok()).toBe(true);
     const data = (await res.json()) as { items: Array<{ id: string; name: string }> };
     const mock = data.items.find((m) => m.id === 'mock-model');
@@ -83,10 +73,10 @@ test.describe('OpenAI backend edge paths', () => {
     expect(mock!.name).toBe('mock-model');
   });
 
-  test('moonshot parses an OpenAI-shaped model list', async ({ page, request }) => {
+  test('moonshot parses an OpenAI-shaped model list', async ({ page, request, app: _app }) => {
     await patchActiveBackendConfig(page, { backendProvider: 'moonshot', model: 'moonshot-mock' });
 
-    const res = await request.get('/api/models', { headers: AUTH });
+    const res = await request.get('/api/models', { headers: authHeaders() });
     expect(res.ok()).toBe(true);
     const data = (await res.json()) as { items: Array<{ id: string; name: string; contextLength?: number }> };
     const mock = data.items.find((m) => m.id === 'mock-model');
@@ -95,7 +85,7 @@ test.describe('OpenAI backend edge paths', () => {
     expect(mock!.contextLength).toBe(131072);
   });
 
-  test('moonshot falls back to the static model list when /models fails', async ({ page, request }) => {
+  test('moonshot falls back to the static model list when /models fails', async ({ page, request, app: _app }) => {
     // Point the base URL at a path the mock 404s: GET /models then fails and
     // MoonshotBackendAdapter.listModels returns FALLBACK_MODELS.
     await patchActiveBackendConfig(page, {
@@ -104,7 +94,7 @@ test.describe('OpenAI backend edge paths', () => {
       apiUrl: `${MOCK_URL}/no-such-path`,
     });
 
-    const res = await request.get('/api/models', { headers: AUTH });
+    const res = await request.get('/api/models', { headers: authHeaders() });
     expect(res.ok()).toBe(true);
     const data = (await res.json()) as { items: Array<{ id: string }>; total: number };
     expect(data.total).toBe(14);

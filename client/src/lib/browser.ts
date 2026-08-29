@@ -8,8 +8,7 @@ export function isFirefox(): boolean {
 
 export function isMobileSafari(): boolean {
   return (
-    /iPad|iPhone|iPod/.test(navigator.platform) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   );
 }
 
@@ -22,13 +21,9 @@ export function isSafari(): boolean {
 }
 
 export function isMobile(): boolean {
-  const coarsePointer = typeof window.matchMedia === 'function'
-    ? window.matchMedia('(pointer: coarse)').matches
-    : false;
-  return (
-    coarsePointer ||
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-  );
+  const coarsePointer =
+    typeof window.matchMedia === 'function' ? window.matchMedia('(pointer: coarse)').matches : false;
+  return coarsePointer || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
 function processNode(node: Node): Node {
@@ -46,10 +41,7 @@ function sanitizeInlineQuotationOnCopy(): void {
   // STRG+C on Firefox leads to duplicate double quotes when inline quotation elements are copied.
   // Transform <q> to <span> before calling toString() on the selection.
   document.addEventListener('copy', (event) => {
-    if (
-      document.activeElement instanceof HTMLInputElement ||
-      document.activeElement instanceof HTMLTextAreaElement
-    ) {
+    if (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) {
       return;
     }
 
@@ -57,8 +49,7 @@ function sanitizeInlineQuotationOnCopy(): void {
     if (!selection || selection.rangeCount === 0) return;
 
     const anchorNode = selection.anchorNode;
-    const anchorEl =
-      anchorNode instanceof Element ? anchorNode : anchorNode?.parentElement;
+    const anchorEl = anchorNode instanceof Element ? anchorNode : anchorNode?.parentElement;
     if (!anchorEl?.closest('.message-content')) return;
 
     const range = selection.getRangeAt(0).cloneContents();

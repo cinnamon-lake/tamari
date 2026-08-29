@@ -34,7 +34,9 @@ function makeCharacter(overrides: Partial<Character> = {}): Character {
   };
 }
 
-function makeTemplate(opts: { characters?: Character[]; chats?: Array<{ id: string; characterId: string | null }> } = {}) {
+function makeTemplate(
+  opts: { characters?: Character[]; chats?: Array<{ id: string; characterId: string | null }> } = {},
+) {
   const charStore = new Map((opts.characters ?? []).map((c) => [c.id, c]));
   const characters = { getById: async (id: string) => charStore.get(id) };
   const chatStore = new Map((opts.chats ?? []).map((c) => [c.id, c]));
@@ -48,7 +50,10 @@ function makeTemplate(opts: { characters?: Character[]; chats?: Array<{ id: stri
       return member;
     },
     removeMember: async (chatId: string, characterId: string) => {
-      memberStore.set(chatId, (memberStore.get(chatId) ?? []).filter((m) => m.characterId !== characterId));
+      memberStore.set(
+        chatId,
+        (memberStore.get(chatId) ?? []).filter((m) => m.characterId !== characterId),
+      );
     },
   };
   const chatMetaBroadcast = {
@@ -81,7 +86,11 @@ describe('ChatWorkbenchTemplate', () => {
       expect(template.id).toBe('chat_workbench');
       expect(template.source).toBe('builtin');
       const def = await template.getDefinition();
-      expect(def.tools.map((t) => t.name).sort()).toEqual(['chat_add_member', 'chat_list_members', 'chat_remove_member']);
+      expect(def.tools.map((t) => t.name).sort()).toEqual([
+        'chat_add_member',
+        'chat_list_members',
+        'chat_remove_member',
+      ]);
     });
   });
 
@@ -97,7 +106,10 @@ describe('ChatWorkbenchTemplate', () => {
 
       const add = await template.execute('chat_add_member', { characterId: 'char1', chatId: 'chat1' });
       expect(JSON.parse(add.content as string)).toEqual({ chatId: 'chat1', characterId: 'char1' });
-      expect(chatMetaBroadcast.broadcastGroupMemberAdded).toHaveBeenCalledWith('chat1', expect.objectContaining({ characterId: 'char1' }));
+      expect(chatMetaBroadcast.broadcastGroupMemberAdded).toHaveBeenCalledWith(
+        'chat1',
+        expect.objectContaining({ characterId: 'char1' }),
+      );
 
       const list = await template.execute('chat_list_members', { chatId: 'chat1' });
       const parsed = JSON.parse(list.content as string) as { members: Array<{ characterId: string; name: string }> };

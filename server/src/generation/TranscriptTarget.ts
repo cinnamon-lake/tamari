@@ -19,7 +19,13 @@
 
 import type { Character, ContentPart } from '@tamari/types';
 import { getMessageText } from '@tamari/types';
-import type { BackendStreamItem, GenerationResult, Prompt, ToolCall, ToolDefinition } from '../backends/BackendAdapter.js';
+import type {
+  BackendStreamItem,
+  GenerationResult,
+  Prompt,
+  ToolCall,
+  ToolDefinition,
+} from '../backends/BackendAdapter.js';
 import type { GenerationBroadcastService } from '../services/GenerationBroadcastService.js';
 import type { ToolRegistry, ToolResult } from '../services/ToolRegistry.js';
 import type { IToolsetRepository } from '../repos/ToolsetRepository.js';
@@ -198,9 +204,7 @@ export class TranscriptTarget implements GenerationTarget {
   /** Tool-execution context: the parent branch (reads inherit) followed by
       the accumulated transcript. genraw stays transcript-only. */
   async toolContextMessages(): Promise<ToolContextMessage[]> {
-    const transcript: ToolContextMessage[] = [
-      { id: 'seed', role: 'user', content: this.seed },
-    ];
+    const transcript: ToolContextMessage[] = [{ id: 'seed', role: 'user', content: this.seed }];
     if (this.parts.length > 0) {
       transcript.push({
         id: 'transcript',
@@ -224,9 +228,7 @@ export class TranscriptTarget implements GenerationTarget {
 
   /** Full-history variant: same span, but the parent branch is uncapped. */
   async fullBranchMessages(): Promise<ToolContextMessage[]> {
-    const transcript: ToolContextMessage[] = [
-      { id: 'seed', role: 'user', content: this.seed },
-    ];
+    const transcript: ToolContextMessage[] = [{ id: 'seed', role: 'user', content: this.seed }];
     if (this.parts.length > 0) {
       transcript.push({
         id: 'transcript',

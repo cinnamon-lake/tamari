@@ -112,7 +112,10 @@ describe('ToolsetWorkbench', () => {
     it('gets a toolset with the template definition', async () => {
       const { template } = makeTemplate({ toolsets: [makeToolset()] });
       const res = await template.execute('toolset_get', { id: 'ts1' });
-      const parsed = JSON.parse(res.content as string) as { id: string; definition: { tools: Array<{ name: string }> } };
+      const parsed = JSON.parse(res.content as string) as {
+        id: string;
+        definition: { tools: Array<{ name: string }> };
+      };
       expect(parsed.id).toBe('ts1');
       expect(parsed.definition.tools).toHaveLength(2);
     });
@@ -128,7 +131,12 @@ describe('ToolsetWorkbench', () => {
     it('creates an enabled toolset from a builtin template', async () => {
       const { template, bus, store } = makeTemplate();
       const res = await template.execute('toolset_create', { templateId: 'workbench' });
-      const parsed = JSON.parse(res.content as string) as { id: string; name: string; enabled: boolean; tools: string[] };
+      const parsed = JSON.parse(res.content as string) as {
+        id: string;
+        name: string;
+        enabled: boolean;
+        tools: string[];
+      };
       expect(parsed.enabled).toBe(true);
       expect(parsed.name).toBe('Builtin workbench');
       expect(parsed.tools).toEqual(['backend_get', 'backend_test']);

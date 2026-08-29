@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { BackendWorkbench } from './BackendWorkbench.js';
-import type { BackendConfig, BackendConfigUpdate, CustomBackend, CustomBackendInsert, CustomBackendUpdate } from '@tamari/types';
+import type {
+  BackendConfig,
+  BackendConfigUpdate,
+  CustomBackend,
+  CustomBackendInsert,
+  CustomBackendUpdate,
+} from '@tamari/types';
 import type { z } from 'zod';
 import type { BackendConfigCreateInputSchema } from '@tamari/types';
 type BackendConfigCreateInput = z.infer<typeof BackendConfigCreateInputSchema>;
@@ -144,7 +150,12 @@ describe('BackendWorkbench', () => {
         apiUrl: 'http://localhost:8080',
         apiKey: 'secret-key',
       });
-      const parsed = JSON.parse(res.content as string) as { id: string; name: string; hasApiKey: boolean; apiKey?: string };
+      const parsed = JSON.parse(res.content as string) as {
+        id: string;
+        name: string;
+        hasApiKey: boolean;
+        apiKey?: string;
+      };
       expect(parsed.name).toBe('Local Llama');
       expect(parsed.hasApiKey).toBe(true);
       expect(parsed.apiKey).toBeUndefined();
@@ -299,15 +310,20 @@ describe('BackendWorkbench', () => {
     it('create → get round-trips a script and broadcasts', async () => {
       const { template, bus } = makeTemplate([], stubAdapter());
       const created = JSON.parse(
-        (await template.execute('custom_backend_create', {
-          name: 'Echo',
-          description: 'repeats input',
-          luaSource: ECHO_LUA,
-        })).content as string,
+        (
+          await template.execute('custom_backend_create', {
+            name: 'Echo',
+            description: 'repeats input',
+            luaSource: ECHO_LUA,
+          })
+        ).content as string,
       ) as { id: string };
       expect(created.id).toBeTruthy();
 
-      const got = JSON.parse((await template.execute('custom_backend_get', { id: created.id })).content as string) as { name: string; luaSource: string };
+      const got = JSON.parse((await template.execute('custom_backend_get', { id: created.id })).content as string) as {
+        name: string;
+        luaSource: string;
+      };
       expect(got.name).toBe('Echo');
       expect(got.luaSource).toBe(ECHO_LUA);
 
@@ -338,7 +354,9 @@ describe('BackendWorkbench', () => {
     it('get/update/delete error for unknown ids', async () => {
       const { template } = makeTemplate([], stubAdapter());
       expect((await template.execute('custom_backend_get', { id: 'nope' })).content).toContain('not found');
-      expect((await template.execute('custom_backend_update', { id: 'nope', patch: { name: 'x' } })).content).toContain('not found');
+      expect((await template.execute('custom_backend_update', { id: 'nope', patch: { name: 'x' } })).content).toContain(
+        'not found',
+      );
       expect((await template.execute('custom_backend_delete', { id: 'nope' })).content).toContain('not found');
     });
 
@@ -355,11 +373,13 @@ describe('BackendWorkbench', () => {
       expect(stored.text).toBe('echo:hello');
 
       const adhoc = JSON.parse(
-        (await template.execute('custom_backend_test', {
-          luaSource: 'function generate(p, c) local r = backends.generate(p):await() return r.text end',
-          input: 'hi',
-          delegateResponse: 'CANNED',
-        })).content as string,
+        (
+          await template.execute('custom_backend_test', {
+            luaSource: 'function generate(p, c) local r = backends.generate(p):await() return r.text end',
+            input: 'hi',
+            delegateResponse: 'CANNED',
+          })
+        ).content as string,
       ) as { ok: boolean; text?: string; delegations: unknown[] };
       expect(adhoc.ok).toBe(true);
       expect(adhoc.text).toBe('CANNED');
@@ -371,24 +391,28 @@ describe('BackendWorkbench', () => {
     it('custom_backend_test accepts state as a plain object and delegateResponse as { text } / { error }', async () => {
       const { template } = makeTemplate([], stubAdapter());
       const res = JSON.parse(
-        (await template.execute('custom_backend_test', {
-          luaSource:
-            'function generate(p, c) local n = (type(state) == "table" and state.turns or 0) + 1 state = { turns = n } local r = backends.generate(p):await() return r.text .. " (turn " .. n .. ")" end',
-          input: 'hi',
-          state: { turns: 2 },
-          delegateResponse: { text: 'CANNED' },
-        })).content as string,
+        (
+          await template.execute('custom_backend_test', {
+            luaSource:
+              'function generate(p, c) local n = (type(state) == "table" and state.turns or 0) + 1 state = { turns = n } local r = backends.generate(p):await() return r.text .. " (turn " .. n .. ")" end',
+            input: 'hi',
+            state: { turns: 2 },
+            delegateResponse: { text: 'CANNED' },
+          })
+        ).content as string,
       ) as { ok: boolean; text?: string; stateOut?: string };
       expect(res.ok).toBe(true);
       expect(res.text).toBe('CANNED (turn 3)');
       expect(JSON.parse(res.stateOut!)).toEqual({ turns: 3 });
 
       const failing = JSON.parse(
-        (await template.execute('custom_backend_test', {
-          luaSource: 'function generate(p, c) local r = backends.generate(p):await() return r.text end',
-          input: 'hi',
-          delegateResponse: { error: 'delegate died' },
-        })).content as string,
+        (
+          await template.execute('custom_backend_test', {
+            luaSource: 'function generate(p, c) local r = backends.generate(p):await() return r.text end',
+            input: 'hi',
+            delegateResponse: { error: 'delegate died' },
+          })
+        ).content as string,
       ) as { ok: boolean; error?: string };
       expect(failing.ok).toBe(false);
       expect(failing.error).toContain('delegate died');
@@ -397,10 +421,12 @@ describe('BackendWorkbench', () => {
     it('custom_backend_test surfaces captured print() output as debug', async () => {
       const { template } = makeTemplate([], stubAdapter());
       const res = JSON.parse(
-        (await template.execute('custom_backend_test', {
-          luaSource: 'function generate(p, c) print("checking prompt", #p.messages) return "ok" end',
-          input: 'hi',
-        })).content as string,
+        (
+          await template.execute('custom_backend_test', {
+            luaSource: 'function generate(p, c) print("checking prompt", #p.messages) return "ok" end',
+            input: 'hi',
+          })
+        ).content as string,
       ) as { ok: boolean; debug?: string };
       expect(res.ok).toBe(true);
       expect(res.debug).toBe('checking prompt\t1\n');

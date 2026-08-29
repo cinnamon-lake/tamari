@@ -76,7 +76,3 @@ export function promptPopup(message: string, defaultValue = '', title?: string):
     defaultValue,
   }) as Promise<string | null>;
 }
-
-export function inputPopup(config: Omit<PopupConfig, 'type'> & { inputType: PopupInputType }): Promise<unknown> {
-  return showPopup({ ...config, type: 'input' });
-}

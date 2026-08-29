@@ -10,7 +10,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'node:crypto';
 import { getLogger } from '../lib/logger.js';
 
-const log = getLogger('api');
+const log = getLogger('middleware/requestLogger');
 
 export function requestLogger(): (req: Request, res: Response, next: NextFunction) => void {
   return (req: Request, res: Response, next: NextFunction) => {

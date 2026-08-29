@@ -5,20 +5,15 @@ import { SchemaForm } from './SchemaForm.js';
 import { IdBadge } from './IdBadge.js';
 import { confirmPopup } from '../stores/popupStore.js';
 import { useI18n } from '../i18n/index.js';
-import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
-import { createBackdropDismiss } from '../lib/backdropDismiss.js';
+import { Modal } from './Modal.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import type { Toolset, ToolTemplate } from '@tamari/types';
 import './ToolsModal.css';
 
 export function ToolsModal(props: { onClose: () => void }) {
   const { t } = useI18n();
-  saveFocus();
 
-  const close = () => {
-    restoreFocus();
-    props.onClose();
-  };
+  const close = () => props.onClose();
 
   const [lastCreatedToolsetId, setLastCreatedToolsetId] = createSignal<string | null>(null);
   const [lastCreatedLuaId, setLastCreatedLuaId] = createSignal<string | null>(null);
@@ -42,46 +37,58 @@ export function ToolsModal(props: { onClose: () => void }) {
   });
 
   return (
-    <div class="modal-overlay" {...createBackdropDismiss(close)}>
-      <div class="modal tools-modal" role="dialog" aria-modal="true" aria-label={t('tools.title')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
-        <div class="modal-header-row">
-          <h2 class="modal-title">
-            <i class="bi bi-tools" /> {t('tools.title')}
-          </h2>
-          <button class="icon-btn" onClick={close} title={t('common.close')} aria-label={t('common.close')} type="button">
-            <i class="bi bi-x-lg" />
-          </button>
+    <Modal
+      title={
+        <>
+          <i class="bi bi-tools" /> {t('tools.title')}
+        </>
+      }
+      onClose={close}
+      class="modal tools-modal"
+      ariaLabel={t('tools.title')}
+      showCloseButton
+    >
+      <p class="tools-description">{t('tools.intro')}</p>
+
+      <div class="tools-panels">
+        <div class="tools-list">
+          <h3 class="panel-title" data-testid="toolsets-heading">
+            <i class="bi bi-collection" /> {t('tools.toolsets')}
+          </h3>
+          <For
+            each={state.toolsets}
+            fallback={
+              <p class="tools-empty" data-testid="toolsets-empty">
+                {t('tools.noToolsets')}
+              </p>
+            }
+          >
+            {(toolset) => (
+              <ToolsetCard id={toolset.id} toolset={toolset} autoExpand={lastCreatedToolsetId() === toolset.id} />
+            )}
+          </For>
+          <NewToolsetButton />
         </div>
 
-        <p class="tools-description">
-          {t('tools.intro')}
-        </p>
-
-        <div class="tools-panels">
-          <div class="tools-list">
-            <h3 class="panel-title"><i class="bi bi-collection" /> {t('tools.toolsets')}</h3>
-            <For each={state.toolsets} fallback={<p class="tools-empty">{t('tools.noToolsets')}</p>}>
-              {(toolset) => <ToolsetCard id={toolset.id} toolset={toolset} autoExpand={lastCreatedToolsetId() === toolset.id} />}
-            </For>
-            <NewToolsetButton />
-          </div>
-
-          <div class="lua-tools-panel">
-            <h3 class="panel-title"><i class="bi bi-code-slash" /> {t('tools.luaTemplates')}</h3>
-            <p class="tools-description">
-              {t('tools.luaTemplatesIntro')} <code class="inline-code">serialize()</code> / <code class="inline-code">deserialize()</code>{t('tools.luaTemplatesIntroSuffix')}
-            </p>
-            <LuaTemplateList autoEditId={lastCreatedLuaId()} />
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <button class="btn btn-primary" onClick={close}>
-            {t('tools.done')}
-          </button>
+        <div class="lua-tools-panel">
+          <h3 class="panel-title" data-testid="lua-templates-heading">
+            <i class="bi bi-code-slash" /> {t('tools.luaTemplates')}
+          </h3>
+          <p class="tools-description">
+            {t('tools.luaTemplatesIntro')} <code class="inline-code">serialize()</code> /{' '}
+            <code class="inline-code">deserialize()</code>
+            {t('tools.luaTemplatesIntroSuffix')}
+          </p>
+          <LuaTemplateList autoEditId={lastCreatedLuaId()} />
         </div>
       </div>
-    </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-primary" onClick={close}>
+          {t('tools.done')}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -130,6 +137,8 @@ function ToolsetCard(props: { id?: string; toolset: Toolset; autoExpand?: boolea
           <IdBadge id={props.toolset.id} iconOnly />
           <button
             class="btn btn-sm btn-ghost"
+            data-testid="toolset-toggle-config"
+            aria-expanded={expanded()}
             onClick={() => setExpanded(!expanded())}
             title={expanded() ? t('tools.hideConfig') : t('tools.showConfig')}
           >
@@ -151,7 +160,13 @@ function ToolsetCard(props: { id?: string; toolset: Toolset; autoExpand?: boolea
             title={t('tools.agentVisibleHint')}
             aria-label={t('tools.agentVisible')}
           />
-          <button class="btn btn-sm btn-ghost btn-danger" onClick={remove} title={t('common.delete')} aria-label={t('common.delete')}>
+          <button
+            class="btn btn-sm btn-ghost btn-danger"
+            data-testid="toolset-delete"
+            onClick={remove}
+            title={t('common.delete')}
+            aria-label={t('common.delete')}
+          >
             <i class="bi bi-trash" />
           </button>
         </div>
@@ -254,6 +269,7 @@ function ToolsetConfigPanel(props: { toolset: Toolset }) {
         <input
           class="input"
           type="text"
+          data-testid="toolset-name-input"
           value={name()}
           onInput={(e) => {
             setName(e.currentTarget.value);
@@ -266,6 +282,7 @@ function ToolsetConfigPanel(props: { toolset: Toolset }) {
         <label class="field-label">{t('tools.template')}</label>
         <select
           class="select"
+          data-testid="toolset-template-select"
           value={templateId()}
           onChange={(e) => {
             setTemplateId(e.currentTarget.value);
@@ -274,7 +291,11 @@ function ToolsetConfigPanel(props: { toolset: Toolset }) {
           }}
         >
           <For each={state.tools}>
-            {(tool) => <option id={tool.id} class="select-option" value={tool.id}>{tool.name}</option>}
+            {(tool) => (
+              <option id={tool.id} class="select-option" value={tool.id}>
+                {tool.name}
+              </option>
+            )}
           </For>
         </select>
       </div>
@@ -408,10 +429,13 @@ function ToolOverrideRow(props: {
       <div class="instance-row-editor">
         <div class="instance-field">
           <code class="tool-code">{props.toolName}</code>
-          <label class="field-label" title={t('tools.toolNameHint')}>{t('common.name')}</label>
+          <label class="field-label" title={t('tools.toolNameHint')}>
+            {t('common.name')}
+          </label>
           <input
             class="input"
             type="text"
+            data-testid="tool-override-name"
             value={name()}
             onInput={(e) => {
               setName(e.currentTarget.value);
@@ -425,6 +449,7 @@ function ToolOverrideRow(props: {
           <label class="field-label">{t('tools.descriptionLabel')}</label>
           <textarea
             class="textarea"
+            data-testid="tool-override-description"
             value={description()}
             onInput={(e) => {
               setDescription(e.currentTarget.value);
@@ -445,6 +470,7 @@ function ToolOverrideRow(props: {
                   <input
                     class="instance-input"
                     type="text"
+                    data-testid={`tool-override-param-${param.key}`}
                     value={paramDescriptions()[param.key] ?? ''}
                     onInput={(e) => {
                       const val = e.currentTarget.value;
@@ -490,7 +516,7 @@ function NewToolsetButton() {
   };
 
   return (
-    <button class="btn btn-sm" onClick={create} disabled={state.tools.length === 0}>
+    <button class="btn btn-sm" data-testid="new-toolset" onClick={create} disabled={state.tools.length === 0}>
       <i class="bi bi-plus-lg" /> {t('tools.newToolset')}
     </button>
   );
@@ -508,6 +534,7 @@ function LuaTemplateList(props: { autoEditId: string | null }) {
 
       <button
         class="btn btn-sm"
+        data-testid="new-lua-template"
         onClick={() =>
           bus.send({
             type: 'toolTemplate.create',
@@ -546,10 +573,22 @@ function LuaTemplateRow(props: { id?: string; template: ToolTemplate; autoEdit?:
               <IdBadge id={props.template.id} />
             </div>
             <div class="instance-row-actions">
-              <button class="btn btn-sm btn-ghost" onClick={() => setEditing(true)} title={t('tools.editLuaTemplate')} aria-label={t('tools.editLuaTemplate')}>
+              <button
+                class="btn btn-sm btn-ghost"
+                data-testid="lua-template-edit"
+                onClick={() => setEditing(true)}
+                title={t('tools.editLuaTemplate')}
+                aria-label={t('tools.editLuaTemplate')}
+              >
                 <i class="bi bi-pencil" />
               </button>
-              <button class="btn btn-sm btn-ghost btn-danger" onClick={remove} title={t('tools.deleteLuaTemplate')} aria-label={t('tools.deleteLuaTemplate')}>
+              <button
+                class="btn btn-sm btn-ghost btn-danger"
+                data-testid="lua-template-delete"
+                onClick={remove}
+                title={t('tools.deleteLuaTemplate')}
+                aria-label={t('tools.deleteLuaTemplate')}
+              >
                 <i class="bi bi-trash" />
               </button>
             </div>
@@ -566,7 +605,9 @@ function LuaTemplateEditor(props: { template: ToolTemplate; onDone: () => void }
   const { t } = useI18n();
   const [name, setName] = createSignal(props.template.name);
   const [code, setCode] = createSignal(props.template.code);
-  const [sandbox, setSandbox] = createSignal<NonNullable<ToolTemplate['sandbox']>>({ ...(props.template.sandbox ?? {}) });
+  const [sandbox, setSandbox] = createSignal<NonNullable<ToolTemplate['sandbox']>>({
+    ...(props.template.sandbox ?? {}),
+  });
   const [savedIndicator, setSavedIndicator] = createSignal(false);
   // Dirty + fingerprint: same live-update/dirty-protection scheme as
   // ToolsetConfigPanel — while clean, another client's update to this
@@ -628,6 +669,7 @@ function LuaTemplateEditor(props: { template: ToolTemplate; onDone: () => void }
           <input
             class="input"
             type="text"
+            data-testid="lua-template-name"
             value={name()}
             onInput={(e) => {
               setName(e.currentTarget.value);
@@ -641,6 +683,7 @@ function LuaTemplateEditor(props: { template: ToolTemplate; onDone: () => void }
         <label class="field-label">{t('tools.luaCode')}</label>
         <textarea
           class="textarea"
+          data-testid="lua-template-code"
           value={code()}
           onInput={(e) => {
             setCode(e.currentTarget.value);
@@ -656,6 +699,7 @@ function LuaTemplateEditor(props: { template: ToolTemplate; onDone: () => void }
         <label class="checkbox-row">
           <input
             type="checkbox"
+            data-testid="lua-sandbox-io"
             checked={sandbox().allowIo ?? false}
             onChange={(e) => {
               setSandbox({ ...sandbox(), allowIo: e.currentTarget.checked });
@@ -668,6 +712,7 @@ function LuaTemplateEditor(props: { template: ToolTemplate; onDone: () => void }
         <label class="checkbox-row">
           <input
             type="checkbox"
+            data-testid="lua-sandbox-os"
             checked={sandbox().allowOs ?? false}
             onChange={(e) => {
               setSandbox({ ...sandbox(), allowOs: e.currentTarget.checked });
@@ -680,6 +725,7 @@ function LuaTemplateEditor(props: { template: ToolTemplate; onDone: () => void }
         <label class="checkbox-row">
           <input
             type="checkbox"
+            data-testid="lua-sandbox-debug"
             checked={sandbox().allowDebug ?? false}
             onChange={(e) => {
               setSandbox({ ...sandbox(), allowDebug: e.currentTarget.checked });
@@ -692,6 +738,7 @@ function LuaTemplateEditor(props: { template: ToolTemplate; onDone: () => void }
         <label class="checkbox-row">
           <input
             type="checkbox"
+            data-testid="lua-sandbox-require"
             checked={sandbox().allowRequire ?? false}
             onChange={(e) => {
               setSandbox({ ...sandbox(), allowRequire: e.currentTarget.checked });
@@ -704,6 +751,7 @@ function LuaTemplateEditor(props: { template: ToolTemplate; onDone: () => void }
         <label class="checkbox-row">
           <input
             type="checkbox"
+            data-testid="lua-sandbox-net"
             checked={sandbox().allowNet ?? false}
             onChange={(e) => {
               setSandbox({ ...sandbox(), allowNet: e.currentTarget.checked });
@@ -716,6 +764,7 @@ function LuaTemplateEditor(props: { template: ToolTemplate; onDone: () => void }
         <label class="checkbox-row">
           <input
             type="checkbox"
+            data-testid="lua-sandbox-files"
             checked={sandbox().allowFiles ?? false}
             onChange={(e) => {
               setSandbox({ ...sandbox(), allowFiles: e.currentTarget.checked });
@@ -728,6 +777,7 @@ function LuaTemplateEditor(props: { template: ToolTemplate; onDone: () => void }
         <label class="checkbox-row">
           <input
             type="checkbox"
+            data-testid="lua-sandbox-st"
             checked={sandbox().allowSt ?? false}
             onChange={(e) => {
               setSandbox({ ...sandbox(), allowSt: e.currentTarget.checked });
@@ -742,7 +792,7 @@ function LuaTemplateEditor(props: { template: ToolTemplate; onDone: () => void }
         <Show when={savedIndicator()}>
           <span class="save-indicator">{t('tools.saved')}</span>
         </Show>
-        <button class="btn btn-sm btn-ghost" onClick={props.onDone}>
+        <button class="btn btn-sm btn-ghost" data-testid="lua-template-done" onClick={props.onDone}>
           {t('tools.done')}
         </button>
       </div>

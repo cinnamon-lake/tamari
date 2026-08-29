@@ -31,17 +31,32 @@ test.describe('Alternate greeting swipes', () => {
             const msg = JSON.parse(event.data);
             if (msg.type === 'snapshot') {
               const char = (msg.state?.characters ?? []).find((c: { name: string }) => c.name === name);
-              if (!char) { ws.close(); reject(new Error('character not found')); return; }
-              ws.send(JSON.stringify({
-                type: 'character.update',
-                characterId: char.id,
-                patch: { alternateGreetings: ['Greeting number two.', 'Greeting number three.'] },
-              }));
+              if (!char) {
+                ws.close();
+                reject(new Error('character not found'));
+                return;
+              }
+              ws.send(
+                JSON.stringify({
+                  type: 'character.update',
+                  characterId: char.id,
+                  patch: { alternateGreetings: ['Greeting number two.', 'Greeting number three.'] },
+                }),
+              );
             }
-            if (msg.type === 'character.updated') { ws.close(); resolve(); }
-            if (msg.type === 'error') { ws.close(); reject(new Error(msg.message)); }
+            if (msg.type === 'character.updated') {
+              ws.close();
+              resolve();
+            }
+            if (msg.type === 'error') {
+              ws.close();
+              reject(new Error(msg.message));
+            }
           };
-          setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 10000);
+          setTimeout(() => {
+            ws.close();
+            reject(new Error('timeout'));
+          }, 10000);
         }),
       { name: charName },
     );

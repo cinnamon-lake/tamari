@@ -23,13 +23,15 @@ interface FakeProvider {
 
 function fakeProvider(handlers: Record<string, Handler>): FakeProvider {
   const calls: FakeCall[] = [];
-  const execute = vi.fn(async (tool: string, args: Record<string, unknown>, context?: ToolContext): Promise<ToolExecuteResult> => {
-    calls.push({ tool, args, context });
-    const handler = handlers[tool];
-    if (handler === undefined) return { content: `Error: no fake handler for ${tool}` };
-    const out = handler(args, context);
-    return { content: typeof out === 'string' ? out : JSON.stringify(out) };
-  });
+  const execute = vi.fn(
+    async (tool: string, args: Record<string, unknown>, context?: ToolContext): Promise<ToolExecuteResult> => {
+      calls.push({ tool, args, context });
+      const handler = handlers[tool];
+      if (handler === undefined) return { content: `Error: no fake handler for ${tool}` };
+      const out = handler(args, context);
+      return { content: typeof out === 'string' ? out : JSON.stringify(out) };
+    },
+  );
   return { execute, calls };
 }
 
@@ -65,7 +67,8 @@ const QUICK_REPLIES = [{ id: 'q1', label: 'Say hi', message: 'Hi!' }];
 
 function defaultCharacterHandlers(): Record<string, Handler> {
   return {
-    character_get: (args) => (args['characterId'] === CARD['id'] ? CARD : `Error: character not found: ${String(args['characterId'])}`),
+    character_get: (args) =>
+      args['characterId'] === CARD['id'] ? CARD : `Error: character not found: ${String(args['characterId'])}`,
     character_create: () => ({ id: 'c9', name: 'Newbie' }),
     character_update: () => ({ ok: true }),
     lorebook_get: () => ({ entries: LORE_ENTRIES }),
@@ -120,7 +123,12 @@ function setup(
   return { template: new WorkbenchTemplate(providers), providers, fakes };
 }
 
-async function exec(template: WorkbenchTemplate, tool: string, args: Record<string, unknown>, context?: ToolContext): Promise<string> {
+async function exec(
+  template: WorkbenchTemplate,
+  tool: string,
+  args: Record<string, unknown>,
+  context?: ToolContext,
+): Promise<string> {
   const result = await template.execute(tool, args, context);
   return result.content as string;
 }
@@ -157,7 +165,9 @@ describe('WorkbenchTemplate identity', () => {
 describe('path handling', () => {
   it('rejects paths without a leading slash', async () => {
     const { template } = setup();
-    expect(await exec(template, 'ls', { path: 'characters/c1' })).toBe('Error: path must start with "/": characters/c1');
+    expect(await exec(template, 'ls', { path: 'characters/c1' })).toBe(
+      'Error: path must start with "/": characters/c1',
+    );
     expect(await exec(template, 'read', { path: 'characters/c1/description' })).toBe(
       'Error: path must start with "/": characters/c1/description',
     );
@@ -186,7 +196,9 @@ describe('path handling', () => {
 
   it('tolerates a trailing slash on an entity directory', async () => {
     const { template } = setup();
-    expect(await exec(template, 'ls', { path: '/characters/c1/' })).toBe(await exec(template, 'ls', { path: '/characters/c1' }));
+    expect(await exec(template, 'ls', { path: '/characters/c1/' })).toBe(
+      await exec(template, 'ls', { path: '/characters/c1' }),
+    );
   });
 });
 
@@ -200,7 +212,15 @@ describe('ls', () => {
 
   it('refuses every collection path', async () => {
     const { template } = setup();
-    for (const path of ['/characters/', '/backends/', '/custom-backends/', '/toolsets/', '/luatools/', '/quickreplies/', '/quickreplies/global/']) {
+    for (const path of [
+      '/characters/',
+      '/backends/',
+      '/custom-backends/',
+      '/toolsets/',
+      '/luatools/',
+      '/quickreplies/',
+      '/quickreplies/global/',
+    ]) {
       expect(await exec(template, 'ls', { path })).toBe(COLLECTION_REFUSAL);
     }
   });
@@ -208,19 +228,48 @@ describe('ls', () => {
   it('lists only non-empty fields and present subdirs of a character dir by default', async () => {
     const { template } = setup();
     expect(await exec(template, 'ls', { path: '/characters/c1' })).toBe(
-      ['description', 'scenario', 'first_mes', 'meta.json', 'lorebook/', 'greetings/', 'regex/', 'assets/', 'modules/', 'backend_logic/'].join('\n'),
+      [
+        'description',
+        'scenario',
+        'first_mes',
+        'meta.json',
+        'lorebook/',
+        'greetings/',
+        'regex/',
+        'assets/',
+        'modules/',
+        'backend_logic/',
+      ].join('\n'),
     );
   });
 
   it('keeps empty fields hidden even if a leftover all flag is passed', async () => {
     const { template } = setup();
     expect(await exec(template, 'ls', { path: '/characters/c1', all: true })).toBe(
-      ['description', 'scenario', 'first_mes', 'meta.json', 'lorebook/', 'greetings/', 'regex/', 'assets/', 'modules/', 'backend_logic/'].join('\n'),
+      [
+        'description',
+        'scenario',
+        'first_mes',
+        'meta.json',
+        'lorebook/',
+        'greetings/',
+        'regex/',
+        'assets/',
+        'modules/',
+        'backend_logic/',
+      ].join('\n'),
     );
   });
 
   it('lists only meta.json for a card with no content', async () => {
-    const emptyCard = { ...CARD, description: '', scenario: '', firstMes: '', worldInfoId: null, alternateGreetings: [] };
+    const emptyCard = {
+      ...CARD,
+      description: '',
+      scenario: '',
+      firstMes: '',
+      worldInfoId: null,
+      alternateGreetings: [],
+    };
     const { template } = setup({
       character: {
         character_get: () => emptyCard,
@@ -240,8 +289,12 @@ describe('ls', () => {
   });
 
   it('lists backend_logic/ as main.lua plus every stored module', async () => {
-    const { template } = setup({ character: { backend_file_list: () => ({ files: ['lib/utils.lua', 'lib/aaa.lua'] }) } });
-    expect(await exec(template, 'ls', { path: '/characters/c1/backend_logic/' })).toBe('main.lua\nlib/utils.lua\nlib/aaa.lua');
+    const { template } = setup({
+      character: { backend_file_list: () => ({ files: ['lib/utils.lua', 'lib/aaa.lua'] }) },
+    });
+    expect(await exec(template, 'ls', { path: '/characters/c1/backend_logic/' })).toBe(
+      'main.lua\nlib/utils.lua\nlib/aaa.lua',
+    );
   });
 
   it('shows the backend_logic dir when only modules exist (no script source)', async () => {
@@ -258,7 +311,10 @@ describe('ls', () => {
   it('lists a scoped quickreply collection and maps "_" to the empty scopeId', async () => {
     const { template, fakes } = setup();
     expect(await exec(template, 'ls', { path: '/quickreplies/global/_/' })).toBe('q1.json  "Say hi"');
-    expect(fakes.quickReply.calls[0]).toMatchObject({ tool: 'quickreply_list', args: { scope: 'global', scopeId: '' } });
+    expect(fakes.quickReply.calls[0]).toMatchObject({
+      tool: 'quickreply_list',
+      args: { scope: 'global', scopeId: '' },
+    });
   });
 
   it('lists a file path as that file entry', async () => {
@@ -276,13 +332,17 @@ describe('ls', () => {
 describe('read', () => {
   it('refuses directories (entity dir and root)', async () => {
     const { template } = setup();
-    expect(await exec(template, 'read', { path: '/characters/c1' })).toBe('Error: is a directory (use ls): /characters/c1');
+    expect(await exec(template, 'read', { path: '/characters/c1' })).toBe(
+      'Error: is a directory (use ls): /characters/c1',
+    );
     expect(await exec(template, 'read', { path: '/' })).toBe('Error: is a directory (use ls): /');
   });
 
   it('reads a text field verbatim', async () => {
     const { template } = setup();
-    expect(await exec(template, 'read', { path: '/characters/c1/description' })).toBe('A wandering mage.\nShe collects dragons.');
+    expect(await exec(template, 'read', { path: '/characters/c1/description' })).toBe(
+      'A wandering mage.\nShe collects dragons.',
+    );
   });
 
   it('pretty-prints .json files', async () => {
@@ -309,7 +369,9 @@ describe('read', () => {
     const { template } = setup({
       character: { character_get: () => ({ ...CARD, description: 'l1\nl2\nl3\nl4\nl5' }) },
     });
-    expect(await exec(template, 'read', { path: '/characters/c1/description', offset: 2, limit: 2 })).toBe('2\tl2\n3\tl3');
+    expect(await exec(template, 'read', { path: '/characters/c1/description', offset: 2, limit: 2 })).toBe(
+      '2\tl2\n3\tl3',
+    );
   });
 
   it('treats a negative offset as a tail read', async () => {
@@ -336,7 +398,9 @@ describe('read', () => {
     expect(await exec(template, 'read', { path: '/characters/c1/lorebook/nope.json' })).toBe(
       'Error: no such file: /characters/c1/lorebook/nope.json',
     );
-    expect(await exec(template, 'read', { path: '/characters/nope/description' })).toBe('Error: character not found: nope');
+    expect(await exec(template, 'read', { path: '/characters/nope/description' })).toBe(
+      'Error: character not found: nope',
+    );
   });
 
   it('rejects a missing path argument', async () => {
@@ -346,11 +410,19 @@ describe('read', () => {
 
   it('reads backend_logic/main.lua and modules from the directory form', async () => {
     const { template, fakes } = setup({
-      character: { backend_file_get: (args) => (args['path'] === 'lib/utils.lua' ? { path: 'lib/utils.lua', luaSource: MODULE_SOURCE } : 'Error: no such module') },
+      character: {
+        backend_file_get: (args) =>
+          args['path'] === 'lib/utils.lua'
+            ? { path: 'lib/utils.lua', luaSource: MODULE_SOURCE }
+            : 'Error: no such module',
+      },
     });
     expect(await exec(template, 'read', { path: '/characters/c1/backend_logic/main.lua' })).toBe(LUA_SOURCE);
     expect(await exec(template, 'read', { path: '/characters/c1/backend_logic/lib/utils.lua' })).toBe(MODULE_SOURCE);
-    expect(fakes.character.calls.at(-1)).toMatchObject({ tool: 'backend_file_get', args: { characterId: 'c1', path: 'lib/utils.lua' } });
+    expect(fakes.character.calls.at(-1)).toMatchObject({
+      tool: 'backend_file_get',
+      args: { characterId: 'c1', path: 'lib/utils.lua' },
+    });
   });
 
   it('keeps backend_logic.lua as a read alias for main.lua', async () => {
@@ -390,7 +462,9 @@ describe('grep', () => {
       character: { character_get: () => ({ ...CARD, description: 'Error: dragons are not real\nor are they' }) },
     });
     // The content is file data, not a route failure: read returns it verbatim...
-    expect(await exec(template, 'read', { path: '/characters/c1/description' })).toBe('Error: dragons are not real\nor are they');
+    expect(await exec(template, 'read', { path: '/characters/c1/description' })).toBe(
+      'Error: dragons are not real\nor are they',
+    );
     // ...and grep finds matches inside it rather than returning it as the walk's error.
     const content = await exec(template, 'grep', { pattern: 'dragon', path: '/characters/c1/' });
     expect(content).toContain('/characters/c1/description:1:Error: dragons are not real');
@@ -401,11 +475,16 @@ describe('grep', () => {
     const { template } = setup({
       character: {
         backend_file_list: () => ({ files: ['lib/utils.lua'] }),
-        backend_file_get: (args) => (args['path'] === 'lib/utils.lua' ? { path: 'lib/utils.lua', luaSource: MODULE_SOURCE } : 'Error: no such module'),
+        backend_file_get: (args) =>
+          args['path'] === 'lib/utils.lua'
+            ? { path: 'lib/utils.lua', luaSource: MODULE_SOURCE }
+            : 'Error: no such module',
       },
     });
     const content = await exec(template, 'grep', { pattern: 'dragon module', path: '/characters/c1/' });
-    expect(content).toContain('/characters/c1/backend_logic/lib/utils.lua:2:function M.reply() return "dragon module" end');
+    expect(content).toContain(
+      '/characters/c1/backend_logic/lib/utils.lua:2:function M.reply() return "dragon module" end',
+    );
   });
 
   it('ignores case by default', async () => {
@@ -424,12 +503,16 @@ describe('grep', () => {
         '/characters/c1/lorebook/e1.json:5:    "dragon"',
       ].join('\n'),
     );
-    expect(await exec(template, 'grep', { pattern: 'DRAGON', path: '/characters/c1/', ignoreCase: false })).toBe('No matches in /characters/c1.');
+    expect(await exec(template, 'grep', { pattern: 'DRAGON', path: '/characters/c1/', ignoreCase: false })).toBe(
+      'No matches in /characters/c1.',
+    );
   });
 
   it('returns an Error for an invalid regex pattern', async () => {
     const { template } = setup();
-    expect(await exec(template, 'grep', { pattern: '(', path: '/characters/c1/', regex: true })).toMatch(/^Error: invalid regex — /);
+    expect(await exec(template, 'grep', { pattern: '(', path: '/characters/c1/', regex: true })).toMatch(
+      /^Error: invalid regex — /,
+    );
   });
 
   it('supports regex: true for valid patterns', async () => {
@@ -452,7 +535,10 @@ describe('grep', () => {
 describe('write', () => {
   it('creates a character via /characters/new and returns the assigned path', async () => {
     const { template, fakes } = setup();
-    const content = await exec(template, 'write', { path: '/characters/new', content: JSON.stringify({ name: 'Newbie' }) });
+    const content = await exec(template, 'write', {
+      path: '/characters/new',
+      content: JSON.stringify({ name: 'Newbie' }),
+    });
     expect(content).toBe(['{', '  "id": "c9",', '  "name": "Newbie",', '  "path": "/characters/c9/"', '}'].join('\n'));
     expect(fakes.character.calls[0]).toMatchObject({ tool: 'character_create', args: { name: 'Newbie' } });
   });
@@ -460,48 +546,81 @@ describe('write', () => {
   it('maps snake_case text-field writes to camelCase patch keys', async () => {
     const { template, fakes } = setup();
     await exec(template, 'write', { path: '/characters/c1/first_mes', content: 'Hi!' });
-    expect(fakes.character.calls[0]).toMatchObject({ tool: 'character_update', args: { characterId: 'c1', patch: { firstMes: 'Hi!' } } });
+    expect(fakes.character.calls[0]).toMatchObject({
+      tool: 'character_update',
+      args: { characterId: 'c1', patch: { firstMes: 'Hi!' } },
+    });
   });
 
   it('routes .lua writes to backend_logic_set', async () => {
     const { template, fakes } = setup();
     await exec(template, 'write', { path: '/characters/c1/backend_logic.lua', content: LUA_SOURCE });
-    expect(fakes.character.calls[0]).toMatchObject({ tool: 'backend_logic_set', args: { characterId: 'c1', luaSource: LUA_SOURCE } });
+    expect(fakes.character.calls[0]).toMatchObject({
+      tool: 'backend_logic_set',
+      args: { characterId: 'c1', luaSource: LUA_SOURCE },
+    });
   });
 
   it('routes backend_logic/ writes to backend_logic_set (main.lua) and backend_file_set (modules)', async () => {
     const { template, fakes } = setup();
     await exec(template, 'write', { path: '/characters/c1/backend_logic/main.lua', content: LUA_SOURCE });
-    expect(fakes.character.calls[0]).toMatchObject({ tool: 'backend_logic_set', args: { characterId: 'c1', luaSource: LUA_SOURCE } });
+    expect(fakes.character.calls[0]).toMatchObject({
+      tool: 'backend_logic_set',
+      args: { characterId: 'c1', luaSource: LUA_SOURCE },
+    });
 
     await exec(template, 'write', { path: '/characters/c1/backend_logic/lib/utils.lua', content: MODULE_SOURCE });
-    expect(fakes.character.calls[1]).toMatchObject({ tool: 'backend_file_set', args: { characterId: 'c1', path: 'lib/utils.lua', luaSource: MODULE_SOURCE } });
+    expect(fakes.character.calls[1]).toMatchObject({
+      tool: 'backend_file_set',
+      args: { characterId: 'c1', path: 'lib/utils.lua', luaSource: MODULE_SOURCE },
+    });
 
     // Nested module paths keep their segments.
     await exec(template, 'write', { path: '/characters/c1/backend_logic/lib/deep/util.lua', content: 'return 1' });
-    expect(fakes.character.calls[2]).toMatchObject({ tool: 'backend_file_set', args: { characterId: 'c1', path: 'lib/deep/util.lua' } });
+    expect(fakes.character.calls[2]).toMatchObject({
+      tool: 'backend_file_set',
+      args: { characterId: 'c1', path: 'lib/deep/util.lua' },
+    });
   });
 
   it('keeps only writable keys in meta.json writes', async () => {
     const { template, fakes } = setup();
     await exec(template, 'write', {
       path: '/characters/c1/meta.json',
-      content: JSON.stringify({ name: 'X', tags: ['t'], avatarUrl: 'http://x', thumbnailUrl: 'http://y', worldInfoId: 'w9' }),
+      content: JSON.stringify({
+        name: 'X',
+        tags: ['t'],
+        avatarUrl: 'http://x',
+        thumbnailUrl: 'http://y',
+        worldInfoId: 'w9',
+      }),
     });
-    expect(fakes.character.calls[0]).toMatchObject({ tool: 'character_update', args: { characterId: 'c1', patch: { name: 'X', tags: ['t'] } } });
+    expect(fakes.character.calls[0]).toMatchObject({
+      tool: 'character_update',
+      args: { characterId: 'c1', patch: { name: 'X', tags: ['t'] } },
+    });
   });
 
   it('rejects meta.json writes without writable keys', async () => {
     const { template } = setup();
-    expect(await exec(template, 'write', { path: '/characters/c1/meta.json', content: JSON.stringify({ avatarUrl: 'http://x' }) })).toBe(
+    expect(
+      await exec(template, 'write', {
+        path: '/characters/c1/meta.json',
+        content: JSON.stringify({ avatarUrl: 'http://x' }),
+      }),
+    ).toBe(
       'Error: meta.json writable fields: name, tags, alternateGreetings (avatarUrl/thumbnailUrl/worldInfoId are read-only)',
     );
   });
 
   it('rejects invalid JSON bodies', async () => {
     const { template } = setup();
-    expect(await exec(template, 'write', { path: '/characters/new', content: 'not json' })).toMatch(/^Error: invalid JSON — /);
-    expect(await exec(template, 'write', { path: '/characters/new', content: '[1,2]' })).toBe('Error: the JSON body must be an object');
+    expect(await exec(template, 'write', { path: '/characters/new', content: 'not json' })).toMatch(
+      /^Error: invalid JSON — /,
+    );
+    expect(await exec(template, 'write', { path: '/characters/new', content: '[1,2]' })).toBe(
+      'Error: the JSON body must be an object',
+    );
   });
 
   it('propagates provider Error strings', async () => {
@@ -521,7 +640,9 @@ describe('write', () => {
 
   it('returns an Error for unknown paths', async () => {
     const { template } = setup();
-    expect(await exec(template, 'write', { path: '/characters/c1/bogus', content: 'x' })).toBe('Error: no such file: /characters/c1/bogus');
+    expect(await exec(template, 'write', { path: '/characters/c1/bogus', content: 'x' })).toBe(
+      'Error: no such file: /characters/c1/bogus',
+    );
     expect(await exec(template, 'write', { path: '/nowhere/x', content: 'x' })).toBe('Error: no such file: /nowhere/x');
   });
 });
@@ -536,7 +657,11 @@ describe('edit', () => {
 
   it('replaces a unique match via the read + write flow', async () => {
     const { template, fakes } = setup();
-    const content = await exec(template, 'edit', { path: '/characters/c1/description', oldString: 'dragons', newString: 'wyverns' });
+    const content = await exec(template, 'edit', {
+      path: '/characters/c1/description',
+      oldString: 'dragons',
+      newString: 'wyverns',
+    });
     expect(content).toBe('Edited /characters/c1/description (1 replacement).');
     expect(fakes.character.calls.map((c) => c.tool)).toEqual(['character_get', 'character_update']);
     expect(fakes.character.calls[1]?.args).toEqual({
@@ -554,21 +679,34 @@ describe('edit', () => {
 
   it('returns an Error suggesting replaceAll on multiple matches', async () => {
     const { template } = setup({ character: { character_get: () => ({ ...CARD, description: 'cat and cat' }) } });
-    expect(await exec(template, 'edit', { path: '/characters/c1/description', oldString: 'cat', newString: 'dog' })).toBe(
+    expect(
+      await exec(template, 'edit', { path: '/characters/c1/description', oldString: 'cat', newString: 'dog' }),
+    ).toBe(
       'Error: oldString matches 2 locations in /characters/c1/description — provide more surrounding context for a unique match, or set replaceAll: true',
     );
   });
 
   it('honors replaceAll: true', async () => {
-    const { template, fakes } = setup({ character: { character_get: () => ({ ...CARD, description: 'cat and cat' }) } });
-    const content = await exec(template, 'edit', { path: '/characters/c1/description', oldString: 'cat', newString: 'dog', replaceAll: true });
+    const { template, fakes } = setup({
+      character: { character_get: () => ({ ...CARD, description: 'cat and cat' }) },
+    });
+    const content = await exec(template, 'edit', {
+      path: '/characters/c1/description',
+      oldString: 'cat',
+      newString: 'dog',
+      replaceAll: true,
+    });
     expect(content).toBe('Edited /characters/c1/description (2 replacements).');
     expect(fakes.character.calls[1]?.args).toEqual({ characterId: 'c1', patch: { description: 'dog and dog' } });
   });
 
   it('delegates backend_logic.lua edits to the backend_logic_edit provider op', async () => {
     const { template, fakes } = setup();
-    const content = await exec(template, 'edit', { path: '/characters/c1/backend_logic.lua', oldString: 'prompt', newString: 'p' });
+    const content = await exec(template, 'edit', {
+      path: '/characters/c1/backend_logic.lua',
+      oldString: 'prompt',
+      newString: 'p',
+    });
     expect(content).toBe('Edited backend logic');
     expect(fakes.character.calls).toHaveLength(1);
     expect(fakes.character.calls[0]?.tool).toBe('backend_logic_edit');
@@ -577,32 +715,75 @@ describe('edit', () => {
 
   it('passes replaceAll through to backend_logic_edit', async () => {
     const { template, fakes } = setup();
-    await exec(template, 'edit', { path: '/characters/c1/backend_logic.lua', oldString: 'a', newString: 'b', replaceAll: true });
-    expect(fakes.character.calls[0]?.args).toEqual({ characterId: 'c1', oldString: 'a', newString: 'b', replaceAll: true });
+    await exec(template, 'edit', {
+      path: '/characters/c1/backend_logic.lua',
+      oldString: 'a',
+      newString: 'b',
+      replaceAll: true,
+    });
+    expect(fakes.character.calls[0]?.args).toEqual({
+      characterId: 'c1',
+      oldString: 'a',
+      newString: 'b',
+      replaceAll: true,
+    });
   });
 
   it('delegates backend_logic/main.lua edits to backend_logic_edit', async () => {
     const { template, fakes } = setup();
-    await exec(template, 'edit', { path: '/characters/c1/backend_logic/main.lua', oldString: 'prompt', newString: 'p' });
+    await exec(template, 'edit', {
+      path: '/characters/c1/backend_logic/main.lua',
+      oldString: 'prompt',
+      newString: 'p',
+    });
     expect(fakes.character.calls[0]?.tool).toBe('backend_logic_edit');
     expect(fakes.character.calls[0]?.args).toEqual({ characterId: 'c1', oldString: 'prompt', newString: 'p' });
   });
 
   it('delegates backend_logic module edits to backend_file_edit', async () => {
     const { template, fakes } = setup();
-    const content = await exec(template, 'edit', { path: '/characters/c1/backend_logic/lib/utils.lua', oldString: 'a', newString: 'b' });
+    const content = await exec(template, 'edit', {
+      path: '/characters/c1/backend_logic/lib/utils.lua',
+      oldString: 'a',
+      newString: 'b',
+    });
     expect(content).toBe('Edited module');
     expect(fakes.character.calls[0]?.tool).toBe('backend_file_edit');
-    expect(fakes.character.calls[0]?.args).toEqual({ characterId: 'c1', path: 'lib/utils.lua', oldString: 'a', newString: 'b' });
+    expect(fakes.character.calls[0]?.args).toEqual({
+      characterId: 'c1',
+      path: 'lib/utils.lua',
+      oldString: 'a',
+      newString: 'b',
+    });
   });
 });
 
 describe('rm', () => {
   const allowed: Array<{ path: string; tool: string; args: Record<string, unknown>; content: string }> = [
-    { path: '/characters/c1/lorebook/e1.json', tool: 'lorebook_entry_remove', args: { characterId: 'c1', entryId: 'e1' }, content: 'Removed lorebook entry' },
-    { path: '/characters/c1/regex/r1.json', tool: 'regex_remove', args: { characterId: 'c1', ruleId: 'r1' }, content: 'Removed regex rule' },
-    { path: '/characters/c1/assets/a1.json', tool: 'character_asset_remove', args: { characterId: 'c1', assetId: 'a1' }, content: 'Removed asset' },
-    { path: '/characters/c1/modules/m1.json', tool: 'risu_module_remove', args: { characterId: 'c1', moduleId: 'm1' }, content: 'Removed module' },
+    {
+      path: '/characters/c1/lorebook/e1.json',
+      tool: 'lorebook_entry_remove',
+      args: { characterId: 'c1', entryId: 'e1' },
+      content: 'Removed lorebook entry',
+    },
+    {
+      path: '/characters/c1/regex/r1.json',
+      tool: 'regex_remove',
+      args: { characterId: 'c1', ruleId: 'r1' },
+      content: 'Removed regex rule',
+    },
+    {
+      path: '/characters/c1/assets/a1.json',
+      tool: 'character_asset_remove',
+      args: { characterId: 'c1', assetId: 'a1' },
+      content: 'Removed asset',
+    },
+    {
+      path: '/characters/c1/modules/m1.json',
+      tool: 'risu_module_remove',
+      args: { characterId: 'c1', moduleId: 'm1' },
+      content: 'Removed module',
+    },
   ];
   for (const { path, tool, args, content } of allowed) {
     it(`deletes ${path} via ${tool}`, async () => {
@@ -615,7 +796,10 @@ describe('rm', () => {
   it('deletes a backend_logic module via backend_file_remove', async () => {
     const { template, fakes } = setup();
     await exec(template, 'rm', { path: '/characters/c1/backend_logic/lib/utils.lua' });
-    expect(fakes.character.calls[0]).toMatchObject({ tool: 'backend_file_remove', args: { characterId: 'c1', path: 'lib/utils.lua' } });
+    expect(fakes.character.calls[0]).toMatchObject({
+      tool: 'backend_file_remove',
+      args: { characterId: 'c1', path: 'lib/utils.lua' },
+    });
   });
 
   it('refuses to remove backend_logic/main.lua (clear with write instead)', async () => {
@@ -632,13 +816,34 @@ describe('rm', () => {
   });
 
   const refused: Array<{ path: string; message: string }> = [
-    { path: '/characters/c1', message: 'Error: cannot remove /characters/c1 — deleting characters is not supported by the workbench' },
-    { path: '/backends/b1.json', message: 'Error: cannot remove /backends/b1.json — backend configs have no delete; overwrite with write or switch the active config' },
-    { path: '/toolsets/t1.json', message: 'Error: cannot remove /toolsets/t1.json — disable it via write with "enabled": false' },
-    { path: '/quickreplies/global/_/q1.json', message: 'Error: cannot remove /quickreplies/global/_/q1.json — quick replies have no delete (matching the existing no-delete policy)' },
-    { path: '/luatools/lt1', message: 'Error: cannot remove /luatools/lt1 — Lua tool templates have no delete (matching the existing no-delete policy)' },
+    {
+      path: '/characters/c1',
+      message: 'Error: cannot remove /characters/c1 — deleting characters is not supported by the workbench',
+    },
+    {
+      path: '/backends/b1.json',
+      message:
+        'Error: cannot remove /backends/b1.json — backend configs have no delete; overwrite with write or switch the active config',
+    },
+    {
+      path: '/toolsets/t1.json',
+      message: 'Error: cannot remove /toolsets/t1.json — disable it via write with "enabled": false',
+    },
+    {
+      path: '/quickreplies/global/_/q1.json',
+      message:
+        'Error: cannot remove /quickreplies/global/_/q1.json — quick replies have no delete (matching the existing no-delete policy)',
+    },
+    {
+      path: '/luatools/lt1',
+      message:
+        'Error: cannot remove /luatools/lt1 — Lua tool templates have no delete (matching the existing no-delete policy)',
+    },
     { path: '/characters/c1/meta.json', message: 'Error: /characters/c1/meta.json is read-only' },
-    { path: '/characters/c1/description', message: 'Error: cannot remove /characters/c1/description — clear it with write and empty content' },
+    {
+      path: '/characters/c1/description',
+      message: 'Error: cannot remove /characters/c1/description — clear it with write and empty content',
+    },
     { path: '/characters/', message: 'Error: is a directory: /characters' },
     { path: '/', message: 'Error: is a directory: /' },
   ];
@@ -675,23 +880,37 @@ describe('greetings', () => {
 
   it('returns no such file for out-of-bounds, non-numeric and trailing-junk reads', async () => {
     const { template } = setup();
-    expect(await exec(template, 'read', { path: '/characters/c1/greetings/7' })).toBe('Error: no such file: /characters/c1/greetings/7');
-    expect(await exec(template, 'read', { path: '/characters/c1/greetings/abc' })).toBe('Error: no such file: /characters/c1/greetings/abc');
-    expect(await exec(template, 'read', { path: '/characters/c1/greetings/0/extra' })).toBe('Error: no such file: /characters/c1/greetings/0/extra');
+    expect(await exec(template, 'read', { path: '/characters/c1/greetings/7' })).toBe(
+      'Error: no such file: /characters/c1/greetings/7',
+    );
+    expect(await exec(template, 'read', { path: '/characters/c1/greetings/abc' })).toBe(
+      'Error: no such file: /characters/c1/greetings/abc',
+    );
+    expect(await exec(template, 'read', { path: '/characters/c1/greetings/0/extra' })).toBe(
+      'Error: no such file: /characters/c1/greetings/0/extra',
+    );
   });
 
   it('appends via write .../greetings/new and reports the assigned path', async () => {
     const { template, fakes } = setup();
     const content = await exec(template, 'write', { path: '/characters/c1/greetings/new', content: 'Second hi' });
     expect(fakes.character.calls.map((c) => c.tool)).toEqual(['character_get', 'character_update']);
-    expect(fakes.character.calls.at(-1)?.args).toEqual({ characterId: 'c1', patch: { alternateGreetings: ['Hi again', 'Second hi'] } });
+    expect(fakes.character.calls.at(-1)?.args).toEqual({
+      characterId: 'c1',
+      patch: { alternateGreetings: ['Hi again', 'Second hi'] },
+    });
     expect(content).toContain('"path": "/characters/c1/greetings/1"');
   });
 
   it('replaces a greeting by index with the full array patch', async () => {
-    const { template, fakes } = setup({ character: { character_get: () => ({ ...CARD, alternateGreetings: ['a', 'b'] }) } });
+    const { template, fakes } = setup({
+      character: { character_get: () => ({ ...CARD, alternateGreetings: ['a', 'b'] }) },
+    });
     await exec(template, 'write', { path: '/characters/c1/greetings/1', content: 'B' });
-    expect(fakes.character.calls.at(-1)?.args).toEqual({ characterId: 'c1', patch: { alternateGreetings: ['a', 'B'] } });
+    expect(fakes.character.calls.at(-1)?.args).toEqual({
+      characterId: 'c1',
+      patch: { alternateGreetings: ['a', 'B'] },
+    });
   });
 
   it('returns no such file for an out-of-bounds write', async () => {
@@ -702,21 +921,37 @@ describe('greetings', () => {
   });
 
   it('edits a greeting via the generic read + write flow (numeric branch)', async () => {
-    const { template, fakes } = setup({ character: { character_get: () => ({ ...CARD, alternateGreetings: ['hello world'] }) } });
-    const content = await exec(template, 'edit', { path: '/characters/c1/greetings/0', oldString: 'world', newString: 'there' });
+    const { template, fakes } = setup({
+      character: { character_get: () => ({ ...CARD, alternateGreetings: ['hello world'] }) },
+    });
+    const content = await exec(template, 'edit', {
+      path: '/characters/c1/greetings/0',
+      oldString: 'world',
+      newString: 'there',
+    });
     expect(content).toBe('Edited /characters/c1/greetings/0 (1 replacement).');
-    expect(fakes.character.calls.at(-1)?.args).toEqual({ characterId: 'c1', patch: { alternateGreetings: ['hello there'] } });
+    expect(fakes.character.calls.at(-1)?.args).toEqual({
+      characterId: 'c1',
+      patch: { alternateGreetings: ['hello there'] },
+    });
   });
 
   it('removes a greeting by index, splicing the array', async () => {
-    const { template, fakes } = setup({ character: { character_get: () => ({ ...CARD, alternateGreetings: ['a', 'b', 'c'] }) } });
+    const { template, fakes } = setup({
+      character: { character_get: () => ({ ...CARD, alternateGreetings: ['a', 'b', 'c'] }) },
+    });
     await exec(template, 'rm', { path: '/characters/c1/greetings/1' });
-    expect(fakes.character.calls.at(-1)?.args).toEqual({ characterId: 'c1', patch: { alternateGreetings: ['a', 'c'] } });
+    expect(fakes.character.calls.at(-1)?.args).toEqual({
+      characterId: 'c1',
+      patch: { alternateGreetings: ['a', 'c'] },
+    });
   });
 
   it('returns no such file for an out-of-bounds rm', async () => {
     const { template } = setup();
-    expect(await exec(template, 'rm', { path: '/characters/c1/greetings/9' })).toBe('Error: no such file: /characters/c1/greetings/9');
+    expect(await exec(template, 'rm', { path: '/characters/c1/greetings/9' })).toBe(
+      'Error: no such file: /characters/c1/greetings/9',
+    );
   });
 });
 
@@ -763,7 +998,9 @@ describe('per-field files', () => {
   it('reads string fields raw and json fields as pretty JSON', async () => {
     const { template } = setupAll();
     expect(await exec(template, 'read', { path: '/characters/c1/regex/r1.json/find_regex' })).toBe('hello');
-    expect(await exec(template, 'read', { path: '/characters/c1/lorebook/e1.json/content' })).toBe('Dragons hoard gold');
+    expect(await exec(template, 'read', { path: '/characters/c1/lorebook/e1.json/content' })).toBe(
+      'Dragons hoard gold',
+    );
     expect(await exec(template, 'read', { path: '/quickreplies/global/_/q1.json/label' })).toBe('Say hi');
     expect(await exec(template, 'read', { path: '/characters/c1/meta.json/tags' })).toBe('[\n  "mage"\n]');
     expect(await exec(template, 'read', { path: '/characters/c1/lorebook/e1.json/keys' })).toBe('[\n  "dragon"\n]');
@@ -794,23 +1031,38 @@ describe('per-field files', () => {
       args: { characterId: 'c1', ruleId: 'r1', patch: { findRegex: '/foo\\d+/gi' } },
     });
     await exec(template, 'write', { path: '/quickreplies/global/_/q1.json/script', content: 'return "hi"' });
-    expect(fakes.quickReply.calls[0]).toMatchObject({ tool: 'quickreply_update', args: { id: 'q1', patch: { script: 'return "hi"' } } });
+    expect(fakes.quickReply.calls[0]).toMatchObject({
+      tool: 'quickreply_update',
+      args: { id: 'q1', patch: { script: 'return "hi"' } },
+    });
     await exec(template, 'write', { path: '/characters/c1/meta.json/name', content: 'Aria II' });
-    expect(fakes.character.calls[1]).toMatchObject({ tool: 'character_update', args: { characterId: 'c1', patch: { name: 'Aria II' } } });
+    expect(fakes.character.calls[1]).toMatchObject({
+      tool: 'character_update',
+      args: { characterId: 'c1', patch: { name: 'Aria II' } },
+    });
     await exec(template, 'write', { path: '/custom-backends/cb1/meta.json/description', content: 'New desc' });
-    expect(fakes.backend.calls[0]).toMatchObject({ tool: 'custom_backend_update', args: { id: 'cb1', patch: { description: 'New desc' } } });
+    expect(fakes.backend.calls[0]).toMatchObject({
+      tool: 'custom_backend_update',
+      args: { id: 'cb1', patch: { description: 'New desc' } },
+    });
   });
 
   it('parses json field values before patching', async () => {
     const { template, fakes } = setupAll();
     await exec(template, 'write', { path: '/characters/c1/regex/r1.json/disabled', content: 'true' });
-    expect(fakes.character.calls[0]).toMatchObject({ tool: 'regex_update', args: { characterId: 'c1', ruleId: 'r1', patch: { disabled: true } } });
+    expect(fakes.character.calls[0]).toMatchObject({
+      tool: 'regex_update',
+      args: { characterId: 'c1', ruleId: 'r1', patch: { disabled: true } },
+    });
     await exec(template, 'write', { path: '/characters/c1/lorebook/e1.json/keys', content: '["dragon", "wyrm"]' });
     expect(fakes.character.calls[1]).toMatchObject({
       tool: 'lorebook_entry_update',
       args: { characterId: 'c1', entryId: 'e1', patch: { keys: ['dragon', 'wyrm'] } },
     });
-    await exec(template, 'write', { path: '/luatools/lt1/meta.json/config_schema', content: '{"level": {"type": "number"}}' });
+    await exec(template, 'write', {
+      path: '/luatools/lt1/meta.json/config_schema',
+      content: '{"level": {"type": "number"}}',
+    });
     expect(fakes.luaTool.calls[0]).toMatchObject({
       tool: 'luatool_update',
       args: { id: 'lt1', patch: { configSchema: { level: { type: 'number' } } } },
@@ -819,7 +1071,9 @@ describe('per-field files', () => {
 
   it('rejects invalid JSON in json fields before any provider call', async () => {
     const { template, fakes } = setupAll();
-    expect(await exec(template, 'write', { path: '/characters/c1/regex/r1.json/disabled', content: 'yes' })).toMatch(/^Error: invalid JSON — /);
+    expect(await exec(template, 'write', { path: '/characters/c1/regex/r1.json/disabled', content: 'yes' })).toMatch(
+      /^Error: invalid JSON — /,
+    );
     expect(fakes.character.calls).toHaveLength(0);
   });
 
@@ -842,7 +1096,11 @@ describe('per-field files', () => {
     });
     expect(content).toBe('Edited /characters/c1/lorebook/e1.json/content (1 replacement).');
     expect(fakes.character.calls.map((c) => c.tool)).toEqual(['lorebook_get', 'lorebook_entry_update']);
-    expect(fakes.character.calls[1]?.args).toEqual({ characterId: 'c1', entryId: 'e1', patch: { content: 'Dragons guard gold' } });
+    expect(fakes.character.calls[1]?.args).toEqual({
+      characterId: 'c1',
+      entryId: 'e1',
+      patch: { content: 'Dragons guard gold' },
+    });
   });
 
   it('refuses to remove field files', async () => {
@@ -891,18 +1149,58 @@ describe('run', () => {
     for (const verb of VERBS) expect(content).toContain(`- ${verb} `);
   });
 
-  const dispatch: Array<{ verb: string; fake: 'character' | 'backend' | 'luaTool'; tool: string; args: Record<string, unknown> }> = [
+  const dispatch: Array<{
+    verb: string;
+    fake: 'character' | 'backend' | 'luaTool';
+    tool: string;
+    args: Record<string, unknown>;
+  }> = [
     { verb: 'test_backend', fake: 'backend', tool: 'backend_test', args: { configId: 'b1', mode: 'dry' } },
-    { verb: 'test_custom_backend', fake: 'backend', tool: 'custom_backend_test', args: { luaSource: 'x', input: 'hi' } },
-    { verb: 'test_backend_logic', fake: 'character', tool: 'backend_logic_test', args: { characterId: 'c1', input: 'hi' } },
+    {
+      verb: 'test_custom_backend',
+      fake: 'backend',
+      tool: 'custom_backend_test',
+      args: { luaSource: 'x', input: 'hi' },
+    },
+    {
+      verb: 'test_backend_logic',
+      fake: 'character',
+      tool: 'backend_logic_test',
+      args: { characterId: 'c1', input: 'hi' },
+    },
     { verb: 'test_luatool', fake: 'luaTool', tool: 'luatool_test', args: { code: 'x', toolName: 't' } },
     { verb: 'test_regex', fake: 'character', tool: 'regex_test', args: { text: 'hello' } },
     { verb: 'clone_character', fake: 'character', tool: 'character_clone', args: { sourceCharacterId: 'c1' } },
-    { verb: 'set_avatar', fake: 'character', tool: 'character_set_avatar', args: { characterId: 'c1', attachmentId: 'att1' } },
-    { verb: 'copy_assets', fake: 'character', tool: 'character_asset_copy', args: { characterId: 'c1', sourceCharacterId: 'c2', assetId: 'a1' } },
-    { verb: 'copy_assets', fake: 'character', tool: 'character_assets_copy', args: { characterId: 'c1', sourceCharacterId: 'c2' } },
-    { verb: 'copy_module_assets', fake: 'character', tool: 'risu_module_assets_copy', args: { characterId: 'c1', sourceCharacterId: 'c2', moduleId: 'm1' } },
-    { verb: 'move_lorebook_entry', fake: 'character', tool: 'lorebook_entry_move', args: { characterId: 'c1', entryId: 'e1', index: 0 } },
+    {
+      verb: 'set_avatar',
+      fake: 'character',
+      tool: 'character_set_avatar',
+      args: { characterId: 'c1', attachmentId: 'att1' },
+    },
+    {
+      verb: 'copy_assets',
+      fake: 'character',
+      tool: 'character_asset_copy',
+      args: { characterId: 'c1', sourceCharacterId: 'c2', assetId: 'a1' },
+    },
+    {
+      verb: 'copy_assets',
+      fake: 'character',
+      tool: 'character_assets_copy',
+      args: { characterId: 'c1', sourceCharacterId: 'c2' },
+    },
+    {
+      verb: 'copy_module_assets',
+      fake: 'character',
+      tool: 'risu_module_assets_copy',
+      args: { characterId: 'c1', sourceCharacterId: 'c2', moduleId: 'm1' },
+    },
+    {
+      verb: 'move_lorebook_entry',
+      fake: 'character',
+      tool: 'lorebook_entry_move',
+      args: { characterId: 'c1', entryId: 'e1', index: 0 },
+    },
     { verb: 'add_game_lib', fake: 'character', tool: 'backend_logic_add_game_lib', args: { characterId: 'c1' } },
   ];
   for (const { verb, fake, tool, args } of dispatch) {
@@ -1084,8 +1382,12 @@ describe('/generations debug-trace route (read-only)', () => {
 
   it('unknown ids and unknown files error; write and rm are read-only', async () => {
     const { template } = setupGenerations({ 'gen-1': RECORD });
-    expect(await exec(template, 'read', { path: '/generations/nope/meta.json' })).toBe('Error: no such file: /generations/nope/meta.json');
-    expect(await exec(template, 'read', { path: '/generations/gen-1/bogus.txt' })).toBe('Error: no such file: /generations/gen-1/bogus.txt');
+    expect(await exec(template, 'read', { path: '/generations/nope/meta.json' })).toBe(
+      'Error: no such file: /generations/nope/meta.json',
+    );
+    expect(await exec(template, 'read', { path: '/generations/gen-1/bogus.txt' })).toBe(
+      'Error: no such file: /generations/gen-1/bogus.txt',
+    );
     expect(await exec(template, 'write', { path: '/generations/gen-1/meta.json', content: '{}' })).toBe(
       'Error: /generations/gen-1/meta.json is read-only',
     );

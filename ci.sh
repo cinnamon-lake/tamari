@@ -33,8 +33,26 @@ npm run lint --workspace=server
 step "Lint packages/types"
 npm run lint --workspace=packages/types
 
+step "Lint e2e"
+npm run lint --workspace=e2e
+
 step "Lint CSS (§16 hookable elements, §22 scoped atoms)"
 npm run lint:css
+
+step "Check formatting"
+npm run format:check
+
+step "Typecheck server"
+npx tsc --noEmit -p server
+
+step "Typecheck client"
+npx tsc --noEmit -p client
+
+step "Typecheck packages/types"
+npx tsc --noEmit -p packages/types
+
+step "Typecheck e2e"
+npx tsc --noEmit -p e2e
 
 step "Test client"
 npm run test --workspace=client

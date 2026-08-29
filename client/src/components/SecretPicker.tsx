@@ -49,17 +49,10 @@ export function SecretPicker(props: { onPick: (ref: string) => void }) {
       <Show when={open()}>
         <div class="secret-picker-dropdown">
           <Show when={!loading()} fallback={<span class="hint-text">{t('common.loading')}</span>}>
-            <Show
-              when={secrets().length > 0}
-              fallback={<span class="hint-text">{t('secrets.noneAvailable')}</span>}
-            >
+            <Show when={secrets().length > 0} fallback={<span class="hint-text">{t('secrets.noneAvailable')}</span>}>
               <For each={secrets()}>
                 {(s) => (
-                  <button
-                    class="text-btn small secret-picker-item"
-                    type="button"
-                    onClick={() => pick(s)}
-                  >
+                  <button class="text-btn small secret-picker-item" type="button" onClick={() => pick(s)}>
                     {s.label ?? s.key}
                   </button>
                 )}

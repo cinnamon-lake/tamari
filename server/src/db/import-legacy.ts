@@ -32,7 +32,14 @@ import { convertLegacyScopedScripts } from '../services/characterRegex.js';
 import { insertMessageParts } from './messageParts.js';
 import extract from 'png-chunks-extract';
 import PNGtext from 'png-chunk-text';
-import type { WorldInfoEntry, BackendConfigInsert, PromptListInsert, PresetPromptDef, PresetPromptOrderEntry, ContentPart } from '@tamari/types';
+import type {
+  WorldInfoEntry,
+  BackendConfigInsert,
+  PromptListInsert,
+  PresetPromptDef,
+  PresetPromptOrderEntry,
+  ContentPart,
+} from '@tamari/types';
 
 /**
  * CWD-relative default for the v1 flat-file `data/` dir. Relative on purpose:
@@ -192,12 +199,40 @@ function legacyRoleToEnum(role: number | null | undefined): WorldInfoEntry['role
 const DEFAULT_PROMPTS: PresetPromptDef[] = [
   { identifier: 'main', name: 'Main Prompt', content: '', role: 'system', enabled: true, systemPrompt: true },
   { identifier: 'nsfw', name: 'NSFW Prompt', content: '', role: 'system', enabled: false, systemPrompt: true },
-  { identifier: 'dialogueExamples', name: 'Dialogue Examples', content: '', role: 'system', enabled: true, marker: true },
+  {
+    identifier: 'dialogueExamples',
+    name: 'Dialogue Examples',
+    content: '',
+    role: 'system',
+    enabled: true,
+    marker: true,
+  },
   { identifier: 'jailbreak', name: 'Jailbreak', content: '', role: 'system', enabled: false, systemPrompt: true },
   { identifier: 'chatHistory', name: 'Chat History', content: '', role: 'system', enabled: true, marker: true },
-  { identifier: 'worldInfoAfter', name: 'World Info (after)', content: '', role: 'system', enabled: true, marker: true },
-  { identifier: 'worldInfoBefore', name: 'World Info (before)', content: '', role: 'system', enabled: true, marker: true },
-  { identifier: 'enhanceDefinitions', name: 'Enhance Definitions', content: '', role: 'system', enabled: false, systemPrompt: true },
+  {
+    identifier: 'worldInfoAfter',
+    name: 'World Info (after)',
+    content: '',
+    role: 'system',
+    enabled: true,
+    marker: true,
+  },
+  {
+    identifier: 'worldInfoBefore',
+    name: 'World Info (before)',
+    content: '',
+    role: 'system',
+    enabled: true,
+    marker: true,
+  },
+  {
+    identifier: 'enhanceDefinitions',
+    name: 'Enhance Definitions',
+    content: '',
+    role: 'system',
+    enabled: false,
+    systemPrompt: true,
+  },
 ];
 
 const DEFAULT_ORDER: PresetPromptOrderEntry[] = [
@@ -314,17 +349,37 @@ function mapOpenAIPrompts(data: OldOpenAIPreset): { prompts: PresetPromptDef[]; 
   return { prompts, order };
 }
 
-function mapOpenAIPreset(fileName: string, data: OldOpenAIPreset): { backendConfig: BackendConfigInsert; promptList: PromptListInsert } {
+function mapOpenAIPreset(
+  fileName: string,
+  data: OldOpenAIPreset,
+): { backendConfig: BackendConfigInsert; promptList: PromptListInsert } {
   const { prompts, order } = mapOpenAIPrompts(data);
   const source = data.chat_completion_source ?? 'openai';
 
   const coreKeys = new Set([
-    'chat_completion_source', 'openai_model', 'claude_model', 'openrouter_model',
-    'google_model', 'vertexai_model', 'mistralai_model', 'chutes_model',
-    'electronhub_model', 'ai21_model', 'custom_model', 'temperature',
-    'openai_max_tokens', 'top_p', 'top_k', 'top_a', 'min_p',
-    'repetition_penalty', 'frequency_penalty', 'presence_penalty',
-    'openai_max_context', 'prompts', 'prompt_order',
+    'chat_completion_source',
+    'openai_model',
+    'claude_model',
+    'openrouter_model',
+    'google_model',
+    'vertexai_model',
+    'mistralai_model',
+    'chutes_model',
+    'electronhub_model',
+    'ai21_model',
+    'custom_model',
+    'temperature',
+    'openai_max_tokens',
+    'top_p',
+    'top_k',
+    'top_a',
+    'min_p',
+    'repetition_penalty',
+    'frequency_penalty',
+    'presence_penalty',
+    'openai_max_context',
+    'prompts',
+    'prompt_order',
   ]);
   const providerParams: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(data)) {
@@ -381,10 +436,29 @@ interface OldKoboldPreset {
   [key: string]: unknown;
 }
 
-function mapKoboldPreset(fileName: string, data: OldKoboldPreset): { backendConfig: BackendConfigInsert; promptList: PromptListInsert } {
+function mapKoboldPreset(
+  fileName: string,
+  data: OldKoboldPreset,
+): { backendConfig: BackendConfigInsert; promptList: PromptListInsert } {
   const providerParams: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(data)) {
-    if (!['temp', 'rep_pen', 'rep_pen_range', 'top_p', 'top_k', 'top_a', 'min_p', 'typical', 'tfs', 'repetition_penalty', 'frequency_penalty', 'presence_penalty', 'max_length'].includes(k)) {
+    if (
+      ![
+        'temp',
+        'rep_pen',
+        'rep_pen_range',
+        'top_p',
+        'top_k',
+        'top_a',
+        'min_p',
+        'typical',
+        'tfs',
+        'repetition_penalty',
+        'frequency_penalty',
+        'presence_penalty',
+        'max_length',
+      ].includes(k)
+    ) {
       providerParams[k] = v;
     }
   }
@@ -436,10 +510,27 @@ interface OldTextGenPreset {
   [key: string]: unknown;
 }
 
-function mapTextGenPreset(fileName: string, data: OldTextGenPreset): { backendConfig: BackendConfigInsert; promptList: PromptListInsert } {
+function mapTextGenPreset(
+  fileName: string,
+  data: OldTextGenPreset,
+): { backendConfig: BackendConfigInsert; promptList: PromptListInsert } {
   const providerParams: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(data)) {
-    if (!['temp', 'temperature', 'top_p', 'top_k', 'top_a', 'min_p', 'rep_pen', 'repetition_penalty', 'frequency_penalty', 'presence_penalty', 'max_length'].includes(k)) {
+    if (
+      ![
+        'temp',
+        'temperature',
+        'top_p',
+        'top_k',
+        'top_a',
+        'min_p',
+        'rep_pen',
+        'repetition_penalty',
+        'frequency_penalty',
+        'presence_penalty',
+        'max_length',
+      ].includes(k)
+    ) {
       providerParams[k] = v;
     }
   }
@@ -450,7 +541,7 @@ function mapTextGenPreset(fileName: string, data: OldTextGenPreset): { backendCo
       backendProvider: 'textgen',
       generationMode: 'text',
       model: '',
-      temperature: (data.temp ?? data.temperature) ?? null,
+      temperature: data.temp ?? data.temperature ?? null,
       maxTokens: data.max_length ?? null,
       topP: data.top_p ?? null,
       topK: data.top_k ?? null,
@@ -491,10 +582,27 @@ interface OldNovelAIPreset {
   [key: string]: unknown;
 }
 
-function mapNovelAIPreset(fileName: string, data: OldNovelAIPreset): { backendConfig: BackendConfigInsert; promptList: PromptListInsert } {
+function mapNovelAIPreset(
+  fileName: string,
+  data: OldNovelAIPreset,
+): { backendConfig: BackendConfigInsert; promptList: PromptListInsert } {
   const providerParams: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(data)) {
-    if (!['temperature', 'max_length', 'top_k', 'typical_p', 'tail_free_sampling', 'repetition_penalty', 'repetition_penalty_range', 'repetition_penalty_slope', 'repetition_penalty_frequency', 'repetition_penalty_presence', 'max_context'].includes(k)) {
+    if (
+      ![
+        'temperature',
+        'max_length',
+        'top_k',
+        'typical_p',
+        'tail_free_sampling',
+        'repetition_penalty',
+        'repetition_penalty_range',
+        'repetition_penalty_slope',
+        'repetition_penalty_frequency',
+        'repetition_penalty_presence',
+        'max_context',
+      ].includes(k)
+    ) {
       providerParams[k] = v;
     }
   }
@@ -639,11 +747,31 @@ export async function importLegacyData(
     }
 
     // ---------- Presets ----------
-    const presetDirs: { path: string; mapper: (name: string, data: unknown) => { backendConfig: BackendConfigInsert; promptList: PromptListInsert }; backend: string }[] = [
-      { path: join(basePath, 'OpenAI Settings'), mapper: (n, d) => mapOpenAIPreset(n, d as OldOpenAIPreset), backend: 'openai' },
-      { path: join(basePath, 'KoboldAI Settings'), mapper: (n, d) => mapKoboldPreset(n, d as OldKoboldPreset), backend: 'koboldcpp' },
-      { path: join(basePath, 'TextGen Settings'), mapper: (n, d) => mapTextGenPreset(n, d as OldTextGenPreset), backend: 'textgen' },
-      { path: join(basePath, 'NovelAI Settings'), mapper: (n, d) => mapNovelAIPreset(n, d as OldNovelAIPreset), backend: 'novelai' },
+    const presetDirs: {
+      path: string;
+      mapper: (name: string, data: unknown) => { backendConfig: BackendConfigInsert; promptList: PromptListInsert };
+      backend: string;
+    }[] = [
+      {
+        path: join(basePath, 'OpenAI Settings'),
+        mapper: (n, d) => mapOpenAIPreset(n, d as OldOpenAIPreset),
+        backend: 'openai',
+      },
+      {
+        path: join(basePath, 'KoboldAI Settings'),
+        mapper: (n, d) => mapKoboldPreset(n, d as OldKoboldPreset),
+        backend: 'koboldcpp',
+      },
+      {
+        path: join(basePath, 'TextGen Settings'),
+        mapper: (n, d) => mapTextGenPreset(n, d as OldTextGenPreset),
+        backend: 'textgen',
+      },
+      {
+        path: join(basePath, 'NovelAI Settings'),
+        mapper: (n, d) => mapNovelAIPreset(n, d as OldNovelAIPreset),
+        backend: 'novelai',
+      },
     ];
 
     for (const presetDir of presetDirs) {
@@ -939,17 +1067,19 @@ export async function importLegacyData(
             for (let i = 0; i < msgLines.length; i++) {
               try {
                 const msg: LegacyMessage = JSON.parse(msgLines[i]!);
-                const role: 'user' | 'assistant' | 'system' = (msg.is_system ?? msg.isSystem)
-                  ? 'system'
-                  : msg.is_user
-                    ? 'user'
-                    : 'assistant';
+                const role: 'user' | 'assistant' | 'system' =
+                  (msg.is_system ?? msg.isSystem) ? 'system' : msg.is_user ? 'user' : 'assistant';
 
                 const swipeId = msg.swipe_id ?? msg.swipeId ?? 0;
                 const swipes = msg.swipes ?? [msg.mes ?? ''];
                 const swipeInfo: LegacyMessage['swipe_info'] =
                   msg.swipe_info ??
-                  swipes.map(() => ({ send_date: msg.send_date ?? msg.sendDate, gen_started: 0, gen_finished: 0, extra: {} }));
+                  swipes.map(() => ({
+                    send_date: msg.send_date ?? msg.sendDate,
+                    gen_started: 0,
+                    gen_finished: 0,
+                    extra: {},
+                  }));
 
                 // Insert active swipe on the main chain
                 const activeText = swipes[swipeId] ?? msg.mes ?? '';
@@ -966,7 +1096,10 @@ export async function importLegacyData(
                     role,
                     activeText,
                     JSON.stringify(activeExtra),
-                    safeDateToUnix((activeSwipeInfo.send_date ?? activeSwipeInfo.sendDate) as string | undefined, chatMtime),
+                    safeDateToUnix(
+                      (activeSwipeInfo.send_date ?? activeSwipeInfo.sendDate) as string | undefined,
+                      chatMtime,
+                    ),
                     chatMtime,
                   ],
                 });
@@ -993,9 +1126,7 @@ export async function importLegacyData(
                     ],
                   });
                   const swipeMsgId = (swipeRs.rows[0] as Record<string, unknown>).id as number;
-                  await insertMessageParts(client, swipeMsgId, [
-                    { type: 'text', text: swipeText },
-                  ] as ContentPart[]);
+                  await insertMessageParts(client, swipeMsgId, [{ type: 'text', text: swipeText }] as ContentPart[]);
                   stats.messages++;
                 }
 
@@ -1256,13 +1387,7 @@ export async function importLegacyData(
           worldNameToUuid.set(oldWorldName, worldId);
           stmts.push({
             sql: `INSERT OR REPLACE INTO world_info (id, name, entries, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-            args: [
-              worldId,
-              legacy.name ?? oldWorldName,
-              JSON.stringify(entries),
-              mtime,
-              mtime,
-            ],
+            args: [worldId, legacy.name ?? oldWorldName, JSON.stringify(entries), mtime, mtime],
           });
           stats.worlds++;
         } catch (e) {

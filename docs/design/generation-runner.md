@@ -11,7 +11,7 @@ The generation flow currently lives in `server/src/services/GenerationService.ts
 2. **A parallel universe.** `handleImpersonate` (`:1181`) bypasses `executeGeneration` entirely and runs through `runQuietGeneration` (`:1739`) — a second, reduced copy of the `runGeneration` streaming loop (`:1378`) that silently drops tool calls and script state. Two streaming engines must be kept in sync; one of them is wrong by omission.
 3. **Special cases that are really the general case.** `executePendingTools` (`:484`) handles "continue on a message that ends in un-executed tool calls" as a pre-step. But that state is indistinguishable from "the model just emitted tool calls this round" — it should be the same code path, entered the same way.
 
-The sub-agent work makes defect 2 untenable: a sub-agent *is* a quiet generation that must call tools, so the transient path needs the full loop, not a copy of it.
+The sub-agent work makes defect 2 untenable: a sub-agent _is_ a quiet generation that must call tools, so the transient path needs the full loop, not a copy of it.
 
 ## Design principles
 
@@ -32,9 +32,9 @@ interface GenerationTarget {
   readonly chatId: string;
   readonly kind: 'send' | 'regenerate' | 'continue' | 'impersonate' | 'quiet' | 'genraw' | 'subagent';
   readonly persistent: boolean;
-  readonly messageId: number | null;   // null for ephemeral targets; null until
-                                       // prepare() for fresh messages (the target
-                                       // is the message's *slot* until then)
+  readonly messageId: number | null; // null for ephemeral targets; null until
+  // prepare() for fresh messages (the target
+  // is the message's *slot* until then)
 
   /** POLICY 1: prompt assembly. The backend is handed down (model-aware
       token counting, wire formatting — text adapters flatten via their
@@ -49,10 +49,10 @@ interface GenerationTarget {
   pendingToolCalls(): ToolCall[];
 
   /** POLICY 2: persistence & broadcasting */
-  prepare(): Promise<void>;                                // create/resolve message, broadcast appends
-  write(item: BackendStreamItem): Promise<void>;           // throttled flush is the impl's business
+  prepare(): Promise<void>; // create/resolve message, broadcast appends
+  write(item: BackendStreamItem): Promise<void>; // throttled flush is the impl's business
   writeToolOutcome(call: ToolCall, outcome: ToolOutcome): Promise<void>;
-  finalize(result: GenerationResult): Promise<void>;       // persist, generation record, final broadcast
+  finalize(result: GenerationResult): Promise<void>; // persist, generation record, final broadcast
   abort(partial: GenerationResult): Promise<void>;
 }
 ```
@@ -63,22 +63,22 @@ interface GenerationTarget {
 
 - **send / regenerate** — history is the branch up to the anchor (the user message / the swipe's parent); the fresh target's `read()` is empty-or-partial.
 - **continue** — the existing message's accumulated parts (text, tool_use, tool_result) read as the trailing content; the model picks up exactly where the state says it is. This is why continue-with-pending-tools needs no special case.
-- **impersonate** — `DraftTarget` is *seeded* with `{ type: 'text', text: impersonationPrompt }`: it exists in `read()` (appended last, as the start of the user's turn) but is never persisted — `finalize` broadcasts the draft and writes nothing to the DB. The impersonation prompt moves from a synthetic system slot in `PromptManager` to target seed content. **Behavioral delta to verify:** its position changes from system slot to trailing content; existing impersonate tests must pin the new position.
+- **impersonate** — `DraftTarget` is _seeded_ with `{ type: 'text', text: impersonationPrompt }`: it exists in `read()` (appended last, as the start of the user's turn) but is never persisted — `finalize` broadcasts the draft and writes nothing to the DB. The impersonation prompt moves from a synthetic system slot in `PromptManager` to target seed content. **Behavioral delta to verify:** its position changes from system slot to trailing content; existing impersonate tests must pin the new position.
 
 **Prompt assembly is reframed: the prompt list asks for the character definition.** The preset's prompt list declares slots and markers; the marker resolver walks chat → character/persona to fill `charDescription`, `scenario`, `personaDescription`, etc. Most of `buildGenerationPrompt`'s current opts object was always derivable from the chat — now it's derived instead of passed.
 
 **Two assembly policies exist, chosen at construction:**
 
-- **Chat-prompt assembly** (full machinery: prompt list, markers, character card, world info, regex, memory, renderers — today's `PromptBuilder`, injected as a collaborator). Used by `AssistantMessageTarget` *and* `DraftTarget` — impersonate builds the complete prompt today, it only differs in seed + persistence.
-- **Seed assembly** (trivial: seed + accumulated content + tool definitions; no prompt list, no card, no world info). Used by `TranscriptTarget`. This is *correct* for a worker sub-agent — and a future card-aware sub-agent is just a `TranscriptTarget` constructed with the chat assembly instead. Construction choice, never a runner branch.
+- **Chat-prompt assembly** (full machinery: prompt list, markers, character card, world info, regex, memory, renderers — today's `PromptBuilder`, injected as a collaborator). Used by `AssistantMessageTarget` _and_ `DraftTarget` — impersonate builds the complete prompt today, it only differs in seed + persistence.
+- **Seed assembly** (trivial: seed + accumulated content + tool definitions; no prompt list, no card, no world info). Used by `TranscriptTarget`. This is _correct_ for a worker sub-agent — and a future card-aware sub-agent is just a `TranscriptTarget` constructed with the chat assembly instead. Construction choice, never a runner branch.
 
 Three implementations cover all current flows:
 
-| Implementation | Constructed by | Assembly | Covers |
-|---|---|---|---|
-| `AssistantMessageTarget` | `forNewMessage({ chatId, parentId?, characterId? })`, `continueFrom(messageId)`, `regenerateOf(messageId)` | chat | send, continue, regenerate, group-chat members |
-| `DraftTarget` | `new DraftTarget({ chatId, clientId, impersonationPrompt? })` | chat | impersonate |
-| `TranscriptTarget` | `new TranscriptTarget({ chatId, clientId?, seed, backend? })` | seed | quiet gen, genraw, sub-agents |
+| Implementation           | Constructed by                                                                                             | Assembly | Covers                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------- |
+| `AssistantMessageTarget` | `forNewMessage({ chatId, parentId?, characterId? })`, `continueFrom(messageId)`, `regenerateOf(messageId)` | chat     | send, continue, regenerate, group-chat members |
+| `DraftTarget`            | `new DraftTarget({ chatId, clientId, impersonationPrompt? })`                                              | chat     | impersonate                                    |
+| `TranscriptTarget`       | `new TranscriptTarget({ chatId, clientId?, seed, backend? })`                                              | seed     | quiet gen, genraw, sub-agents                  |
 
 The optional `characterId` on `forNewMessage` is how group chats generate per-member: the handler constructs one target per activated character. Kind-specific data (impersonation prompt, backend choice, seed) is constructor input — it never passes through the runner.
 
@@ -133,19 +133,19 @@ A sub-agent is a runner call from inside `ToolRegistry.execute`, handed the lock
 ```ts
 const outcome = await runner.run(
   new TranscriptTarget({
-    chatId,                                   // must equal the parent's — see below
+    chatId, // must equal the parent's — see below
     clientId,
     seed: [{ type: 'text', text: systemPrompt + input }],
-    backend: tool.config.backend,             // optional override
+    backend: tool.config.backend, // optional override
   }),
-  lock,                                       // parent's tenure
+  lock, // parent's tenure
 );
 return outcome.text;
 ```
 
 - Sub-agents get tool-calling for free — there is only one loop, and `TranscriptTarget.pendingToolCalls()` works on the accumulated content exactly as `AssistantMessageTarget`'s works on message parts.
-- **Recursion is bounded by depth**, carried in the *tool execution* context (not the runner): `toolRegistry.execute` receives `depth` (0 at top level), the spawn tool refuses to spawn beyond `maxAgentDepth`, and a spawned sub-agent's own tool executions receive `depth + 1`. The runner itself never sees depth — lock ownership already tells it everything it needs about nesting.
-- **Quick replies triggered from inside a sub-agent throw.** A quick reply is an external, user-level thing that is merely *triggered* by the agent — the lock is not passed into it, its `tryLock` fails, the request dies loudly. Deliberate, not a bug: silently queueing external side effects inside a sub-agent tenure would be worse.
+- **Recursion is bounded by depth**, carried in the _tool execution_ context (not the runner): `toolRegistry.execute` receives `depth` (0 at top level), the spawn tool refuses to spawn beyond `maxAgentDepth`, and a spawned sub-agent's own tool executions receive `depth + 1`. The runner itself never sees depth — lock ownership already tells it everything it needs about nesting.
+- **Quick replies triggered from inside a sub-agent throw.** A quick reply is an external, user-level thing that is merely _triggered_ by the agent — the lock is not passed into it, its `tryLock` fails, the request dies loudly. Deliberate, not a bug: silently queueing external side effects inside a sub-agent tenure would be worse.
 - Cross-chat sub-agents are forbidden: a sub-agent's `chatId` must equal its parent's, because the passed lock keys on it.
 
 ### Tool access and state sharing
@@ -200,7 +200,7 @@ All target kinds write a generation record in `finalize` — including quiet and
 
 ## Migration order
 
-1. **Target + Runner.** Migrate send/continue/regenerate, then impersonate/quiet/genraw; delete `runQuietGeneration`. Safety net: the six existing `GenerationService.*.test.ts` files; add golden-prompt tests per target kind *before* moving anything.
+1. **Target + Runner.** Migrate send/continue/regenerate, then impersonate/quiet/genraw; delete `runQuietGeneration`. Safety net: the six existing `GenerationService.*.test.ts` files; add golden-prompt tests per target kind _before_ moving anything.
 2. **Sub-agent plumbing** — lock + depth through the `ToolRegistry` context, tool allowlists, the spawn tool.
 3. **Backend registry** replacing the if-chain.
 4. ~~(Later, separate change) **Pipeline stages.**~~ ✅ Done — `PromptStages.ts` (named, ordered, replaceable stage list; behavior pinned byte-identical by the golden-prompt suite). **Consumer decision:** no external stage-registration API — positioned prompt injection is served by Author's Note, World Info depth entries, and `backend_logic` prompt editing (recipe in `docs/user/custom-backends.md`). The stage list remains an internal extension point until a use case backend_logic can't serve shows up.

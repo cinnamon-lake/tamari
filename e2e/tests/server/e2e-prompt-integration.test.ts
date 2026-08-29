@@ -9,9 +9,7 @@ describe('e2e prompt integration', () => {
   let client: ReturnType<TestHarness['connectClient']>;
 
   beforeEach(async () => {
-    const backend = new TrivialBackendAdapter([
-      [{ type: 'content', content: 'Response!' }],
-    ]);
+    const backend = new TrivialBackendAdapter([[{ type: 'content', content: 'Response!' }]]);
 
     h = new TestHarness({
       backendFactory: {
@@ -145,18 +143,14 @@ describe('e2e prompt integration', () => {
     const messages = announced.prompt.messages as Array<{ role: string; content: string }>;
 
     // Verify {{char}} was resolved to 'Seraphina' in character description marker
-    const systemContents = messages
-      .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+    const systemContents = messages.filter((m) => m.role === 'system').map((m) => m.content);
     expect(systemContents.some((c) => c.includes('Seraphina'))).toBe(true);
 
     // Verify {{user}} was resolved to 'Tester' in persona description marker
     expect(systemContents.some((c) => c.includes('Tester'))).toBe(true);
 
     // Verify greeting macro was resolved in chat history
-    const assistantContents = messages
-      .filter((m) => m.role === 'assistant')
-      .map((m) => m.content);
+    const assistantContents = messages.filter((m) => m.role === 'assistant').map((m) => m.content);
     expect(assistantContents.some((c) => c.includes('Greetings Tester!'))).toBe(true);
   });
 
@@ -215,9 +209,7 @@ describe('e2e prompt integration', () => {
 
     const announced = h.expectBroadcast('prompt.announced');
     const messages = announced.prompt.messages as Array<{ role: string; content: string }>;
-    const systemContents = messages
-      .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+    const systemContents = messages.filter((m) => m.role === 'system').map((m) => m.content);
 
     expect(systemContents.some((c) => c.includes('Magic is powered by mana crystals.'))).toBe(true);
   });
@@ -319,9 +311,7 @@ describe('e2e prompt integration', () => {
 
     const announced = h.expectBroadcast('prompt.announced');
     const messages = announced.prompt.messages as Array<{ role: string; content: string }>;
-    const systemContents = messages
-      .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+    const systemContents = messages.filter((m) => m.role === 'system').map((m) => m.content);
 
     expect(systemContents.some((c) => c.includes('You are a helpful assistant.'))).toBe(true);
     expect(systemContents.some((c) => c.includes('Always be polite and concise.'))).toBe(true);
@@ -1015,7 +1005,8 @@ describe('e2e prompt integration', () => {
           {
             identifier: 'main',
             name: 'Main',
-            content: 'eq-true:{{equal::foo::foo}}|eq-false:{{equal::foo::bar}}|q-true:{{?::foo::bar}}|q-false:{{?::false}}|q-and:{{?::foo&&bar}}',
+            content:
+              'eq-true:{{equal::foo::foo}}|eq-false:{{equal::foo::bar}}|q-true:{{?::foo::bar}}|q-false:{{?::false}}|q-and:{{?::foo&&bar}}',
             role: 'system',
             enabled: true,
             systemPrompt: true,
@@ -1294,7 +1285,8 @@ describe('e2e prompt integration', () => {
           {
             identifier: 'main',
             name: 'Main',
-            content: 'Date:{{date}}|Time:{{time}}|Week:{{weekday}}|IsoDate:{{isodate}}|IsoTime:{{isotime}}|Fmt:{{datetimeformat::YYYY-MM-DD HH:mm}}',
+            content:
+              'Date:{{date}}|Time:{{time}}|Week:{{weekday}}|IsoDate:{{isodate}}|IsoTime:{{isotime}}|Fmt:{{datetimeformat::YYYY-MM-DD HH:mm}}',
             role: 'system',
             enabled: true,
             systemPrompt: true,
@@ -1346,7 +1338,9 @@ describe('e2e prompt integration', () => {
     const content = systemContents.join(' ');
 
     // Date should be like "June 15, 2024"
-    expect(content).toMatch(/Date:(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b/);
+    expect(content).toMatch(
+      /Date:(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b/,
+    );
     // Time should be HH:mm
     expect(content).toMatch(/Time:\d{2}:\d{2}\b/);
     // Weekday should be a day name
@@ -1501,7 +1495,8 @@ describe('e2e prompt integration', () => {
           {
             identifier: 'second',
             name: 'Second',
-            content: 'Shorthand:{{.mood}}|GenType:{{lastGenerationType}}|Ext:{{hasExtension::regex}}|NoExt:{{hasExtension::missing}}',
+            content:
+              'Shorthand:{{.mood}}|GenType:{{lastGenerationType}}|Ext:{{hasExtension::regex}}|NoExt:{{hasExtension::missing}}',
             role: 'system',
             enabled: true,
             systemPrompt: true,

@@ -126,15 +126,21 @@ export function BackendDryRunPanel(props: BackendDryRunPanelProps) {
             </Show>
             <Show when={o().text}>
               <span class="text-xs text-muted">{t('customBackends.testOutput')}</span>
-              <pre class="font-mono text-sm" style={PRE_STYLE}>{o().text}</pre>
+              <pre class="font-mono text-sm" style={PRE_STYLE}>
+                {o().text}
+              </pre>
             </Show>
             <Show when={o().reasoning}>
               <span class="text-xs text-muted">{t('customBackends.testReasoning')}</span>
-              <pre class="font-mono text-sm" style={PRE_STYLE}>{o().reasoning}</pre>
+              <pre class="font-mono text-sm" style={PRE_STYLE}>
+                {o().reasoning}
+              </pre>
             </Show>
             <Show when={o().debug}>
               <span class="text-xs text-muted">{t('customBackends.testDebug')}</span>
-              <pre class="font-mono text-sm" style={PRE_STYLE}>{o().debug}</pre>
+              <pre class="font-mono text-sm" style={PRE_STYLE}>
+                {o().debug}
+              </pre>
             </Show>
             <p class="text-xs text-muted">
               {t('customBackends.testUsage', {
@@ -144,7 +150,9 @@ export function BackendDryRunPanel(props: BackendDryRunPanelProps) {
             </p>
             <Show when={o().stateOut}>
               <span class="text-xs text-muted">{t('customBackends.testStateOut')}</span>
-              <pre class="font-mono text-sm" style={PRE_STYLE}>{o().stateOut}</pre>
+              <pre class="font-mono text-sm" style={PRE_STYLE}>
+                {o().stateOut}
+              </pre>
               {/* Multi-turn testing: feed the returned state back as the next run's input state. */}
               <button class="text-btn small" type="button" onClick={() => setStateText(o().stateOut ?? '')}>
                 {t('customBackends.testFeedState')}
@@ -160,7 +168,9 @@ export function BackendDryRunPanel(props: BackendDryRunPanelProps) {
                     <summary class="text-sm">
                       {d.configId ?? t('customBackends.testDelegateDefaultId')} — {d.promptPreview}
                     </summary>
-                    <pre class="font-mono text-sm" style={PRE_STYLE}>{d.response}</pre>
+                    <pre class="font-mono text-sm" style={PRE_STYLE}>
+                      {d.response}
+                    </pre>
                   </details>
                 )}
               </For>

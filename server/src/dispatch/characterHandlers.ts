@@ -3,11 +3,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import {
-  toCharacterSummary,
-  withCharacterAvatar,
-  withCharacterAssets,
-} from '../lib/summaries.js';
+import { toCharacterSummary, withCharacterAvatar, withCharacterAssets } from '../lib/summaries.js';
 import { maybeRebroadcastGreetingSnapshot } from './helpers.js';
 import { broadcastQuickReplyList } from '../services/quickReplyBroadcast.js';
 import type { DispatcherDeps, Handlers } from './types.js';
@@ -15,15 +11,7 @@ import type { DispatcherDeps, Handlers } from './types.js';
 export function buildCharacterHandlers(
   deps: DispatcherDeps,
 ): Handlers<'character.select' | 'character.create' | 'character.update' | 'character.delete'> {
-  const {
-    bus,
-    characters,
-    characterAssets,
-    chats,
-    storage,
-    quickReplies,
-    chatBroadcast,
-  } = deps;
+  const { bus, characters, characterAssets, chats, storage, quickReplies, chatBroadcast } = deps;
 
   return {
     'character.select': async (client, msg) => {
@@ -33,7 +21,10 @@ export function buildCharacterHandlers(
         return;
       }
       const assetList = await characterAssets.listForCharacter(character.id);
-      bus.broadcast({ type: 'character.snapshot', character: withCharacterAssets(withCharacterAvatar(character), assetList) }, client.id);
+      bus.broadcast(
+        { type: 'character.snapshot', character: withCharacterAssets(withCharacterAvatar(character), assetList) },
+        client.id,
+      );
     },
 
     'character.create': async (client, msg) => {

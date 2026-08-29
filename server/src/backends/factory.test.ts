@@ -45,10 +45,7 @@ describe('createBackendAdapter', () => {
     } as Response);
 
     await consumeStream(
-      adapter!.stream(
-        { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-        new AbortController().signal,
-      ),
+      adapter!.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
     );
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];

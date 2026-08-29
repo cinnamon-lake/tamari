@@ -33,7 +33,12 @@ export interface PromptBuilderStageHost {
   readonly macroResolver: MacroResolver;
   readonly chatRenderer: ChatCompletionRenderer;
   readonly exampleBuilder: ExampleBuilder;
-  scanWorldInfo(opts: BuildOptions, history: Message[], macroCtx: MacroContext, tokenCounter: ITokenCounter): WorldInfoScanResult;
+  scanWorldInfo(
+    opts: BuildOptions,
+    history: Message[],
+    macroCtx: MacroContext,
+    tokenCounter: ITokenCounter,
+  ): WorldInfoScanResult;
   applyPromptRegexRules(history: Message[], rules: RegexRule[] | undefined): Promise<Message[]>;
   spliceAuthorsNote(
     history: Message[],
@@ -339,9 +344,7 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
           };
         }
 
-        const tools = opts.toolDefinitions && opts.toolDefinitions.length > 0
-          ? opts.toolDefinitions
-          : undefined;
+        const tools = opts.toolDefinitions && opts.toolDefinitions.length > 0 ? opts.toolDefinitions : undefined;
 
         // One renderer for every backend: the pipeline always produces a
         // message list. Text-completion adapters flatten it themselves with

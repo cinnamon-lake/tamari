@@ -42,7 +42,7 @@ import { findLatestStateSnapshot } from '../services/toolState.js';
 import { AsyncMutex, type ChatLock } from './AsyncMutex.js';
 import type { GenerationTarget, ResolvedGenerationBackend, ToolContextMessage } from './GenerationTarget.js';
 
-const log = getLogger('GenerationRunner');
+const log = getLogger('generation/GenerationRunner');
 
 /** Auto-continue may chain at most this many follow-up generations. */
 const MAX_AUTO_CONTINUE_CHAIN = 3;
@@ -147,16 +147,22 @@ export class GenerationRunner {
   /** The currently active generation, for replaying stream state to
       reconnecting clients. */
   getActiveGeneration():
-    | { id: string; chatId: string; messageId: number; text: string; reasoning?: string }
-    | undefined {
+    { id: string; chatId: string; messageId: number; text: string; reasoning?: string } | undefined {
     for (const [generationId, active] of this.active) {
       const parts = active.target.read();
       return {
         id: generationId,
         chatId: active.target.chatId,
         messageId: active.target.messageId ?? 0,
-        text: parts.filter((p) => p.type === 'text').map((p) => p.text).join(''),
-        reasoning: parts.filter((p) => p.type === 'reasoning').map((p) => p.text).join('') || undefined,
+        text: parts
+          .filter((p) => p.type === 'text')
+          .map((p) => p.text)
+          .join(''),
+        reasoning:
+          parts
+            .filter((p) => p.type === 'reasoning')
+            .map((p) => p.text)
+            .join('') || undefined,
       };
     }
     return undefined;
@@ -215,14 +221,22 @@ export class GenerationRunner {
     }
 
     if (!backend) return null;
-    return { allSettings, backendConfig: backendConfig ?? null, promptList: promptList ?? null, backendSettings, backend };
+    return {
+      allSettings,
+      backendConfig: backendConfig ?? null,
+      promptList: promptList ?? null,
+      backendSettings,
+      backend,
+    };
   }
 
   // ── The loop ───────────────────────────────────────────────────────────
 
   async run(target: GenerationTarget, lock?: ChatLock, autoChain = 0): Promise<GenerationOutcome> {
     if (lock && lock.chatId !== target.chatId) {
-      throw new Error(`cross-chat generation under a held lock is forbidden (lock: ${lock.chatId}, target: ${target.chatId})`);
+      throw new Error(
+        `cross-chat generation under a held lock is forbidden (lock: ${lock.chatId}, target: ${target.chatId})`,
+      );
     }
     const topLevel = lock === undefined;
     if (topLevel) {
@@ -251,7 +265,11 @@ export class GenerationRunner {
           finishReason: 'error',
           usage: { promptTokens: 0, completionTokens: 0 },
           error: 'NO_BACKEND',
-          traceError: { code: 'NO_BACKEND', layer: 'runner', message: 'No backend configured. Set API key and model in settings.' },
+          traceError: {
+            code: 'NO_BACKEND',
+            layer: 'runner',
+            message: 'No backend configured. Set API key and model in settings.',
+          },
         });
       }
 
@@ -383,7 +401,11 @@ export class GenerationRunner {
 
     try {
       await this.deps.generations.update(generationId, { status: 'streaming' });
-      this.deps.generationBroadcast.broadcastGenerationStarted(target.chatId, generationId, target.messageId ?? undefined);
+      this.deps.generationBroadcast.broadcastGenerationStarted(
+        target.chatId,
+        generationId,
+        target.messageId ?? undefined,
+      );
 
       const debugPrompts = Boolean(await this.deps.settings.get('debugPrompts'));
       if (debugPrompts) {
@@ -429,7 +451,10 @@ export class GenerationRunner {
           completionTokens: result.usage.completionTokens,
           meta: buildMeta(result.traceError),
         });
-        log.error({ chatId: target.chatId, generationId, backend: resolved.backend.id, error: result.error }, 'generation failed');
+        log.error(
+          { chatId: target.chatId, generationId, backend: resolved.backend.id, error: result.error },
+          'generation failed',
+        );
         this.deps.generationBroadcast.broadcastGenerationError(target.chatId, generationId, result.error);
         return result;
       }
@@ -452,7 +477,11 @@ export class GenerationRunner {
         error,
         traceError: { code: aborted ? 'ABORTED' : 'UNKNOWN', layer: resolved.backend.id, message: error },
       };
-      await this.deps.generations.update(generationId, { status: aborted ? 'aborted' : 'error', errorMessage: error, meta: buildMeta(result.traceError) });
+      await this.deps.generations.update(generationId, {
+        status: aborted ? 'aborted' : 'error',
+        errorMessage: error,
+        meta: buildMeta(result.traceError),
+      });
       if (aborted) {
         this.deps.generationBroadcast.broadcastGenerationAborted(target.chatId, generationId);
       } else {

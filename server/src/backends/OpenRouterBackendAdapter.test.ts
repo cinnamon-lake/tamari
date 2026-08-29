@@ -40,10 +40,9 @@ describe('OpenRouterBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -67,10 +66,9 @@ describe('OpenRouterBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -98,10 +96,9 @@ describe('OpenRouterBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
     expect(result.finishReason).toBe('stop');
 
     const emitted = items.filter((i) => i.type === 'text').map((i) => i.token);
@@ -123,10 +120,9 @@ describe('OpenRouterBackendAdapter', () => {
       text: async () => 'Invalid credentials',
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
 
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('401');
@@ -147,10 +143,9 @@ describe('OpenRouterBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -174,10 +169,9 @@ describe('OpenRouterBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -197,10 +191,9 @@ describe('OpenRouterBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream({ messages: [], tokenUsage: { prompt: 10, completion: 100 } }, new AbortController().signal),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -220,19 +213,21 @@ describe('OpenRouterBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          { role: 'system', content: 'Be helpful.' },
-          { role: 'user', content: 'Hello' },
-          { role: 'assistant', content: 'Hi' },
-          { role: 'user', content: 'How are you?' },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-        cacheDepth: 0,
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            { role: 'system', content: 'Be helpful.' },
+            { role: 'user', content: 'Hello' },
+            { role: 'assistant', content: 'Hi' },
+            { role: 'user', content: 'How are you?' },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+          cacheDepth: 0,
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -263,19 +258,21 @@ describe('OpenRouterBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          { role: 'system', content: 'Be helpful.' },
-          { role: 'user', content: 'Hello' },
-          { role: 'assistant', content: 'Hi' },
-          { role: 'user', content: 'How are you?' },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-        cacheDepth: 0,
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            { role: 'system', content: 'Be helpful.' },
+            { role: 'user', content: 'Hello' },
+            { role: 'assistant', content: 'Hi' },
+            { role: 'user', content: 'How are you?' },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+          cacheDepth: 0,
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -307,23 +304,25 @@ describe('OpenRouterBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [{ role: 'user', content: 'Weather in Paris?' }],
-        tokenUsage: { prompt: 10, completion: 100 },
-        tools: [
-          {
-            type: 'function',
-            function: {
-              name: 'get_weather',
-              description: 'Get weather',
-              parameters: { type: 'object', properties: { city: { type: 'string' } } },
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [{ role: 'user', content: 'Weather in Paris?' }],
+          tokenUsage: { prompt: 10, completion: 100 },
+          tools: [
+            {
+              type: 'function',
+              function: {
+                name: 'get_weather',
+                description: 'Get weather',
+                parameters: { type: 'object', properties: { city: { type: 'string' } } },
+              },
             },
-          },
-        ],
-      },
-      new AbortController().signal,
-    ));
+          ],
+        },
+        new AbortController().signal,
+      ),
+    );
 
     expect(result.finishReason).toBe('stop');
     expect(result.toolCalls).toHaveLength(1);
@@ -347,17 +346,19 @@ describe('OpenRouterBackendAdapter', () => {
       body: createMockStream(['data: [DONE]']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      {
-        messages: [
-          { role: 'system', content: 'Be helpful.' },
-          { role: 'user', content: 'Hello' },
-        ],
-        tokenUsage: { prompt: 10, completion: 100 },
-        cacheDepth: 0,
-      },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            { role: 'system', content: 'Be helpful.' },
+            { role: 'user', content: 'Hello' },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+          cacheDepth: 0,
+        },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];

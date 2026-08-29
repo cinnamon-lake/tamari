@@ -688,9 +688,7 @@ export const CustomBackendTestOutcomeSchema = z.object({
     .optional(),
   usage: z.object({ promptTokens: z.number(), completionTokens: z.number() }),
   stateOut: z.string().optional(),
-  delegations: z.array(
-    z.object({ configId: z.string().nullable(), promptPreview: z.string(), response: z.string() }),
-  ),
+  delegations: z.array(z.object({ configId: z.string().nullable(), promptPreview: z.string(), response: z.string() })),
   debug: z.string().optional(),
   error: z.string().optional(),
 });

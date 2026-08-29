@@ -153,7 +153,19 @@ describe('ReadThroughCharacterRepository reads', () => {
     await innerCharacters.create('unpacked/disk-card', { name: 'Disk Card' });
     registerCard(
       makeParsed({
-        regexRules: [{ id: 'r1', name: '', findRegex: 'a', replaceString: 'b', disabled: false, userInput: false, aiOutput: false, prompt: true, display: true }],
+        regexRules: [
+          {
+            id: 'r1',
+            name: '',
+            findRegex: 'a',
+            replaceString: 'b',
+            disabled: false,
+            userInput: false,
+            aiOutput: false,
+            prompt: true,
+            display: true,
+          },
+        ],
         backendLogic: { luaSource: 'function generate() end', files: {} },
         errors: ['lorebook/bad.json: invalid JSON'],
       }),

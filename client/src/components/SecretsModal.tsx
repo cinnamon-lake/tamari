@@ -8,8 +8,7 @@
 
 import { createSignal, Show, For, onMount } from 'solid-js';
 import { useI18n } from '../i18n/index.js';
-import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
-import { createBackdropDismiss } from '../lib/backdropDismiss.js';
+import { Modal } from './Modal.js';
 import { listSecrets, setSecret, deleteSecret, isMaskedSecret, type SecretListItem } from '../lib/secrets.js';
 import { confirmPopup } from '../stores/popupStore.js';
 
@@ -37,18 +36,16 @@ export function SecretsModal(props: { onClose: () => void }) {
   };
 
   onMount(() => {
-    saveFocus();
     void load();
   });
 
-  const close = () => {
-    restoreFocus();
-    props.onClose();
-  };
+  const close = () => props.onClose();
 
   const openAdd = () => {
     setFormMode('add');
-    setFormKey(''); setFormLabel(''); setFormValue('');
+    setFormKey('');
+    setFormLabel('');
+    setFormValue('');
   };
 
   // Masked entries carry no plaintext, so editing always starts blank — the
@@ -92,102 +89,103 @@ export function SecretsModal(props: { onClose: () => void }) {
   const toggleReveal = (k: string) => setRevealed((p) => ({ ...p, [k]: !p[k] }));
 
   return (
-    <div class="modal-overlay" {...createBackdropDismiss(close)}>
-      <div class="modal settings-modal" role="dialog" aria-modal="true" aria-label={t('secrets.title')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
-        <h2 class="modal-title">{t('secrets.title')}</h2>
+    <Modal title={t('secrets.title')} onClose={close} class="modal settings-modal" ariaLabel={t('secrets.title')}>
+      <section class="settings-section">
+        <p class="hint-text">{t('secrets.description', { ref: 'secret:my-key' })}</p>
+        {error() && <p class="hint-text text-danger">{error()}</p>}
+      </section>
 
-        <section class="settings-section">
-          <p class="hint-text">{t('secrets.description', { ref: 'secret:my-key' })}</p>
-          {error() && <p class="hint-text text-danger">{error()}</p>}
-        </section>
-
-        <section class="settings-section">
-          <Show when={!loading()} fallback={<p class="hint-text">{t('common.loading')}</p>}>
-            <Show
-              when={entries().length > 0}
-              fallback={<p class="hint-text">{t('secrets.empty')}</p>}
-            >
-              <For each={entries()}>
-                {(s) => (
-                  <div class="flex-between">
-                    <div class="flex-col-sm flex-1 min-w-0">
-                      <span class="text-sm"><strong>{s.label ?? s.key}</strong></span>
-                      <span class="text-xs text-muted font-mono">{s.key}</span>
-                      <span class="text-xs text-muted font-mono">
-                        {isMaskedSecret(s) ? s.hint : revealed()[s.key] ? s.value : '••••••••••••'}
-                      </span>
-                    </div>
-                    <div class="flex-row-sm">
-                      <Show when={!isMaskedSecret(s)}>
-                        <button class="text-btn small" type="button" onClick={() => toggleReveal(s.key)}>
-                          {revealed()[s.key] ? t('secrets.hide') : t('secrets.reveal')}
-                        </button>
-                      </Show>
-                      <button class="text-btn small" type="button" onClick={() => openEdit(s)}>
-                        {t('secrets.edit')}
-                      </button>
-                      <button class="text-btn danger small" type="button" onClick={() => remove(s)}>
-                        {t('secrets.delete')}
-                      </button>
-                    </div>
+      <section class="settings-section">
+        <Show when={!loading()} fallback={<p class="hint-text">{t('common.loading')}</p>}>
+          <Show when={entries().length > 0} fallback={<p class="hint-text">{t('secrets.empty')}</p>}>
+            <For each={entries()}>
+              {(s) => (
+                <div class="flex-between">
+                  <div class="flex-col-sm flex-1 min-w-0">
+                    <span class="text-sm">
+                      <strong>{s.label ?? s.key}</strong>
+                    </span>
+                    <span class="text-xs text-muted font-mono">{s.key}</span>
+                    <span class="text-xs text-muted font-mono">
+                      {isMaskedSecret(s) ? s.hint : revealed()[s.key] ? s.value : '••••••••••••'}
+                    </span>
                   </div>
-                )}
-              </For>
-            </Show>
+                  <div class="flex-row-sm">
+                    <Show when={!isMaskedSecret(s)}>
+                      <button class="text-btn small" type="button" onClick={() => toggleReveal(s.key)}>
+                        {revealed()[s.key] ? t('secrets.hide') : t('secrets.reveal')}
+                      </button>
+                    </Show>
+                    <button class="text-btn small" type="button" onClick={() => openEdit(s)}>
+                      {t('secrets.edit')}
+                    </button>
+                    <button class="text-btn danger small" type="button" onClick={() => remove(s)}>
+                      {t('secrets.delete')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </For>
           </Show>
+        </Show>
+      </section>
+
+      {/* Add / edit form */}
+      <Show when={formMode() !== 'closed'}>
+        <section class="settings-section">
+          <h3 class="section-heading">{formMode() === 'add' ? t('secrets.add') : t('secrets.edit')}</h3>
+          <label class="field-label">
+            {t('secrets.key')}
+            <input
+              class="input font-mono"
+              value={formKey()}
+              onInput={(e) => setFormKey(e.currentTarget.value)}
+              placeholder="openai-key"
+              disabled={formMode() === 'edit'}
+            />
+            <span class="hint-text">{t('secrets.keyHint', { ref: `secret:${formKey() || '...'}` })}</span>
+          </label>
+          <label class="field-label">
+            {t('secrets.label')}
+            <input
+              class="input"
+              value={formLabel()}
+              onInput={(e) => setFormLabel(e.currentTarget.value)}
+              placeholder="OpenAI – Work"
+            />
+          </label>
+          <label class="field-label">
+            {t('secrets.value')}
+            <input
+              class="input font-mono"
+              type="password"
+              value={formValue()}
+              onInput={(e) => setFormValue(e.currentTarget.value)}
+              placeholder="sk-..."
+            />
+          </label>
+          <div class="flex-row-sm mt-sm">
+            <button class="btn btn-primary primary-btn" type="button" onClick={() => void save()}>
+              {t('secrets.save')}
+            </button>
+            <button class="text-btn" type="button" onClick={closeForm}>
+              {t('secrets.cancel')}
+            </button>
+          </div>
         </section>
+      </Show>
 
-        {/* Add / edit form */}
-        <Show when={formMode() !== 'closed'}>
-          <section class="settings-section">
-            <h3 class="section-heading">{formMode() === 'add' ? t('secrets.add') : t('secrets.edit')}</h3>
-            <label class="field-label">
-              {t('secrets.key')}
-              <input
-                class="input font-mono"
-                value={formKey()}
-                onInput={(e) => setFormKey(e.currentTarget.value)}
-                placeholder="openai-key"
-                disabled={formMode() === 'edit'}
-              />
-              <span class="hint-text">{t('secrets.keyHint', { ref: `secret:${formKey() || '...'}` })}</span>
-            </label>
-            <label class="field-label">
-              {t('secrets.label')}
-              <input
-                class="input"
-                value={formLabel()}
-                onInput={(e) => setFormLabel(e.currentTarget.value)}
-                placeholder="OpenAI – Work"
-              />
-            </label>
-            <label class="field-label">
-              {t('secrets.value')}
-              <input
-                class="input font-mono"
-                type="password"
-                value={formValue()}
-                onInput={(e) => setFormValue(e.currentTarget.value)}
-                placeholder="sk-..."
-              />
-            </label>
-            <div class="flex-row-sm mt-sm">
-              <button class="btn btn-primary primary-btn" type="button" onClick={() => void save()}>{t('secrets.save')}</button>
-              <button class="text-btn" type="button" onClick={closeForm}>{t('secrets.cancel')}</button>
-            </div>
-          </section>
-        </Show>
+      <Show when={formMode() === 'closed'}>
+        <button class="text-btn" type="button" onClick={openAdd}>
+          <i class="bi bi-plus-lg" /> {t('secrets.add')}
+        </button>
+      </Show>
 
-        <Show when={formMode() === 'closed'}>
-          <button class="text-btn" type="button" onClick={openAdd}>
-            <i class="bi bi-plus-lg" /> {t('secrets.add')}
-          </button>
-        </Show>
-
-        <div class="modal-actions">
-          <button class="btn" onClick={close}>{t('common.close')}</button>
-        </div>
+      <div class="modal-actions">
+        <button class="btn" onClick={close}>
+          {t('common.close')}
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -20,18 +20,17 @@
  * Assertions are made against the mock's captured request
  * (GET /last-request?route=/models/ — the Gemini path starts with /models/).
  */
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { authHeaders } from '../helpers/auth.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { resetLlmRequests } from '../helpers/llm.js';
 import { setSetting } from '../helpers/settings.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
+import { uniqueName } from '../helpers/names.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
 
 /** The e2e webServer pins TAMARI_SECRET to this value (playwright.config.ts). */
-const AUTH = { Authorization: 'Bearer e2e-test-secret' };
 
 /** Mirrors FALLBACK_MODELS in server/src/backends/GeminiBackendAdapter.ts. */
 const GEMINI_FALLBACK_MODELS = [
@@ -41,13 +40,8 @@ const GEMINI_FALLBACK_MODELS = [
   { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', contextLength: 1048576 },
 ];
 
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
-
 interface RouteCapture {
   route: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   body: any;
   headers: Record<string, string>;
 }
@@ -62,9 +56,7 @@ async function getRouteCapture(routePrefix: string): Promise<RouteCapture | null
 test.describe('Gemini backend adapter', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async ({ app: _app, page }) => {
     // Keep the mock URL/key, switch the provider + model to Gemini.
     await patchActiveBackendConfig(page, {
       backendProvider: 'gemini',
@@ -76,11 +68,9 @@ test.describe('Gemini backend adapter', () => {
   test.afterEach(async ({ page }) => {
     // Persisted on the shared e2e server — clear or later specs inherit it.
     await setSetting(page, 'customStoppingStrings', []);
-    await resetBackendConfig(page);
   });
 
-  test('streams a basic reply and sends a Gemini-shaped request', async ({ page }) => {
-    const app = new App(page);
+  test('streams a basic reply and sends a Gemini-shaped request', async ({ page, app }) => {
     // Custom stop strings must arrive as generationConfig.stopSequences (the
     // adapter maps the internal params.stop onto Gemini's native field). Use a
     // string that never occurs in the reply so the mock doesn't actually cut.
@@ -113,7 +103,9 @@ test.describe('Gemini backend adapter', () => {
     expect(contents[contents.length - 1]!.role).toBe('user');
     // The first reply round-trips in history as a 'model' text part.
     const firstReply = contents.find(
-      (c) => c.role === 'model' && c.parts.some((p) => typeof p.text === 'string' && (p.text as string).includes('hello gemini')),
+      (c) =>
+        c.role === 'model' &&
+        c.parts.some((p) => typeof p.text === 'string' && (p.text as string).includes('hello gemini')),
     );
     expect(firstReply).toBeDefined();
 
@@ -132,8 +124,7 @@ test.describe('Gemini backend adapter', () => {
     expect(body.stop).toBeUndefined();
   });
 
-  test('renders thought parts as a reasoning block', async ({ page }) => {
-    const app = new App(page);
+  test('renders thought parts as a reasoning block', async ({ app }) => {
     await app.createCharacterAndChat({ name: uniqueName('Gemini Think'), firstMes: 'Ready.' });
 
     await app.sendUserMessage('think: ponder this', { expectReply: true });
@@ -148,8 +139,7 @@ test.describe('Gemini backend adapter', () => {
     await expect(reasoningBlock).toContainText('I am thinking through this carefully.');
   });
 
-  test('runs a functionCall tool loop and re-sends a functionResponse', async ({ page }) => {
-    const app = new App(page);
+  test('runs a functionCall tool loop and re-sends a functionResponse', async ({ page, app }) => {
     const toolsetId = await enableBuiltinToolset(page, 'lua_dice');
     try {
       await app.createCharacterAndChat({ name: uniqueName('Gemini Tools'), firstMes: 'Ready.' });
@@ -190,8 +180,7 @@ test.describe('Gemini backend adapter', () => {
     }
   });
 
-  test('maps MAX_TOKENS to a length finish and still renders the reply', async ({ page }) => {
-    const app = new App(page);
+  test('maps MAX_TOKENS to a length finish and still renders the reply', async ({ app }) => {
     await app.createCharacterAndChat({ name: uniqueName('Gemini Length'), firstMes: 'Ready.' });
 
     // The mock ends the stream with finishReason MAX_TOKENS; the adapter maps
@@ -207,18 +196,17 @@ test.describe('Gemini backend adapter', () => {
     // The adapter GETs {mock}/models?key=…; the mock answers with the OpenAI
     // list shape (no x-api-key header), which fails GeminiModelListSchema —
     // so listModels returns its static FALLBACK_MODELS.
-    const res = await request.get('/api/models', { headers: AUTH });
+    const res = await request.get('/api/models', { headers: authHeaders() });
     expect(res.ok()).toBe(true);
     const body = (await res.json()) as { items: unknown[]; total: number };
     expect(body.items).toEqual(GEMINI_FALLBACK_MODELS);
     expect(body.total).toBe(GEMINI_FALLBACK_MODELS.length);
   });
 
-  test('records usageMetadata completion tokens in generation stats', async ({ page, request }) => {
-    const app = new App(page);
+  test('records usageMetadata completion tokens in generation stats', async ({ request, app }) => {
     await app.createCharacterAndChat({ name: uniqueName('Gemini Usage'), firstMes: 'Ready.' });
 
-    const statsBefore = (await (await request.get('/api/stats', { headers: AUTH })).json()) as {
+    const statsBefore = (await (await request.get('/api/stats', { headers: authHeaders() })).json()) as {
       totalCompletionTokens: number;
     };
 
@@ -237,7 +225,7 @@ test.describe('Gemini backend adapter', () => {
     await expect
       .poll(
         async () => {
-          const stats = (await (await request.get('/api/stats', { headers: AUTH })).json()) as {
+          const stats = (await (await request.get('/api/stats', { headers: authHeaders() })).json()) as {
             totalCompletionTokens: number;
           };
           return stats.totalCompletionTokens - statsBefore.totalCompletionTokens;

@@ -30,6 +30,7 @@
 The architectural foundation is **solid and operational**. All foundation phases (0–2) are complete. Phase 3 (Feature Port) is well underway — the vast majority of core user-facing features are implemented.
 
 **Recently landed:**
+
 - Security audit — shared-secret auth, CSP, origin validation, path traversal fixes, Lua sandbox hardening, SSRF mitigation
 - Global message pool — `chat_id` dropped from `messages`; reachability via `parent_id` chains from `chats.active_child_id`
 - Migration chain squashed — all internal migrations consolidated into `001_init.sql` (with `002_add_chat_materialized.sql` added later for the chat-materialized view)
@@ -54,31 +55,31 @@ The architectural foundation is **solid and operational**. All foundation phases
 - **Backend configs** — Reusable named connection profiles (`BackendConfigModal` + `backend_configs` table) with live model listing, replacing the cancelled Connection Manager extension
 - **Internationalization (i18n)** — `@solid-primitives/i18n` provider + `useI18n()` (first Solid Context in the client); English extracted across all 34 components into per-domain fragments (~600 keys); language persisted in `AppSettings.language` with hot-switch (no reload) + `<html lang>`; Language picker in Settings. Only `en` ships — non-English locale selection/translation is the remaining step (drop-in: a `locales/<code>.ts` + `REGISTRY` entry).
 
-**Remaining work** is overwhelmingly *user-facing feature surface* (TTS providers, Stable Diffusion, advanced World Info features, mobile polish, macro parity, thumbnail generation, content seeding) rather than architectural unknowns.
+**Remaining work** is overwhelmingly _user-facing feature surface_ (TTS providers, Stable Diffusion, advanced World Info features, mobile polish, macro parity, thumbnail generation, content seeding) rather than architectural unknowns.
 
 ### Foundation Checklist
 
-| Item | Status |
-|---|---|
-| SQLite3 with WAL mode, migrations, one-time SillyTavern import | ✅ |
-| Tree-structured messages (`parent_id`) for swipes and branches | ✅ |
-| WebSocket event bus with snapshot replay and multi-tab sync | ✅ |
-| Server-side prompt pipeline (`PromptBuilder`, `PromptManager`, `MacroResolver`, `WorldInfoInjector`, renderers) | ✅ |
-| Backend adapters: OpenAI, OpenRouter, Claude, Gemini, llama.cpp, TabbyAPI (via Text Completion), KoboldCPP, Text Completion, Moonshot | ✅ |
-| SolidJS thin client with message pagination, markdown rendering, reactive stores | ✅ |
-| Basic CRUD for characters, chats, world info, personas, presets | ✅ |
-| Group chat backend with activation strategies | ✅ |
-| Quick Reply (Lua scripting engine) — server-side `wasmoon` runtime, `st` API with ~80 functions, atomic chat-locking execution | ✅ |
-| Virtual greeting materialization | ✅ |
-| Backend format parity — OpenRouter, Claude, Gemini tool/reasoning/vision formatting | ✅ |
-| Claude prompt caching — auto depth, non-deterministic macro guard | ✅ |
-| World Info at-depth injection + recursive activation | ✅ |
-| Per-preset connection config | ✅ |
-| Universal Lua request transformer | ✅ |
-| Backend adapter model listing | ✅ |
-| Character card V3 (core fields, assets, CharX) | ✅ |
-| Security audit (auth, CSP, origin, path traversal, Lua sandbox, SSRF, ReDoS, SQL injection, request-body scrubbing) | ✅ |
-| Template-based tool architecture (built-in + Lua templates, toolsets, branch-aware state) | ✅ |
+| Item                                                                                                                                  | Status |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| SQLite3 with WAL mode, migrations, one-time SillyTavern import                                                                        | ✅     |
+| Tree-structured messages (`parent_id`) for swipes and branches                                                                        | ✅     |
+| WebSocket event bus with snapshot replay and multi-tab sync                                                                           | ✅     |
+| Server-side prompt pipeline (`PromptBuilder`, `PromptManager`, `MacroResolver`, `WorldInfoInjector`, renderers)                       | ✅     |
+| Backend adapters: OpenAI, OpenRouter, Claude, Gemini, llama.cpp, TabbyAPI (via Text Completion), KoboldCPP, Text Completion, Moonshot | ✅     |
+| SolidJS thin client with message pagination, markdown rendering, reactive stores                                                      | ✅     |
+| Basic CRUD for characters, chats, world info, personas, presets                                                                       | ✅     |
+| Group chat backend with activation strategies                                                                                         | ✅     |
+| Quick Reply (Lua scripting engine) — server-side `wasmoon` runtime, `st` API with ~80 functions, atomic chat-locking execution        | ✅     |
+| Virtual greeting materialization                                                                                                      | ✅     |
+| Backend format parity — OpenRouter, Claude, Gemini tool/reasoning/vision formatting                                                   | ✅     |
+| Claude prompt caching — auto depth, non-deterministic macro guard                                                                     | ✅     |
+| World Info at-depth injection + recursive activation                                                                                  | ✅     |
+| Per-preset connection config                                                                                                          | ✅     |
+| Universal Lua request transformer                                                                                                     | ✅     |
+| Backend adapter model listing                                                                                                         | ✅     |
+| Character card V3 (core fields, assets, CharX)                                                                                        | ✅     |
+| Security audit (auth, CSP, origin, path traversal, Lua sandbox, SSRF, ReDoS, SQL injection, request-body scrubbing)                   | ✅     |
+| Template-based tool architecture (built-in + Lua templates, toolsets, branch-aware state)                                             | ✅     |
 
 ---
 
@@ -86,16 +87,16 @@ The architectural foundation is **solid and operational**. All foundation phases
 
 These are **deliberate, permanent changes** that improve the codebase. They are not temporary regressions.
 
-| Decision | Old Way | New Way | Why |
-|---|---|---|---|
-| **Story string templates** | Separate `renderStoryString` system for text-completion APIs | One `PromptManager` pipeline assembles messages for all APIs; text-completion adapters flatten them with their `InstructTemplate` | One prompt assembly pipeline, less code, no divergence between chat and text modes |
-| **SillyTavern system prompt presets** | Parallel `sysprompt.js` preset system alongside instruct mode | System prompt is the `main` prompt slot in `PromptManager`, overridable per-character | Eliminates a redundant preset system that confused users |
-| **Client-side macro engine** | Regex-based substitution in `substituteParams()`, client-side only | Server-side `MacroResolver.ts` with typed, pluggable handlers and block control structures | Macros must resolve before WI scanning and prompt building; server-side is the only place with full context |
-| **jQuery + global mutable state** | `chat[]`, `characters[]`, direct DOM manipulation | SolidJS reactive stores + WebSocket sync | Enables multi-tab sync, testability, and eliminates an entire class of sync bugs |
-| **Flat-file persistence** | JSON/JSONL/PNG metadata in `data/` | SQLite3 with relational schema and migrations | Enables search, aggregation, transactions, and prevents data corruption from partial writes |
-| **Theme system** | JSON themes targeting `--SmartTheme*` CSS variables and DOM selectors | CSS custom properties (design tokens) with semantic naming | Stable theming API that survives DOM refactors; old themes will need migration |
-| **Extension API** | Direct DOM access, global vars, jQuery plugins | Server-side hooks + client-side renderer plugins in designated slots | Extensions can't break the UI or leak memory; server extensions can access DB and HTTP |
-| **Post-processing filters** | Individual toggles for `collapseNewlines`, `trimSpaces`, etc. | Unified `whitespaceMode` enum (`none` / `essential` / `full`) | Simpler UI; `essential` trims leading/trailing whitespace, `full` also collapses internal whitespace and normalizes newlines |
+| Decision                              | Old Way                                                               | New Way                                                                                                                           | Why                                                                                                                          |
+| ------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Story string templates**            | Separate `renderStoryString` system for text-completion APIs          | One `PromptManager` pipeline assembles messages for all APIs; text-completion adapters flatten them with their `InstructTemplate` | One prompt assembly pipeline, less code, no divergence between chat and text modes                                           |
+| **SillyTavern system prompt presets** | Parallel `sysprompt.js` preset system alongside instruct mode         | System prompt is the `main` prompt slot in `PromptManager`, overridable per-character                                             | Eliminates a redundant preset system that confused users                                                                     |
+| **Client-side macro engine**          | Regex-based substitution in `substituteParams()`, client-side only    | Server-side `MacroResolver.ts` with typed, pluggable handlers and block control structures                                        | Macros must resolve before WI scanning and prompt building; server-side is the only place with full context                  |
+| **jQuery + global mutable state**     | `chat[]`, `characters[]`, direct DOM manipulation                     | SolidJS reactive stores + WebSocket sync                                                                                          | Enables multi-tab sync, testability, and eliminates an entire class of sync bugs                                             |
+| **Flat-file persistence**             | JSON/JSONL/PNG metadata in `data/`                                    | SQLite3 with relational schema and migrations                                                                                     | Enables search, aggregation, transactions, and prevents data corruption from partial writes                                  |
+| **Theme system**                      | JSON themes targeting `--SmartTheme*` CSS variables and DOM selectors | CSS custom properties (design tokens) with semantic naming                                                                        | Stable theming API that survives DOM refactors; old themes will need migration                                               |
+| **Extension API**                     | Direct DOM access, global vars, jQuery plugins                        | Server-side hooks + client-side renderer plugins in designated slots                                                              | Extensions can't break the UI or leak memory; server extensions can access DB and HTTP                                       |
+| **Post-processing filters**           | Individual toggles for `collapseNewlines`, `trimSpaces`, etc.         | Unified `whitespaceMode` enum (`none` / `essential` / `full`)                                                                     | Simpler UI; `essential` trims leading/trailing whitespace, `full` also collapses internal whitespace and normalizes newlines |
 
 See [Breaking Changes](breaking-changes.md) for the full migration guide.
 
@@ -103,33 +104,33 @@ See [Breaking Changes](breaking-changes.md) for the full migration guide.
 
 ## Technology Stack
 
-| Layer | Old | New |
-|---|---|---|
-| Server language | JavaScript (ES modules) | TypeScript (strict) |
-| Server framework | Express | Express + `ws` |
-| Database | Flat files (JSON/JSONL) | SQLite3 (`@libsql/client`) |
-| Client framework | Vanilla JS + jQuery | SolidJS |
-| Client bundler | Webpack (libs only) | Vite |
-| Styling | jQuery UI + custom CSS + inline | CSS custom properties + Tailwind |
-| State sync | Ad-hoc REST POST | WebSocket event bus |
-| Testing | Jest (backend only) | Vitest (monorepo — **619 type-safe client tests across 52 files**, all pass `tsc --noEmit`) |
-| API validation | None | Zod |
-| Package manager | npm | npm workspaces |
+| Layer            | Old                             | New                                                                                         |
+| ---------------- | ------------------------------- | ------------------------------------------------------------------------------------------- |
+| Server language  | JavaScript (ES modules)         | TypeScript (strict)                                                                         |
+| Server framework | Express                         | Express + `ws`                                                                              |
+| Database         | Flat files (JSON/JSONL)         | SQLite3 (`@libsql/client`)                                                                  |
+| Client framework | Vanilla JS + jQuery             | SolidJS                                                                                     |
+| Client bundler   | Webpack (libs only)             | Vite                                                                                        |
+| Styling          | jQuery UI + custom CSS + inline | CSS custom properties + Tailwind                                                            |
+| State sync       | Ad-hoc REST POST                | WebSocket event bus                                                                         |
+| Testing          | Jest (backend only)             | Vitest (monorepo — **619 type-safe client tests across 52 files**, all pass `tsc --noEmit`) |
+| API validation   | None                            | Zod                                                                                         |
+| Package manager  | npm                             | npm workspaces                                                                              |
 
 ---
 
 ## Roadmap Phases (Condensed)
 
-| Phase | Focus | Status |
-|---|---|---|
-| 0 | Foundation — monorepo, DB schema, event bus protocol, TS setup | ✅ Done |
-| 1 | Server Becomes the Brain — migration script, repos, prompt pipeline, backend adapters, generation lifecycle | ✅ Done |
-| 2 | Thin Client Rebuild — SolidJS, stores, message pagination, components, design tokens | ✅ Done |
-| 3 | Feature Port — character management, world info, presets, slash commands, swipes, group chats, stats, data maid | 🟡 In Progress (~75% complete) |
-| 3a | Backend format parity (OpenRouter tools, reasoning reconciliation, multimodal embedding) | ✅ Done |
-| 3b | Claude prompt caching (beta headers, auto depth, non-deterministic macro guard) | ✅ Done |
-| 3c | Universal Lua request transformer, per-preset connection config, model listing per adapter | ✅ Done |
-| 4 | Extension System — manifest V2, server/client hosts, built-in extensions migrate | 🟡 Not Started |
-| 5 | Polish — backup/export, testing, performance, migration wizard | 🟡 Not Started |
+| Phase | Focus                                                                                                           | Status                         |
+| ----- | --------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| 0     | Foundation — monorepo, DB schema, event bus protocol, TS setup                                                  | ✅ Done                        |
+| 1     | Server Becomes the Brain — migration script, repos, prompt pipeline, backend adapters, generation lifecycle     | ✅ Done                        |
+| 2     | Thin Client Rebuild — SolidJS, stores, message pagination, components, design tokens                            | ✅ Done                        |
+| 3     | Feature Port — character management, world info, presets, slash commands, swipes, group chats, stats, data maid | 🟡 In Progress (~75% complete) |
+| 3a    | Backend format parity (OpenRouter tools, reasoning reconciliation, multimodal embedding)                        | ✅ Done                        |
+| 3b    | Claude prompt caching (beta headers, auto depth, non-deterministic macro guard)                                 | ✅ Done                        |
+| 3c    | Universal Lua request transformer, per-preset connection config, model listing per adapter                      | ✅ Done                        |
+| 4     | Extension System — manifest V2, server/client hosts, built-in extensions migrate                                | 🟡 Not Started                 |
+| 5     | Polish — backup/export, testing, performance, migration wizard                                                  | 🟡 Not Started                 |
 
 See [Pending Features](pending-features.md) for the detailed Phase 3–5 checklist.

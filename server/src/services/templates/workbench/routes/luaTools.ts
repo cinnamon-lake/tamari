@@ -83,7 +83,11 @@ async function read(call: RouteCall): Promise<string | RouteError> {
         if (spec === undefined) return { error: err(`no such file: ${call.path}`) };
         return readField(item, spec);
       }
-      return pretty({ name: item['name'] ?? null, sandbox: item['sandbox'] ?? {}, configSchema: item['configSchema'] ?? {} });
+      return pretty({
+        name: item['name'] ?? null,
+        sandbox: item['sandbox'] ?? {},
+        configSchema: item['configSchema'] ?? {},
+      });
     }
     case 'code.lua':
       if (field !== undefined) return { error: err(`no such file: ${call.path}`) };

@@ -4,6 +4,7 @@ import request from 'supertest';
 import { TestHarness } from '../testing/TestHarness.js';
 import { AuthService } from '../services/AuthService.js';
 import { createAttachmentDownloadRouter, createAttachmentsRouter } from './attachments.js';
+import { errorHandler } from '../middleware/errorHandler.js';
 
 const TEST_SECRET = 'audit-test-secret';
 
@@ -28,6 +29,7 @@ function binaryParser(res: any, callback: (err: any, body: Buffer) => void) {
 function createDownloadApp(harness: TestHarness, auth: AuthService) {
   const app = express();
   app.use('/api/attachments', createAttachmentDownloadRouter(harness.deps.attachments, harness.deps.storage, auth));
+  app.use(errorHandler);
   return app;
 }
 
@@ -35,10 +37,8 @@ function createDownloadApp(harness: TestHarness, auth: AuthService) {
 function createUploadApp(harness: TestHarness) {
   const app = express();
   app.use(express.json());
-  app.use(
-    '/api/attachments',
-    createAttachmentsRouter(harness.deps.attachments, harness.deps.storage, harness.bus),
-  );
+  app.use('/api/attachments', createAttachmentsRouter(harness.deps.attachments, harness.deps.storage, harness.bus));
+  app.use(errorHandler);
   return app;
 }
 
@@ -173,10 +173,7 @@ describe('createAttachmentsRouter', () => {
   it('rejects a malformed body with 400 and broadcasts nothing', async () => {
     const broadcast = vi.spyOn(h.bus, 'broadcast');
 
-    const res = await request(app)
-      .post('/api/attachments')
-      .send({ mimeType: 'not-a-mime', data: '' })
-      .expect(400);
+    const res = await request(app).post('/api/attachments').send({ mimeType: 'not-a-mime', data: '' }).expect(400);
 
     expect(res.body.error).toBe('Invalid request body');
     expect(broadcast).not.toHaveBeenCalled();

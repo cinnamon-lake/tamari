@@ -248,9 +248,7 @@ describe('GenerationService.handleImpersonate', () => {
       id: 'list-1',
       name: 'Test List',
       description: '',
-      prompts: [
-        { identifier: 'impersonation', name: 'Impersonation Prompt', content, role: 'system', enabled: true },
-      ],
+      prompts: [{ identifier: 'impersonation', name: 'Impersonation Prompt', content, role: 'system', enabled: true }],
       promptOrder: [],
       createdAt: 0,
       updatedAt: 0,

@@ -19,12 +19,11 @@
  *   5. unresolvable host        → DNS-failure block
  *   6. header mutation succeeds → generation works, header lands on the wire
  */
-import { test, expect } from '../fixtures/base.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import type { Page } from '@playwright/test';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { getLastLlmRequest, resetLlmRequests, waitForNextLlmRequest } from '../helpers/llm.js';
-import { App } from '../helpers/app.js';
+import type { App } from '../helpers/app.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
 
@@ -45,20 +44,18 @@ async function expectGenerationError(app: App, text: string, match: RegExp | str
 }
 
 test.describe('Request script error paths', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  // Order-independent (no page, no backend dependency) — safe to run before
+  // the fixture's login + configureMockBackend.
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
   test.afterEach(async ({ page }) => {
     // Never leak a script (or a wiped blob) into the next spec.
     await setRequestScript(page, null);
-    await resetBackendConfig(page);
   });
 
-  test('lua error("boom") surfaces as a Request script error toast', async ({ page }) => {
-    const app = new App(page);
+  test('lua error("boom") surfaces as a Request script error toast', async ({ page, app }) => {
     const charName = `RS Boom ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -66,8 +63,7 @@ test.describe('Request script error paths', () => {
     await expectGenerationError(app, 'trigger a script failure', /Request script error:.*boom/);
   });
 
-  test('script redirect to a loopback 404 surfaces the HTTP error', async ({ page }) => {
-    const app = new App(page);
+  test('script redirect to a loopback 404 surfaces the HTTP error', async ({ page, app }) => {
     const charName = `RS NotFound ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -77,8 +73,7 @@ test.describe('Request script error paths', () => {
     await expectGenerationError(app, 'trigger a 404', /HTTP 404: Not found/);
   });
 
-  test('script redirect to a private IP is SSRF-blocked', async ({ page }) => {
-    const app = new App(page);
+  test('script redirect to a private IP is SSRF-blocked', async ({ page, app }) => {
     const charName = `RS Private ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -90,8 +85,7 @@ test.describe('Request script error paths', () => {
     );
   });
 
-  test('script redirect to a file: URL is protocol-blocked', async ({ page }) => {
-    const app = new App(page);
+  test('script redirect to a file: URL is protocol-blocked', async ({ page, app }) => {
     const charName = `RS File ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -99,9 +93,8 @@ test.describe('Request script error paths', () => {
     await expectGenerationError(app, 'trigger a protocol block', 'SSRF blocked: unsupported protocol file:');
   });
 
-  test('script redirect to an unresolvable host is DNS-blocked', async ({ page }) => {
+  test('script redirect to an unresolvable host is DNS-blocked', async ({ page, app }) => {
     test.setTimeout(90000); // DNS lookup can take seconds to fail.
-    const app = new App(page);
     const charName = `RS Dns ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -115,8 +108,7 @@ test.describe('Request script error paths', () => {
     );
   });
 
-  test('script header mutation lands on the outgoing request', async ({ page }) => {
-    const app = new App(page);
+  test('script header mutation lands on the outgoing request', async ({ page, app }) => {
     const charName = `RS Header ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 

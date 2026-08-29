@@ -1,15 +1,11 @@
-import { test, expect, type Page } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Page } from '../fixtures/base.js';
 import { getLastLlmRequest, resetLlmRequests } from '../helpers/llm.js';
 import { setSetting } from '../helpers/settings.js';
 import { App } from '../helpers/app.js';
+import { uniqueName } from '../helpers/names.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
 
 function promptText(captured: { body: unknown }): string {
   const body = captured.body as Record<string, unknown>;
@@ -74,7 +70,7 @@ async function setEntryRetrievalMode(page: Page, bookName: string, mode: 'semant
               reject(new Error(msg.message ?? 'entry update failed'));
             }
           } catch (err) {
-            reject(err);
+            reject(err instanceof Error ? err : new Error(String(err)));
           }
         };
 
@@ -120,20 +116,16 @@ async function createBookWithEntry(app: App, bookName: string, keys: string, con
 }
 
 test.describe('Semantic World Info (RAG)', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
   test.afterEach(async ({ page }) => {
     // RAG must end disabled — it is a persisted setting shared by the server.
     await configureRag(page, false);
-    await resetBackendConfig(page);
   });
 
-  test('runtime-enabled RAG activates a semantic entry without a keyword match', async ({ page }) => {
-    const app = new App(page);
+  test('runtime-enabled RAG activates a semantic entry without a keyword match', async ({ page, app }) => {
     await configureRag(page, true);
 
     const bookName = uniqueName('SemBook');
@@ -164,6 +156,8 @@ test.describe('Semantic World Info (RAG)', () => {
     // assert on the NEW reply, not the raw prompt).
     await configureRag(page, false);
     await app.sendUserMessage('tell me about grimbles again', { expectReply: true });
-    expect(await app.lastAssistantText()).toBe('Hello! This is a deterministic mock response from the e2e test server.');
+    expect(await app.lastAssistantText()).toBe(
+      'Hello! This is a deterministic mock response from the e2e test server.',
+    );
   });
 });

@@ -13,21 +13,21 @@ Regex rules come in two scopes, and both are always merged together:
 
 Both editors work the same way: click **New Regex Rule**, fill in the form, **Save Rule**. Each rule row shows its pattern, replacement, and active placements at a glance.
 
-> **Note:** When you import a SillyTavern v1 character card, scoped scripts stored at `extensions.regex_scripts` are converted to tamari rules automatically at import time. RisuAI module regexes are *not* converted — modules stay attached as a read-only porting reference; see [The Workbench](./workbench.md) for the porting workflow.
+> **Note:** When you import a SillyTavern v1 character card, scoped scripts stored at `extensions.regex_scripts` are converted to tamari rules automatically at import time. RisuAI module regexes are _not_ converted — modules stay attached as a read-only porting reference; see [The Workbench](./workbench.md) for the porting workflow.
 
 ## Rule Fields
 
-| Field | UI label | What it does |
-|-------|----------|--------------|
-| `name` | **Name** | A label for you; required. |
-| `findRegex` | **Find Regex** | The pattern to match — must be in `/pattern/flags` form (see below). |
-| `replaceString` | **Replace With** (Text) | The replacement text, with `$1`-style back-references. |
-| `replaceLua` | **Replace With (Lua)** | A Lua replacement function — takes precedence over the text replacement when set. See [Lua Replacements](#lua-replacements). |
-| `prompt` | **Prompt** checkbox | Apply when building the prompt (what the model sees). |
-| `display` | **Display** checkbox | Apply when rendering messages (what you see). |
-| `userInput` | **User Input** checkbox | Restrict the rule to your messages. |
-| `aiOutput` | **AI Output** checkbox | Restrict the rule to the character's messages. |
-| `disabled` | **Disabled** checkbox | Keep the rule but turn it off. |
+| Field           | UI label                | What it does                                                                                                                 |
+| --------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `name`          | **Name**                | A label for you; required.                                                                                                   |
+| `findRegex`     | **Find Regex**          | The pattern to match — must be in `/pattern/flags` form (see below).                                                         |
+| `replaceString` | **Replace With** (Text) | The replacement text, with `$1`-style back-references.                                                                       |
+| `replaceLua`    | **Replace With (Lua)**  | A Lua replacement function — takes precedence over the text replacement when set. See [Lua Replacements](#lua-replacements). |
+| `prompt`        | **Prompt** checkbox     | Apply when building the prompt (what the model sees).                                                                        |
+| `display`       | **Display** checkbox    | Apply when rendering messages (what you see).                                                                                |
+| `userInput`     | **User Input** checkbox | Restrict the rule to your messages.                                                                                          |
+| `aiOutput`      | **AI Output** checkbox  | Restrict the rule to the character's messages.                                                                               |
+| `disabled`      | **Disabled** checkbox   | Keep the rule but turn it off.                                                                                               |
 
 ### Find Regex format
 
@@ -51,13 +51,13 @@ The text replacement supports standard JavaScript back-references:
 
 ### Placement and role filters
 
-The **Prompt** / **Display** checkboxes choose *where* the rule runs; **User Input** / **AI Output** optionally narrow it to one role:
+The **Prompt** / **Display** checkboxes choose _where_ the rule runs; **User Input** / **AI Output** optionally narrow it to one role:
 
 - Neither role checkbox set → the rule applies to both user and assistant messages.
 - **User Input** set → only your messages. **AI Output** set → only the character's.
 - `system` and `tool` role messages never match a rule that has either role filter set.
 
-> **Warning:** A rule with neither **Prompt** nor **Display** checked does nothing — the list shows "No placement selected". Also note the editors' defaults differ: a new *character-scoped* rule starts with both placements on (apply everywhere), while a new *global* rule starts with both off. Set the placements deliberately every time.
+> **Warning:** A rule with neither **Prompt** nor **Display** checked does nothing — the list shows "No placement selected". Also note the editors' defaults differ: a new _character-scoped_ rule starts with both placements on (apply everywhere), while a new _global_ rule starts with both off. Set the placements deliberately every time.
 
 ## Lua Replacements
 
@@ -87,7 +87,7 @@ The contract:
 
 Prompt rules run on the server during prompt assembly, as the **first** stage that touches chat history — before the Author's Note splice, at-depth World Info entries, and runtime injections. Each message is processed independently, with role filtering applied per message, and only text parts are rewritten (images, tool results, and other part types pass through).
 
-The rewrite is ephemeral: it's built fresh for that generation and never written back to the chat. Prompt rules also run on your *outgoing* message as it enters the history being sent — a **Prompt** + **User Input** rule can rewrite what the model sees of your own text while your displayed message stays as typed.
+The rewrite is ephemeral: it's built fresh for that generation and never written back to the chat. Prompt rules also run on your _outgoing_ message as it enters the history being sent — a **Prompt** + **User Input** rule can rewrite what the model sees of your own text while your displayed message stays as typed.
 
 > **Note:** When Settings → Generation → **Append-only prompt layout** is on, prompt-side rules (including output-side `aiOutput` rules) are not applied at all — they would rewrite already-sent bytes. Display rules are unaffected.
 
@@ -130,56 +130,62 @@ It returns the sample text after `prompt` rules and after `display` rules separa
 
 Straighten the model's dashes and collapse stray asterisks for reading, without touching stored text:
 
-| Field | Value |
-|-------|-------|
-| Name | `Collapse asterisk runs` |
-| Find Regex | `/\*{2,}/g` |
-| Replace With | `*` |
-| Placement | **Display** |
+| Field        | Value                    |
+| ------------ | ------------------------ |
+| Name         | `Collapse asterisk runs` |
+| Find Regex   | `/\*{2,}/g`              |
+| Replace With | `*`                      |
+| Placement    | **Display**              |
 
 ### Spoiler hiding (display)
 
 Render `||spoiler||` markup as a hidden span:
 
-| Field | Value |
-|-------|-------|
-| Name | `Spoilers` |
-| Find Regex | `/\|\|(.+?)\|\|/g` |
+| Field        | Value                             |
+| ------------ | --------------------------------- |
+| Name         | `Spoilers`                        |
+| Find Regex   | `/\|\|(.+?)\|\|/g`                |
 | Replace With | `<span class="spoiler">$1</span>` |
-| Placement | **Display** |
+| Placement    | **Display**                       |
 
 Then style the class in Settings → **Theme** → **Custom CSS** (see [UI Customization](./ui-customization.md)):
 
 ```css
-.spoiler { background: #000; color: #000; border-radius: 3px; }
-.spoiler:hover { color: #fff; }
+.spoiler {
+  background: #000;
+  color: #000;
+  border-radius: 3px;
+}
+.spoiler:hover {
+  color: #fff;
+}
 ```
 
 ### HUD stripping (prompt)
 
 If your card emits status tags like `[HUD|hp=7|mp=3]` that you don't want echoing in the model's next context:
 
-| Field | Value |
-|-------|-------|
-| Name | `Strip HUD tags` |
-| Find Regex | `/\[HUD\|[^\]]+\]/g` |
-| Replace With | *(empty)* |
-| Placement | **Prompt**, **AI Output** |
+| Field        | Value                     |
+| ------------ | ------------------------- |
+| Name         | `Strip HUD tags`          |
+| Find Regex   | `/\[HUD\|[^\]]+\]/g`      |
+| Replace With | _(empty)_                 |
+| Placement    | **Prompt**, **AI Output** |
 
 The stored message keeps the tag (so a display rule can still render it as a panel for you), but the model never sees it again.
 
-> **Note:** Think twice before stripping state from the prompt — a compact tag the model can see is often *useful*, updatable state. A common pattern is the opposite split: keep the tag in the prompt, and use a **Display** rule with a Lua replacement to render it as a nice panel for yourself.
+> **Note:** Think twice before stripping state from the prompt — a compact tag the model can see is often _useful_, updatable state. A common pattern is the opposite split: keep the tag in the prompt, and use a **Display** rule with a Lua replacement to render it as a nice panel for yourself.
 
 ### HUD panel (display, Lua)
 
 The display half of that pattern — turn the tag into markup:
 
-| Field | Value |
-|-------|-------|
-| Name | `Render HUD` |
-| Find Regex | `/\[HUD\|([^\]]+)\]/g` |
-| Replace With (Lua) | see below |
-| Placement | **Display**, **AI Output** |
+| Field              | Value                      |
+| ------------------ | -------------------------- |
+| Name               | `Render HUD`               |
+| Find Regex         | `/\[HUD\|([^\]]+)\]/g`     |
+| Replace With (Lua) | see below                  |
+| Placement          | **Display**, **AI Output** |
 
 ```lua
 function replace(match, captures)
@@ -201,5 +207,5 @@ end
 - **Rules compose through order.** A character-scoped rule can post-process what a global rule produced — or undo it, since character rules run last.
 - **Prompt rules don't change what you see; display rules don't change what the model sees.** If a rule seems to do nothing, check which placement you actually checked.
 - **A skipped rule fails silently in the UI.** If nothing happens, test with `test_regex` and check the server log for `regex rule failed, skipped` warnings — usually a bad pattern, a timeout, or a Lua error.
-- **Keep state out of display rules.** Display rules re-render old messages every time they load, so a replacement that depends on *current* state would rewrite history. Carry the values in the message text itself (like the HUD tag above) instead.
+- **Keep state out of display rules.** Display rules re-render old messages every time they load, so a replacement that depends on _current_ state would rewrite history. Carry the values in the message text itself (like the HUD tag above) instead.
 - **For logic too rich for one regex**, move the transformation into a [Lua script](./lua-scripting.md) or do conditional text with [macros](./macros.md) instead of stacking rules.

@@ -9,7 +9,13 @@ import type { BackendAdapter, GenerationResult } from '../backends/BackendAdapte
 import type { MemorySettings, Message, PromptList } from '@tamari/types';
 import { textToParts, DEFAULT_MEMORY_SUMMARY_PROMPT } from '@tamari/types';
 
-function makeMessage(id: number, role: Message['role'], text: string, parentId: number | null = null, extra?: Record<string, unknown>): Message {
+function makeMessage(
+  id: number,
+  role: Message['role'],
+  text: string,
+  parentId: number | null = null,
+  extra?: Record<string, unknown>,
+): Message {
   return {
     id,
     role,
@@ -20,13 +26,15 @@ function makeMessage(id: number, role: Message['role'], text: string, parentId: 
   };
 }
 
-function makeMockDeps(overrides: {
-  settings?: Partial<MemorySettings>;
-  /** Content of the list's memorySummary utility prompt; null = no prompt list. */
-  summaryPrompt?: string | null;
-  backendText?: string;
-  backendError?: string;
-} = {}) {
+function makeMockDeps(
+  overrides: {
+    settings?: Partial<MemorySettings>;
+    /** Content of the list's memorySummary utility prompt; null = no prompt list. */
+    summaryPrompt?: string | null;
+    backendText?: string;
+    backendError?: string;
+  } = {},
+) {
   const settings: Partial<MemorySettings> = {
     enabled: true,
     updateInterval: 2,
@@ -234,7 +242,15 @@ describe('MemoryService', () => {
   });
 
   it('returns existing summary without calling backend when not enough new messages', async () => {
-    deps.messages.push(makeMessage(1, 'user', 'Hello', null, { memory: { summaryText: 'Existing [msg:1].', citations: [{ event: 'Existing', messageIds: [1] }], anchoredAt: 1 } }));
+    deps.messages.push(
+      makeMessage(1, 'user', 'Hello', null, {
+        memory: {
+          summaryText: 'Existing [msg:1].',
+          citations: [{ event: 'Existing', messageIds: [1] }],
+          anchoredAt: 1,
+        },
+      }),
+    );
     deps.messages.push(makeMessage(2, 'assistant', 'Hi', 1));
     deps.messages.push(makeMessage(3, 'user', 'How are you?', 2));
 

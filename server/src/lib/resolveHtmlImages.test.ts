@@ -28,9 +28,7 @@ describe('resolveHtmlImages', () => {
       makeAsset({ id: 'a2', name: 'Bbang_Marisa_Kirisame_.png' }),
     ];
     const content = '<img src="Marisa Kirisame.png">';
-    expect(resolveHtmlImages(content, assets, 'char-1')).toBe(
-      '<img src="/api/characters/char-1/assets/a1.png">',
-    );
+    expect(resolveHtmlImages(content, assets, 'char-1')).toBe('<img src="/api/characters/char-1/assets/a1.png">');
   });
 
   it('prefers Normal_ prefix when multiple match', () => {
@@ -39,9 +37,7 @@ describe('resolveHtmlImages', () => {
       makeAsset({ id: 'a2', name: 'Normal_Reimu_Hakurei_.png' }),
     ];
     const content = '<img src="Reimu Hakurei.png">';
-    expect(resolveHtmlImages(content, assets, 'char-1')).toBe(
-      '<img src="/api/characters/char-1/assets/a2.png">',
-    );
+    expect(resolveHtmlImages(content, assets, 'char-1')).toBe('<img src="/api/characters/char-1/assets/a2.png">');
   });
 
   it('resolves double-quoted src', () => {

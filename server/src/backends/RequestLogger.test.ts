@@ -93,7 +93,13 @@ describe('RequestLogger', () => {
 
   it('redacts compound credential keys (proxy_password, client_secret, refreshToken)', () => {
     logRequest('openai', 'https://api.openai.com/v1/chat/completions', {
-      body: JSON.stringify({ model: 'gpt-4o', proxy_password: 'super-secret', client_secret: 'shh', refreshToken: 'tok', messages: [] }),
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        proxy_password: 'super-secret',
+        client_secret: 'shh',
+        refreshToken: 'tok',
+        messages: [],
+      }),
     });
 
     const parsed = JSON.parse(getLoggedBody() as string);

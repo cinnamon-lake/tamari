@@ -2,8 +2,7 @@
 // Reuses common.* (delete, name) where the word fits.
 export const tools = {
   title: 'Tools',
-  intro:
-    'Toolsets are instances of tool templates. Enable a toolset to let the AI use its tools during generation.',
+  intro: 'Toolsets are instances of tool templates. Enable a toolset to let the AI use its tools during generation.',
   toolsets: 'Toolsets',
   noToolsets: 'No toolsets yet.',
   luaTemplates: 'Lua Templates',

@@ -143,7 +143,12 @@ return Tool
           content: '',
           extra: {
             parts: [
-              { type: 'tool_result' as const, toolUseId: 'call-1', content: '', extra: { _toolState: { counter: '{"count":5}' } } },
+              {
+                type: 'tool_result' as const,
+                toolUseId: 'call-1',
+                content: '',
+                extra: { _toolState: { counter: '{"count":5}' } },
+              },
             ],
           },
         },
@@ -167,7 +172,12 @@ return Tool
           content: '',
           extra: {
             parts: [
-              { type: 'tool_result' as const, toolUseId: 'call-1', content: '', extra: { _toolState: { counter: '{"count":2}' } } },
+              {
+                type: 'tool_result' as const,
+                toolUseId: 'call-1',
+                content: '',
+                extra: { _toolState: { counter: '{"count":2}' } },
+              },
             ],
           },
         },
@@ -177,7 +187,12 @@ return Tool
           content: '',
           extra: {
             parts: [
-              { type: 'tool_result' as const, toolUseId: 'call-1', content: '', extra: { _toolState: { counter: '{"count":7}' } } },
+              {
+                type: 'tool_result' as const,
+                toolUseId: 'call-1',
+                content: '',
+                extra: { _toolState: { counter: '{"count":7}' } },
+              },
             ],
           },
         },
@@ -194,7 +209,12 @@ return Tool
           content: '',
           extra: {
             parts: [
-              { type: 'tool_result' as const, toolUseId: 'call-1', content: '', extra: { _toolState: { other_tool: '{"foo":1}' } } },
+              {
+                type: 'tool_result' as const,
+                toolUseId: 'call-1',
+                content: '',
+                extra: { _toolState: { other_tool: '{"foo":1}' } },
+              },
             ],
           },
         },
@@ -241,7 +261,12 @@ return Tool
           content: '',
           extra: {
             parts: [
-              { type: 'tool_result' as const, toolUseId: 'call-1', content: '', extra: { _toolState: { bad: 'anything' } } },
+              {
+                type: 'tool_result' as const,
+                toolUseId: 'call-1',
+                content: '',
+                extra: { _toolState: { bad: 'anything' } },
+              },
             ],
           },
         },
@@ -367,7 +392,17 @@ return Tool
           },
         },
         attachments: {
-          create: async ({ id, messageId, mimeType, filePath }: { id: string; messageId: null; mimeType: string; filePath: string }) => ({
+          create: async ({
+            id,
+            messageId,
+            mimeType,
+            filePath,
+          }: {
+            id: string;
+            messageId: null;
+            mimeType: string;
+            filePath: string;
+          }) => ({
             id,
             messageId,
             mimeType,
@@ -472,7 +507,13 @@ return Tool
 
     it('exposes the curated subset in a chat context', async () => {
       const { ex, settingsStore, charStore, bus } = makeStExecutor();
-      const result = await ex.execute(stTemplateCode, 'stt', {}, { chatId: 'chat1', clientId: 'client1' }, { allowSt: true });
+      const result = await ex.execute(
+        stTemplateCode,
+        'stt',
+        {},
+        { chatId: 'chat1', clientId: 'client1' },
+        { allowSt: true },
+      );
       expect(result.content).toBe('hp:42 char:Lua Made send:nil edit:nil');
       expect(settingsStore.get('lua.var.chat1.hp')).toBe(42);
       expect(charStore.size).toBe(1);

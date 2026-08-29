@@ -2,12 +2,9 @@ import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
 import { App } from '../helpers/app.js';
 import type { Locator, Page } from '@playwright/test';
+import { uniqueName } from '../helpers/names.js';
 
 test.describe.configure({ mode: 'serial' });
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
 
 // Shared across the serial tests: created in one test, driven/cleaned up in later ones.
 const speakToolsetName = uniqueName('Modal Speak TS');
@@ -64,7 +61,7 @@ return Tool
 `;
 
 async function openToolsModal(page: Page): Promise<Locator> {
-  const btn = page.locator('button.settings-btn:has-text("Tools")');
+  const btn = page.getByTestId('open-tools');
   await btn.scrollIntoViewIfNeeded();
   await btn.click();
   const modal = page.locator('.tools-modal');
@@ -88,7 +85,9 @@ function toolsetCard(modal: Locator, name: string): Locator {
 // finished by the time the short wait elapses.
 async function waitToolsetSaveReceipt(card: Locator): Promise<void> {
   try {
-    await expect(card.locator('button[title="Show config"]')).toBeVisible({ timeout: 4000 });
+    await expect(card.locator('[data-testid="toolset-toggle-config"][aria-expanded="false"]')).toBeVisible({
+      timeout: 4000,
+    });
   } catch {
     // Auto-expand window kept the card open; the save already round-tripped.
   }
@@ -97,15 +96,17 @@ async function waitToolsetSaveReceipt(card: Locator): Promise<void> {
 async function expandToolsetCard(card: Locator): Promise<void> {
   await expect(card).toBeVisible();
   // Wait for the header to render before the one-shot expanded/collapsed check.
-  await expect(card.locator('button[title="Show config"], button[title="Hide config"]')).toBeVisible();
-  const showBtn = card.locator('button[title="Show config"]');
-  if (await showBtn.isVisible()) {
-    await showBtn.click();
+  const toggle = card.getByTestId('toolset-toggle-config');
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') {
+    await toggle.click();
   }
   await expect(card.locator('.toolset-body')).toBeVisible();
 }
 
-async function editToolsetAndSave(card: Locator, edit: () => Promise<void>): Promise<void> {
+// `edit` may resolve to anything (e.g. selectOption returns string[]) — the
+// receipt wait, not the edit's resolution, is the synchronization point.
+async function editToolsetAndSave(card: Locator, edit: () => Promise<unknown>): Promise<void> {
   await expandToolsetCard(card);
   await edit();
   await waitToolsetSaveReceipt(card);
@@ -116,7 +117,7 @@ async function editToolsetAndSave(card: Locator, edit: () => Promise<void>): Pro
 // the auto-edit window after creation).
 async function waitLuaSaveReceipt(row: Locator): Promise<void> {
   try {
-    await expect(row.locator('button[title="Edit Lua template"]')).toBeVisible({ timeout: 4000 });
+    await expect(row.getByTestId('lua-template-edit')).toBeVisible({ timeout: 4000 });
   } catch {
     // Auto-edit window kept the editor open; the save already round-tripped.
   }
@@ -124,8 +125,8 @@ async function waitLuaSaveReceipt(row: Locator): Promise<void> {
 
 async function ensureLuaEditing(row: Locator): Promise<void> {
   // Wait for the row to render before the one-shot editing/display check.
-  await expect(row.locator('button[title="Edit Lua template"], .instance-row-editor')).toBeVisible();
-  const editBtn = row.locator('button[title="Edit Lua template"]');
+  await expect(row.locator('[data-testid="lua-template-edit"], .instance-row-editor')).toBeVisible();
+  const editBtn = row.getByTestId('lua-template-edit');
   if (await editBtn.isVisible()) {
     await editBtn.click();
   }
@@ -141,20 +142,20 @@ test.describe('Tools Modal', () => {
     const modal = await openToolsModal(page);
 
     // The modal's two sections.
-    await expect(modal.locator('h3:has-text("Toolsets")')).toBeVisible();
-    await expect(modal.locator('h3:has-text("Lua Templates")')).toBeVisible();
-    await expect(modal.locator('.tools-empty', { hasText: 'No toolsets yet' })).toBeVisible();
+    await expect(modal.getByTestId('toolsets-heading')).toBeVisible();
+    await expect(modal.getByTestId('lua-templates-heading')).toBeVisible();
+    await expect(modal.getByTestId('toolsets-empty')).toBeVisible();
 
-    await modal.locator('button:has-text("New Toolset")').click();
+    await modal.getByTestId('new-toolset').click();
     const card = toolsetCard(modal, 'New Toolset');
     await expect(card).toBeVisible();
-    await expect(modal.locator('.tools-empty', { hasText: 'No toolsets yet' })).not.toBeVisible();
+    await expect(modal.getByTestId('toolsets-empty')).not.toBeVisible();
     // Newly created toolsets start enabled and auto-expanded.
     await expect(card.locator('.toolset-checkbox')).toBeChecked();
     await expect(card.locator('.toolset-body')).toBeVisible();
 
     // The template picker lists builtin templates plus seeded Lua templates.
-    const templateSelect = card.locator('select.select');
+    const templateSelect = card.getByTestId('toolset-template-select');
     await expect(templateSelect).toBeVisible();
     const optionLabels = (await templateSelect.locator('option').allTextContents()).map((s) => s.trim());
     expect(optionLabels.length).toBeGreaterThanOrEqual(10);
@@ -169,7 +170,7 @@ test.describe('Tools Modal', () => {
     await expect(card.locator('.toolset-header-meta')).toHaveText('Speak', { timeout: 5000 });
 
     await expandToolsetCard(card);
-    await card.locator('.toolset-body .instance-field input.input').first().fill(speakToolsetName);
+    await card.getByTestId('toolset-name-input').fill(speakToolsetName);
     const renamed = toolsetCard(modal, speakToolsetName);
     await expect(renamed.locator('.toolset-header-name')).toHaveText(speakToolsetName, { timeout: 5000 });
 
@@ -184,13 +185,9 @@ test.describe('Tools Modal', () => {
     await expect(card).toBeVisible();
 
     const voiceId = `voice-${Date.now()}`;
-    await editToolsetAndSave(card, () =>
-      card.locator('#provider select.schema-select').selectOption('elevenlabs'),
-    );
+    await editToolsetAndSave(card, () => card.locator('#provider select.schema-select').selectOption('elevenlabs'));
     await editToolsetAndSave(card, () => card.locator('#voiceId input.schema-input').fill(voiceId));
-    await editToolsetAndSave(card, () =>
-      card.locator('#requestScript textarea.schema-input').fill('return request'),
-    );
+    await editToolsetAndSave(card, () => card.locator('#requestScript textarea.schema-input').fill('return request'));
     await editToolsetAndSave(card, () => card.locator('#apiKey input[type="password"]').fill('e2e-secret-key'));
 
     await closeToolsModal(page);
@@ -215,59 +212,57 @@ test.describe('Tools Modal', () => {
     // The row exposes the parameter from the tool's JSON schema.
     await expect(row.locator('.instance-param .instance-param-key')).toHaveText('text');
 
-    await editToolsetAndSave(card, () => row.locator('input.input').fill('speak_e2e'));
-    await editToolsetAndSave(card, () => row.locator('textarea.textarea').fill('Custom speak description'));
-    await editToolsetAndSave(card, () =>
-      row.locator('.instance-param input.instance-input').fill('Custom text parameter'),
-    );
+    await editToolsetAndSave(card, () => row.getByTestId('tool-override-name').fill('speak_e2e'));
+    await editToolsetAndSave(card, () => row.getByTestId('tool-override-description').fill('Custom speak description'));
+    await editToolsetAndSave(card, () => row.getByTestId('tool-override-param-text').fill('Custom text parameter'));
 
     await closeToolsModal(page);
     const modal2 = await openToolsModal(page);
     const card2 = toolsetCard(modal2, speakToolsetName);
     await expandToolsetCard(card2);
     const row2 = card2.locator('.instance-row', { hasText: 'speak' });
-    await expect(row2.locator('input.input')).toHaveValue('speak_e2e');
-    await expect(row2.locator('textarea.textarea')).toHaveValue('Custom speak description');
-    await expect(row2.locator('.instance-param input.instance-input')).toHaveValue('Custom text parameter');
+    await expect(row2.getByTestId('tool-override-name')).toHaveValue('speak_e2e');
+    await expect(row2.getByTestId('tool-override-description')).toHaveValue('Custom speak description');
+    await expect(row2.getByTestId('tool-override-param-text')).toHaveValue('Custom text parameter');
   });
 
   test('authors a Lua template: name, code and sandbox flags persist', async ({ page }) => {
     const modal = await openToolsModal(page);
 
-    await modal.locator('button:has-text("New Lua Template")').click();
+    await modal.getByTestId('new-lua-template').click();
     // Newest template sorts first (created_at DESC) and auto-opens its editor.
     const row = modal.locator('.lua-tool-list .instance-row').first();
     await expect(row.locator('.instance-row-editor')).toBeVisible();
     // The editor starts from the default template code.
-    await expect(row.locator('.lua-tool-editor-code textarea')).toHaveValue(/function Tool\.getDefinition/);
+    await expect(row.getByTestId('lua-template-code')).toHaveValue(/function Tool\.getDefinition/);
 
-    await row.locator('.lua-tool-editor-fields input.input').fill(luaTemplateName);
+    await row.getByTestId('lua-template-name').fill(luaTemplateName);
     await waitLuaSaveReceipt(row);
 
     await ensureLuaEditing(row);
-    await row.locator('.lua-tool-editor-code textarea').fill(LUA_CODE);
+    await row.getByTestId('lua-template-code').fill(LUA_CODE);
     await waitLuaSaveReceipt(row);
 
     await ensureLuaEditing(row);
-    await row.locator('.lua-tool-sandbox label:has-text("Allow fetch") input').check();
+    await row.getByTestId('lua-sandbox-net').check();
     await waitLuaSaveReceipt(row);
 
     await ensureLuaEditing(row);
-    await row.locator('.lua-tool-sandbox label:has-text("Allow st API") input').check();
+    await row.getByTestId('lua-sandbox-st').check();
     await waitLuaSaveReceipt(row);
 
     await ensureLuaEditing(row);
-    await row.locator('.instance-row-actions button:has-text("Done")').click();
+    await row.getByTestId('lua-template-done').click();
     await expect(row.locator('.lua-tool-name')).toHaveText(luaTemplateName);
 
     // Reopen the editor: everything read back comes from the server broadcast.
-    await row.locator('button[title="Edit Lua template"]').click();
-    await expect(row.locator('.lua-tool-editor-fields input.input')).toHaveValue(luaTemplateName);
-    await expect(row.locator('.lua-tool-editor-code textarea')).toHaveValue(LUA_CODE);
-    await expect(row.locator('.lua-tool-sandbox label:has-text("Allow fetch") input')).toBeChecked();
-    await expect(row.locator('.lua-tool-sandbox label:has-text("Allow st API") input')).toBeChecked();
-    await expect(row.locator('.lua-tool-sandbox label:has-text("Allow io") input')).not.toBeChecked();
-    await row.locator('.instance-row-actions button:has-text("Done")').click();
+    await row.getByTestId('lua-template-edit').click();
+    await expect(row.getByTestId('lua-template-name')).toHaveValue(luaTemplateName);
+    await expect(row.getByTestId('lua-template-code')).toHaveValue(LUA_CODE);
+    await expect(row.getByTestId('lua-sandbox-net')).toBeChecked();
+    await expect(row.getByTestId('lua-sandbox-st')).toBeChecked();
+    await expect(row.getByTestId('lua-sandbox-io')).not.toBeChecked();
+    await row.getByTestId('lua-template-done').click();
   });
 
   test('builds a toolset on the Lua template and edits checkbox/number SchemaForm fields', async ({ page }) => {
@@ -281,11 +276,11 @@ test.describe('Tools Modal', () => {
     await new App(page).waitForInitialSnapshot();
 
     const modal = await openToolsModal(page);
-    await modal.locator('button:has-text("New Toolset")').click();
+    await modal.getByTestId('new-toolset').click();
     const card = toolsetCard(modal, 'New Toolset');
     await expect(card).toBeVisible();
 
-    const templateSelect = card.locator('select.select');
+    const templateSelect = card.getByTestId('toolset-template-select');
     await expect(templateSelect.locator('option', { hasText: luaTemplateName })).toHaveCount(1);
     await templateSelect.selectOption({ label: luaTemplateName });
     await expect(card.locator('.toolset-header-meta')).toHaveText(luaTemplateName, { timeout: 5000 });
@@ -323,42 +318,42 @@ test.describe('Tools Modal', () => {
     // Delete the override: clearing the row's fields removes it on save.
     const speakCard = toolsetCard(modal, speakToolsetName);
     const row = speakCard.locator('.instance-row', { hasText: 'speak' });
-    await editToolsetAndSave(speakCard, () => row.locator('input.input').fill(''));
-    await editToolsetAndSave(speakCard, () => row.locator('textarea.textarea').fill(''));
-    await editToolsetAndSave(speakCard, () => row.locator('.instance-param input.instance-input').fill(''));
+    await editToolsetAndSave(speakCard, () => row.getByTestId('tool-override-name').fill(''));
+    await editToolsetAndSave(speakCard, () => row.getByTestId('tool-override-description').fill(''));
+    await editToolsetAndSave(speakCard, () => row.getByTestId('tool-override-param-text').fill(''));
 
     await expandToolsetCard(speakCard);
-    await expect(row.locator('input.input')).toHaveValue('');
-    await expect(row.locator('textarea.textarea')).toHaveValue('');
-    await expect(row.locator('.instance-param input.instance-input')).toHaveValue('');
+    await expect(row.getByTestId('tool-override-name')).toHaveValue('');
+    await expect(row.getByTestId('tool-override-description')).toHaveValue('');
+    await expect(row.getByTestId('tool-override-param-text')).toHaveValue('');
 
     // Delete the Lua-backed toolset first (it references the template).
     const luaCard = toolsetCard(modal, 'New Toolset');
-    await luaCard.locator('button[title="Delete"]').click();
+    await luaCard.getByTestId('toolset-delete').click();
     let popup = page.locator('.popup-modal');
     await expect(popup).toBeVisible();
     await expect(popup.locator('.popup-message')).toContainText('Delete toolset "New Toolset"?');
-    await popup.locator('button:has-text("Confirm")').click();
+    await popup.getByTestId('popup-confirm').click();
     await expect(popup).not.toBeVisible();
     await expect(toolsetCard(modal, 'New Toolset')).toHaveCount(0);
 
     // Then the Speak toolset.
-    await speakCard.locator('button[title="Delete"]').click();
+    await speakCard.getByTestId('toolset-delete').click();
     popup = page.locator('.popup-modal');
     await expect(popup).toBeVisible();
     await expect(popup.locator('.popup-message')).toContainText(`Delete toolset "${speakToolsetName}"?`);
-    await popup.locator('button:has-text("Confirm")').click();
+    await popup.getByTestId('popup-confirm').click();
     await expect(popup).not.toBeVisible();
     await expect(toolsetCard(modal, speakToolsetName)).toHaveCount(0);
-    await expect(modal.locator('.tools-empty', { hasText: 'No toolsets yet' })).toBeVisible();
+    await expect(modal.getByTestId('toolsets-empty')).toBeVisible();
 
     // Finally the Lua template.
     const luaRow = modal.locator('.lua-tool-list .instance-row', { hasText: luaTemplateName });
-    await luaRow.locator('button[title="Delete Lua template"]').click();
+    await luaRow.getByTestId('lua-template-delete').click();
     popup = page.locator('.popup-modal');
     await expect(popup).toBeVisible();
     await expect(popup.locator('.popup-message')).toContainText(`Delete Lua template "${luaTemplateName}"?`);
-    await popup.locator('button:has-text("Confirm")').click();
+    await popup.getByTestId('popup-confirm').click();
     await expect(popup).not.toBeVisible();
     await expect(modal.locator('.lua-tool-list .instance-row', { hasText: luaTemplateName })).toHaveCount(0);
   });

@@ -15,12 +15,10 @@
  * Assertions are made against the mock's captured request (GET /last-request
  * for the body, GET /last-request?route=/chat/completions for the headers).
  */
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { getLastLlmRequest, resetLlmRequests, waitForNextLlmRequest } from '../helpers/llm.js';
 import { setSetting } from '../helpers/settings.js';
-import { App } from '../helpers/app.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
 
@@ -47,9 +45,7 @@ const TOUCHED_SETTINGS: Array<[string, unknown]> = [
 ];
 
 test.describe('OpenRouter backend adapter', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async ({ app: _app, page }) => {
     // Keep the mock URL/key, switch the provider + model to OpenRouter/Claude.
     await patchActiveBackendConfig(page, {
       backendProvider: 'openrouter',
@@ -63,11 +59,9 @@ test.describe('OpenRouter backend adapter', () => {
       await setSetting(page, key, defaultValue);
     }
     await patchActiveBackendConfig(page, { providerParams: {}, openrouterProvider: null });
-    await resetBackendConfig(page);
   });
 
-  test('streams a basic reply and sends OpenRouter headers', async ({ page }) => {
-    const app = new App(page);
+  test('streams a basic reply and sends OpenRouter headers', async ({ app }) => {
     const charName = `OR Basic ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -98,11 +92,10 @@ test.describe('OpenRouter backend adapter', () => {
     expect(route!.headers['x-title']).toBe('tamari');
   });
 
-  test('sends reasoning effort and summary from openrouter.* settings', async ({ page }) => {
+  test('sends reasoning effort and summary from openrouter.* settings', async ({ page, app }) => {
     await setSetting(page, 'openrouter.reasoningEffort', 'high');
     await setSetting(page, 'openrouter.reasoningSummary', 'concise');
 
-    const app = new App(page);
     const charName = `OR Reasoning ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -115,14 +108,13 @@ test.describe('OpenRouter backend adapter', () => {
     expect(body.reasoning).toEqual({ effort: 'high', summary: 'concise' });
   });
 
-  test('sends provider routing order and allow_fallbacks', async ({ page }) => {
+  test('sends provider routing order and allow_fallbacks', async ({ page, app }) => {
     // buildBackendSettings maps the config's openrouterProvider field to
     // settings['openrouter.providerOrder'] = [provider]; allowFallbacks is a
     // global openrouter.* setting the factory parses as a boolean.
     await patchActiveBackendConfig(page, { openrouterProvider: 'Anthropic' });
     await setSetting(page, 'openrouter.allowFallbacks', false);
 
-    const app = new App(page);
     const charName = `OR Routing ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -135,13 +127,12 @@ test.describe('OpenRouter backend adapter', () => {
     expect(body.provider).toEqual({ order: ['Anthropic'], allow_fallbacks: false });
   });
 
-  test('injects Claude cache_control breakpoints for anthropic/claude* models', async ({ page }) => {
+  test('injects Claude cache_control breakpoints for anthropic/claude* models', async ({ page, app }) => {
     // Prompt caching is per-backend config (providerParams.cacheMode/cacheDepth/cacheTTL).
     await patchActiveBackendConfig(page, {
       providerParams: { cacheMode: 'manual', cacheDepth: 0, cacheTTL: '1h' },
     });
 
-    const app = new App(page);
     const charName = `OR Cache ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -181,11 +172,10 @@ test.describe('OpenRouter backend adapter', () => {
     expect(route!.headers['http-referer']).toBe('https://github.com/cinnamon-lake/tamari');
   });
 
-  test('sends transforms and plugins when configured', async ({ page }) => {
+  test('sends transforms and plugins when configured', async ({ page, app }) => {
     await setSetting(page, 'openrouter.transforms', ['middle-out']);
     await setSetting(page, 'openrouter.plugins', [{ id: 'web' }]);
 
-    const app = new App(page);
     const charName = `OR Transforms ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 

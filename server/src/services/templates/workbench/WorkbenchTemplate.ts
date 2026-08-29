@@ -104,7 +104,11 @@ const GrepArgs = z.object({
 
 const WriteArgs = z.object({
   path: z.string().describe(PATH_DESCRIBE),
-  content: z.string().describe('Full new file content. Text/.lua files are stored verbatim; .json files must be valid JSON and are schema-validated.'),
+  content: z
+    .string()
+    .describe(
+      'Full new file content. Text/.lua files are stored verbatim; .json files must be valid JSON and are schema-validated.',
+    ),
 });
 
 const EditArgs = z.object({
@@ -120,7 +124,10 @@ const RmArgs = z.object({
 
 const RunArgs = z.object({
   verb: z.string().optional().describe('Action to perform. Omit (or pass an unknown verb) to get the verb menu.'),
-  args: z.record(z.string(), z.unknown()).optional().describe('Verb arguments, passed through to the underlying provider op.'),
+  args: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe('Verb arguments, passed through to the underlying provider op.'),
 });
 
 interface RunVerb {
@@ -131,7 +138,8 @@ interface RunVerb {
 /** The run-verb table: escape hatch for actions that don't map to files. */
 const RUN_VERBS: Record<string, RunVerb> = {
   test_backend: {
-    summary: '{configId?, patch?, prompt?, mode: "dry"|"live"} — dry-run or live-test a backend config (configId defaults to the active backend)',
+    summary:
+      '{configId?, patch?, prompt?, mode: "dry"|"live"} — dry-run or live-test a backend config (configId defaults to the active backend)',
     run: (p, a, c) => p.backendWorkbench.execute('backend_test', a, c),
   },
   test_custom_backend: {
@@ -143,7 +151,8 @@ const RUN_VERBS: Record<string, RunVerb> = {
     run: (p, a, c) => p.characterWorkbench.execute('backend_logic_test', a, c),
   },
   test_luatool: {
-    summary: '{id?|code?, sandbox?, toolName, args?, config?} — run a tool from a Lua tool template (stored or ad-hoc code)',
+    summary:
+      '{id?|code?, sandbox?, toolName, args?, config?} — run a tool from a Lua tool template (stored or ad-hoc code)',
     run: (p, a, c) => p.luaToolWorkbench.execute('luatool_test', a, c),
   },
   test_regex: {
@@ -168,7 +177,7 @@ const RUN_VERBS: Record<string, RunVerb> = {
   },
   test_session_message: {
     summary:
-      '{sessionId, content, timeoutMs?} — send a user message in a test session and run one generation turn; returns reply, generationId, finishReason, the card\'s Lua scriptState, and any backend print() output (debug)',
+      "{sessionId, content, timeoutMs?} — send a user message in a test session and run one generation turn; returns reply, generationId, finishReason, the card's Lua scriptState, and any backend print() output (debug)",
     run: (p, a) =>
       p.testSessions !== undefined
         ? toToolResult(p.testSessions.message(a))
@@ -176,7 +185,7 @@ const RUN_VERBS: Record<string, RunVerb> = {
   },
   test_session_state: {
     summary:
-      '{sessionId, generationId?} — inspect a test session: message chain (role + text), generations (id/status/meta without prompts), and the card\'s latest Lua script state. Pass generationId for that generation\'s full record including every captured round prompt (big — hence opt-in)',
+      "{sessionId, generationId?} — inspect a test session: message chain (role + text), generations (id/status/meta without prompts), and the card's latest Lua script state. Pass generationId for that generation's full record including every captured round prompt (big — hence opt-in)",
     run: (p, a) =>
       p.testSessions !== undefined
         ? toToolResult(p.testSessions.state(a))
@@ -191,11 +200,13 @@ const RUN_VERBS: Record<string, RunVerb> = {
         : Promise.resolve({ content: 'Error: test_session_end is not available in this context' }),
   },
   clone_character: {
-    summary: '{sourceCharacterId, name?} — deep-copy a character card (fields, lorebook, regex, modules, assets, avatar)',
+    summary:
+      '{sourceCharacterId, name?} — deep-copy a character card (fields, lorebook, regex, modules, assets, avatar)',
     run: (p, a, c) => p.characterWorkbench.execute('character_clone', a, c),
   },
   set_avatar: {
-    summary: '{characterId, attachmentId?|sourceCharacterId?} — set a character avatar from an attachment image or another card',
+    summary:
+      '{characterId, attachmentId?|sourceCharacterId?} — set a character avatar from an attachment image or another card',
     run: (p, a, c) => p.characterWorkbench.execute('character_set_avatar', a, c),
   },
   copy_assets: {
@@ -212,7 +223,8 @@ const RUN_VERBS: Record<string, RunVerb> = {
     run: (p, a, c) => p.characterWorkbench.execute('lorebook_entry_move', a, c),
   },
   add_game_lib: {
-    summary: "{characterId} — vendor the game lib (lib/*.lua: loop, rolling, ledger, todo, registry, …) into the card's backend_logic VFS",
+    summary:
+      "{characterId} — vendor the game lib (lib/*.lua: loop, rolling, ledger, todo, registry, …) into the card's backend_logic VFS",
     run: (p, a, c) => p.characterWorkbench.execute('backend_logic_add_game_lib', a, c),
   },
 };
@@ -323,7 +335,9 @@ export class WorkbenchTemplate implements ToolTemplate {
   private route(
     rawPath: string,
     context?: ToolContext,
-  ): { ok: true; domainName: string; domain: DomainRoute; call: RouteCall; root: boolean } | { ok: false; error: string } {
+  ):
+    | { ok: true; domainName: string; domain: DomainRoute; call: RouteCall; root: boolean }
+    | { ok: false; error: string } {
     let path: string;
     let segs: string[];
     try {
@@ -344,7 +358,13 @@ export class WorkbenchTemplate implements ToolTemplate {
     }
     const domain = resolveDomain(first);
     if (domain === undefined) return { ok: false, error: err(`no such file: ${path}`) };
-    return { ok: true, domainName: first, domain, call: { providers: this.providers, context, path, segs: segs.slice(1) }, root: false };
+    return {
+      ok: true,
+      domainName: first,
+      domain,
+      call: { providers: this.providers, context, path, segs: segs.slice(1) },
+      root: false,
+    };
   }
 
   // ---------- tools ----------
@@ -476,7 +496,13 @@ export class WorkbenchTemplate implements ToolTemplate {
           )
         : await this.providers.characterWorkbench.execute(
             'backend_file_edit',
-            { characterId, path: [file, ...rest].join('/'), oldString, newString, ...(replaceAll ? { replaceAll: true } : {}) },
+            {
+              characterId,
+              path: [file, ...rest].join('/'),
+              oldString,
+              newString,
+              ...(replaceAll ? { replaceAll: true } : {}),
+            },
             context,
           );
       return { content: typeof result.content === 'string' ? result.content : JSON.stringify(result.content) };
@@ -543,7 +569,8 @@ function renderRange(content: string, path: string, offset?: number, limit?: num
     if (lines.length <= MAX_READ_LINES) return content;
     return `${lines.slice(0, MAX_READ_LINES).join('\n')}\n… [truncated — ${lines.length} lines total; page with offset/limit, e.g. read {"path":"${path}","offset":${MAX_READ_LINES + 1}}]`;
   }
-  const start = offset !== undefined && offset < 0 ? Math.max(0, lines.length + offset) : Math.max(0, (offset ?? 1) - 1);
+  const start =
+    offset !== undefined && offset < 0 ? Math.max(0, lines.length + offset) : Math.max(0, (offset ?? 1) - 1);
   let end = limit !== undefined ? start + limit : lines.length;
   let truncated = false;
   if (end - start > MAX_READ_LINES) {

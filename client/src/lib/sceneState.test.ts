@@ -84,8 +84,18 @@ describe('parseScene', () => {
     expect(parseScene({ backgroundUrl: 1, sprites: [], caption: '' })).toBeNull();
     expect(parseScene({ backgroundUrl: null, sprites: 'x', caption: '' })).toBeNull();
     expect(parseScene({ backgroundUrl: null, sprites: [], caption: 5 })).toBeNull();
-    expect(parseScene({ backgroundUrl: null, sprites: [{ name: 'A', position: 'behind', url: '/a.png' }], caption: '' })).toBeNull();
-    expect(parseScene({ backgroundUrl: null, sprites: [{ name: 'A', position: 'left', url: 7 }], caption: '' })).toBeNull();
-    expect(parseScene({ backgroundUrl: null, sprites: [{ name: 'A', position: 'left', url: '/a.png', emotion: 3 }], caption: '' })).toBeNull();
+    expect(
+      parseScene({ backgroundUrl: null, sprites: [{ name: 'A', position: 'behind', url: '/a.png' }], caption: '' }),
+    ).toBeNull();
+    expect(
+      parseScene({ backgroundUrl: null, sprites: [{ name: 'A', position: 'left', url: 7 }], caption: '' }),
+    ).toBeNull();
+    expect(
+      parseScene({
+        backgroundUrl: null,
+        sprites: [{ name: 'A', position: 'left', url: '/a.png', emotion: 3 }],
+        caption: '',
+      }),
+    ).toBeNull();
   });
 });

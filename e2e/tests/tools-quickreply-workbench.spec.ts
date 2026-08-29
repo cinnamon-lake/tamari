@@ -1,31 +1,18 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 test.describe('Quick Reply Workbench Tools', () => {
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     if (toolsetId) {
       await deleteToolset(page, toolsetId);
       toolsetId = undefined;
     }
   });
 
-  test('quick reply write + scoped ls, and the button appears in the quick reply bar', async ({ page }) => {
-    const app = new App(page);
+  test('quick reply write + scoped ls, and the button appears in the quick reply bar', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -50,8 +37,8 @@ test.describe('Quick Reply Workbench Tools', () => {
     await expect(results.last()).toContainText(label);
 
     // The quickreply.created broadcast lands; the button renders in the bar.
-    await expect(
-      page.locator('.quick-reply-bar .quick-reply-btn .qr-label', { hasText: label }),
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.quick-reply-bar .quick-reply-btn .qr-label', { hasText: label })).toBeVisible({
+      timeout: 10000,
+    });
   });
 });

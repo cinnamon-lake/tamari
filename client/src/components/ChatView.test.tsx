@@ -129,11 +129,7 @@ describe('ChatView', () => {
     });
 
     it('combines hidden filter and search', () => {
-      const msgs = [
-        makeMsg(1, 'Hello world'),
-        makeMsg(2, 'Hidden hello', { hidden: true }),
-        makeMsg(3, 'Goodbye'),
-      ];
+      const msgs = [makeMsg(1, 'Hello world'), makeMsg(2, 'Hidden hello', { hidden: true }), makeMsg(3, 'Goodbye')];
       setState('messages', { 'chat-1': msgs });
       expect(getVisibleMessages(chat, 'hello', false)).toHaveLength(1);
       expect(getVisibleMessages(chat, 'hello', true)).toHaveLength(2);
@@ -495,9 +491,7 @@ describe('ChatView', () => {
       fireEvent.touchStart(bubble, { touches: [{ clientX: 200, clientY: 100 }] });
       fireEvent.touchEnd(bubble, { changedTouches: [{ clientX: 180, clientY: 100 }] });
 
-      expect(sendSpy).not.toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'action.swipe' }),
-      );
+      expect(sendSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'action.swipe' }));
     });
 
     it('renders raw escaped text when encodeTags is enabled', () => {
@@ -537,7 +531,7 @@ describe('ChatView', () => {
       const msg = makeMsg(1, 'battle menu');
       msg.renderedHtml = [
         '<div class="hud"><button data-post-response="attack">Attack!</button>' +
-        '<button data-post-response="flee">Run away</button></div>',
+          '<button data-post-response="flee">Run away</button></div>',
       ];
       setState('messages', { 'chat-1': [msg] });
       setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
@@ -580,12 +574,12 @@ describe('ChatView', () => {
       const msg = makeMsg(1, 'battle form');
       msg.renderedHtml = [
         '<form data-post-response="action">' +
-        '<input name="target" type="text" value="the goblin">' +
-        '<input type="checkbox" name="sneak" value="yes" checked>' +
-        '<input type="checkbox" name="shield" value="yes">' +
-        '<select name="weapon"><option value="sword">Sword</option><option value="bow" selected>Bow</option></select>' +
-        '<textarea name="flourish"></textarea>' +
-        '<button type="submit">Attack</button></form>',
+          '<input name="target" type="text" value="the goblin">' +
+          '<input type="checkbox" name="sneak" value="yes" checked>' +
+          '<input type="checkbox" name="shield" value="yes">' +
+          '<select name="weapon"><option value="sword">Sword</option><option value="bow" selected>Bow</option></select>' +
+          '<textarea name="flourish"></textarea>' +
+          '<button type="submit">Attack</button></form>',
       ];
       setState('messages', { 'chat-1': [msg] });
       setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
@@ -639,7 +633,7 @@ describe('ChatView', () => {
       const msg = makeMsg(1, 'empty form');
       msg.renderedHtml = [
         '<form data-post-response="action"><input type="text" value="no-name">' +
-        '<button type="submit">go</button></form>',
+          '<button type="submit">go</button></form>',
       ];
       setState('messages', { 'chat-1': [msg] });
       setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
@@ -667,10 +661,7 @@ describe('ChatView', () => {
       setState('activeChat', makeChat({ id: 'chat-greeting', materialized: false }));
       setState('messages', { 'chat-greeting': [] });
       setState('greeting', 'menu');
-      setState(
-        'greetingHtml',
-        '<div class="menu"><button data-post-response="lumia_pick_0">First Day</button></div>',
-      );
+      setState('greetingHtml', '<div class="menu"><button data-post-response="lumia_pick_0">First Day</button></div>');
       setState('chatCharacter', {
         id: 'char-1',
         name: 'Alice',
@@ -684,12 +675,18 @@ describe('ChatView', () => {
       fireEvent.click(button);
 
       // Materialization is requested first…
-      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat.materialize', chatId: 'chat-greeting' }));
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'chat.materialize', chatId: 'chat-greeting' }),
+      );
       expect(sendSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'action.sendAndGenerate' }));
       // …and the response is posted once the server answers with a snapshot.
       (handlers.get('chat.snapshot') ?? new Set()).forEach((h) => h({ chat: { id: 'chat-greeting' } }));
       await vi.waitFor(() => {
-        expect(sendSpy).toHaveBeenCalledWith({ type: 'action.sendAndGenerate', chatId: 'chat-greeting', content: 'lumia_pick_0' });
+        expect(sendSpy).toHaveBeenCalledWith({
+          type: 'action.sendAndGenerate',
+          chatId: 'chat-greeting',
+          content: 'lumia_pick_0',
+        });
       });
       // click-to-edit must stay gated off in the read-only greeting
       expect(document.querySelector('.message-edit')).not.toBeInTheDocument();
@@ -728,7 +725,9 @@ describe('ChatView', () => {
       expect(form).toBeInTheDocument();
       fireEvent.submit(form);
 
-      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat.materialize', chatId: 'chat-greeting' }));
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'chat.materialize', chatId: 'chat-greeting' }),
+      );
       (handlers.get('chat.snapshot') ?? new Set()).forEach((h) => h({ chat: { id: 'chat-greeting' } }));
 
       const expected =
@@ -739,7 +738,11 @@ describe('ChatView', () => {
         '</lumia_start>\n' +
         '```';
       await vi.waitFor(() => {
-        expect(sendSpy).toHaveBeenCalledWith({ type: 'action.sendAndGenerate', chatId: 'chat-greeting', content: expected });
+        expect(sendSpy).toHaveBeenCalledWith({
+          type: 'action.sendAndGenerate',
+          chatId: 'chat-greeting',
+          content: expected,
+        });
       });
     });
   });

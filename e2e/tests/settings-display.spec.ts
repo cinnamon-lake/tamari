@@ -1,15 +1,9 @@
-import { test, expect, type Locator, type Page } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { App } from '../helpers/app.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Locator, Page } from '../fixtures/base.js';
+import { uniqueName } from '../helpers/names.js';
 
 // Minimal 1x1 transparent PNG (same fixture as attachments.spec.ts).
-const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 function pngFile() {
   return { name: 'display-test.png', mimeType: 'image/png', buffer: Buffer.from(PNG_BASE64, 'base64') };
@@ -37,18 +31,8 @@ async function rootCssVar(page: Page, name: string): Promise<string> {
 test.describe('Settings — Display', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('chat style, avatar style, shadows, compact input, reduced motion', async ({ page }) => {
+  test('chat style, avatar style, shadows, compact input, reduced motion', async ({ page, app }) => {
     test.setTimeout(90000);
-    const app = new App(page);
     const name = uniqueName('DisplayStyle');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 
@@ -91,9 +75,8 @@ test.describe('Settings — Display', () => {
     await app.closeSettings();
   });
 
-  test('avatars, names, message ids, swipe numbers on all messages', async ({ page }) => {
+  test('avatars, names, message ids, swipe numbers on all messages', async ({ page, app }) => {
     test.setTimeout(120000);
-    const app = new App(page);
     const name = uniqueName('DisplayChrome');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 
@@ -147,9 +130,8 @@ test.describe('Settings — Display', () => {
     await app.closeSettings();
   });
 
-  test('encodeTags, hotswap bar, model timestamps, toast position', async ({ page }) => {
+  test('encodeTags, hotswap bar, model timestamps, toast position', async ({ page, app }) => {
     test.setTimeout(90000);
-    const app = new App(page);
     const name = uniqueName('DisplayMisc');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
     await app.sendUserMessage('respond:a plain reply', { expectReply: true });
@@ -193,9 +175,8 @@ test.describe('Settings — Display', () => {
     await app.closeSettings();
   });
 
-  test('click to edit, auto-focus input, never resize avatars', async ({ page }) => {
+  test('click to edit, auto-focus input, never resize avatars', async ({ page, app }) => {
     test.setTimeout(120000);
-    const app = new App(page);
     const name = uniqueName('DisplayInteract');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
     await app.sendUserMessage('respond:interaction probe', { expectReply: true });
@@ -219,7 +200,6 @@ test.describe('Settings — Display', () => {
     await app.ensureSetting('Auto-focus input when switching chats', false);
 
     // neverResizeAvatars: avatar upload skips the crop dialog when enabled.
-    await app.revealHoverButtons();
     const row = app.characterRow(name);
     await row.locator('[title="Edit character"]').click({ force: true });
     const editor = page.locator('.character-editor-modal');
@@ -237,13 +217,10 @@ test.describe('Settings — Display', () => {
     // (The editor's SafeImage renders nothing when the character has no avatar
     // yet, so the upload POST — not the <img> — is the observable signal.)
     await app.ensureSetting('Never resize avatars (skip crop dialog)', true);
-    await app.revealHoverButtons();
     await app.characterRow(name).locator('[title="Edit character"]').click({ force: true });
     await expect(editor).toBeVisible();
     const uploadResponse = page.waitForResponse(
-      (resp) =>
-        resp.request().method() === 'POST' &&
-        /\/api\/characters\/[^/]+\/avatar/.test(resp.url()),
+      (resp) => resp.request().method() === 'POST' && /\/api\/characters\/[^/]+\/avatar/.test(resp.url()),
       { timeout: 10000 },
     );
     await editor.locator('.hidden-file-input').setInputFiles(pngFile());
@@ -254,9 +231,8 @@ test.describe('Settings — Display', () => {
     await app.ensureSetting('Never resize avatars (skip crop dialog)', false);
   });
 
-  test('media display mode and external media CSP', async ({ page }) => {
+  test('media display mode and external media CSP', async ({ page, app }) => {
     test.setTimeout(90000);
-    const app = new App(page);
     const name = uniqueName('DisplayMedia');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 
@@ -290,9 +266,8 @@ test.describe('Settings — Display', () => {
     await app.closeSettings();
   });
 
-  test('strict HTML sanitization', async ({ page }) => {
+  test('strict HTML sanitization', async ({ app }) => {
     test.setTimeout(90000);
-    const app = new App(page);
     const name = uniqueName('DisplaySanitize');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 
@@ -309,9 +284,7 @@ test.describe('Settings — Display', () => {
     await app.ensureSetting('Strict HTML sanitization', false);
   });
 
-  test('fuzzy character search', async ({ page }) => {
-    test.setTimeout(60000);
-    const app = new App(page);
+  test('fuzzy character search', async ({ page, app }) => {
     const name = uniqueName('Alice Fzprobe');
     await app.createCharacter({ name });
 
@@ -331,9 +304,8 @@ test.describe('Settings — Display', () => {
     await search.fill('');
   });
 
-  test('display settings persist across reload', async ({ page }) => {
+  test('display settings persist across reload', async ({ page, app }) => {
     test.setTimeout(90000);
-    const app = new App(page);
     const name = uniqueName('DisplayPersist');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 

@@ -70,10 +70,7 @@ function anthropicError(res: Response, status: number, type: string, message: st
 function toPipelineMessages(body: CreateMessageBody): PipelineMessage[] {
   const messages: PipelineMessage[] = [];
   if (body.system !== undefined) {
-    const system =
-      typeof body.system === 'string'
-        ? body.system
-        : body.system.map((b) => b.text).join('\n');
+    const system = typeof body.system === 'string' ? body.system : body.system.map((b) => b.text).join('\n');
     if (system.length > 0) messages.push({ role: 'system', content: system });
   }
   for (const m of body.messages) {
@@ -137,7 +134,10 @@ export function createProxyRouter(
         else
           res.status(404).json({
             type: 'error',
-            error: { type: 'not_found_error', message: 'The proxy API is unavailable! Enable it in the settings (proxyApi.enabled).' },
+            error: {
+              type: 'not_found_error',
+              message: 'The proxy API is unavailable! Enable it in the settings (proxyApi.enabled).',
+            },
           });
       })
       .catch(next);
@@ -199,7 +199,12 @@ export function createProxyRouter(
       const backendSettings = buildBackendSettings(settings, config);
       const adapter = await createResolvedAdapter(backendSettings);
       if (!adapter) {
-        anthropicError(res, 400, 'invalid_request_error', 'Backend config could not produce an adapter (missing credentials?)');
+        anthropicError(
+          res,
+          400,
+          'invalid_request_error',
+          'Backend config could not produce an adapter (missing credentials?)',
+        );
         return;
       }
 

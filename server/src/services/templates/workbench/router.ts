@@ -160,7 +160,9 @@ export async function fileEntry(
 
 /** Render structured entries as ls output: dirs suffixed `/`, annotations as `<name>  "text"`. */
 export function formatLs(entries: ListEntry[]): string {
-  return entries.map((e) => (e.dir ? `${e.name}/` : e.annotation !== undefined ? `${e.name}  "${e.annotation}"` : e.name)).join('\n');
+  return entries
+    .map((e) => (e.dir ? `${e.name}/` : e.annotation !== undefined ? `${e.name}  "${e.annotation}"` : e.name))
+    .join('\n');
 }
 
 const ROUTES: Record<string, DomainRoute> = {

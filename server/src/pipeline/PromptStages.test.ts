@@ -62,10 +62,7 @@ describe('PromptStages', () => {
     const marker: PromptStage = {
       id: 'marker',
       run(ctx) {
-        ctx.chatHistory = [
-          ...ctx.chatHistory,
-          userMessage(-99, 'INSERTED-STAGE-MARKER'),
-        ];
+        ctx.chatHistory = [...ctx.chatHistory, userMessage(-99, 'INSERTED-STAGE-MARKER')];
       },
     };
     stages.splice(renderIndex, 0, marker);

@@ -52,21 +52,15 @@ describe('normalizeSql', () => {
   });
 
   it('replaces string literals with ?', () => {
-    expect(normalizeSql("SELECT * FROM users WHERE name = 'Alice'")).toBe(
-      "SELECT * FROM users WHERE name = '?'",
-    );
+    expect(normalizeSql("SELECT * FROM users WHERE name = 'Alice'")).toBe("SELECT * FROM users WHERE name = '?'");
   });
 
   it('replaces numeric literals with ?', () => {
-    expect(normalizeSql('SELECT * FROM users WHERE id = 42')).toBe(
-      'SELECT * FROM users WHERE id = ?',
-    );
+    expect(normalizeSql('SELECT * FROM users WHERE id = 42')).toBe('SELECT * FROM users WHERE id = ?');
   });
 
   it('collapses IN clause placeholders', () => {
-    expect(normalizeSql('SELECT * FROM foo WHERE id IN (?, ?, ?)')).toBe(
-      'SELECT * FROM foo WHERE id IN (?)',
-    );
+    expect(normalizeSql('SELECT * FROM foo WHERE id IN (?, ?, ?)')).toBe('SELECT * FROM foo WHERE id IN (?)');
   });
 });
 

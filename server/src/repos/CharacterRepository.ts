@@ -8,12 +8,7 @@ import type { Client } from '@libsql/client';
 import type { InValue } from '@libsql/core/api';
 import { CharacterSchema, CharacterRowSchema, CharacterSummaryRowSchema } from '@tamari/types';
 import type { Character, CharacterInsert, CharacterUpdate, WorldInfoEntry } from '@tamari/types';
-import type {
-  TavernCard,
-  TavernCardV2Data,
-  TavernCardV3Data,
-  CharacterBookEntry,
-} from '@tamari/types';
+import type { TavernCard, TavernCardV2Data, TavernCardV3Data, CharacterBookEntry } from '@tamari/types';
 import { NotFoundError } from '../errors.js';
 import { z } from 'zod';
 
@@ -27,14 +22,12 @@ export interface ICharacterRepository {
     limit?: number;
     offset?: number;
   }): Promise<{ items: Character[]; total: number }>;
-  listSummaries(opts?: {
-    search?: string;
-    tag?: string;
-    limit?: number;
-    offset?: number;
-  }): Promise<{
+  listSummaries(opts?: { search?: string; tag?: string; limit?: number; offset?: number }): Promise<{
     items: Array<
-      Pick<Character, 'id' | 'name' | 'tags' | 'avatarPath' | 'avatarThumbnailPath' | 'external' | 'createdAt' | 'updatedAt'>
+      Pick<
+        Character,
+        'id' | 'name' | 'tags' | 'avatarPath' | 'avatarThumbnailPath' | 'external' | 'createdAt' | 'updatedAt'
+      >
     >;
     total: number;
   }>;
@@ -110,7 +103,10 @@ export class CharacterRepository implements ICharacterRepository {
   }
 
   async getByName(name: string): Promise<Character | undefined> {
-    const rs = await this.client.execute({ sql: 'SELECT * FROM characters WHERE name = ? COLLATE NOCASE', args: [name] });
+    const rs = await this.client.execute({
+      sql: 'SELECT * FROM characters WHERE name = ? COLLATE NOCASE',
+      args: [name],
+    });
     if (rs.rows.length === 0) return undefined;
     return rowToCharacter(rs.rows[0]);
   }
@@ -152,9 +148,7 @@ export class CharacterRepository implements ICharacterRepository {
     };
   }
 
-  async listSummaries(
-    opts: { search?: string; tag?: string; limit?: number; offset?: number } = {},
-  ): Promise<{
+  async listSummaries(opts: { search?: string; tag?: string; limit?: number; offset?: number } = {}): Promise<{
     items: Array<
       Pick<Character, 'id' | 'name' | 'tags' | 'avatarPath' | 'avatarThumbnailPath' | 'createdAt' | 'updatedAt'>
     >;

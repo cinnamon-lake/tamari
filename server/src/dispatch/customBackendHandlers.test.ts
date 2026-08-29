@@ -30,7 +30,12 @@ describe('custombackend.test handler', () => {
   });
 
   it('dry-runs an ad-hoc luaSource and echoes requestId', async () => {
-    await h.send(client, { type: 'custombackend.test', luaSource: ECHO_LUA, input: 'hello', requestId: 'req-1' } as never);
+    await h.send(client, {
+      type: 'custombackend.test',
+      luaSource: ECHO_LUA,
+      input: 'hello',
+      requestId: 'req-1',
+    } as never);
     const result = lastTestResult();
     expect(result).toBeDefined();
     expect(result!.requestId).toBe('req-1');
@@ -161,5 +166,98 @@ describe('custombackend.test handler', () => {
       input: 'hi',
     } as never);
     expect(lastTestResult()!.outcome.text).toBe('EXPLICIT');
+  });
+});
+
+describe('custombackend CRUD handlers', () => {
+  let h: TestHarness;
+  let client: TestClient;
+
+  const lastError = () => [...client.messages].reverse().find((m) => m.type === 'error');
+
+  beforeEach(async () => {
+    h = new TestHarness();
+    await h.initSchema();
+    client = h.connectClient();
+  });
+
+  afterEach(async () => {
+    await h.teardown();
+  });
+
+  it('custombackend.list replies only to the requesting client', async () => {
+    await h.deps.customBackends.create('cb-1', { name: 'One', description: '', luaSource: ECHO_LUA });
+    const other = h.connectClient();
+
+    await h.send(client, { type: 'custombackend.list' } as never);
+
+    const listed = client.messages.find((m) => m.type === 'custombackend.listed');
+    expect(listed).toBeDefined();
+    expect((listed as { items: unknown[] }).items).toHaveLength(1);
+    // Request/response, not shared state — the other client gets nothing.
+    expect(other.messages.find((m) => m.type === 'custombackend.listed')).toBeUndefined();
+  });
+
+  it('custombackend.get returns the item as custombackend.updated', async () => {
+    const item = await h.deps.customBackends.create('cb-1', {
+      name: 'One',
+      description: '',
+      luaSource: ECHO_LUA,
+    });
+    await h.send(client, { type: 'custombackend.get', id: item.id } as never);
+    const reply = client.messages.find((m) => m.type === 'custombackend.updated');
+    expect(reply).toMatchObject({ type: 'custombackend.updated' });
+    expect((reply as { item: { id: string } }).item.id).toBe(item.id);
+  });
+
+  it('custombackend.get on a missing id replies NOT_FOUND', async () => {
+    await h.send(client, { type: 'custombackend.get', id: 'no-such' } as never);
+    expect(lastError()).toMatchObject({ type: 'error', code: 'NOT_FOUND' });
+  });
+
+  it('custombackend.create broadcasts created plus a reconverged list', async () => {
+    await h.send(client, {
+      type: 'custombackend.create',
+      data: { name: 'New', description: 'd', luaSource: ECHO_LUA },
+    } as never);
+
+    const created = h.expectBroadcast('custombackend.created');
+    expect(created.clientId).toBe(client.connection.id);
+    expect(created.item.name).toBe('New');
+    const listed = h.expectBroadcast('custombackend.listed');
+    expect((listed.items as { id: string }[]).some((i) => i.id === created.item.id)).toBe(true);
+  });
+
+  it('custombackend.update broadcasts updated plus a reconverged list', async () => {
+    const item = await h.deps.customBackends.create('cb-1', {
+      name: 'Old',
+      description: '',
+      luaSource: ECHO_LUA,
+    });
+    await h.send(client, {
+      type: 'custombackend.update',
+      id: item.id,
+      patch: { name: 'Renamed' },
+    } as never);
+
+    const updated = h.expectBroadcast('custombackend.updated');
+    expect(updated.item.name).toBe('Renamed');
+    expect(updated.clientId).toBe(client.connection.id);
+    h.expectBroadcast('custombackend.listed');
+  });
+
+  it('custombackend.delete broadcasts deleted plus a reconverged list', async () => {
+    const item = await h.deps.customBackends.create('cb-1', {
+      name: 'Doomed',
+      description: '',
+      luaSource: ECHO_LUA,
+    });
+    await h.send(client, { type: 'custombackend.delete', id: item.id } as never);
+
+    const deleted = h.expectBroadcast('custombackend.deleted');
+    expect(deleted.id).toBe(item.id);
+    const listed = h.expectBroadcast('custombackend.listed');
+    expect((listed.items as { id: string }[]).some((i) => i.id === item.id)).toBe(false);
+    expect(await h.deps.customBackends.getById(item.id)).toBeUndefined();
   });
 });

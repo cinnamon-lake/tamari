@@ -35,8 +35,18 @@ describe('parseCardFolder', () => {
       description: 'A brave hero.',
       first_mes: 'Hello, traveler!',
       system_prompt: 'Be heroic.',
-      'lorebook/town.json': JSON.stringify({ keys: ['town'], content: 'The town of Tamari.', comment: 'Town info', order: 5 }),
-      'regex/emote.json': JSON.stringify({ name: 'Emote', findRegex: '/\\*\\*/g', replaceString: '*', userInput: true }),
+      'lorebook/town.json': JSON.stringify({
+        keys: ['town'],
+        content: 'The town of Tamari.',
+        comment: 'Town info',
+        order: 5,
+      }),
+      'regex/emote.json': JSON.stringify({
+        name: 'Emote',
+        findRegex: '/\\*\\*/g',
+        replaceString: '*',
+        userInput: true,
+      }),
       'backend_logic/main.lua': 'function generate(prompt, ctx) return "ok" end',
       'backend_logic/lib/util.lua': 'local M = {}\nreturn M',
       'avatar.png': 'fake-png-bytes',
@@ -213,7 +223,12 @@ describe('parseCardFolder', () => {
     const card = await parseCardFolder(dir);
 
     expect(card.regexRules).toHaveLength(1);
-    expect(card.regexRules[0]).toMatchObject({ id: 'good', findRegex: '/a+/', replaceString: 'b', replaceLua: 'return match' });
+    expect(card.regexRules[0]).toMatchObject({
+      id: 'good',
+      findRegex: '/a+/',
+      replaceString: 'b',
+      replaceLua: 'return match',
+    });
     expect(card.errors.some((e) => e.includes('regex/bad.json') && e.includes('findRegex'))).toBe(true);
   });
 
@@ -226,7 +241,11 @@ describe('parseCardFolder', () => {
     const card = await parseCardFolder(dir);
 
     expect(card.regexRules).toHaveLength(0);
-    expect(card.errors.some((e) => e.includes('regex/bare.json') && e.includes('invalid findRegex') && e.includes('/pattern/flags'))).toBe(true);
+    expect(
+      card.errors.some(
+        (e) => e.includes('regex/bare.json') && e.includes('invalid findRegex') && e.includes('/pattern/flags'),
+      ),
+    ).toBe(true);
   });
 
   it('rejects a delimited findRegex with an invalid pattern or flags', async () => {
@@ -240,7 +259,11 @@ describe('parseCardFolder', () => {
 
     expect(card.regexRules).toHaveLength(0);
     expect(card.errors.some((e) => e.includes('regex/bad-pattern.json') && e.includes('invalid findRegex'))).toBe(true);
-    expect(card.errors.some((e) => e.includes('regex/bad-flags.json') && e.includes('invalid findRegex') && e.includes('Invalid flags'))).toBe(true);
+    expect(
+      card.errors.some(
+        (e) => e.includes('regex/bad-flags.json') && e.includes('invalid findRegex') && e.includes('Invalid flags'),
+      ),
+    ).toBe(true);
   });
 
   it('reports a non-directory path instead of throwing', async () => {

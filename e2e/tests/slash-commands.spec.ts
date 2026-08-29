@@ -19,16 +19,11 @@
  *   - /reset — wipes chat history; destructive and orthogonal to commands.ts
  *     branching (single passthrough).
  */
-import { test, expect, type Page } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { App } from '../helpers/app.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Page } from '../fixtures/base.js';
 import { setSetting } from '../helpers/settings.js';
 import { getLastLlmRequest, waitForNextLlmRequest, resetLlmRequests } from '../helpers/llm.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()} ${Math.floor(Math.random() * 100000)}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 /** Type a slash command into the composer and dispatch it with the send button. */
 async function runCommand(page: Page, command: string): Promise<void> {
@@ -78,14 +73,7 @@ async function readSetting(page: Page, key: string): Promise<unknown> {
 test.describe('Slash commands', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('message ops: /sys, /send, /cut', async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-    const app = new App(page);
+  test('message ops: /sys, /send, /cut', async ({ page, app }) => {
     const charName = uniqueName('SlashOps Char');
     await app.createCharacterAndChat({ name: charName, description: 'ops char', firstMes: 'Greetings from ops.' });
 
@@ -106,10 +94,7 @@ test.describe('Slash commands', () => {
     await expect(app.lastBubble('user')).toContainText('respond: send reply here');
   });
 
-  test('identity and lock: /name, /lock, /unlock', async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-    const app = new App(page);
+  test('identity and lock: /name, /lock, /unlock', async ({ page, app }) => {
     const charName = uniqueName('SlashName Char');
     await app.createCharacterAndChat({ name: charName, description: 'name char', firstMes: 'Greetings from name.' });
 
@@ -142,10 +127,7 @@ test.describe('Slash commands', () => {
     await expect(input).toHaveAttribute('placeholder', 'Type a message...');
   });
 
-  test('/persona assigns a persona to the chat and errors on unknown names', async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-    const app = new App(page);
+  test('/persona assigns a persona to the chat and errors on unknown names', async ({ page, app }) => {
     const personaName = uniqueName('Slash Persona');
 
     // Create a persona via the Personas manager UI.
@@ -160,7 +142,11 @@ test.describe('Slash commands', () => {
     await expect(manager).not.toBeVisible();
 
     const charName = uniqueName('SlashPersona Char');
-    await app.createCharacterAndChat({ name: charName, description: 'persona char', firstMes: 'Greetings from persona.' });
+    await app.createCharacterAndChat({
+      name: charName,
+      description: 'persona char',
+      firstMes: 'Greetings from persona.',
+    });
 
     // Unknown persona → error toast, chat unchanged.
     const bogus = uniqueName('NoSuchPerson');
@@ -173,10 +159,7 @@ test.describe('Slash commands', () => {
     await expect(app.lastBubble('user').locator('.message-role')).toHaveText(personaName);
   });
 
-  test('/char switches to another character and errors on unknown names', async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-    const app = new App(page);
+  test('/char switches to another character and errors on unknown names', async ({ page, app }) => {
     const first = uniqueName('SlashChar First');
     const second = uniqueName('SlashChar Second');
     await app.createCharacterAndChat({ name: first, description: 'first', firstMes: 'Greetings from first.' });
@@ -198,11 +181,8 @@ test.describe('Slash commands', () => {
     await expect(page.locator('main').getByRole('heading', { name: second })).toBeVisible();
   });
 
-  test('generation: /gen, /genraw, /sysgen', async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test('generation: /gen, /genraw, /sysgen', async ({ page, app }) => {
     await resetLlmRequests();
-    const app = new App(page);
     const charName = uniqueName('SlashGen Char');
     const descMarker = `DESC_MARKER_${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, description: descMarker, firstMes: 'Greetings from gen.' });
@@ -231,10 +211,7 @@ test.describe('Slash commands', () => {
     await expect(lastSystemBubble(page)).toContainText('sys out', { timeout: 10000 });
   });
 
-  test('/ask generates as a specific character in a group chat', async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-    const app = new App(page);
+  test('/ask generates as a specific character in a group chat', async ({ page, app }) => {
     // /ask's first argument is a single token (args[0]), so the character name
     // must not contain spaces.
     const charName = `SlashAskMember${Date.now()}`;
@@ -266,12 +243,13 @@ test.describe('Slash commands', () => {
     await expect(app.lastBubble('assistant').locator('.message-role')).toHaveText(charName);
   });
 
-  test('utility: /listvar', async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-    const app = new App(page);
+  test('utility: /listvar', async ({ page, app }) => {
     const charName = uniqueName('SlashListvar Char');
-    await app.createCharacterAndChat({ name: charName, description: 'listvar char', firstMes: 'Greetings from listvar.' });
+    await app.createCharacterAndChat({
+      name: charName,
+      description: 'listvar char',
+      firstMes: 'Greetings from listvar.',
+    });
 
     // /listvar with nothing set → info toast.
     await runCommand(page, '/listvar');
@@ -285,15 +263,17 @@ test.describe('Slash commands', () => {
     await setSetting(page, 'globalVars', {});
   });
 
-  test('/wi family against a linked lorebook', async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-    const app = new App(page);
+  test('/wi family against a linked lorebook', async ({ page, app }) => {
     const bookName = uniqueName('SlashWI Book');
     const charName = uniqueName('SlashWI Char');
     const dragonToken = `DRAGONTOK_${Date.now()}`;
     const bookLabel = await app.createLorebook(bookName, 'ember', `EMBERTOK_${Date.now()}`);
-    await app.createCharacterAndChat({ name: charName, description: 'wi char', firstMes: 'Greetings from wi.', lorebookBookLabel: bookLabel });
+    await app.createCharacterAndChat({
+      name: charName,
+      description: 'wi char',
+      firstMes: 'Greetings from wi.',
+      lorebookBookLabel: bookLabel,
+    });
 
     // /wi add <keys> <content...> — creates an entry in the linked book.
     await runCommand(page, `/wi add dragon [WI] ${dragonToken}`);
@@ -326,10 +306,7 @@ test.describe('Slash commands', () => {
     await expect(lastSystemBubble(page)).toContainText('[ember]');
   });
 
-  test('/theme and /bg apply settings; /wi without a linked book errors', async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-    const app = new App(page);
+  test('/theme and /bg apply settings; /wi without a linked book errors', async ({ page, app }) => {
     const charName = uniqueName('SlashTheme Char');
     await app.createCharacterAndChat({ name: charName, description: 'theme char', firstMes: 'Greetings from theme.' });
 

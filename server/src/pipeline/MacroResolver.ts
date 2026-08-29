@@ -1,4 +1,3 @@
-
 import type { MacroGenerationType, MessageRole } from '@tamari/types';
 
 /**
@@ -85,7 +84,12 @@ export type Token =
 export type MacroHandler = (ctx: MacroContext, args: Resoluble[], resolver: MacroResolver) => string | undefined;
 
 export interface BlockHandler {
-  tryResolve(condition: Resoluble, branches: Resoluble[], ctx: MacroContext, resolver: MacroResolver): string | undefined;
+  tryResolve(
+    condition: Resoluble,
+    branches: Resoluble[],
+    ctx: MacroContext,
+    resolver: MacroResolver,
+  ): string | undefined;
 }
 
 /** Maximum passes before giving up on a template. */
@@ -286,10 +290,7 @@ class Lexer {
       const exprStart = input.indexOf('{{', i);
       const blockStart = input.indexOf('{%', i);
 
-      const nextSpecial = Math.min(
-        exprStart === -1 ? Infinity : exprStart,
-        blockStart === -1 ? Infinity : blockStart,
-      );
+      const nextSpecial = Math.min(exprStart === -1 ? Infinity : exprStart, blockStart === -1 ? Infinity : blockStart);
 
       if (nextSpecial === Infinity) {
         if (i < input.length) {
@@ -372,9 +373,12 @@ function tokensToSource(tokens: Token[]): string {
   return tokens
     .map((t) => {
       switch (t.type) {
-        case 'TEXT': return t.value;
-        case 'EXPR': return `{{${t.content}}}`;
-        default: return t.raw; // BLOCK_OPEN / BLOCK_MIDDLE / BLOCK_CLOSE
+        case 'TEXT':
+          return t.value;
+        case 'EXPR':
+          return `{{${t.content}}}`;
+        default:
+          return t.raw; // BLOCK_OPEN / BLOCK_MIDDLE / BLOCK_CLOSE
       }
     })
     .join('');
@@ -511,7 +515,10 @@ class Parser {
     return { name, args };
   }
 
-  private collectBlock(tokens: Token[], startIdx: number): { endIndex: number; branches: Token[][]; terminated: boolean } {
+  private collectBlock(
+    tokens: Token[],
+    startIdx: number,
+  ): { endIndex: number; branches: Token[][]; terminated: boolean } {
     const open = tokens[startIdx];
     if (!open || open.type !== 'BLOCK_OPEN') {
       throw new Error('collectBlock must start at a BLOCK_OPEN token');
@@ -691,9 +698,64 @@ export class MacroResolver {
     this.macros.set('maxPrompt', (ctx) => String(ctx.maxContext ?? 4096));
 
     // ---- Time / date macros (UTC) — non-deterministic: value changes per turn ----
-    this.register('time', (ctx, args) => {
-      const d = ctx.now ?? new Date();
-      if (args.length > 0 && args[0]) {
+    this.register(
+      'time',
+      (ctx, args) => {
+        const d = ctx.now ?? new Date();
+        if (args.length > 0 && args[0]) {
+          if (!args[0].has_resolved()) return undefined;
+          const fmt = args[0].resolve();
+          return fmt
+            .replace('YYYY', String(d.getUTCFullYear()))
+            .replace('MM', String(d.getUTCMonth() + 1).padStart(2, '0'))
+            .replace('DD', String(d.getUTCDate()).padStart(2, '0'))
+            .replace('HH', String(d.getUTCHours()).padStart(2, '0'))
+            .replace('mm', String(d.getUTCMinutes()).padStart(2, '0'))
+            .replace('ss', String(d.getUTCSeconds()).padStart(2, '0'));
+        }
+        const h = String(d.getUTCHours()).padStart(2, '0');
+        const m = String(d.getUTCMinutes()).padStart(2, '0');
+        return `${h}:${m}`;
+      },
+      { deterministic: false },
+    );
+    this.register(
+      'date',
+      (ctx) => {
+        const d = ctx.now ?? new Date();
+        return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+      },
+      { deterministic: false },
+    );
+    this.register(
+      'weekday',
+      (ctx) => {
+        const d = ctx.now ?? new Date();
+        return d.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+      },
+      { deterministic: false },
+    );
+    this.register(
+      'isotime',
+      (ctx) => {
+        const d = ctx.now ?? new Date();
+        return (d.toISOString().split('T')[1] ?? '').slice(0, 5);
+      },
+      { deterministic: false },
+    );
+    this.register(
+      'isodate',
+      (ctx) => {
+        const d = ctx.now ?? new Date();
+        return d.toISOString().split('T')[0];
+      },
+      { deterministic: false },
+    );
+    this.register(
+      'datetimeformat',
+      (ctx, args) => {
+        const d = ctx.now ?? new Date();
+        if (args.length === 0 || !args[0]) return d.toISOString();
         if (!args[0].has_resolved()) return undefined;
         const fmt = args[0].resolve();
         return fmt
@@ -703,40 +765,9 @@ export class MacroResolver {
           .replace('HH', String(d.getUTCHours()).padStart(2, '0'))
           .replace('mm', String(d.getUTCMinutes()).padStart(2, '0'))
           .replace('ss', String(d.getUTCSeconds()).padStart(2, '0'));
-      }
-      const h = String(d.getUTCHours()).padStart(2, '0');
-      const m = String(d.getUTCMinutes()).padStart(2, '0');
-      return `${h}:${m}`;
-    }, { deterministic: false });
-    this.register('date', (ctx) => {
-      const d = ctx.now ?? new Date();
-      return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-    }, { deterministic: false });
-    this.register('weekday', (ctx) => {
-      const d = ctx.now ?? new Date();
-      return d.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
-    }, { deterministic: false });
-    this.register('isotime', (ctx) => {
-      const d = ctx.now ?? new Date();
-      return (d.toISOString().split('T')[1] ?? '').slice(0, 5);
-    }, { deterministic: false });
-    this.register('isodate', (ctx) => {
-      const d = ctx.now ?? new Date();
-      return d.toISOString().split('T')[0];
-    }, { deterministic: false });
-    this.register('datetimeformat', (ctx, args) => {
-      const d = ctx.now ?? new Date();
-      if (args.length === 0 || !args[0]) return d.toISOString();
-      if (!args[0].has_resolved()) return undefined;
-      const fmt = args[0].resolve();
-      return fmt
-        .replace('YYYY', String(d.getUTCFullYear()))
-        .replace('MM', String(d.getUTCMonth() + 1).padStart(2, '0'))
-        .replace('DD', String(d.getUTCDate()).padStart(2, '0'))
-        .replace('HH', String(d.getUTCHours()).padStart(2, '0'))
-        .replace('mm', String(d.getUTCMinutes()).padStart(2, '0'))
-        .replace('ss', String(d.getUTCSeconds()).padStart(2, '0'));
-    }, { deterministic: false });
+      },
+      { deterministic: false },
+    );
 
     // ---- Chat inspection macros ----
     this.macros.set('lastMessage', (ctx) => {
@@ -782,43 +813,55 @@ export class MacroResolver {
     });
 
     // ---- Randomization macros — non-deterministic: rng-driven ----
-    this.register('random', (_ctx, args) => {
-      if (args.length === 0) return String(this.rng());
-      if (args.length === 1 && args[0]) {
-        if (!args[0].has_resolved()) return undefined;
-        const max = parseInt(args[0].resolve(), 10);
-        if (!isNaN(max)) return String(Math.floor(this.rng() * max) + 1);
-        return String(this.rng());
-      }
-      if (args.length >= 2 && args[0] && args[1]) {
-        if (!args[0].has_resolved() || !args[1].has_resolved()) return undefined;
-        const min = parseInt(args[0].resolve(), 10);
-        const max = parseInt(args[1].resolve(), 10);
-        if (!isNaN(min) && !isNaN(max)) {
-          return String(Math.floor(this.rng() * (max - min + 1)) + min);
+    this.register(
+      'random',
+      (_ctx, args) => {
+        if (args.length === 0) return String(this.rng());
+        if (args.length === 1 && args[0]) {
+          if (!args[0].has_resolved()) return undefined;
+          const max = parseInt(args[0].resolve(), 10);
+          if (!isNaN(max)) return String(Math.floor(this.rng() * max) + 1);
+          return String(this.rng());
         }
-      }
-      return String(this.rng());
-    }, { deterministic: false });
-    this.register('pick', (_ctx, args) => {
-      if (args.length === 0) return '';
-      const resolved = args.map((a) => (a.has_resolved() ? a.resolve() : undefined));
-      if (resolved.some((v) => v === undefined)) return undefined;
-      return resolved[Math.floor(this.rng() * resolved.length)] ?? '';
-    }, { deterministic: false });
-    this.register('roll', (_ctx, args) => {
-      if (args.length === 0 || !args[0]) return String(Math.floor(this.rng() * 20) + 1);
-      if (!args[0].has_resolved()) return undefined;
-      const match = args[0].resolve().match(/(\d+)d(\d+)/i);
-      const countStr = match?.[1];
-      const sidesStr = match?.[2];
-      if (!countStr || !sidesStr) return '';
-      const count = parseInt(countStr, 10);
-      const sides = parseInt(sidesStr, 10);
-      let total = 0;
-      for (let i = 0; i < count; i++) total += Math.floor(this.rng() * sides) + 1;
-      return String(total);
-    }, { deterministic: false });
+        if (args.length >= 2 && args[0] && args[1]) {
+          if (!args[0].has_resolved() || !args[1].has_resolved()) return undefined;
+          const min = parseInt(args[0].resolve(), 10);
+          const max = parseInt(args[1].resolve(), 10);
+          if (!isNaN(min) && !isNaN(max)) {
+            return String(Math.floor(this.rng() * (max - min + 1)) + min);
+          }
+        }
+        return String(this.rng());
+      },
+      { deterministic: false },
+    );
+    this.register(
+      'pick',
+      (_ctx, args) => {
+        if (args.length === 0) return '';
+        const resolved = args.map((a) => (a.has_resolved() ? a.resolve() : undefined));
+        if (resolved.some((v) => v === undefined)) return undefined;
+        return resolved[Math.floor(this.rng() * resolved.length)] ?? '';
+      },
+      { deterministic: false },
+    );
+    this.register(
+      'roll',
+      (_ctx, args) => {
+        if (args.length === 0 || !args[0]) return String(Math.floor(this.rng() * 20) + 1);
+        if (!args[0].has_resolved()) return undefined;
+        const match = args[0].resolve().match(/(\d+)d(\d+)/i);
+        const countStr = match?.[1];
+        const sidesStr = match?.[2];
+        if (!countStr || !sidesStr) return '';
+        const count = parseInt(countStr, 10);
+        const sides = parseInt(sidesStr, 10);
+        let total = 0;
+        for (let i = 0; i < count; i++) total += Math.floor(this.rng() * sides) + 1;
+        return String(total);
+      },
+      { deterministic: false },
+    );
 
     // ---- Variable macros ----
     this.macros.set('getvar', (ctx, args) => {
@@ -927,7 +970,7 @@ export class MacroResolver {
         if (!condition.has_resolved()) return undefined;
         const resolved = condition.resolve();
         const isTrue = evaluateBooleanExpression(resolved);
-        const chosen = isTrue ? branches[0] ?? new TextResoluble('') : branches[1] ?? new TextResoluble('');
+        const chosen = isTrue ? (branches[0] ?? new TextResoluble('')) : (branches[1] ?? new TextResoluble(''));
         if (!chosen.has_resolved()) return undefined;
         return chosen.resolve();
       },
@@ -938,7 +981,7 @@ export class MacroResolver {
         if (!condition.has_resolved()) return undefined;
         const resolved = condition.resolve();
         const isTrue = resolved.length > 0 && resolved !== 'false' && resolved !== '0';
-        const chosen = isTrue ? branches[1] ?? new TextResoluble('') : branches[0] ?? new TextResoluble('');
+        const chosen = isTrue ? (branches[1] ?? new TextResoluble('')) : (branches[0] ?? new TextResoluble(''));
         if (!chosen.has_resolved()) return undefined;
         return chosen.resolve();
       },

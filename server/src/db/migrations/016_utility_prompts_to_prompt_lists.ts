@@ -25,7 +25,7 @@ import { PromptListRepository } from '../../repos/PromptListRepository.js';
 import { SettingsRepository } from '../../repos/SettingsRepository.js';
 import type { Migration } from '../runMigrations.js';
 
-const log = getLogger('db');
+const log = getLogger('db/migrations/016_utility_prompts_to_prompt_lists');
 
 function utilityPrompt(identifier: string, name: string, content: string): PresetPromptDef {
   return { identifier, name, content, role: 'system', enabled: true, systemPrompt: true, marker: false };
@@ -37,9 +37,7 @@ const migration: Migration = {
     const promptLists = new PromptListRepository(db);
 
     const row = await db.execute('SELECT blob FROM settings WHERE id = 0');
-    const raw = (
-      row.rows.length > 0 ? JSON.parse(str(row.rows[0]?.blob, '{}')) : {}
-    ) as Record<string, unknown>;
+    const raw = (row.rows.length > 0 ? JSON.parse(str(row.rows[0]?.blob, '{}')) : {}) as Record<string, unknown>;
     const legacyImpersonation = str(raw['impersonationPrompt']);
     const legacyMemory =
       raw['memory'] && typeof raw['memory'] === 'object' ? (raw['memory'] as Record<string, unknown>) : undefined;

@@ -30,7 +30,8 @@ class LuaRunnerTemplate implements ToolTemplate {
       tools: [
         {
           name: 'run_lua',
-          description: 'Execute a Lua script and return the result. Useful for calculations, string manipulation, or custom logic.',
+          description:
+            'Execute a Lua script and return the result. Useful for calculations, string manipulation, or custom logic.',
           parameters: z.toJSONSchema(LuaRunnerArgs) as Record<string, unknown>,
         },
       ],
@@ -63,6 +64,8 @@ class LuaRunnerTemplate implements ToolTemplate {
     }
   }
 
-  serialize(): string { return ''; }
+  serialize(): string {
+    return '';
+  }
   deserialize(_raw: string): void {}
 }

@@ -113,7 +113,7 @@ describe('append-only prompt layout', () => {
 
   it('PROPERTY (chat flow): everything before the stream target is byte-identical; the reply re-sends verbatim', async () => {
     const opts = makeOpts({
-      chatHistory: [makeMsg('user', 'first'), makeMsg('assistant', ''),],
+      chatHistory: [makeMsg('user', 'first'), makeMsg('assistant', '')],
       prompts: {
         authorsNote: { content: 'NOTE', position: 'in_chat', depth: 0, role: 'system', interval: 1 },
       },
@@ -189,10 +189,7 @@ describe('append-only prompt layout', () => {
     const prompt = await builder.build(
       makeOpts({
         chatHistory: [makeMsg('user', 'hello'), makeMsg('assistant', 'hello')],
-        regexRules: [
-          makeRule({ id: 'p1', userInput: true }),
-          makeRule({ id: 'p2', aiOutput: true }),
-        ],
+        regexRules: [makeRule({ id: 'p1', userInput: true }), makeRule({ id: 'p2', aiOutput: true })],
         ...APPEND_ONLY,
       }),
     );
@@ -207,9 +204,36 @@ describe('append-only prompt layout', () => {
         prompts: {
           authorsNote: { content: 'NOTE-TEXT', position: 'in_chat', depth: 1, role: 'system', interval: 1 },
           presetPrompts: [
-            { identifier: 'main', name: 'Main', role: 'system', content: 'MAIN', enabled: true, systemPrompt: true, marker: false },
-            { identifier: 'chatHistory', name: 'History', role: 'system', content: '', enabled: true, systemPrompt: true, marker: true },
-            { identifier: 'abs1', name: 'Abs', role: 'system', content: 'ABS-PROMPT', enabled: true, systemPrompt: false, marker: false, injectionPosition: 'absolute', injectionDepth: 1, injectionOrder: 0 },
+            {
+              identifier: 'main',
+              name: 'Main',
+              role: 'system',
+              content: 'MAIN',
+              enabled: true,
+              systemPrompt: true,
+              marker: false,
+            },
+            {
+              identifier: 'chatHistory',
+              name: 'History',
+              role: 'system',
+              content: '',
+              enabled: true,
+              systemPrompt: true,
+              marker: true,
+            },
+            {
+              identifier: 'abs1',
+              name: 'Abs',
+              role: 'system',
+              content: 'ABS-PROMPT',
+              enabled: true,
+              systemPrompt: false,
+              marker: false,
+              injectionPosition: 'absolute',
+              injectionDepth: 1,
+              injectionOrder: 0,
+            },
           ],
           presetPromptOrder: [
             { identifier: 'main', enabled: true },
@@ -218,7 +242,9 @@ describe('append-only prompt layout', () => {
           ],
         },
         worldInfo: {
-          entries: [makeEntry({ id: 'const-depth', content: 'CONSTANT-DEPTH', constant: true, position: 'atDepth', depth: 1 })],
+          entries: [
+            makeEntry({ id: 'const-depth', content: 'CONSTANT-DEPTH', constant: true, position: 'atDepth', depth: 1 }),
+          ],
         },
         ...APPEND_ONLY,
       }),
@@ -275,7 +301,12 @@ describe('append-only prompt layout', () => {
       }),
     );
     expect(prompt.appendOnlyTrace).toBeDefined();
-    expect(prompt.appendOnlyTrace!.suppressed).toEqual(['nonConstantWorldInfo', 'promptRegex', 'macros', 'outputPostProcessing']);
+    expect(prompt.appendOnlyTrace!.suppressed).toEqual([
+      'nonConstantWorldInfo',
+      'promptRegex',
+      'macros',
+      'outputPostProcessing',
+    ]);
     expect(prompt.appendOnlyTrace!.hoisted).toContain('authorsNote');
   });
 
@@ -297,7 +328,17 @@ describe('append-only output side (AssistantMessageTarget)', () => {
     const store = new Map<number, Message>();
     const updatedMessages: Message[] = [];
     const chats = {
-      getChatById: vi.fn(async () => ({ id: 'chat-1', characterId: null, personaId: null, headMessageId: null, activeChildId: null, materialized: false, metadata: {}, createdAt: 0, updatedAt: 0 })),
+      getChatById: vi.fn(async () => ({
+        id: 'chat-1',
+        characterId: null,
+        personaId: null,
+        headMessageId: null,
+        activeChildId: null,
+        materialized: false,
+        metadata: {},
+        createdAt: 0,
+        updatedAt: 0,
+      })),
       getMessageById: vi.fn(async (id: number) => store.get(id)),
       appendMessage: vi.fn(async (_chatId: string, msg: Partial<Message>) => {
         const created: Message = {
@@ -323,7 +364,12 @@ describe('append-only output side (AssistantMessageTarget)', () => {
     };
 
     const settings = {
-      list: vi.fn(async () => ({ appendOnlyPromptLayout: true, trimSentences: true, removeXML: true, whitespaceMode: 'full' })),
+      list: vi.fn(async () => ({
+        appendOnlyPromptLayout: true,
+        trimSentences: true,
+        removeXML: true,
+        whitespaceMode: 'full',
+      })),
       get: vi.fn(async () => undefined),
     };
 
@@ -334,15 +380,16 @@ describe('append-only output side (AssistantMessageTarget)', () => {
       personas: {},
       settings,
       backendConfigs: {},
-      chatBroadcast: { broadcastSnapshot: vi.fn(), broadcastMessageAppended: vi.fn(), broadcastMessageSnapshot: vi.fn() },
+      chatBroadcast: {
+        broadcastSnapshot: vi.fn(),
+        broadcastMessageAppended: vi.fn(),
+        broadcastMessageSnapshot: vi.fn(),
+      },
       generationBroadcast: { broadcastGenerationToken: vi.fn(), broadcastGenerationReasoningToken: vi.fn() },
       assembly: {},
     };
 
-    const target = AssistantMessageTarget.forNewMessage(
-      { chatId: 'chat-1', character: null },
-      deps as never,
-    );
+    const target = AssistantMessageTarget.forNewMessage({ chatId: 'chat-1', character: null }, deps as never);
     await target.prepare();
 
     for (const char of '<b>bold</b> incomplete sentence {{setvar::x::1}}') {

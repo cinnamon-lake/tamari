@@ -11,17 +11,10 @@ import type { DispatcherDeps, Handlers } from './types.js';
 
 export function buildMessageHandlers(
   deps: DispatcherDeps,
-): Handlers<'action.edit' | 'action.delete' | 'action.hide' | 'action.unhide' | 'action.system' | 'action.cut' | 'action.swipe'> {
-  const {
-    bus,
-    characters,
-    chats,
-    settings,
-    personas,
-    tokenCounter,
-    chatBroadcast,
-    chatMetaBroadcast,
-  } = deps;
+): Handlers<
+  'action.edit' | 'action.delete' | 'action.hide' | 'action.unhide' | 'action.system' | 'action.cut' | 'action.swipe'
+> {
+  const { bus, characters, chats, settings, personas, tokenCounter, chatBroadcast, chatMetaBroadcast } = deps;
 
   async function setHidden(
     client: ClientConnection,

@@ -262,10 +262,12 @@ High-level summary of finished foundation work. Detailed implementation notes re
 - **Phase 6 — App shell + major components (40 tests)**: `App` (drag-drop, layout), `Sidebar` (filter, sort, pagination, modal triggers), `MessageInput` (send dispatch, slash autocomplete, streaming state, lock/unlock, attachments).
 
 **Type safety:**
+
 - All 52 test files pass `tsc --noEmit` with `strict: true`. Test mocks match `@tamari/types` interfaces exactly — no `as any` casts or exclusions.
 - `serverStore.ts` exports `ServerState` interface for test consumption.
 
 **Testing conventions established:**
+
 - `serverStore.ts` registers global `bus.on()` at import time — tests use `vi.resetModules()` + dynamic `import()` for isolation.
 - `state.clientId` must be set directly for own-client detection in WS handlers.
 - `activeChatId()` signal from `uiStore.ts` is checked by store handlers, not `state.activeChat`.

@@ -80,9 +80,7 @@ describe('executeSlashCommand', () => {
       const deps = makeDeps();
       const parsed = parseCommand('/theme light')!;
       expect(executeSlashCommand(parsed, 'chat-1', deps)).toBe(true);
-      expect(sendSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'settings.set', key: 'themeCustomCss' }),
-      );
+      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'settings.set', key: 'themeCustomCss' }));
       const call = sendSpy.mock.calls[0]![0] as { value: string };
       expect(call.value).toContain('--color-bg-primary');
     });
@@ -133,9 +131,7 @@ describe('executeSlashCommand', () => {
       const deps = makeDeps();
       const parsed = parseCommand('/persona bob')!;
       expect(executeSlashCommand(parsed, 'chat-1', deps)).toBe(true);
-      expect(sendSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ patch: { personaId: 'p2' } }),
-      );
+      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({ patch: { personaId: 'p2' } }));
     });
   });
 
@@ -145,7 +141,20 @@ describe('executeSlashCommand', () => {
         settings: {},
         characters: [{ id: 'c1', name: 'Miku', avatarUrl: null, thumbnailUrl: null, tags: [] }],
         chats: [
-          { id: 'ch1', characterId: 'c1', name: 'Miku Chat', createdAt: 1000, updatedAt: 2000, headMessageId: null, activeChildId: null, materialized: false, metadata: {}, personaId: null, forkedFromChatId: null, forkedAtMessageId: null },
+          {
+            id: 'ch1',
+            characterId: 'c1',
+            name: 'Miku Chat',
+            createdAt: 1000,
+            updatedAt: 2000,
+            headMessageId: null,
+            activeChildId: null,
+            materialized: false,
+            metadata: {},
+            personaId: null,
+            forkedFromChatId: null,
+            forkedAtMessageId: null,
+          },
         ],
       });
       const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
@@ -234,7 +243,25 @@ describe('executeSlashCommand', () => {
             id: 'book-1',
             name: 'Test Book',
             entries: [
-              { id: 'e1', keys: ['key1'], content: 'Content one', comment: '', position: 'before_char', order: 0, probability: 100, constant: false, selective: false, secondaryKeys: [], addMemo: false, disable: false, regex: false, recursive: false, depth: 0, role: 'system', retrievalMode: 'keyword' },
+              {
+                id: 'e1',
+                keys: ['key1'],
+                content: 'Content one',
+                comment: '',
+                position: 'before_char',
+                order: 0,
+                probability: 100,
+                constant: false,
+                selective: false,
+                secondaryKeys: [],
+                addMemo: false,
+                disable: false,
+                regex: false,
+                recursive: false,
+                depth: 0,
+                role: 'system',
+                retrievalMode: 'keyword',
+              },
             ],
           },
         ],
@@ -256,7 +283,25 @@ describe('executeSlashCommand', () => {
             id: 'book-1',
             name: 'Test Book',
             entries: [
-              { id: 'e1', keys: ['magic', 'spell'], content: 'Magic is real', comment: '', position: 'before_char', order: 0, probability: 100, constant: false, selective: false, secondaryKeys: [], addMemo: false, disable: false, regex: false, recursive: false, depth: 0, role: 'system', retrievalMode: 'keyword' },
+              {
+                id: 'e1',
+                keys: ['magic', 'spell'],
+                content: 'Magic is real',
+                comment: '',
+                position: 'before_char',
+                order: 0,
+                probability: 100,
+                constant: false,
+                selective: false,
+                secondaryKeys: [],
+                addMemo: false,
+                disable: false,
+                regex: false,
+                recursive: false,
+                depth: 0,
+                role: 'system',
+                retrievalMode: 'keyword',
+              },
             ],
           },
         ],
@@ -320,7 +365,25 @@ describe('executeSlashCommand', () => {
             id: 'book-1',
             name: 'Test',
             entries: [
-              { id: 'e1', keys: ['delete-me'], content: 'bye', comment: '', position: 'before_char', order: 0, probability: 100, constant: false, selective: false, secondaryKeys: [], addMemo: false, disable: false, regex: false, recursive: false, depth: 0, role: 'system', retrievalMode: 'keyword' },
+              {
+                id: 'e1',
+                keys: ['delete-me'],
+                content: 'bye',
+                comment: '',
+                position: 'before_char',
+                order: 0,
+                probability: 100,
+                constant: false,
+                selective: false,
+                secondaryKeys: [],
+                addMemo: false,
+                disable: false,
+                regex: false,
+                recursive: false,
+                depth: 0,
+                role: 'system',
+                retrievalMode: 'keyword',
+              },
             ],
           },
         ],
@@ -379,14 +442,18 @@ describe('executeSlashCommand', () => {
       mockState({ settings: { chatMessageLoadLimit: 30 } });
       const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
       selectChat('chat-99');
-      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat.select', chatId: 'chat-99', limit: 30 }));
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'chat.select', chatId: 'chat-99', limit: 30 }),
+      );
     });
 
     it('uses custom chatMessageLoadLimit', () => {
       mockState({ settings: { chatMessageLoadLimit: 100 } });
       const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
       selectChat('chat-99');
-      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat.select', chatId: 'chat-99', limit: 100 }));
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'chat.select', chatId: 'chat-99', limit: 100 }),
+      );
     });
   });
 });

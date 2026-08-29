@@ -54,7 +54,15 @@ describe('dispatcher CRUD integration', () => {
     it('updates a backend config and broadcasts backendConfig.updated + snapshot + listed', async () => {
       await h.send(client, {
         type: 'backendConfig.create',
-        data: { name: 'Original', description: '', backendProvider: 'openai', generationMode: 'chat', model: 'gpt-3', instructTemplate: '', providerParams: {} },
+        data: {
+          name: 'Original',
+          description: '',
+          backendProvider: 'openai',
+          generationMode: 'chat',
+          model: 'gpt-3',
+          instructTemplate: '',
+          providerParams: {},
+        },
       } as ClientMessage);
 
       const created = h.expectBroadcast('backendConfig.created');
@@ -83,13 +91,29 @@ describe('dispatcher CRUD integration', () => {
       // Need two backend configs because you cannot delete the last one
       await h.send(client, {
         type: 'backendConfig.create',
-        data: { name: 'Config A', description: '', backendProvider: 'openai', generationMode: 'chat', model: 'gpt-3', instructTemplate: '', providerParams: {} },
+        data: {
+          name: 'Config A',
+          description: '',
+          backendProvider: 'openai',
+          generationMode: 'chat',
+          model: 'gpt-3',
+          instructTemplate: '',
+          providerParams: {},
+        },
       } as ClientMessage);
       h.expectBroadcast('backendConfig.created');
 
       await h.send(client, {
         type: 'backendConfig.create',
-        data: { name: 'Config B', description: '', backendProvider: 'openai', generationMode: 'chat', model: 'gpt-4', instructTemplate: '', providerParams: {} },
+        data: {
+          name: 'Config B',
+          description: '',
+          backendProvider: 'openai',
+          generationMode: 'chat',
+          model: 'gpt-4',
+          instructTemplate: '',
+          providerParams: {},
+        },
       } as ClientMessage);
       const createdB = h.expectBroadcast('backendConfig.created');
       const backendConfigIdB = createdB.backendConfig.id;
@@ -110,13 +134,29 @@ describe('dispatcher CRUD integration', () => {
     it('falls back to another backend config when deleting the active one', async () => {
       await h.send(client, {
         type: 'backendConfig.create',
-        data: { name: 'Config A', description: '', backendProvider: 'openai', generationMode: 'chat', model: 'gpt-3', instructTemplate: '', providerParams: {} },
+        data: {
+          name: 'Config A',
+          description: '',
+          backendProvider: 'openai',
+          generationMode: 'chat',
+          model: 'gpt-3',
+          instructTemplate: '',
+          providerParams: {},
+        },
       } as ClientMessage);
       const createdA = h.expectBroadcast('backendConfig.created');
 
       await h.send(client, {
         type: 'backendConfig.create',
-        data: { name: 'Config B', description: '', backendProvider: 'openai', generationMode: 'chat', model: 'gpt-4', instructTemplate: '', providerParams: {} },
+        data: {
+          name: 'Config B',
+          description: '',
+          backendProvider: 'openai',
+          generationMode: 'chat',
+          model: 'gpt-4',
+          instructTemplate: '',
+          providerParams: {},
+        },
       } as ClientMessage);
       const createdB = h.expectBroadcast('backendConfig.created');
 
@@ -143,7 +183,15 @@ describe('dispatcher CRUD integration', () => {
     it('rejects deleting the last backend config', async () => {
       await h.send(client, {
         type: 'backendConfig.create',
-        data: { name: 'Only Config', description: '', backendProvider: 'openai', generationMode: 'chat', model: 'gpt-3', instructTemplate: '', providerParams: {} },
+        data: {
+          name: 'Only Config',
+          description: '',
+          backendProvider: 'openai',
+          generationMode: 'chat',
+          model: 'gpt-3',
+          instructTemplate: '',
+          providerParams: {},
+        },
       } as ClientMessage);
       const created = h.expectBroadcast('backendConfig.created');
 
@@ -161,7 +209,15 @@ describe('dispatcher CRUD integration', () => {
     it('returns backendConfig.snapshot for the selected backend config', async () => {
       await h.send(client, {
         type: 'backendConfig.create',
-        data: { name: 'My Config', description: '', backendProvider: 'openai', generationMode: 'chat', model: 'gpt-4', instructTemplate: '', providerParams: {} },
+        data: {
+          name: 'My Config',
+          description: '',
+          backendProvider: 'openai',
+          generationMode: 'chat',
+          model: 'gpt-4',
+          instructTemplate: '',
+          providerParams: {},
+        },
       } as ClientMessage);
       const created = h.expectBroadcast('backendConfig.created');
 

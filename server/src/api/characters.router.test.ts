@@ -4,6 +4,7 @@ import request from 'supertest';
 import { zipSync, unzipSync, strFromU8 } from 'fflate';
 import { TestHarness } from '../testing/TestHarness.js';
 import { createCharacterRouter, createPngWithMetadata } from './characters.js';
+import { errorHandler } from '../middleware/errorHandler.js';
 import { buildRisum } from '../lib/risum.js';
 
 const minimalPng = Buffer.from(
@@ -34,6 +35,7 @@ function createApp(harness: TestHarness) {
       harness.bus,
     ),
   );
+  app.use(errorHandler);
   return app;
 }
 
@@ -69,10 +71,7 @@ describe('createCharacterRouter', () => {
     });
 
     it('returns 404 for a missing character', async () => {
-      await request(app)
-        .post('/characters/nonexistent/avatar')
-        .attach('avatar', minimalPng, 'avatar.png')
-        .expect(404);
+      await request(app).post('/characters/nonexistent/avatar').attach('avatar', minimalPng, 'avatar.png').expect(404);
     });
 
     it('returns 400 when no file is sent', async () => {
@@ -84,11 +83,7 @@ describe('createCharacterRouter', () => {
   describe('GET /characters/:id/assets/:assetId', () => {
     it('serves an asset from the direct filesystem path', async () => {
       const character = await h.deps.characters.create('char-assets', { name: 'Asset Test' });
-      h.deps.storage.write(
-        `character_assets/${character.id}`,
-        'logo.png',
-        new Uint8Array(minimalPng),
-      );
+      h.deps.storage.write(`character_assets/${character.id}`, 'logo.png', new Uint8Array(minimalPng));
 
       const res = await request(app)
         .get(`/characters/${character.id}/assets/logo.png`)
@@ -159,10 +154,7 @@ describe('createCharacterRouter', () => {
       });
       const pngWithMeta = createPngWithMetadata(cardJson, 'v3');
 
-      const res = await request(app)
-        .post('/characters/import')
-        .attach('file', pngWithMeta, 'test.png')
-        .expect(200);
+      const res = await request(app).post('/characters/import').attach('file', pngWithMeta, 'test.png').expect(200);
 
       expect(res.body.success).toBe(true);
       expect(res.body.character.name).toBe('Imported PNG');
@@ -191,10 +183,7 @@ describe('createCharacterRouter', () => {
     });
 
     it('returns 400 for an unsupported file format', async () => {
-      await request(app)
-        .post('/characters/import')
-        .attach('file', Buffer.from('not a card'), 'test.txt')
-        .expect(400);
+      await request(app).post('/characters/import').attach('file', Buffer.from('not a card'), 'test.txt').expect(400);
     });
   });
 
@@ -406,10 +395,7 @@ describe('createCharacterRouter', () => {
 
     it('imports asset payloads as character assets on attach', async () => {
       const character = await h.deps.characters.create('char-attach-assets', { name: 'Asset Attach' });
-      const risum = buildRisum(
-        { name: 'Asset Pack', assets: [['song', '', 'mp3']] },
-        [Buffer.from('FAKE-MP3')],
-      );
+      const risum = buildRisum({ name: 'Asset Pack', assets: [['song', '', 'mp3']] }, [Buffer.from('FAKE-MP3')]);
 
       const res = await request(app)
         .post(`/characters/${character.id}/risu-module`)
@@ -435,10 +421,7 @@ describe('createCharacterRouter', () => {
 
     it('returns 404 when attaching to a missing character', async () => {
       const risum = buildRisum({ name: 'M' });
-      await request(app)
-        .post('/characters/nonexistent/risu-module')
-        .attach('file', risum, 'module.risum')
-        .expect(404);
+      await request(app).post('/characters/nonexistent/risu-module').attach('file', risum, 'module.risum').expect(404);
     });
 
     it('deletes an attached module', async () => {
@@ -451,9 +434,7 @@ describe('createCharacterRouter', () => {
       const moduleId = attachRes.body.module.id as string;
       const filePath = attachRes.body.module.filePath as string;
 
-      const res = await request(app)
-        .delete(`/characters/${character.id}/risu-module/${moduleId}`)
-        .expect(200);
+      const res = await request(app).delete(`/characters/${character.id}/risu-module/${moduleId}`).expect(200);
       expect(res.body).toEqual({ success: true, removed: moduleId });
 
       const updated = await h.deps.characters.getById(character.id);
@@ -463,9 +444,7 @@ describe('createCharacterRouter', () => {
 
     it('returns 404 when deleting a missing module', async () => {
       const character = await h.deps.characters.create('char-detach-missing', { name: 'Detach Missing' });
-      await request(app)
-        .delete(`/characters/${character.id}/risu-module/nope`)
-        .expect(404);
+      await request(app).delete(`/characters/${character.id}/risu-module/nope`).expect(404);
     });
   });
 

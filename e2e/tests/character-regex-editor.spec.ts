@@ -1,29 +1,12 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { uniqueName } from '../helpers/names.js';
 
 test.describe('Character Regex Editor UI', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('add a scoped display rule in the editor; assistant text renders transformed', async ({ page }) => {
-    const app = new App(page);
+  test('add a scoped display rule in the editor; assistant text renders transformed', async ({ page, app }) => {
     const name = uniqueName('Regex UI Host');
     await app.createCharacter({ name, firstMes: 'Ready.' });
 
     // Reopen the editor (createCharacter closes it after auto-save).
-    await app.revealHoverButtons();
     await page.locator('input[placeholder="Search characters..."]').fill(name);
     const row = app.characterRow(name);
     await row.waitFor({ state: 'visible' });

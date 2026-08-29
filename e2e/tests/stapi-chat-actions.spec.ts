@@ -1,15 +1,10 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
 // Global quick replies are created from the chat view's quick reply bar
 // (`+` button → QuickReplyEditor, scope defaults to global) — the bar only
 // exists with a chat open, so each test creates its character/chat FIRST.
 import { createLuaQuickReply as createGlobalQuickReply } from '../helpers/quickReplies.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 async function createCharacter(page: any, charName: string) {
   await page.locator('[title="Create character"]').click();
@@ -38,7 +33,10 @@ async function createCharacterAndChat(page: any, charName: string) {
   await newChatBtn.click({ force: true });
 
   // The client auto-selects new chats, but explicit selection is more reliable under load.
-  const chatItem = page.locator('.chat-item').filter({ hasText: new RegExp(charName) }).first();
+  const chatItem = page
+    .locator('.chat-item')
+    .filter({ hasText: new RegExp(charName) })
+    .first();
   await expect(chatItem).toBeVisible({ timeout: 10000 });
   await chatItem.click();
 
@@ -71,18 +69,9 @@ async function expectErrorToast(page: any, text: string | RegExp) {
 test.describe.configure({ mode: 'serial' });
 
 test.describe('StApi Chat Actions', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
   // ── 1. Generation actions ────────────────────────────────────────────────
 
-  test('st.continue extends the last assistant reply', async ({ page }) => {
+  test('st.continue extends the last assistant reply', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Continue');
     const charName = uniqueName('StApi Continue Character');
 
@@ -103,15 +92,13 @@ test.describe('StApi Chat Actions', () => {
     await waitForNextLlmRequest(count);
 
     // The continued text is appended to the same bubble (another "Turn N" chunk).
-    await expect
-      .poll(async () => (await replyContent.textContent()) ?? '', { timeout: 10000 })
-      .not.toBe(before);
+    await expect.poll(async () => (await replyContent.textContent()) ?? '', { timeout: 10000 }).not.toBe(before);
     const after = ((await replyContent.textContent()) ?? '').trim();
     expect(after).toContain(before.trim());
     expect(after.length).toBeGreaterThan(before.trim().length);
   });
 
-  test('st.impersonate fills the composer with a generated user draft', async ({ page }) => {
+  test('st.impersonate fills the composer with a generated user draft', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Impersonate');
     const charName = uniqueName('StApi Impersonate Character');
 
@@ -129,9 +116,7 @@ test.describe('StApi Chat Actions', () => {
     });
   });
 
-  test('st.regenerate adds a swipe, st.swipe navigates, bad direction toasts an error', async ({
-    page,
-  }) => {
+  test('st.regenerate adds a swipe, st.swipe navigates, bad direction toasts an error', async ({ page, app: _app }) => {
     const regenLabel = uniqueName('StApi Regenerate');
     const swipeLeftLabel = uniqueName('StApi Swipe Left');
     const swipeBadLabel = uniqueName('StApi Swipe Bad');
@@ -154,8 +139,7 @@ test.describe('StApi Chat Actions', () => {
     await expect
       .poll(
         async () =>
-          ((await page.locator('.message-bubble.assistant').last().textContent()) ?? '').match(/Turn \d+/)?.[0] ??
-          '',
+          ((await page.locator('.message-bubble.assistant').last().textContent()) ?? '').match(/Turn \d+/)?.[0] ?? '',
         { timeout: 10000 },
       )
       .not.toBe(firstTurn);
@@ -170,7 +154,7 @@ test.describe('StApi Chat Actions', () => {
 
   // ── 2. Swipe tree management ─────────────────────────────────────────────
 
-  test('st.add_swipe, st.set_active_child, st.get_swipes and st.get_siblings', async ({ page }) => {
+  test('st.add_swipe, st.set_active_child, st.get_swipes and st.get_siblings', async ({ page, app: _app }) => {
     const addLabel = uniqueName('StApi AddSwipe Switch');
     const addHiddenLabel = uniqueName('StApi AddSwipe Keep');
     const narrateLabel = uniqueName('StApi Swipe Counts');
@@ -192,11 +176,7 @@ test.describe('StApi Chat Actions', () => {
       narrateLabel,
       'local sw = st.get_swipes():await() local id = st.getvar("orig_id"):await() local sib = st.get_siblings(id):await() st.toast("swipes=" .. #sw .. " siblings=" .. #sib)',
     );
-    await createGlobalQuickReply(
-      page,
-      restoreLabel,
-      'local id = st.getvar("orig_id"):await() st.set_active_child(id)',
-    );
+    await createGlobalQuickReply(page, restoreLabel, 'local id = st.getvar("orig_id"):await() st.set_active_child(id)');
 
     await sendAndWaitReply(page, 'respond: original swipe text', 'original swipe text');
 
@@ -223,7 +203,7 @@ test.describe('StApi Chat Actions', () => {
     });
   });
 
-  test('st.add_swipe without an assistant message shows an error toast', async ({ page }) => {
+  test('st.add_swipe without an assistant message shows an error toast', async ({ page, app: _app }) => {
     const label = uniqueName('StApi AddSwipe Error');
     const charName = uniqueName('StApi AddSwipe Error Character');
 
@@ -239,7 +219,7 @@ test.describe('StApi Chat Actions', () => {
 
   // ── 3. hide / unhide ─────────────────────────────────────────────────────
 
-  test('st.hide and st.unhide toggle message visibility', async ({ page }) => {
+  test('st.hide and st.unhide toggle message visibility', async ({ page, app: _app }) => {
     const hideLabel = uniqueName('StApi Hide');
     const unhideLabel = uniqueName('StApi Unhide');
     const charName = uniqueName('StApi Hide Character');
@@ -249,7 +229,11 @@ test.describe('StApi Chat Actions', () => {
     // the active-child/swipe path, which bypasses the hidden filter applied to
     // the bulk message list (getVisibleMessages), so hiding it changes nothing
     // on screen. Bulk messages are filtered.
-    await createGlobalQuickReply(page, hideLabel, 'local msgs = st.get_messages(10):await() st.hide(msgs[#msgs - 1].id)');
+    await createGlobalQuickReply(
+      page,
+      hideLabel,
+      'local msgs = st.get_messages(10):await() st.hide(msgs[#msgs - 1].id)',
+    );
     await createGlobalQuickReply(
       page,
       unhideLabel,
@@ -272,7 +256,7 @@ test.describe('StApi Chat Actions', () => {
 
   // ── 4. Chat lifecycle ────────────────────────────────────────────────────
 
-  test('st.new_chat creates another chat for the character', async ({ page }) => {
+  test('st.new_chat creates another chat for the character', async ({ page, app: _app }) => {
     const label = uniqueName('StApi New Chat');
     const charName = uniqueName('StApi New Chat Character');
 
@@ -286,7 +270,7 @@ test.describe('StApi Chat Actions', () => {
     await expect(chatItems).toHaveCount(2, { timeout: 5000 });
   });
 
-  test('st.temp_chat creates a Temporary Chat entry', async ({ page }) => {
+  test('st.temp_chat creates a Temporary Chat entry', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Temp Chat');
     const charName = uniqueName('StApi Temp Chat Character');
 
@@ -301,7 +285,7 @@ test.describe('StApi Chat Actions', () => {
     await expect(page.locator('.chat-list')).toContainText('Temporary Chat', { timeout: 5000 });
   });
 
-  test('st.reset_chat clears all messages from the view', async ({ page }) => {
+  test('st.reset_chat clears all messages from the view', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Reset Chat');
     const charName = uniqueName('StApi Reset Chat Character');
 
@@ -318,16 +302,12 @@ test.describe('StApi Chat Actions', () => {
     await expect(page.locator('.chat-view')).not.toContainText('resettable reply');
   });
 
-  test('st.branch creates a (branch) chat in the list', async ({ page }) => {
+  test('st.branch creates a (branch) chat in the list', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Branch');
     const charName = uniqueName('StApi Branch Character');
 
     await createCharacterAndChat(page, charName);
-    await createGlobalQuickReply(
-      page,
-      label,
-      'local msgs = st.get_messages(10):await() st.branch(msgs[#msgs].id)',
-    );
+    await createGlobalQuickReply(page, label, 'local msgs = st.get_messages(10):await() st.branch(msgs[#msgs].id)');
 
     await sendAndWaitReply(page, 'respond: branchable reply', 'branchable reply');
 
@@ -335,7 +315,7 @@ test.describe('StApi Chat Actions', () => {
     await expect(page.locator('.chat-list')).toContainText('(branch)', { timeout: 5000 });
   });
 
-  test('st.checkpoint creates a (checkpoint) chat in the list', async ({ page }) => {
+  test('st.checkpoint creates a (checkpoint) chat in the list', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Checkpoint');
     const charName = uniqueName('StApi Checkpoint Character');
 
@@ -348,16 +328,12 @@ test.describe('StApi Chat Actions', () => {
     await expect(page.locator('.chat-list')).toContainText('(checkpoint)', { timeout: 5000 });
   });
 
-  test('st.hard_fork creates a (fork) chat in the list', async ({ page }) => {
+  test('st.hard_fork creates a (fork) chat in the list', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Hard Fork');
     const charName = uniqueName('StApi Hard Fork Character');
 
     await createCharacterAndChat(page, charName);
-    await createGlobalQuickReply(
-      page,
-      label,
-      'local msgs = st.get_messages(10):await() st.hard_fork(msgs[#msgs].id)',
-    );
+    await createGlobalQuickReply(page, label, 'local msgs = st.get_messages(10):await() st.hard_fork(msgs[#msgs].id)');
 
     await sendAndWaitReply(page, 'respond: forkable reply', 'forkable reply');
 
@@ -365,7 +341,7 @@ test.describe('StApi Chat Actions', () => {
     await expect(page.locator('.chat-list')).toContainText('(fork)', { timeout: 5000 });
   });
 
-  test('st.delete_chat removes the active chat from the list', async ({ page }) => {
+  test('st.delete_chat removes the active chat from the list', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Delete Chat');
     const charName = uniqueName('StApi Delete Chat Character');
 
@@ -381,7 +357,7 @@ test.describe('StApi Chat Actions', () => {
 
   // ── 5. Quiet generation ──────────────────────────────────────────────────
 
-  test('st.generate result can be narrated into the chat', async ({ page }) => {
+  test('st.generate result can be narrated into the chat', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Generate');
     const charName = uniqueName('StApi Generate Character');
 
@@ -400,7 +376,7 @@ test.describe('StApi Chat Actions', () => {
     });
   });
 
-  test('st.genraw appends a raw system message with a minimal prompt', async ({ page }) => {
+  test('st.genraw appends a raw system message with a minimal prompt', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Genraw');
     const charName = uniqueName('StApi Genraw Character');
 
@@ -430,7 +406,7 @@ test.describe('StApi Chat Actions', () => {
     expect(JSON.stringify(cap.body)).not.toContain('A character created by e2e tests.');
   });
 
-  test('st.ask generates a reply as another character', async ({ page }) => {
+  test('st.ask generates a reply as another character', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Ask');
     const charName = uniqueName('StApi Ask Character');
     const otherName = uniqueName('StApi Ask Other');
@@ -451,7 +427,7 @@ test.describe('StApi Chat Actions', () => {
     });
   });
 
-  test('st.sysgen appends a generated system message', async ({ page }) => {
+  test('st.sysgen appends a generated system message', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Sysgen');
     const charName = uniqueName('StApi Sysgen Character');
 
@@ -471,7 +447,7 @@ test.describe('StApi Chat Actions', () => {
 
   // ── 7. send_as / comment / trigger ───────────────────────────────────────
 
-  test('st.send_as appends an assistant message as a character', async ({ page }) => {
+  test('st.send_as appends an assistant message as a character', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Send As');
     const charName = uniqueName('StApi Send As Character');
 
@@ -484,13 +460,17 @@ test.describe('StApi Chat Actions', () => {
     });
   });
 
-  test('st.comment stores a hidden comment without a visible bubble', async ({ page }) => {
+  test('st.comment stores a hidden comment without a visible bubble', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Comment');
     const charName = uniqueName('StApi Comment Character');
 
     await createCharacterAndChat(page, charName);
     // The trailing narrator message proves the script completed without error.
-    await createGlobalQuickReply(page, label, 'st.comment("side note"):await() st.send_narrator("comment done"):await()');
+    await createGlobalQuickReply(
+      page,
+      label,
+      'st.comment("side note"):await() st.send_narrator("comment done"):await()',
+    );
 
     await clickQuickReply(page, label);
     await expect(page.locator('.message-bubble.system').last()).toContainText('comment done', {
@@ -501,7 +481,7 @@ test.describe('StApi Chat Actions', () => {
     await expect(page.locator('.message-bubble')).toHaveCount(2); // greeting + narrator
   });
 
-  test('st.trigger generates an assistant reply', async ({ page }) => {
+  test('st.trigger generates an assistant reply', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Trigger');
     const charName = uniqueName('StApi Trigger Character');
 
@@ -521,7 +501,7 @@ test.describe('StApi Chat Actions', () => {
 
   // ── 8. sleep / delay ─────────────────────────────────────────────────────
 
-  test('st.sleep and st.delay complete without error', async ({ page }) => {
+  test('st.sleep and st.delay complete without error', async ({ page, app: _app }) => {
     const label = uniqueName('StApi Sleep');
     const charName = uniqueName('StApi Sleep Character');
 

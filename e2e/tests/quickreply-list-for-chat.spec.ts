@@ -1,10 +1,7 @@
 import { test, expect } from '../fixtures/base.js';
 import { login, TEST_SECRET } from '../helpers/auth.js';
 import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // Reproduces docs/quality/audits/interface-audit-2026-07-20.md live bug #2:
 // `quickreply.listForChat` is in ClientMessageSchema, the TS union, and has a

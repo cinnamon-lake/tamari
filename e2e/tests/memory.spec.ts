@@ -1,18 +1,10 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { getLastLlmRequest, resetLlmRequests } from '../helpers/llm.js';
 import { getActiveBackendConfigId, setSetting } from '../helpers/settings.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 test.describe('Rolling Memory', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
@@ -20,11 +12,9 @@ test.describe('Rolling Memory', () => {
     // Memory is a persisted setting on the shared e2e server — disable it or
     // later specs start summarizing unexpectedly.
     await setSetting(page, 'memory', { enabled: false });
-    await resetBackendConfig(page);
   });
 
-  test('a rolling summary is injected into the prompt after enough turns', async ({ page }) => {
-    const app = new App(page);
+  test('a rolling summary is injected into the prompt after enough turns', async ({ page, app }) => {
     const backendConfigId = await getActiveBackendConfigId(page);
     await setSetting(page, 'memory', { enabled: true, updateInterval: 2, depth: 1, backendConfigId });
     await app.createCharacterAndChat({ name: uniqueName('Mem Char'), firstMes: 'Ready.' });

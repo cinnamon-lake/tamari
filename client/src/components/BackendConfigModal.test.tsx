@@ -44,7 +44,8 @@ function valueNumberInput(labelText: string | RegExp): HTMLInputElement {
   return screen.getByLabelText(labelText) as unknown as HTMLInputElement;
 }
 function enableCheckbox(labelText: string): HTMLInputElement {
-  return screen.getByText(labelText)
+  return screen
+    .getByText(labelText)
     .closest('.sampler-field')!
     .querySelector('input[type="checkbox"]') as HTMLInputElement;
 }
@@ -56,10 +57,7 @@ function expandAdvanced() {
 describe('BackendConfigModal advanced sampling', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }));
     setState('activeBackendConfig', makeConfig({ backendProvider: 'llamacpp', generationMode: 'text' }));
     setState('settings', {});
   });
@@ -103,9 +101,7 @@ describe('BackendConfigModal advanced sampling', () => {
     fireEvent.input(valueNumberInput('Mirostat Tau'), { target: { value: '5.5' } });
     vi.advanceTimersByTime(600);
 
-    const update = sendSpy.mock.calls
-      .map((c) => c[0])
-      .find((m) => m.type === 'backendConfig.update');
+    const update = sendSpy.mock.calls.map((c) => c[0]).find((m) => m.type === 'backendConfig.update');
     expect(update).toBeDefined();
     const patch = (update as { patch: { providerParams: Record<string, unknown> } }).patch;
     expect(patch.providerParams.mirostat_tau).toBe(5.5);
@@ -113,10 +109,7 @@ describe('BackendConfigModal advanced sampling', () => {
   });
 
   it('shows only Seed for the chat profile (no mirostat/grammar)', () => {
-    setState(
-      'activeBackendConfig',
-      makeConfig({ backendProvider: 'openai', generationMode: 'chat' }),
-    );
+    setState('activeBackendConfig', makeConfig({ backendProvider: 'openai', generationMode: 'chat' }));
     render(() => <BackendConfigModal onClose={() => {}} />);
     expandAdvanced();
     expect(screen.getByText('Seed')).toBeInTheDocument();
@@ -145,9 +138,7 @@ describe('BackendConfigModal advanced sampling', () => {
 
     vi.advanceTimersByTime(600);
 
-    const update = sendSpy.mock.calls
-      .map((c) => c[0])
-      .find((m) => m.type === 'backendConfig.update');
+    const update = sendSpy.mock.calls.map((c) => c[0]).find((m) => m.type === 'backendConfig.update');
     expect(update).toBeDefined();
     const patch = (update as { patch: { topK: number | null; providerParams: Record<string, unknown> } }).patch;
     expect(patch.topK).toBe(40);
@@ -160,10 +151,7 @@ describe('BackendConfigModal advanced sampling', () => {
 describe('BackendConfigModal prompt caching', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }));
     setState('settings', {});
   });
 
@@ -225,9 +213,7 @@ describe('BackendConfigModal prompt caching', () => {
     fireEvent.input(screen.getByLabelText(/^Cache TTL/), { target: { value: '1h' } });
     vi.advanceTimersByTime(600);
 
-    const update = sendSpy.mock.calls
-      .map((c) => c[0])
-      .find((m) => m.type === 'backendConfig.update');
+    const update = sendSpy.mock.calls.map((c) => c[0]).find((m) => m.type === 'backendConfig.update');
     expect(update).toBeDefined();
     const patch = (update as { patch: { providerParams: Record<string, unknown> } }).patch;
     expect(patch.providerParams.cacheMode).toBe('manual');
@@ -253,9 +239,7 @@ describe('BackendConfigModal prompt caching', () => {
     fireEvent.change(screen.getByLabelText(/^Cache Mode/), { target: { value: 'off' } });
     vi.advanceTimersByTime(600);
 
-    const update = sendSpy.mock.calls
-      .map((c) => c[0])
-      .find((m) => m.type === 'backendConfig.update');
+    const update = sendSpy.mock.calls.map((c) => c[0]).find((m) => m.type === 'backendConfig.update');
     expect(update).toBeDefined();
     const patch = (update as { patch: { providerParams: Record<string, unknown> } }).patch;
     expect(patch.providerParams.cacheMode).toBeUndefined();
@@ -267,10 +251,7 @@ describe('BackendConfigModal prompt caching', () => {
 describe('BackendConfigModal delete', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }));
     setState('settings', {});
     setState('backendConfigs', [
       { id: 'cfg-1', name: 'Test' },
@@ -318,10 +299,7 @@ function makeCustomBackend(overrides: Partial<CustomBackend> = {}): CustomBacken
 describe('BackendConfigModal custom provider', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }));
     setState('settings', {});
     setState('customBackends', [makeCustomBackend()]);
     setState('backendConfigs', [
@@ -362,9 +340,7 @@ describe('BackendConfigModal custom provider', () => {
   it('shows a hint when no custom backends exist', () => {
     setState('customBackends', []);
     render(() => <BackendConfigModal onClose={() => {}} />);
-    expect(
-      screen.getByText('No custom backends yet. Create one in the Custom Backends menu.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('No custom backends yet. Create one in the Custom Backends menu.')).toBeInTheDocument();
   });
 
   it('writes customBackendId and delegateConfigId into providerParams on save', () => {
@@ -376,9 +352,7 @@ describe('BackendConfigModal custom provider', () => {
     });
     vi.advanceTimersByTime(600);
 
-    const update = sendSpy.mock.calls
-      .map((c) => c[0])
-      .find((m) => m.type === 'backendConfig.update');
+    const update = sendSpy.mock.calls.map((c) => c[0]).find((m) => m.type === 'backendConfig.update');
     expect(update).toBeDefined();
     const patch = (update as { patch: { providerParams: Record<string, unknown> } }).patch;
     expect(patch.providerParams.customBackendId).toBe('cb-1');

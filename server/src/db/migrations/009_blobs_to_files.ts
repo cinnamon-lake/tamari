@@ -13,7 +13,7 @@ import { getLogger } from '../../lib/logger.js';
 import { FileStorage } from '../../services/FileStorage.js';
 import type { Migration } from '../runMigrations.js';
 
-const log = getLogger('db');
+const log = getLogger('db/migrations/009_blobs_to_files');
 
 async function hasColumn(db: Client, table: string, column: string): Promise<boolean> {
   const rs = await db.execute({
@@ -28,14 +28,10 @@ const migration: Migration = {
     // Collect legacy rows first so a missing dataDir is only an error when
     // there is actual work to do (tests run migrations without one).
     const chars = (await hasColumn(db, 'characters', 'avatar_blob'))
-      ? await db.execute(
-          'SELECT id, avatar_blob FROM characters WHERE avatar_blob IS NOT NULL AND avatar_path IS NULL',
-        )
+      ? await db.execute('SELECT id, avatar_blob FROM characters WHERE avatar_blob IS NOT NULL AND avatar_path IS NULL')
       : null;
     const personas = (await hasColumn(db, 'personas', 'avatar_blob'))
-      ? await db.execute(
-          'SELECT id, avatar_blob FROM personas WHERE avatar_blob IS NOT NULL AND avatar_path IS NULL',
-        )
+      ? await db.execute('SELECT id, avatar_blob FROM personas WHERE avatar_blob IS NOT NULL AND avatar_path IS NULL')
       : null;
     const attachments = (await hasColumn(db, 'attachments', 'blob'))
       ? await db.execute('SELECT id, blob FROM attachments WHERE blob IS NOT NULL AND file_path IS NULL')

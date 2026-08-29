@@ -41,7 +41,9 @@ export function parseJsonBody(content: string): { ok: true; value: unknown } | {
 }
 
 /** Parse + require a JSON object body. */
-export function parseJsonObjectBody(content: string): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+export function parseJsonObjectBody(
+  content: string,
+): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
   const parsed = parseJsonBody(content);
   if (!parsed.ok) return parsed;
   if (!isRecord(parsed.value)) return { ok: false, error: err('the JSON body must be an object') };
@@ -87,7 +89,10 @@ export function readField(obj: Record<string, unknown>, spec: FieldSpec): string
  * Parse `write` content for a field file: verbatim for string fields, JSON
  * for json fields (syntax errors surface before any provider call).
  */
-export function parseFieldContent(spec: FieldSpec, content: string): { ok: true; value: unknown } | { ok: false; error: string } {
+export function parseFieldContent(
+  spec: FieldSpec,
+  content: string,
+): { ok: true; value: unknown } | { ok: false; error: string } {
   if (spec.type === 'string') return { ok: true, value: content };
   return parseJsonBody(content);
 }

@@ -30,10 +30,7 @@ import type { Page, Locator } from '@playwright/test';
 import { login } from '../helpers/auth.js';
 import { resetBackendConfig, patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { setSetting } from '../helpers/settings.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // ── modal plumbing ──────────────────────────────────────────────────────────
 
@@ -117,7 +114,7 @@ async function readActiveBackendConfig(page: Page): Promise<Record<string, unkno
             reject(new Error(msg.message ?? 'backendConfig.select failed'));
           }
         } catch (err) {
-          reject(err);
+          reject(err instanceof Error ? err : new Error(String(err)));
         }
       };
 
@@ -292,9 +289,7 @@ test.describe('Backend Config Modal', () => {
     modal = await openBackendConfig(page);
     await expect(generationModeSelect(modal)).toHaveValue('text');
     await modal.locator('details.advanced-sampling summary').click();
-    await expect(
-      modal.locator('label.radio-row:has(input[name="knob-dynatemp"]):has-text("On") input'),
-    ).toBeChecked();
+    await expect(modal.locator('label.radio-row:has(input[name="knob-dynatemp"]):has-text("On") input')).toBeChecked();
     await closeModal(modal);
   });
 

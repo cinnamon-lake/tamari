@@ -17,16 +17,14 @@
  * (GET /last-request?route=<prefix>), which records the LAST request per route
  * with body + headers.
  */
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { authHeaders } from '../helpers/auth.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { resetLlmRequests } from '../helpers/llm.js';
-import { App } from '../helpers/app.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
 
 /** The e2e webServer pins TAMARI_SECRET to this value (playwright.config.ts). */
-const AUTH = { Authorization: 'Bearer e2e-test-secret' };
 
 interface RouteCapture {
   route: string;
@@ -57,9 +55,7 @@ async function waitForRouteCapture(routePrefix: string, timeout = 10000): Promis
 test.describe('LlamaCpp backend adapter', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async ({ app: _app, page }) => {
     // Keep the mock URL/key + model, switch provider to llama.cpp native.
     // generationMode 'text' is the UI's own pairing for llamacpp (and makes
     // PromptBuilder render the flat instruct prompt the adapter sends);
@@ -75,11 +71,9 @@ test.describe('LlamaCpp backend adapter', () => {
     // The active config is shared across specs — undo this spec's mutations
     // (logitBias is not reset by resetBackendConfig).
     await patchActiveBackendConfig(page, { logitBias: null });
-    await resetBackendConfig(page);
   });
 
-  test('streams a basic reply and sends a llama.cpp-shaped request', async ({ page }) => {
-    const app = new App(page);
+  test('streams a basic reply and sends a llama.cpp-shaped request', async ({ app }) => {
     const charName = `Llama Basic ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -99,8 +93,7 @@ test.describe('LlamaCpp backend adapter', () => {
     expect(body['n_predict'] as number).toBeGreaterThan(0);
   });
 
-  test('reports adapter token counts into usage', async ({ page, request }) => {
-    const app = new App(page);
+  test('reports adapter token counts into usage', async ({ request, app }) => {
     const charName = `Llama Usage ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -115,7 +108,7 @@ test.describe('LlamaCpp backend adapter', () => {
     await app.sendUserMessage('respond: hello llama', { expectReply: true });
     await app.waitForAssistantText('hello llama');
 
-    const res = await request.get('/api/stats', { headers: AUTH });
+    const res = await request.get('/api/stats', { headers: authHeaders() });
     expect(res.ok()).toBe(true);
     const stats = (await res.json()) as { totalCompletionTokens: number; totalGenerations: number };
     expect(stats.totalGenerations).toBeGreaterThanOrEqual(1);
@@ -123,7 +116,7 @@ test.describe('LlamaCpp backend adapter', () => {
     expect(stats.totalCompletionTokens).toBeGreaterThanOrEqual(11);
   });
 
-  test('converts an OpenAI-style logitBias object to llama.cpp pairs', async ({ page }) => {
+  test('converts an OpenAI-style logitBias object to llama.cpp pairs', async ({ page, app }) => {
     // buildBackendSettings merges the config's logitBias into textgen.params
     // (the blob the llamacpp factory branch consumes); the adapter explicitly
     // maps it onto the logit_bias wire field, converting the {tokenId: bias}
@@ -132,7 +125,6 @@ test.describe('LlamaCpp backend adapter', () => {
       logitBias: { '123': -5 },
     });
 
-    const app = new App(page);
     const charName = `Llama LogitBias ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -143,8 +135,7 @@ test.describe('LlamaCpp backend adapter', () => {
     expect(cap.body['logit_bias']).toEqual([[123, -5]]);
   });
 
-  test('maps a stopped_limit final chunk to a length finish', async ({ page }) => {
-    const app = new App(page);
+  test('maps a stopped_limit final chunk to a length finish', async ({ app }) => {
     const charName = `Llama Length ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -161,7 +152,7 @@ test.describe('LlamaCpp backend adapter', () => {
   test('lists models via the OpenAI-shaped GET /models', async ({ request }) => {
     // LlamaCppBackendAdapter.listModels fetches {base}/models and parses the
     // OpenAI model-list shape — the mock's default /models response works.
-    const res = await request.get('/api/models', { headers: AUTH });
+    const res = await request.get('/api/models', { headers: authHeaders() });
     expect(res.ok()).toBe(true);
     const data = (await res.json()) as { items: Array<{ id: string; name: string }> };
     const mock = data.items.find((m) => m.id === 'mock-model');

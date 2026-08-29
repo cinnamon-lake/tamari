@@ -29,7 +29,11 @@ function generate(prompt, ctx)
 end
 `;
 
-function makeService(h: TestHarness, unpackedCards: UnpackedCardService, toolRegistry?: ToolRegistry): TestSessionService {
+function makeService(
+  h: TestHarness,
+  unpackedCards: UnpackedCardService,
+  toolRegistry?: ToolRegistry,
+): TestSessionService {
   const deps: TestSessionServiceDeps = {
     settings: h.deps.settings,
     backendConfigs: h.deps.backendConfigs,
@@ -79,7 +83,10 @@ describe('TestSessionService', () => {
     client = h.connectClient();
     service = makeService(h, unpackedCards);
 
-    await h.send(client, { type: 'character.create', data: { name: 'Testsubject', description: 'A test subject.', firstMes: 'Greetings, {{user}}!' } } as ClientMessage);
+    await h.send(client, {
+      type: 'character.create',
+      data: { name: 'Testsubject', description: 'A test subject.', firstMes: 'Greetings, {{user}}!' },
+    } as ClientMessage);
     characterId = h.expectBroadcast('character.created').character.id;
   });
 
@@ -197,7 +204,8 @@ describe('TestSessionService', () => {
           },
         ],
       }),
-      execute: (_toolName, args) => Promise.resolve({ content: `Weather for ${(args as { city: string }).city}: sunny, 25°C` }),
+      execute: (_toolName, args) =>
+        Promise.resolve({ content: `Weather for ${(args as { city: string }).city}: sunny, 25°C` }),
       serialize: () => '',
       deserialize: () => {},
     });
@@ -225,7 +233,10 @@ describe('TestSessionService', () => {
     client = h.connectClient();
     service = makeService(h, unpackedCards, toolRegistry);
 
-    await h.send(client, { type: 'character.create', data: { name: 'Testsubject', description: 'd', firstMes: 'hi' } } as ClientMessage);
+    await h.send(client, {
+      type: 'character.create',
+      data: { name: 'Testsubject', description: 'd', firstMes: 'hi' },
+    } as ClientMessage);
     characterId = h.expectBroadcast('character.created').character.id;
     await h.send(client, {
       type: 'toolset.create',

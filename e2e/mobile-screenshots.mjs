@@ -19,9 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, '..');
-const suffixArg = process.argv.includes('--suffix')
-  ? process.argv[process.argv.indexOf('--suffix') + 1]
-  : '';
+const suffixArg = process.argv.includes('--suffix') ? process.argv[process.argv.indexOf('--suffix') + 1] : '';
 const outDir = path.join(__dirname, 'test-results', `mobile-screenshots${suffixArg ? `-${suffixArg}` : ''}`);
 const PORT = 8910;
 const MOCK_PORT = 9877;
@@ -51,14 +49,20 @@ function startMockLlm() {
         let stream = true;
         try {
           stream = JSON.parse(body).stream !== false;
-        } catch { /* default stream */ }
+        } catch {
+          /* default stream */
+        }
         if (!stream) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            id: 'chatcmpl-mock', object: 'chat.completion', created: 0,
-            choices: [{ index: 0, message: { role: 'assistant', content: REPLY }, finish_reason: 'stop' }],
-            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-          }));
+          res.end(
+            JSON.stringify({
+              id: 'chatcmpl-mock',
+              object: 'chat.completion',
+              created: 0,
+              choices: [{ index: 0, message: { role: 'assistant', content: REPLY }, finish_reason: 'stop' }],
+              usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+            }),
+          );
           return;
         }
         res.writeHead(200, {
@@ -71,19 +75,27 @@ function startMockLlm() {
         const timer = setInterval(() => {
           if (i >= words.length) {
             clearInterval(timer);
-            res.write(`data: ${JSON.stringify({
-              id: 'chatcmpl-mock', object: 'chat.completion.chunk', created: 0,
-              choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-            })}\n\n`);
+            res.write(
+              `data: ${JSON.stringify({
+                id: 'chatcmpl-mock',
+                object: 'chat.completion.chunk',
+                created: 0,
+                choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+              })}\n\n`,
+            );
             res.write('data: [DONE]\n\n');
             res.end();
             return;
           }
           const content = words.slice(i, (i += 6)).join(' ') + ' ';
-          res.write(`data: ${JSON.stringify({
-            id: 'chatcmpl-mock', object: 'chat.completion.chunk', created: 0,
-            choices: [{ index: 0, delta: { content }, finish_reason: null }],
-          })}\n\n`);
+          res.write(
+            `data: ${JSON.stringify({
+              id: 'chatcmpl-mock',
+              object: 'chat.completion.chunk',
+              created: 0,
+              choices: [{ index: 0, delta: { content }, finish_reason: null }],
+            })}\n\n`,
+          );
         }, 15);
       });
       return;
@@ -121,7 +133,9 @@ async function waitForServer(timeoutMs = 30000) {
     try {
       const res = await fetch(BASE);
       if (res.status === 200 || res.status === 401 || res.status === 403) return;
-    } catch { /* not ready */ }
+    } catch {
+      /* not ready */
+    }
     await new Promise((r) => setTimeout(r, 200));
   }
   throw new Error('server did not start');
@@ -155,9 +169,7 @@ async function configureMockBackend(page) {
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
         if (msg.type === 'snapshot') {
-          const existing =
-            msg.state?.settings?.activeBackendConfigId ??
-            msg.state?.backendConfigs?.[0]?.id;
+          const existing = msg.state?.settings?.activeBackendConfigId ?? msg.state?.backendConfigs?.[0]?.id;
           if (existing) {
             ws.send(JSON.stringify({ type: 'backendConfig.update', backendConfigId: existing, patch: data }));
           } else {
@@ -172,18 +184,20 @@ async function configureMockBackend(page) {
           ws.send(JSON.stringify({ type: 'settings.set', key: 'activeBackendConfigId', value: id }));
           ws.send(JSON.stringify({ type: 'backendConfig.select', backendConfigId: id }));
         }
-        if (
-          msg.type === 'backendConfig.updated' ||
-          (msg.type === 'backendConfig.snapshot' && phase === 'select')
-        ) {
-          ws.close(); resolve();
+        if (msg.type === 'backendConfig.updated' || (msg.type === 'backendConfig.snapshot' && phase === 'select')) {
+          ws.close();
+          resolve();
         }
         if (msg.type === 'error') {
-          ws.close(); reject(new Error(msg.message ?? 'backendConfig error'));
+          ws.close();
+          reject(new Error(msg.message ?? 'backendConfig error'));
         }
       };
       ws.onerror = () => reject(new Error('ws error'));
-      setTimeout(() => { ws.close(); reject(new Error('backend config timed out')); }, 10000);
+      setTimeout(() => {
+        ws.close();
+        reject(new Error('backend config timed out'));
+      }, 10000);
     });
   }, `http://127.0.0.1:${MOCK_PORT}`);
 }
@@ -200,7 +214,10 @@ async function sendAndWaitReply(page, text) {
     },
     { timeout: 20000 },
   );
-  await page.locator('.message-bubble.streaming').waitFor({ state: 'detached', timeout: 20000 }).catch(() => {});
+  await page
+    .locator('.message-bubble.streaming')
+    .waitFor({ state: 'detached', timeout: 20000 })
+    .catch(() => {});
   await page.waitForTimeout(300);
 }
 
@@ -254,14 +271,20 @@ try {
     const editor = page.locator('.character-editor-modal');
     await editor.waitFor({ state: 'visible' });
     await editor.locator('.text-input').first().fill('Seraphina Vale');
-    await editor.locator('.textarea-input').nth(0).fill(
-      'A wandering cartographer-mage who charts the borderlands between the mortal realm and the Feywild. ' +
-      'Speaks softly, carries a silvered compass that points toward whatever the holder most desires, and never sleeps under the same stars twice.',
-    );
-    await editor.locator('.textarea-input').nth(3).fill(
-      '*The tavern door creaks open, and a figure in a travel-worn cloak shakes the rain from her hood. ' +
-      'Her eyes — violet, flecked with gold — find yours across the room.* You look lost, stranger. Most who come through the Thornwood do. I\'m Seraphina. Can I buy you a drink?',
-    );
+    await editor
+      .locator('.textarea-input')
+      .nth(0)
+      .fill(
+        'A wandering cartographer-mage who charts the borderlands between the mortal realm and the Feywild. ' +
+          'Speaks softly, carries a silvered compass that points toward whatever the holder most desires, and never sleeps under the same stars twice.',
+      );
+    await editor
+      .locator('.textarea-input')
+      .nth(3)
+      .fill(
+        '*The tavern door creaks open, and a figure in a travel-worn cloak shakes the rain from her hood. ' +
+          "Her eyes — violet, flecked with gold — find yours across the room.* You look lost, stranger. Most who come through the Thornwood do. I'm Seraphina. Can I buy you a drink?",
+      );
     await editor.locator('.save-indicator').waitFor({ state: 'visible', timeout: 5000 });
     await page.waitForTimeout(600);
     await shot(page, '04-character-editor');
@@ -291,7 +314,10 @@ try {
 
   // 05 — chat with conversation
   await step('chat conversation', async () => {
-    await sendAndWaitReply(page, 'Hi Seraphina! I\'m not lost, exactly — I\'m looking for the old observatory north of the river. Do you know it?');
+    await sendAndWaitReply(
+      page,
+      "Hi Seraphina! I'm not lost, exactly — I'm looking for the old observatory north of the river. Do you know it?",
+    );
     await sendAndWaitReply(page, 'That sounds dangerous. Is the road safe to travel at night?');
     await shot(page, '05-chat');
   });
@@ -302,7 +328,10 @@ try {
     await page.waitForTimeout(300);
     await shot(page, '06-chat-header-menu');
     await page.keyboard.press('Escape');
-    await page.locator('.chat-header .dropdown-menu').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {});
+    await page
+      .locator('.chat-header .dropdown-menu')
+      .waitFor({ state: 'detached', timeout: 3000 })
+      .catch(() => {});
   });
 
   // 07 — message actions / editing
@@ -352,14 +381,21 @@ try {
     await popup.locator('button:has-text("Cancel")').click();
     await popup.waitFor({ state: 'detached', timeout: 3000 }).catch(() => {});
     // Close the drawer again so later steps see the chat view.
-    await page.locator('.mobile-close.icon-btn').click().catch(() => {});
+    await page
+      .locator('.mobile-close.icon-btn')
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(400);
   });
 
   // 17 — message input focused (long text)
   await step('message input', async () => {
     await page.locator('.message-textarea').tap();
-    await page.locator('.message-textarea').fill('This is a longer draft message to show how the input area wraps and grows on a narrow mobile screen when the user types multiple lines of text.');
+    await page
+      .locator('.message-textarea')
+      .fill(
+        'This is a longer draft message to show how the input area wraps and grows on a narrow mobile screen when the user types multiple lines of text.',
+      );
     await page.waitForTimeout(300);
     await shot(page, '17-message-input-draft');
   });

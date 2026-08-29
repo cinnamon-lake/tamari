@@ -1,13 +1,8 @@
-import { test, expect, type Page } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Page } from '../fixtures/base.js';
 import { resetLlmRequests } from '../helpers/llm.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
 
@@ -29,7 +24,11 @@ async function getRouteRequest(route: string): Promise<CapturedRouteRequest | nu
  * the app's WS bus and return its id. The workbench chat that authors the
  * card must be a different, plain character — see the test below.
  */
-async function createCharacterViaWs(page: Page, charName: string, extensions: Record<string, unknown>): Promise<string> {
+async function createCharacterViaWs(
+  page: Page,
+  charName: string,
+  extensions: Record<string, unknown>,
+): Promise<string> {
   return await page.evaluate(
     ({ charName: cn, extensions: ext }) => {
       return new Promise<string>((resolve, reject) => {
@@ -45,7 +44,9 @@ async function createCharacterViaWs(page: Page, charName: string, extensions: Re
           try {
             const msg = JSON.parse(event.data as string);
             if (msg.type === 'snapshot') {
-              ws.send(JSON.stringify({ type: 'character.create', data: { name: cn, firstMes: 'Ready.', extensions: ext } }));
+              ws.send(
+                JSON.stringify({ type: 'character.create', data: { name: cn, firstMes: 'Ready.', extensions: ext } }),
+              );
             }
             if (msg.type === 'character.created' && msg.character?.name === cn) {
               ws.close();
@@ -56,7 +57,7 @@ async function createCharacterViaWs(page: Page, charName: string, extensions: Re
               reject(new Error(msg.message ?? 'WS creation failed'));
             }
           } catch (err) {
-            reject(err);
+            reject(err instanceof Error ? err : new Error(String(err)));
           }
         };
 
@@ -90,22 +91,17 @@ test.describe.configure({ mode: 'serial' });
 test.describe('Backend Logic VFS (card multi-file + response_format)', () => {
   const toolsetIds: string[] = [];
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     while (toolsetIds.length > 0) {
       await deleteToolset(page, toolsetIds.pop()!);
     }
   });
 
-  test('workbench writes backend_logic/main.lua + a module; generation resolves require', async ({ page }) => {
-    const app = new App(page);
-
+  test('workbench writes backend_logic/main.lua + a module; generation resolves require', async ({ page, app }) => {
     // The scripted card starts with a placeholder script, ENABLED — writes to
     // backend_logic/ replace the entry point while preserving the flag. The
     // workbench host chat is a plain character (a contextual-backend chat
@@ -142,8 +138,7 @@ test.describe('Backend Logic VFS (card multi-file + response_format)', () => {
     await app.waitForAssistantText('VFS_MODULE_OK');
   });
 
-  test('backend_logic response_format reaches the delegate request', async ({ page }) => {
-    const app = new App(page);
+  test('backend_logic response_format reaches the delegate request', async ({ page, app }) => {
     const cardName = uniqueName('RF Card');
     await createCharacterViaWs(page, cardName, {
       contextualBackend: { enabled: true, luaSource: PASSTHROUGH_LUA },

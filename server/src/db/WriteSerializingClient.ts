@@ -19,17 +19,10 @@
  * queue.
  */
 
-import type {
-  Client,
-  InArgs,
-  InStatement,
-  ResultSet,
-  Transaction,
-  TransactionMode,
-} from '@libsql/client';
+import type { Client, InArgs, InStatement, ResultSet, Transaction, TransactionMode } from '@libsql/client';
 import { getLogger } from '../lib/logger.js';
 
-const log = getLogger('db');
+const log = getLogger('db/WriteSerializingClient');
 
 const DEFAULT_LOCK_TIMEOUT_MS = 10_000;
 
@@ -199,10 +192,7 @@ export class WriteSerializingClient implements Client {
     }
   }
 
-  async batch(
-    stmts: Array<InStatement | [string, InArgs?]>,
-    mode?: TransactionMode,
-  ): Promise<Array<ResultSet>> {
+  async batch(stmts: Array<InStatement | [string, InArgs?]>, mode?: TransactionMode): Promise<Array<ResultSet>> {
     const release = await this.lock.acquire(`batch[${stmts.length}]`);
     try {
       return await this.inner.batch(stmts, mode);

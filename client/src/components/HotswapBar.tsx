@@ -48,7 +48,7 @@ export function HotswapBar() {
             >
               <SafeImage
                 class="hotswap-avatar"
-                src={(char.thumbnailUrl ?? char.avatarUrl) ?? undefined}
+                src={char.thumbnailUrl ?? char.avatarUrl ?? undefined}
                 alt=""
                 loading="lazy"
               />

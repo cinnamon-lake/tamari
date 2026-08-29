@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { existsSync } from 'node:fs';
 
 /**
  * Standalone Playwright config for the UX/UI audit screenshot pass.
@@ -9,13 +10,20 @@ import { defineConfig, devices } from '@playwright/test';
  * Mirrors the main config's webServer (fresh DATA_DIR per run, fixed secret,
  * mock LLM from global-setup) but only picks up specs in ./ux-audit.
  * Screenshots are written to e2e/ux-audit/shots/ by the spec itself.
+ *
+ * Honors E2E_PORT like the other configs (parallel-safe side-by-side runs).
  */
+// NixOS can't run Playwright's downloaded chromium — point at the system
+// browser when it exists (local dev). Elsewhere the path is absent, so
+// Playwright falls back to its own installed chromium.
+const nixosChromium = '/run/current-system/sw/bin/chromium-browser';
 const chromeLaunch = {
   ...devices['Desktop Chrome'],
-  launchOptions: {
-    executablePath: '/run/current-system/sw/bin/chromium-browser',
-  },
+  ...(existsSync(nixosChromium) ? { launchOptions: { executablePath: nixosChromium } } : {}),
 };
+
+const e2ePort = Number(process.env.E2E_PORT ?? 8765);
+const dataDir = process.env.E2E_PORT ? `server/.test-data-${e2ePort}` : 'server/.test-data';
 
 export default defineConfig({
   fullyParallel: false,
@@ -25,7 +33,7 @@ export default defineConfig({
   globalSetup: './global-setup.ts',
   timeout: 240000,
   use: {
-    baseURL: 'http://localhost:8765',
+    baseURL: `http://localhost:${e2ePort}`,
     trace: 'off',
     screenshot: 'off',
     video: 'off',
@@ -40,14 +48,15 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'rm -rf server/.test-data && mkdir -p server/.test-data && node server/dist/main.js',
+    // Same cross-platform wipe as the main config (rm/mkdir break under cmd).
+    command: `node e2e/scripts/reset-test-data.mjs ${dataDir} && node server/dist/main.js`,
     cwd: '..',
-    url: 'http://localhost:8765',
+    url: `http://localhost:${e2ePort}`,
     reuseExistingServer: false,
     env: {
-      PORT: '8765',
+      PORT: String(e2ePort),
       HOST: '127.0.0.1',
-      DATA_DIR: './server/.test-data',
+      DATA_DIR: `./${dataDir}`,
       TAMARI_SECRET: 'e2e-test-secret',
       LOG_LEVEL: 'debug',
       DISABLE_CSRF: 'true',

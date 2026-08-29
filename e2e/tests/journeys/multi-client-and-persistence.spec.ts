@@ -16,7 +16,7 @@ import { journeyTest as test, expect } from '../../fixtures/journey.js';
 import { login } from '../../helpers/auth.js';
 
 test.describe('Multi-Client & Persistence Journey', () => {
-  test('two clients stay in sync; a fresh session restores everything from the server', async ({ app, page, browser }) => {
+  test('two clients stay in sync; a fresh session restores everything from the server', async ({ app, browser }) => {
     const charName = `Sync Char ${Date.now()}`;
     const greeting = `Hello from ${charName}.`;
     const liveMessage = 'seq:Can the other tab hear me?';
@@ -33,7 +33,11 @@ test.describe('Multi-Client & Persistence Journey', () => {
 
     await test.step('client B opens the same chat and sees the greeting', async () => {
       await expect(pageB.locator('.chat-list')).toContainText(charName, { timeout: 10000 });
-      await pageB.locator('.chat-item').filter({ hasText: new RegExp(charName) }).first().click();
+      await pageB
+        .locator('.chat-item')
+        .filter({ hasText: new RegExp(charName) })
+        .first()
+        .click();
       await expect(pageB.locator('.chat-view')).toBeVisible();
       await expect(pageB.locator('.message-bubble.assistant').first()).toContainText(greeting, { timeout: 10000 });
     });
@@ -55,7 +59,11 @@ test.describe('Multi-Client & Persistence Journey', () => {
 
       // Fresh login → server snapshot repopulates everything.
       await expect(pageC.locator('.chat-list')).toContainText(charName, { timeout: 10000 });
-      await pageC.locator('.chat-item').filter({ hasText: new RegExp(charName) }).first().click();
+      await pageC
+        .locator('.chat-item')
+        .filter({ hasText: new RegExp(charName) })
+        .first()
+        .click();
       await expect(pageC.locator('.chat-view')).toBeVisible();
       await expect(pageC.locator('.message-bubble.assistant').first()).toContainText(greeting);
       await expect(pageC.locator('.message-bubble.user').last()).toContainText('Can the other tab hear me');

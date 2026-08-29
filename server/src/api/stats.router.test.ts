@@ -3,6 +3,7 @@ import express from 'express';
 import request from 'supertest';
 import type { StatsService } from '../services/StatsService.js';
 import { createStatsRouter } from './stats.js';
+import { errorHandler } from '../middleware/errorHandler.js';
 
 const fakeStats = {
   totalChats: 12,
@@ -14,6 +15,7 @@ const fakeStats = {
 function createApp(statsService: StatsService) {
   const app = express();
   app.use('/stats', createStatsRouter(statsService));
+  app.use(errorHandler);
   return app;
 }
 
@@ -36,6 +38,8 @@ describe('createStatsRouter', () => {
 
     const res = await request(createApp(statsService)).get('/stats').expect(500);
 
-    expect(res.body.error).toBe('Failed to load stats');
+    // Unexpected 5xx now forwards to the central handler, which passes the
+    // raw message through outside production (redacted in production).
+    expect(res.body.error).toBe('db gone');
   });
 });

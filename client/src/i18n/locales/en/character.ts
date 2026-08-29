@@ -34,7 +34,7 @@ export const character = {
     'This card is unpacked on disk (unpacked-cards/{{slug}}/). Edit the files directly — changes apply immediately.',
   regexHeading: 'Regex Scripts (this character)',
   regexDescription:
-    'Find/replace rules applied only to this character\'s messages, after global regex rules. Prompt rules affect what the AI sees; Display rules only affect rendering.',
+    "Find/replace rules applied only to this character's messages, after global regex rules. Prompt rules affect what the AI sees; Display rules only affect rendering.",
   backendHeading: 'Backend Logic (this character)',
   backendDescription:
     'A Lua script that drives generation for this character. When enabled, the script owns the prompt and the active backend is its default delegate.',

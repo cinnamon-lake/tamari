@@ -66,9 +66,7 @@ describe('e2e attachment lifecycle', () => {
   }
 
   beforeEach(async () => {
-    const backend = new TrivialBackendAdapter([
-      [{ type: 'content', content: 'I see the image.' }],
-    ]);
+    const backend = new TrivialBackendAdapter([[{ type: 'content', content: 'I see the image.' }]]);
 
     h = new TestHarness({ backendFactory: { create: async () => backend } });
     await h.initSchema();
@@ -177,7 +175,13 @@ describe('e2e attachment lifecycle', () => {
 
     const filePath = h.deps.storage.write('attachments', 'get-by-id.png', new Uint8Array([0x89, 0x50]));
     const attId = uuid();
-    await h.deps.attachments.create({ id: attId, messageId: null, mimeType: 'image/png', filePath, meta: { key: 'value' } });
+    await h.deps.attachments.create({
+      id: attId,
+      messageId: null,
+      mimeType: 'image/png',
+      filePath,
+      meta: { key: 'value' },
+    });
 
     const retrieved = await h.deps.attachments.getById(attId);
     expect(retrieved).toBeDefined();

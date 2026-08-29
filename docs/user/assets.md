@@ -4,14 +4,14 @@ tamari works with two kinds of files: **character assets**, which belong to a ch
 
 ## The Two Kinds of Files
 
-| | Character assets | Chat attachments |
-|---|---|---|
-| Scope | A character card | A single message |
-| Stored at | `character_assets/<characterId>/` under your data dir | `attachments/` under your data dir |
-| Metadata | `character_assets` table (name, type, ext) | `attachments` table (MIME type, message link) |
-| Served from | `GET /api/characters/<id>/assets/<assetId>.<ext>` | `GET /api/attachments/<id>` |
-| Embed in text | `{{img::name}}` or `<img src="name.png">` | `{{attachment::id}}` |
-| Exported with card | Yes (CharX) | No |
+|                    | Character assets                                      | Chat attachments                              |
+| ------------------ | ----------------------------------------------------- | --------------------------------------------- |
+| Scope              | A character card                                      | A single message                              |
+| Stored at          | `character_assets/<characterId>/` under your data dir | `attachments/` under your data dir            |
+| Metadata           | `character_assets` table (name, type, ext)            | `attachments` table (MIME type, message link) |
+| Served from        | `GET /api/characters/<id>/assets/<assetId>.<ext>`     | `GET /api/attachments/<id>`                   |
+| Embed in text      | `{{img::name}}` or `<img src="name.png">`             | `{{attachment::id}}`                          |
+| Exported with card | Yes (CharX)                                           | No                                            |
 
 > **Note:** Attachment downloads are public (no auth) so inline images load in the browser. Character asset URLs sit behind the API auth middleware, which also accepts a `?token=` query parameter.
 
@@ -71,7 +71,7 @@ The name is looked up in the current character's asset list. If the exact name m
 Raw HTML image tags in card content also resolve at display time:
 
 ```html
-<img src="Marisa Kirisame.png">
+<img src="Marisa Kirisame.png" />
 ```
 
 The filename is fuzzy-matched against the character's assets (sanitized names; assets whose name starts with `Normal_` win ties). Only `png`, `jpg`/`jpeg`, `gif`, `webp`, and `bmp` sources are rewritten. CharX-style `embeded://` URIs (both the misspelled and the correct `embedded://` spelling) in `src` attributes resolve the same way.
@@ -117,19 +117,19 @@ These are capability flags on the backend config (Backend Config modal), because
 
 **When a capability is off**, the attachment is silently dropped from the prompt — unless you enable **Verbose media mode** in **Settings**, which instead substitutes a text placeholder so the model knows a file was there:
 
-| Attachment | Placeholder |
-|---|---|
-| Image | `[Attached image]` |
-| Audio | `[Attached audio]` |
-| Video | `[Attached video]` |
+| Attachment | Placeholder        |
+| ---------- | ------------------ |
+| Image      | `[Attached image]` |
+| Audio      | `[Attached audio]` |
+| Video      | `[Attached video]` |
 
 ## Limits and Environment Variables
 
-| Setting | Default | What it caps |
-|---|---|---|
-| `HTTP_JSON_LIMIT` | `5mb` | JSON body size — governs base64 attachment uploads |
-| `AVATAR_MAX_FILE_SIZE_BYTES` | `52428800` (50 MB) | Persona avatar uploads |
-| `DATA_DIR` | `./data-v2` | Root of all file storage (`attachments/`, `character_assets/`, `avatars/`, …) |
+| Setting                      | Default            | What it caps                                                                  |
+| ---------------------------- | ------------------ | ----------------------------------------------------------------------------- |
+| `HTTP_JSON_LIMIT`            | `5mb`              | JSON body size — governs base64 attachment uploads                            |
+| `AVATAR_MAX_FILE_SIZE_BYTES` | `52428800` (50 MB) | Persona avatar uploads                                                        |
+| `DATA_DIR`                   | `./data-v2`        | Root of all file storage (`attachments/`, `character_assets/`, `avatars/`, …) |
 
 Hard-coded limits to be aware of:
 
@@ -150,12 +150,12 @@ If you let the model use the workbench (see [Workbench](./workbench.md)), it can
 
 Relevant `run` verbs:
 
-| Verb | Args | Effect |
-|---|---|---|
-| `set_avatar` | `{characterId, attachmentId? \| sourceCharacterId?}` | Set avatar from an attachment image or another card |
-| `copy_assets` | `{characterId, sourceCharacterId, assetId?}` | Copy one asset, or all when `assetId` is omitted |
-| `copy_module_assets` | `{characterId, sourceCharacterId, moduleId}` | Copy a Risu module's stored assets onto a card |
-| `clone_character` | `{sourceCharacterId, name?}` | Deep-copy a card including assets and avatar |
+| Verb                 | Args                                                 | Effect                                              |
+| -------------------- | ---------------------------------------------------- | --------------------------------------------------- |
+| `set_avatar`         | `{characterId, attachmentId? \| sourceCharacterId?}` | Set avatar from an attachment image or another card |
+| `copy_assets`        | `{characterId, sourceCharacterId, assetId?}`         | Copy one asset, or all when `assetId` is omitted    |
+| `copy_module_assets` | `{characterId, sourceCharacterId, moduleId}`         | Copy a Risu module's stored assets onto a card      |
+| `clone_character`    | `{sourceCharacterId, name?}`                         | Deep-copy a card including assets and avatar        |
 
 ## Letting the LLM List Assets
 

@@ -1,10 +1,14 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { getLastLlmRequest, resetLlmRequests, waitForNextLlmRequest } from '../helpers/llm.js';
-import { App } from '../helpers/app.js';
+import { uniqueName } from '../helpers/names.js';
 
-async function postSecret(page: import('@playwright/test').Page, key: string, value: string, label?: string): Promise<void> {
+async function postSecret(
+  page: import('@playwright/test').Page,
+  key: string,
+  value: string,
+  label?: string,
+): Promise<void> {
   await page.evaluate(
     async ({ key, value, label }) => {
       const token = localStorage.getItem('st_auth_token') ?? '';
@@ -31,16 +35,10 @@ async function deleteSecret(page: import('@playwright/test').Page, key: string):
   );
 }
 
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
-
 test.describe('Secrets', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-  });
-
-  test('opens the secrets modal and adds a secret via the UI', async ({ page }) => {
+  // Login-only test, but `_app` pulls in the fixture's login (the mock
+  // backend it also configures is harmless here and reset on teardown).
+  test('opens the secrets modal and adds a secret via the UI', async ({ app: _app, page }) => {
     const btn = page.locator('button.settings-btn:has-text("Secrets")');
     await btn.scrollIntoViewIfNeeded();
     await btn.click();
@@ -62,8 +60,7 @@ test.describe('Secrets', () => {
     await deleteSecret(page, 'ui-test-key');
   });
 
-  test('a secret:<key> apiKey resolves to the vault value at generation', async ({ page }) => {
-    await configureMockBackend(page);
+  test('a secret:<key> apiKey resolves to the vault value at generation', async ({ page, app }) => {
     await resetLlmRequests();
 
     // Store a secret in the vault
@@ -72,7 +69,6 @@ test.describe('Secrets', () => {
     // Set the backend config's apiKey to a secret reference
     await patchActiveBackendConfig(page, { apiKey: 'secret:resolution-key' });
 
-    const app = new App(page);
     const charName = uniqueName('Secret Resolve');
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -86,6 +82,5 @@ test.describe('Secrets', () => {
 
     // Clean up
     await deleteSecret(page, 'resolution-key');
-    await resetBackendConfig(page);
   });
 });

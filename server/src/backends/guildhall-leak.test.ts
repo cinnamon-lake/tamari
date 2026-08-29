@@ -13,11 +13,7 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { LuaRuntime } from '../scripting/LuaRuntime.js';
-import {
-  LuaBackendAdapter,
-  type CustomBackendDelegate,
-  type DelegatedGenerateResult,
-} from './LuaBackendAdapter.js';
+import { LuaBackendAdapter, type CustomBackendDelegate, type DelegatedGenerateResult } from './LuaBackendAdapter.js';
 import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
 import type { GenerationType } from './BackendAdapter.js';
 import type { MessageRole } from '@tamari/types';
@@ -25,7 +21,20 @@ import { consumeStream, type BackendStreamItem, type Prompt } from './BackendAda
 
 const luaSource = readFileSync(new URL('../../../docs/design/examples/guildhall/main.lua', import.meta.url), 'utf8');
 const LIB_FILES: Record<string, string> = Object.fromEntries(
-  ['loop', 'sanitize', 'chrome', 'ledger', 'toolset', 'todo', 'registry', 'summarize', 'maptag', 'events', 'rolling', 'layout'].map((m) => [
+  [
+    'loop',
+    'sanitize',
+    'chrome',
+    'ledger',
+    'toolset',
+    'todo',
+    'registry',
+    'summarize',
+    'maptag',
+    'events',
+    'rolling',
+    'layout',
+  ].map((m) => [
     `lib/${m}.lua`,
     readFileSync(new URL(`../../../docs/design/examples/game-lib/${m}.lua`, import.meta.url), 'utf8'),
   ]),
@@ -58,10 +67,15 @@ function adapter(delegate: CustomBackendDelegate): LuaBackendAdapter {
   });
 }
 
-const sysOf = (p: Prompt): string => (typeof p.messages[0]?.content === 'string' ? (p.messages[0].content as string) : '');
+const sysOf = (p: Prompt): string =>
+  typeof p.messages[0]?.content === 'string' ? (p.messages[0].content as string) : '';
 // loop.lua rebuilds rounds as assistant messages with typed tool_use/tool_result blocks.
 const hasToolResult = (p: Prompt): boolean =>
-  p.messages.some((m) => Array.isArray(m.content) && m.content.some((b) => typeof b === 'object' && b !== null && (b as { type?: string }).type === 'tool_result'));
+  p.messages.some(
+    (m) =>
+      Array.isArray(m.content) &&
+      m.content.some((b) => typeof b === 'object' && b !== null && (b as { type?: string }).type === 'tool_result'),
+  );
 
 /**
  * Behavior-scripted delegate. Matches on system-prompt content:
@@ -94,7 +108,11 @@ function delegate(behavior: Behavior = 'planner', dmScript: string[] = []): Cust
             return tc([{ name: 'finish_floor', arguments: { intro: 'The stair spits you into dust and dark.' } }]);
           }
           // Leak bait: the planner's raw final text must NEVER be served.
-          return { text: 'FULL DESIGN DUMP: r6 dead end hides Greenblade + 20g; roster is Crypt Rat; ledger debt filed.', finishReason: 'stop', usage: USAGE };
+          return {
+            text: 'FULL DESIGN DUMP: r6 dead end hides Greenblade + 20g; roster is Crypt Rat; ledger debt filed.',
+            finishReason: 'stop',
+            usage: USAGE,
+          };
         }
         const sysText = sys;
         const rooms = [...new Set([...sysText.matchAll(/\br(\d+)\b/g)].map((m) => `r${m[1]}`))];
@@ -103,7 +121,10 @@ function delegate(behavior: Behavior = 'planner', dmScript: string[] = []): Cust
           { name: 'add_description', arguments: { text: 'Dust and old bones, galleries collapsing inward.' } },
         ];
         for (const s of sections)
-          calls.push({ name: 'theme_section', arguments: { section: s, name: `Wing ${s}`, vibe: 'Old stone, older dust.' } });
+          calls.push({
+            name: 'theme_section',
+            arguments: { section: s, name: `Wing ${s}`, vibe: 'Old stone, older dust.' },
+          });
         calls.push({
           name: 'furnish_rooms',
           arguments: {
@@ -117,12 +138,21 @@ function delegate(behavior: Behavior = 'planner', dmScript: string[] = []): Cust
             hp: 99,
             atk: 99,
             reward: 99,
-            lines: { intro: 'It lunges from the dark.', hit: 'The rat sinks its teeth in.', death: 'The rat twitches and is still.' },
+            lines: {
+              intro: 'It lunges from the dark.',
+              hit: 'The rat sinks its teeth in.',
+              death: 'The rat twitches and is still.',
+            },
           },
         });
         calls.push({
           name: 'add_interactable',
-          arguments: { room: rooms[0], name: 'crate', responses: ['Inside: a few coins.', 'Just dust now.'], effect: { gold: 5 } },
+          arguments: {
+            room: rooms[0],
+            name: 'crate',
+            responses: ['Inside: a few coins.', 'Just dust now.'],
+            effect: { gold: 5 },
+          },
         });
         calls.push({ name: 'add_ambient', arguments: { lines: ['Water drips below.'] } });
         return tc(calls);
@@ -134,7 +164,12 @@ function delegate(behavior: Behavior = 'planner', dmScript: string[] = []): Cust
         const want = dmScript[dmRound++];
         if (!want) return { text: 'Nothing more comes of it.', finishReason: 'stop', usage: USAGE };
         if (want === 'open_event')
-          return tc([{ name: 'open_event', arguments: { kind: 'communion', context: 'The player whispers to the bones; something answers.' } }]);
+          return tc([
+            {
+              name: 'open_event',
+              arguments: { kind: 'communion', context: 'The player whispers to the bones; something answers.' },
+            },
+          ]);
         const sp = want.indexOf(' ');
         const name = sp === -1 ? want : want.slice(0, sp);
         const args = sp === -1 ? {} : JSON.parse(want.slice(sp + 1));
@@ -145,7 +180,8 @@ function delegate(behavior: Behavior = 'planner', dmScript: string[] = []): Cust
         sceneRound++;
         if (behavior === 'onboarder') {
           if (sceneRound === 1) return tc([{ name: 'register_player', arguments: { name: 'Alda' } }]);
-          if (sceneRound === 2) return tc([{ name: 'close_event', arguments: { gist: 'Alda registered at the guildhall.' } }]);
+          if (sceneRound === 2)
+            return tc([{ name: 'close_event', arguments: { gist: 'Alda registered at the guildhall.' } }]);
           return { text: 'She stamps the form. "Alda. Welcome to the Guildhall."', finishReason: 'stop', usage: USAGE };
         }
         // eventDm scenes: reply, then close, then a final plain-text line.
@@ -208,7 +244,14 @@ interface Dun {
   atk: number;
   inventory: Record<string, number>;
   room: string;
-  combat?: { name: string; hp: number; maxHp: number; atk: number; lines: { intro: string; hit: string; death: string }; reward: number };
+  combat?: {
+    name: string;
+    hp: number;
+    maxHp: number;
+    atk: number;
+    lines: { intro: string; hit: string; death: string };
+    reward: number;
+  };
   seen: Record<string, true>;
   escalations: number;
   fightName?: string;
@@ -247,30 +290,131 @@ async function turn(
 
 // ── the seeded f1 pack (grid geometry, one dead end, one annex for add_exit) ──
 interface PackBlob {
-  floors: Array<{ id: string; floor: string; name: string; description: string; entrance: string; stairsDown: string; ambient: string[] }>;
-  rooms: Array<{ id: string; floor: string; name: string; desc: string; x: number; y: number; section: string; exits: Record<string, string> }>;
-  enemies: Array<{ id: string; floor: string; name: string; hp: number; maxHp: number; atk: number; reward: number; lines: Record<string, string> }>;
-  interactables: Array<{ id: string; key: string; floor: string; responses: string[]; effect?: Record<string, unknown> }>;
+  floors: Array<{
+    id: string;
+    floor: string;
+    name: string;
+    description: string;
+    entrance: string;
+    stairsDown: string;
+    ambient: string[];
+  }>;
+  rooms: Array<{
+    id: string;
+    floor: string;
+    name: string;
+    desc: string;
+    x: number;
+    y: number;
+    section: string;
+    exits: Record<string, string>;
+  }>;
+  enemies: Array<{
+    id: string;
+    floor: string;
+    name: string;
+    hp: number;
+    maxHp: number;
+    atk: number;
+    reward: number;
+    lines: Record<string, string>;
+  }>;
+  interactables: Array<{
+    id: string;
+    key: string;
+    floor: string;
+    responses: string[];
+    effect?: Record<string, unknown>;
+  }>;
 }
 function packBlob(relic = false): PackBlob {
   return {
-    floors: [{ id: 'f1', floor: 'f1', name: 'The Upper Halls', description: 'Dust and old bones.', entrance: 'r1', stairsDown: 'r3', ambient: ['Water drips below.'] }],
+    floors: [
+      {
+        id: 'f1',
+        floor: 'f1',
+        name: 'The Upper Halls',
+        description: 'Dust and old bones.',
+        entrance: 'r1',
+        stairsDown: 'r3',
+        ambient: ['Water drips below.'],
+      },
+    ],
     rooms: [
-      { id: 'r1', floor: 'f1', name: 'Collapsed Nave', desc: 'Dust and old bones.', x: 0, y: 1, section: 'A', exits: { north: 'r2', south: 'r4' } },
-      { id: 'r2', floor: 'f1', name: 'Ossuary', desc: 'Stacked femurs like cordwood.', x: 0, y: 0, section: 'A', exits: { south: 'r1', east: 'r3' } },
-      { id: 'r3', floor: 'f1', name: 'Silent Choir', desc: 'Stone seats in rows.', x: 1, y: 0, section: 'B', exits: { west: 'r2', down: 'down' } },
-      { id: 'r4', floor: 'f1', name: 'Bone Pit', desc: 'A shallow pit of bones.', x: 0, y: 2, section: 'B', exits: { north: 'r1' } },
+      {
+        id: 'r1',
+        floor: 'f1',
+        name: 'Collapsed Nave',
+        desc: 'Dust and old bones.',
+        x: 0,
+        y: 1,
+        section: 'A',
+        exits: { north: 'r2', south: 'r4' },
+      },
+      {
+        id: 'r2',
+        floor: 'f1',
+        name: 'Ossuary',
+        desc: 'Stacked femurs like cordwood.',
+        x: 0,
+        y: 0,
+        section: 'A',
+        exits: { south: 'r1', east: 'r3' },
+      },
+      {
+        id: 'r3',
+        floor: 'f1',
+        name: 'Silent Choir',
+        desc: 'Stone seats in rows.',
+        x: 1,
+        y: 0,
+        section: 'B',
+        exits: { west: 'r2', down: 'down' },
+      },
+      {
+        id: 'r4',
+        floor: 'f1',
+        name: 'Bone Pit',
+        desc: 'A shallow pit of bones.',
+        x: 0,
+        y: 2,
+        section: 'B',
+        exits: { north: 'r1' },
+      },
       { id: 'r5', floor: 'f1', name: 'Sealed Annex', desc: 'A sealed annex.', x: 1, y: 1, section: 'B', exits: {} },
     ],
     // empty roster: deterministic exploration (no random encounters roll)
     enemies: [],
     interactables: relic
-      ? [{ id: 'r1-relic', key: 'r1:relic', floor: 'f1', responses: ['You take the relic. It hums.'], effect: { item: 'relic' } }]
-      : [{ id: 'r4-crate', key: 'r4:crate', floor: 'f1', responses: ['Inside: a few coins.', 'Just dust now.'], effect: { gold: 5 } }],
+      ? [
+          {
+            id: 'r1-relic',
+            key: 'r1:relic',
+            floor: 'f1',
+            responses: ['You take the relic. It hums.'],
+            effect: { item: 'relic' },
+          },
+        ]
+      : [
+          {
+            id: 'r4-crate',
+            key: 'r4:crate',
+            floor: 'f1',
+            responses: ['Inside: a few coins.', 'Just dust now.'],
+            effect: { gold: 5 },
+          },
+        ],
   };
 }
 
-const RAT = { name: 'Crypt Rat', hp: 3, maxHp: 3, atk: 1, reward: 5, lines: { intro: 'It lunges.', hit: 'The rat bites.', death: 'The rat is still.' } };
+const RAT = {
+  name: 'Crypt Rat',
+  hp: 3,
+  maxHp: 3,
+  atk: 1,
+  reward: 5,
+  lines: { intro: 'It lunges.', hit: 'The rat bites.', death: 'The rat is still.' },
+};
 
 async function seedPack(relic = false): Promise<string> {
   return blobs.put('pack', JSON.stringify(packBlob(relic)));
@@ -344,8 +488,13 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
     const regResult = prompts
       .flatMap((p) => p.messages)
       .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
-      .find((b) => typeof b === 'object' && b !== null && (b as { type?: string }).type === 'tool_result'
-        && String((b as { content?: unknown }).content).includes('"registered"'));
+      .find(
+        (b) =>
+          typeof b === 'object' &&
+          b !== null &&
+          (b as { type?: string }).type === 'tool_result' &&
+          String((b as { content?: unknown }).content).includes('"registered"'),
+      );
     expect(regResult).toBeDefined();
     expect(String((regResult as { content: unknown }).content)).not.toMatch(/"hp"|"atk"|"gold"/);
   });
@@ -394,29 +543,43 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
     const h: Array<{ role: MessageRole; content: string }> = [];
     let st = dungeonState(p);
 
-    let r = await turn(d, 'go north', st, h); hist(h, 'go north', r.text); st = r.raw;
+    let r = await turn(d, 'go north', st, h);
+    hist(h, 'go north', r.text);
+    st = r.raw;
     expect(r.st.dun.room).toBe('f1:r2');
     expect(r.text).toContain('Stacked femurs like cordwood.');
     expect(r.text).toMatch(/\[MAP\|[^\]]*Ossuary/);
 
-    r = await turn(d, 'look', st, h); hist(h, 'look', r.text); st = r.raw;
+    r = await turn(d, 'look', st, h);
+    hist(h, 'look', r.text);
+    st = r.raw;
     expect(r.text).toContain('Stacked femurs like cordwood.');
 
-    r = await turn(d, 'go south', st, h); hist(h, 'go south', r.text); st = r.raw;
-    r = await turn(d, 'go south', st, h); hist(h, 'go south', r.text); st = r.raw;
+    r = await turn(d, 'go south', st, h);
+    hist(h, 'go south', r.text);
+    st = r.raw;
+    r = await turn(d, 'go south', st, h);
+    hist(h, 'go south', r.text);
+    st = r.raw;
     expect(r.st.dun.room).toBe('f1:r4');
 
-    r = await turn(d, 'search the crate', st, h); hist(h, 'search the crate', r.text); st = r.raw;
+    r = await turn(d, 'search the crate', st, h);
+    hist(h, 'search the crate', r.text);
+    st = r.raw;
     expect(r.text).toContain('Inside: a few coins.');
     expect(r.st.gold).toBe(35);
     expect(r.st.flags['used:f1:r4:crate']).toBe(true);
 
-    r = await turn(d, 'search the crate', st, h); hist(h, 'search the crate', r.text); st = r.raw;
+    r = await turn(d, 'search the crate', st, h);
+    hist(h, 'search the crate', r.text);
+    st = r.raw;
     expect(r.text).toContain('Just dust now.');
     expect(r.st.gold).toBe(35);
 
     // "fleece"/word-boundary check: "attack" out of combat, no monster word-catch
-    r = await turn(d, 'I attack nothing here', st, h); hist(h, 'I attack nothing here', r.text); st = r.raw;
+    r = await turn(d, 'I attack nothing here', st, h);
+    hist(h, 'I attack nothing here', r.text);
+    st = r.raw;
     expect(r.text).toContain('Nothing here fights back.');
 
     // "up" on the top floor climbs OUT: the delve ends by choice, back in the hall.
@@ -433,8 +596,18 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
     const h: Array<{ role: MessageRole; content: string }> = [];
     const st = dungeonState(p, {
       turn: 4,
-      dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r1': true, 'f1:r2': true }, escalations: 0,
-        combat: { ...RAT }, fightName: 'fight Crypt Rat', fightLog: [] },
+      dun: {
+        maxHp: 20,
+        hp: 20,
+        atk: 4,
+        inventory: {},
+        room: 'f1:r2',
+        seen: { 'f1:r1': true, 'f1:r2': true },
+        escalations: 0,
+        combat: { ...RAT },
+        fightName: 'fight Crypt Rat',
+        fightLog: [],
+      },
     });
     // while the monster lives, movement is gated
     let r = await turn(d, 'go south', st, h);
@@ -456,21 +629,41 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
     const d = delegate('eventDm', ['open_event']);
     const h: Array<{ role: MessageRole; content: string }> = [];
     let st = dungeonState(p, {
-      dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r2', seen: { 'f1:r1': true, 'f1:r2': true }, escalations: 0,
-        combat: { ...RAT, hp: 2 }, fightName: 'fight Crypt Rat', fightLog: [] },
+      dun: {
+        maxHp: 20,
+        hp: 20,
+        atk: 4,
+        inventory: {},
+        room: 'f1:r2',
+        seen: { 'f1:r1': true, 'f1:r2': true },
+        escalations: 0,
+        combat: { ...RAT, hp: 2 },
+        fightName: 'fight Crypt Rat',
+        fightLog: [],
+      },
     });
 
-    let r = await turn(d, 'I whisper to the bones', st, h); hist(h, 'w', r.text); st = r.raw;
+    let r = await turn(d, 'I whisper to the bones', st, h);
+    hist(h, 'w', r.text);
+    st = r.raw;
     expect(r.st.event?.kind).toBe('communion');
     expect(r.st.dun.combat?.name).toBe('Crypt Rat'); // combat persisted through the scene open
     expect(r.st.dun.escalations).toBe(1);
     expect(r.text).toContain('The bones stir and listen.'); // the scene line wins over DM prose
-    expect(prompts.some((pp) => sysOf(pp).includes('dungeon master') && JSON.stringify(pp).includes('IN COMBAT with Crypt Rat'))).toBe(true);
+    expect(
+      prompts.some(
+        (pp) => sysOf(pp).includes('dungeon master') && JSON.stringify(pp).includes('IN COMBAT with Crypt Rat'),
+      ),
+    ).toBe(true);
 
-    r = await turn(d, 'attack', st, h); hist(h, 'attack', r.text); st = r.raw;
+    r = await turn(d, 'attack', st, h);
+    hist(h, 'attack', r.text);
+    st = r.raw;
     expect(r.text).toContain('Finish your business here first.');
 
-    r = await turn(d, 'the bones demand a name', st, h); hist(h, 'name', r.text); st = r.raw;
+    r = await turn(d, 'the bones demand a name', st, h);
+    hist(h, 'name', r.text);
+    st = r.raw;
     expect(r.st.event).toBeUndefined();
     // the closing prose is served once; the gist is NOT re-appended after it
     expect(r.text).toContain('The bones settle.');
@@ -491,8 +684,18 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
     const d = delegate('planner');
     const h: Array<{ role: MessageRole; content: string }> = [];
     const st = dungeonState(p, {
-      dun: { maxHp: 20, hp: 1, atk: 4, inventory: {}, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0,
-        combat: { ...RAT, hp: 50, atk: 9 }, fightName: 'fight Crypt Rat', fightLog: [] },
+      dun: {
+        maxHp: 20,
+        hp: 1,
+        atk: 4,
+        inventory: {},
+        room: 'f1:r1',
+        seen: { 'f1:r1': true },
+        escalations: 0,
+        combat: { ...RAT, hp: 50, atk: 9 },
+        fightName: 'fight Crypt Rat',
+        fightLog: [],
+      },
     });
     let r = await turn(d, 'attack', st, h);
     expect(r.text).toContain('THE DARK KEEPS YOU');
@@ -538,9 +741,12 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
       dun: { maxHp: 20, hp: 20, atk: 4, inventory: {}, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0 },
     });
     for (const cmd of ['go north', 'go east']) {
-      const r = await turn(d, cmd, st, h); hist(h, cmd, r.text); st = r.raw;
+      const r = await turn(d, cmd, st, h);
+      hist(h, cmd, r.text);
+      st = r.raw;
     }
-    const r = await turn(d, 'go down', st, h); hist(h, 'go down', r.text);
+    const r = await turn(d, 'go down', st, h);
+    hist(h, 'go down', r.text);
     expect(r.st.packIds?.f2).toBeDefined();
     expect(r.st.dun.room).toMatch(/^f2:r\d+$/);
     expect(r.text).toContain('The stair spits you into dust and dark.');
@@ -560,7 +766,15 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
     ]);
     const h: Array<{ role: MessageRole; content: string }> = [];
     const st = dungeonState(p, {
-      dun: { maxHp: 20, hp: 20, atk: 4, inventory: { torch: 1 }, room: 'f1:r1', seen: { 'f1:r1': true }, escalations: 0 },
+      dun: {
+        maxHp: 20,
+        hp: 20,
+        atk: 4,
+        inventory: { torch: 1 },
+        room: 'f1:r1',
+        seen: { 'f1:r1': true },
+        escalations: 0,
+      },
     });
     const r = await turn(d, 'I blow open the annex wall with the torch, and whatever comes through, I fight', st, h);
     expect(r.st.dun.escalations).toBe(1);
@@ -598,26 +812,33 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
     expect(result.error ?? result.finishReason).toContain('continue');
   });
 
-  it("LEAK HUNT: no summary content in user-role messages or served replies", async () => {
+  it('LEAK HUNT: no summary content in user-role messages or served replies', async () => {
     await seedPack();
     // 7 story entries → crosses RECENT+BACKLOG (6) → next briefing folds
     const storyIds: string[] = [];
     for (let i = 1; i <= 7; i++) {
-      storyIds.push(await blobs.put("roll", JSON.stringify({ label: "episode " + i, gist: "Episode " + i + " happened thus." })));
+      storyIds.push(
+        await blobs.put('roll', JSON.stringify({ label: 'episode ' + i, gist: 'Episode ' + i + ' happened thus.' })),
+      );
     }
-    const d = delegate("dm", []);
-    const d2 = delegate("dm", ["open_event"]);
+    const d = delegate('dm', []);
+    const d2 = delegate('dm', ['open_event']);
     const h: Array<{ role: MessageRole; content: string }> = [];
-    let st = hallState({ turn: 9, story: { kv: { player: "Tester" }, ids: storyIds } });
+    let st = hallState({ turn: 9, story: { kv: { player: 'Tester' }, ids: storyIds } });
 
     // hall DM turn: briefing folds (sub-gen), DM narrates
-    let r = await turn(d, "I chat with the quartermaster", st, h); hist(h, "q", r.text); st = r.raw;
-    expect(r.st.mode).toBe("hall");
+    let r = await turn(d, 'I chat with the quartermaster', st, h);
+    hist(h, 'q', r.text);
+    st = r.raw;
+    expect(r.st.mode).toBe('hall');
 
     // open an event from the hall, one scene turn, close it
-    r = await turn(d2, "I corner the old knight by the hearth", st, h); hist(h, "k", r.text); st = r.raw;
-    expect(r.st.event?.kind).toBe("communion");
-    r = await turn(d2, "we talk about the war", st, h); hist(h, "w", r.text);
+    r = await turn(d2, 'I corner the old knight by the hearth', st, h);
+    hist(h, 'k', r.text);
+    st = r.raw;
+    expect(r.st.event?.kind).toBe('communion');
+    r = await turn(d2, 'we talk about the war', st, h);
+    hist(h, 'w', r.text);
     expect(r.st.event).toBeUndefined();
 
     // ── the scan ──
@@ -626,16 +847,29 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
     // "Compress these…" / "Summarize what happened…") carry summaries AS
     // their payload — also by design. A leak is that content reaching any
     // other prompt's user/assistant messages, or a served reply.
-    const MARKERS = ["STORY SO FAR", "FACTS:", "roll#", "PLOT LEDGER", "Episode ", "episode ", "happened thus", "Compress these", "Summarize what happened", "digest", "dossier", "older_takes"];
+    const MARKERS = [
+      'STORY SO FAR',
+      'FACTS:',
+      'roll#',
+      'PLOT LEDGER',
+      'Episode ',
+      'episode ',
+      'happened thus',
+      'Compress these',
+      'Summarize what happened',
+      'digest',
+      'dossier',
+      'older_takes',
+    ];
     const hits: string[] = [];
     for (let i = 0; i < prompts.length; i++) {
       const pp = prompts[i]!;
       const sys = sysOf(pp);
-      if (sys.startsWith("Compress these") || sys.startsWith("Summarize what happened")) continue; // internal payload
+      if (sys.startsWith('Compress these') || sys.startsWith('Summarize what happened')) continue; // internal payload
       for (let mi = 0; mi < pp.messages.length; mi++) {
         const m = pp.messages[mi]!;
-        if (m.role === "system") continue; // the briefing channel itself
-        const content = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+        if (m.role === 'system') continue; // the briefing channel itself
+        const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
         for (const mk of MARKERS) {
           if (content.includes(mk)) {
             hits.push(`prompt[${i}] msg[${mi}] role=${m.role} marker="${mk}"`);
@@ -644,13 +878,13 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
       }
     }
     for (const m of h) {
-      if (m.role !== "assistant") continue;
+      if (m.role !== 'assistant') continue;
       for (const mk of MARKERS) {
         if (m.content.includes(mk)) hits.push(`reply marker="${mk}" text=${m.content.slice(0, 60)}`);
       }
     }
     const unique = [...new Set(hits)];
-    if (unique.length > 0) console.log("LEAK HITS:\n" + unique.join("\n"));
+    if (unique.length > 0) console.log('LEAK HITS:\n' + unique.join('\n'));
     expect(unique).toEqual([]);
   });
 
@@ -660,15 +894,20 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
     const h: Array<{ role: MessageRole; content: string }> = [];
     let st = dungeonState(p); // at f1:r1 — exits north/south only
 
-    let r = await turn(d, 'go east', st, h); hist(h, 'go east', r.text); st = r.raw;
+    let r = await turn(d, 'go east', st, h);
+    hist(h, 'go east', r.text);
+    st = r.raw;
     expect(r.text).toContain('No passage east from here.');
     expect(r.st.dun.room).toBe('f1:r1');
     expect(r.st.dun.escalations).toBe(0);
 
-    r = await turn(d, 'west', st, h); hist(h, 'west', r.text); st = r.raw;
+    r = await turn(d, 'west', st, h);
+    hist(h, 'west', r.text);
+    st = r.raw;
     expect(r.text).toContain('No passage west from here.');
 
-    r = await turn(d, 'go down', st, h); hist(h, 'go down', r.text);
+    r = await turn(d, 'go down', st, h);
+    hist(h, 'go down', r.text);
     expect(r.text).toContain('No passage down from here.'); // stairs down are at r3
 
     // no delegate call happened at all — zero model spend
@@ -680,11 +919,13 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
     const d = delegate('planner');
     const h: Array<{ role: MessageRole; content: string }> = [];
 
-    let r = await turn(d, 'Shop', hallState(), h); hist(h, 'Shop', r.text);
+    let r = await turn(d, 'Shop', hallState(), h);
+    hist(h, 'Shop', r.text);
     expect(r.text).toContain('quartermaster');
     expect(r.st.mode).toBe('hall');
 
-    r = await turn(d, 'Delve', r.raw, h); hist(h, 'Delve', r.text);
+    r = await turn(d, 'Delve', r.raw, h);
+    hist(h, 'Delve', r.text);
     expect(r.st.mode).toBe('dungeon');
     expect(r.text).toContain('The stair spits you into dust and dark.');
 
@@ -696,7 +937,8 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
   it('shop economy: buy_item moves real gold and grants the item; unaffordable is refused', async () => {
     const h: Array<{ role: MessageRole; content: string }> = [];
     let d = delegate('dm', ['buy_item {"item":"rope","price":5}']);
-    let r = await turn(d, 'I buy a length of rope', hallState(), h); hist(h, 'buy', r.text);
+    let r = await turn(d, 'I buy a length of rope', hallState(), h);
+    hist(h, 'buy', r.text);
     expect(r.st.gold).toBe(25);
     expect(r.st.dun.inventory.rope).toBe(1);
 
@@ -721,8 +963,13 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
     const attemptResult = prompts
       .flatMap((pp) => pp.messages)
       .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
-      .find((b) => typeof b === 'object' && b !== null && (b as { type?: string }).type === 'tool_result'
-        && (b as { name?: string }).name === 'attempt');
+      .find(
+        (b) =>
+          typeof b === 'object' &&
+          b !== null &&
+          (b as { type?: string }).type === 'tool_result' &&
+          (b as { name?: string }).name === 'attempt',
+      );
     expect(attemptResult).toBeDefined();
     const content = String((attemptResult as { content: unknown }).content);
     expect(content).toContain('"outcome"');
@@ -736,7 +983,8 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
       eventSeq: 1,
       event: { id: 'e1', kind: 'gossip', context: 'Hearth gossip with the regulars.', participants: [] },
     });
-    const r = await turn(d, 'leave', st, h); hist(h, 'leave', r.text);
+    const r = await turn(d, 'leave', st, h);
+    hist(h, 'leave', r.text);
     expect(r.st.event).toBeUndefined();
     expect(r.st.bricked).toBeUndefined();
     expect(r.text).toContain('They walked out mid-scene.');
@@ -761,5 +1009,4 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
     expect(r.text).toContain('The gossip breaks off.');
     expect(r.text).toContain('You step away; the moment ends.');
   });
-
 });

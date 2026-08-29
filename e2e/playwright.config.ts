@@ -37,9 +37,7 @@ import { join } from 'node:path';
 const nixosChromium = '/run/current-system/sw/bin/chromium-browser';
 const chromeLaunch = {
   ...devices['Desktop Chrome'],
-  ...(existsSync(nixosChromium)
-    ? { launchOptions: { executablePath: nixosChromium } }
-    : {}),
+  ...(existsSync(nixosChromium) ? { launchOptions: { executablePath: nixosChromium } } : {}),
 };
 
 const coverageEnabled = !!process.env.E2E_COVERAGE;
@@ -51,10 +49,7 @@ const coverageEnabled = !!process.env.E2E_COVERAGE;
 const e2ePort = Number(process.env.E2E_PORT ?? 8765);
 const dataDir = process.env.E2E_PORT ? `server/.test-data-${e2ePort}` : 'server/.test-data';
 
-const reporter: NonNullable<Parameters<typeof defineConfig>[0]['reporter']> = [
-  ['list'],
-  ['html', { open: 'never' }],
-];
+const reporter: NonNullable<Parameters<typeof defineConfig>[0]['reporter']> = [['list'], ['html', { open: 'never' }]];
 if (coverageEnabled) {
   reporter.push([
     'monocart-reporter',
@@ -69,9 +64,7 @@ if (coverageEnabled) {
         // sourcemap sources unpack as bare src/... — rewrite them (and the
         // bundle label) to their real repo paths.
         sourcePath: (filePath: string) =>
-          filePath
-            .replace(/^localhost-8765\/assets\//, 'client/dist/assets/')
-            .replace(/^src\//, 'client/src/'),
+          filePath.replace(/^localhost-8765\/assets\//, 'client/dist/assets/').replace(/^src\//, 'client/src/'),
         // Raw Node V8 coverage written by the webServer (NODE_V8_COVERAGE).
         // Browser coverage arrives via addCoverageReport() in fixtures/base.ts.
         dataDir: join(__dirname, '.coverage/node'),
@@ -119,6 +112,10 @@ export default defineConfig({
       name: 'chromium-smoke',
       testDir: './tests',
       testIgnore: ['**/server/**', '**/journeys/**'],
+      // Smoke specs are fast and isolated, but under load a fair number used
+      // to need ad-hoc 60s bumps past the 30s default — set 60s project-wide.
+      // Specs that genuinely need more keep their own test.setTimeout.
+      timeout: 60000,
       use: chromeLaunch,
     },
     {

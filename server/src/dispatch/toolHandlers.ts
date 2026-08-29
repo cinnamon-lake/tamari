@@ -9,7 +9,12 @@ import type { DispatcherDeps, Handlers } from './types.js';
 export function buildToolHandlers(
   deps: DispatcherDeps,
 ): Handlers<
-  'toolset.create' | 'toolset.update' | 'toolset.delete' | 'toolTemplate.create' | 'toolTemplate.update' | 'toolTemplate.delete'
+  | 'toolset.create'
+  | 'toolset.update'
+  | 'toolset.delete'
+  | 'toolTemplate.create'
+  | 'toolTemplate.update'
+  | 'toolTemplate.delete'
 > {
   const { bus, toolRegistry, toolsets: toolsetRepo, toolTemplates: toolTemplateRepo } = deps;
 

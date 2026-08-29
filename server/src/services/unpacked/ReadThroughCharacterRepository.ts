@@ -62,7 +62,10 @@ export class ReadThroughCharacterRepository implements ICharacterRepository {
 
   async listSummaries(opts: ListOpts = {}): Promise<{
     items: Array<
-      Pick<Character, 'id' | 'name' | 'tags' | 'avatarPath' | 'avatarThumbnailPath' | 'external' | 'createdAt' | 'updatedAt'>
+      Pick<
+        Character,
+        'id' | 'name' | 'tags' | 'avatarPath' | 'avatarThumbnailPath' | 'external' | 'createdAt' | 'updatedAt'
+      >
     >;
     total: number;
   }> {

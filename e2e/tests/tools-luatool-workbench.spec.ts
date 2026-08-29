@@ -1,12 +1,6 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 // Compact Lua template source (statements are whitespace-separated, so no
 // newlines are needed inside the tool: message's JSON string). Defines an
@@ -23,21 +17,14 @@ const ECHO_LUA =
 test.describe('Lua Tool Workbench', () => {
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     if (toolsetId) {
       await deleteToolset(page, toolsetId);
       toolsetId = undefined;
     }
   });
 
-  test('create + test a Lua tool template; sandbox flags control stdlib access', async ({ page }) => {
-    const app = new App(page);
+  test('create + test a Lua tool template; sandbox flags control stdlib access', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -92,8 +79,7 @@ test.describe('Lua Tool Workbench', () => {
     await expect(stored).toContainText('echo:stored os:table');
   });
 
-  test('a write to /luatools/new.json rejects broken code without saving', async ({ page }) => {
-    const app = new App(page);
+  test('a write to /luatools/new.json rejects broken code without saving', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({

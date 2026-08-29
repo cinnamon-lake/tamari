@@ -52,42 +52,40 @@ export function buildAuthHandlers(deps: DispatcherDeps): Handlers<'auth'> {
         backendConfigs: (await backendConfigs.listSummaries()).map(toBackendConfigSummary),
         promptLists: (await promptLists.listSummaries()).map(toPromptListSummary),
         tools: toolRegistry
-          ? await Promise.all(
-              [
-                // Built-in templates
-                ...toolRegistry.getAllBuiltinTemplates().map(async (t) => {
-                  const def = await t.getDefinition();
-                  return {
-                    id: t.id,
-                    name: t.name,
-                    description: t.name,
-                    configSchema: def.configSchema,
-                    tools: def.tools,
-                  };
-                }),
-                // Lua templates
-                ...(await toolTemplateRepo.list()).map(async (lt) => {
-                  const tmpl = await toolRegistry.getTemplate(lt.id);
-                  if (!tmpl) {
-                    return {
-                      id: lt.id,
-                      name: lt.name,
-                      description: lt.name,
-                      configSchema: lt.configSchema,
-                      tools: [] as Array<{ name: string; description: string; parameters?: Record<string, unknown> }>,
-                    };
-                  }
-                  const def = await tmpl.getDefinition();
+          ? await Promise.all([
+              // Built-in templates
+              ...toolRegistry.getAllBuiltinTemplates().map(async (t) => {
+                const def = await t.getDefinition();
+                return {
+                  id: t.id,
+                  name: t.name,
+                  description: t.name,
+                  configSchema: def.configSchema,
+                  tools: def.tools,
+                };
+              }),
+              // Lua templates
+              ...(await toolTemplateRepo.list()).map(async (lt) => {
+                const tmpl = await toolRegistry.getTemplate(lt.id);
+                if (!tmpl) {
                   return {
                     id: lt.id,
                     name: lt.name,
                     description: lt.name,
-                    configSchema: def.configSchema,
-                    tools: def.tools,
+                    configSchema: lt.configSchema,
+                    tools: [] as Array<{ name: string; description: string; parameters?: Record<string, unknown> }>,
                   };
-                }),
-              ],
-            )
+                }
+                const def = await tmpl.getDefinition();
+                return {
+                  id: lt.id,
+                  name: lt.name,
+                  description: lt.name,
+                  configSchema: def.configSchema,
+                  tools: def.tools,
+                };
+              }),
+            ])
           : [],
         toolsets: await toolsetRepo.list(),
         toolTemplates: await toolTemplateRepo.list(),

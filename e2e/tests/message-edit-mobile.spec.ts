@@ -6,34 +6,24 @@
  * actions. Guards the compact-composer (max-height media query), the edit
  * textarea caps, and the visualViewport re-pin in App.tsx.
  */
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
-import { App } from '../helpers/app.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 
 test.describe('Mobile message editing', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('edit box and actions stay visible with the keyboard open', async ({ page }) => {
+  test('edit box and actions stay visible with the keyboard open', async ({ page, app }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    const app = new App(page);
     // Mobile layout: the sidebar lives behind the hamburger drawer.
     await page.locator('.mobile-menu-btn').click();
     const charName = `Mobile Edit ${Date.now()}`;
-    await app.createCharacter({ name: charName, description: 'A character for mobile edit testing.', firstMes: 'Greetings, traveler.' });
+    await app.createCharacter({
+      name: charName,
+      description: 'A character for mobile edit testing.',
+      firstMes: 'Greetings, traveler.',
+    });
 
     // app.startChat's explicit chat-item click doesn't survive the mobile
     // drawer auto-closing — the client already selects the new chat, so just
     // open it and wait for the greeting bubble. No force: the natural
     // actionability checks wait for the drawer's slide-in to settle.
-    await app.revealHoverButtons();
     await page.locator('input[placeholder="Search characters..."]').fill(charName);
     await app.characterRow(charName).locator('[title="New chat"]').click();
     await expect(page.locator('.chat-view')).toBeVisible({ timeout: 10000 });
@@ -70,13 +60,9 @@ test.describe('Mobile message editing', () => {
     await expect(page.locator('.scroll-to-bottom-btn')).toBeHidden();
 
     // Typing keeps everything in place (no scroll-to-top jump).
-    const before = await page.evaluate(
-      () => document.querySelector('.virtual-list.messages')?.scrollTop ?? -1,
-    );
+    const before = await page.evaluate(() => document.querySelector('.virtual-list.messages')?.scrollTop ?? -1);
     await page.keyboard.type(' more text', { delay: 20 });
-    const after = await page.evaluate(
-      () => document.querySelector('.virtual-list.messages')?.scrollTop ?? -1,
-    );
+    const after = await page.evaluate(() => document.querySelector('.virtual-list.messages')?.scrollTop ?? -1);
     expect(Math.abs(after - before)).toBeLessThan(80);
   });
 });

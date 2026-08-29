@@ -12,21 +12,21 @@ LLM Frontend for Power Users
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `8000` | HTTP server port |
-| `HOST` | `::` | HTTP server bind address |
-| `DATA_DIR` | `./data-v2` | Path to SQLite database and file storage |
-| `LOG_LEVEL` | `info` | Server log level (`debug`, `info`, `warn`, `error`) |
-| `TAMARI_SECRET` | *(prompted)* | Auth secret for bearer tokens and the API-key vault. On first interactive run you're asked to choose a password, which is saved to `.env`; non-interactive runs without it fall back to a random secret that does not survive restarts |
-| `DISABLE_CSRF` | `false` | When `true`, allows WebSocket connections from any `localhost`/`127.0.0.1` port (dev mode) |
-| `WS_ORIGINS` | *(empty)* | Comma-separated list of additional allowed WebSocket origins (e.g. `http://myhost:3000,https://myhost`) |
-| `HTTP_JSON_LIMIT` | `5mb` | Max body size for JSON HTTP requests |
-| `WS_MAX_PAYLOAD_BYTES` | `1048576` | Max WebSocket message payload in bytes (1 MB) |
-| `AVATAR_MAX_FILE_SIZE_BYTES` | `52428800` | Max persona avatar upload file size in bytes (50 MB) |
-| `SHUTDOWN_TIMEOUT_MS` | `5000` | Graceful shutdown timeout before force-exit |
-| `MAX_TOOL_ROUNDS` | `100` | Tool-call rounds allowed per generation turn |
-| `MAX_AGENT_DEPTH` | `4` | Maximum nesting depth for sub-agents (`run_agent`) |
+| Variable                     | Default      | Description                                                                                                                                                                                                                            |
+| ---------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                       | `8000`       | HTTP server port                                                                                                                                                                                                                       |
+| `HOST`                       | `::`         | HTTP server bind address                                                                                                                                                                                                               |
+| `DATA_DIR`                   | `./data-v2`  | Path to SQLite database and file storage                                                                                                                                                                                               |
+| `LOG_LEVEL`                  | `info`       | Server log level (`debug`, `info`, `warn`, `error`)                                                                                                                                                                                    |
+| `TAMARI_SECRET`              | _(prompted)_ | Auth secret for bearer tokens and the API-key vault. On first interactive run you're asked to choose a password, which is saved to `.env`; non-interactive runs without it fall back to a random secret that does not survive restarts |
+| `DISABLE_CSRF`               | `false`      | When `true`, allows WebSocket connections from any `localhost`/`127.0.0.1` port (dev mode)                                                                                                                                             |
+| `WS_ORIGINS`                 | _(empty)_    | Comma-separated list of additional allowed WebSocket origins (e.g. `http://myhost:3000,https://myhost`)                                                                                                                                |
+| `HTTP_JSON_LIMIT`            | `5mb`        | Max body size for JSON HTTP requests                                                                                                                                                                                                   |
+| `WS_MAX_PAYLOAD_BYTES`       | `1048576`    | Max WebSocket message payload in bytes (1 MB)                                                                                                                                                                                          |
+| `AVATAR_MAX_FILE_SIZE_BYTES` | `52428800`   | Max persona avatar upload file size in bytes (50 MB)                                                                                                                                                                                   |
+| `SHUTDOWN_TIMEOUT_MS`        | `5000`       | Graceful shutdown timeout before force-exit                                                                                                                                                                                            |
+| `MAX_TOOL_ROUNDS`            | `100`        | Tool-call rounds allowed per generation turn                                                                                                                                                                                           |
+| `MAX_AGENT_DEPTH`            | `4`          | Maximum nesting depth for sub-agents (`run_agent`)                                                                                                                                                                                     |
 
 ## License
 

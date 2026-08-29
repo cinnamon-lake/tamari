@@ -24,17 +24,17 @@ The `speak` tool reaches the model on the next generation. If `provider` is empt
 
 ### Configuration Fields
 
-| Field | Description |
-|-------|-------------|
-| `provider` | **Required.** One of `fishaudio`, `kokoro`, `elevenlabs`, `openai`, `azure`, `minimax`, `volcengine`, `alltalk`, `vits`, `silero`, `gptsovits`. |
-| `voiceId` | Voice ID (optional; provider default if empty). For Azure, the voice ShortName (e.g. `en-US-JennyNeural`); for GPT-SoVITS, the server-side reference-audio path. |
-| `baseUrl` | API base URL (optional; provider default if empty). For Azure, the regional host (e.g. `https://eastus.tts.speech.microsoft.com`). |
-| `apiKey` | API key or access token, or a vault reference (`secret:<key>`). Rendered as a password field with a vault picker. |
-| `model` | Model ID for OpenAI / ElevenLabs / MiniMax (optional). |
-| `appId` | App ID for VolcEngine (optional for other providers). |
-| `referenceAudio` | Reference audio file for voice cloning (optional). Uploaded in the form and stored as base64. |
-| `referenceText` | Transcript of the reference audio — required when `referenceAudio` is set. |
-| `requestScript` | Lua script that mutates the outgoing HTTP request — see [Request Scripts](./request-scripts.md). |
+| Field            | Description                                                                                                                                                      |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provider`       | **Required.** One of `fishaudio`, `kokoro`, `elevenlabs`, `openai`, `azure`, `minimax`, `volcengine`, `alltalk`, `vits`, `silero`, `gptsovits`.                  |
+| `voiceId`        | Voice ID (optional; provider default if empty). For Azure, the voice ShortName (e.g. `en-US-JennyNeural`); for GPT-SoVITS, the server-side reference-audio path. |
+| `baseUrl`        | API base URL (optional; provider default if empty). For Azure, the regional host (e.g. `https://eastus.tts.speech.microsoft.com`).                               |
+| `apiKey`         | API key or access token, or a vault reference (`secret:<key>`). Rendered as a password field with a vault picker.                                                |
+| `model`          | Model ID for OpenAI / ElevenLabs / MiniMax (optional).                                                                                                           |
+| `appId`          | App ID for VolcEngine (optional for other providers).                                                                                                            |
+| `referenceAudio` | Reference audio file for voice cloning (optional). Uploaded in the form and stored as base64.                                                                    |
+| `referenceText`  | Transcript of the reference audio — required when `referenceAudio` is set.                                                                                       |
+| `requestScript`  | Lua script that mutates the outgoing HTTP request — see [Request Scripts](./request-scripts.md).                                                                 |
 
 > **Note:** Which fields matter depends on the provider — check the table below. Fields you leave empty fall back to the provider's built-in defaults.
 
@@ -42,19 +42,19 @@ The `speak` tool reaches the model on the next generation. If `provider` is empt
 
 "Needs" lists what you must supply beyond picking the provider. Every provider also accepts `baseUrl` (to point at a self-hosted or proxied endpoint) and `requestScript`.
 
-| Provider (`provider` value) | Kind | Needs | Defaults |
-|------------------------------|------|-------|----------|
-| `fishaudio` — Fish Audio S2 Pro | Local | Nothing for a default local server | `baseUrl` `http://127.0.0.1:8080/v1`; `voiceId` is a reference ID from your server's voice list |
-| `kokoro` — Kokoro (FastAPI) | Local | Nothing for a default local server | `baseUrl` `http://127.0.0.1:8880/v1`; voice `af_heart` |
-| `elevenlabs` — ElevenLabs | Cloud | `apiKey` | `baseUrl` `https://api.elevenlabs.io`; voice `21m00Tcm4TlvDq8ikWAM` ("Rachel"); `model` `eleven_multilingual_v2` |
-| `openai` — OpenAI | Cloud | `apiKey` | `baseUrl` `https://api.openai.com`; voice `alloy`; `model` `gpt-4o-mini-tts` |
-| `azure` — Azure Speech | Cloud | `apiKey` (subscription key) | `baseUrl` `https://eastus.tts.speech.microsoft.com`; voice `en-US-JennyNeural` |
-| `minimax` — MiniMax | Cloud | `apiKey` | `baseUrl` `https://api.minimax.io`; voice `English_expressive_narrator`; `model` `speech-02-hd` |
-| `volcengine` — VolcEngine | Cloud | `apiKey` (OpenSpeech Access Token) **and** `appId` | `baseUrl` `https://openspeech.bytedance.com`; voice `zh_female_wanwanxiaohe` |
-| `alltalk` — AllTalk | Local | Nothing for a default local server | `baseUrl` `http://127.0.0.1:7851`; voice `alloy` |
-| `vits` — VITS (simple-api) | Local | Nothing for a default local server | `baseUrl` `http://127.0.0.1:23456`; voice is a numeric speaker ID (`0` if empty) |
-| `silero` — Silero | Local | Nothing for a default local server | `baseUrl` `http://127.0.0.1:8001`; voice `en_0` |
-| `gptsovits` — GPT-SoVITS | Local | Nothing for a default local server | `baseUrl` `http://127.0.0.1:9880`; set `voiceId` to the server-side reference-audio path |
+| Provider (`provider` value)     | Kind  | Needs                                              | Defaults                                                                                                         |
+| ------------------------------- | ----- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `fishaudio` — Fish Audio S2 Pro | Local | Nothing for a default local server                 | `baseUrl` `http://127.0.0.1:8080/v1`; `voiceId` is a reference ID from your server's voice list                  |
+| `kokoro` — Kokoro (FastAPI)     | Local | Nothing for a default local server                 | `baseUrl` `http://127.0.0.1:8880/v1`; voice `af_heart`                                                           |
+| `elevenlabs` — ElevenLabs       | Cloud | `apiKey`                                           | `baseUrl` `https://api.elevenlabs.io`; voice `21m00Tcm4TlvDq8ikWAM` ("Rachel"); `model` `eleven_multilingual_v2` |
+| `openai` — OpenAI               | Cloud | `apiKey`                                           | `baseUrl` `https://api.openai.com`; voice `alloy`; `model` `gpt-4o-mini-tts`                                     |
+| `azure` — Azure Speech          | Cloud | `apiKey` (subscription key)                        | `baseUrl` `https://eastus.tts.speech.microsoft.com`; voice `en-US-JennyNeural`                                   |
+| `minimax` — MiniMax             | Cloud | `apiKey`                                           | `baseUrl` `https://api.minimax.io`; voice `English_expressive_narrator`; `model` `speech-02-hd`                  |
+| `volcengine` — VolcEngine       | Cloud | `apiKey` (OpenSpeech Access Token) **and** `appId` | `baseUrl` `https://openspeech.bytedance.com`; voice `zh_female_wanwanxiaohe`                                     |
+| `alltalk` — AllTalk             | Local | Nothing for a default local server                 | `baseUrl` `http://127.0.0.1:7851`; voice `alloy`                                                                 |
+| `vits` — VITS (simple-api)      | Local | Nothing for a default local server                 | `baseUrl` `http://127.0.0.1:23456`; voice is a numeric speaker ID (`0` if empty)                                 |
+| `silero` — Silero               | Local | Nothing for a default local server                 | `baseUrl` `http://127.0.0.1:8001`; voice `en_0`                                                                  |
+| `gptsovits` — GPT-SoVITS        | Local | Nothing for a default local server                 | `baseUrl` `http://127.0.0.1:9880`; set `voiceId` to the server-side reference-audio path                         |
 
 Provider-specific notes:
 

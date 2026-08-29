@@ -103,14 +103,12 @@ describe('WriteSerializingClient', () => {
   });
 
   it('keeps ordering: queued writes apply in acquisition order', async () => {
-    await client.execute('DELETE FROM t WHERE v LIKE \'ord-%\'');
+    await client.execute("DELETE FROM t WHERE v LIKE 'ord-%'");
     const writes = Array.from({ length: 10 }, (_, i) =>
       client.execute({ sql: `INSERT INTO t (v) VALUES ('ord-${i}')`, args: [] }),
     );
     await Promise.all(writes);
     const rs = await client.execute("SELECT v FROM t WHERE v LIKE 'ord-%' ORDER BY v");
-    expect(rs.rows.map((r) => r.v)).toEqual(
-      Array.from({ length: 10 }, (_, i) => `ord-${i}`),
-    );
+    expect(rs.rows.map((r) => r.v)).toEqual(Array.from({ length: 10 }, (_, i) => `ord-${i}`));
   });
 });

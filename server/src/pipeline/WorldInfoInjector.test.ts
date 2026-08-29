@@ -366,11 +366,7 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
       const entries = [makeEntry({ id: '1', keys: ['dragon'], cooldown: 3 })];
       const result = injector.scan({
         entries,
-        chatHistory: [
-          makeMessage('x'),
-          makeAssistantMessage('y', ['1']),
-          makeMessage('dragon'),
-        ],
+        chatHistory: [makeMessage('x'), makeAssistantMessage('y', ['1']), makeMessage('dragon')],
         tokenCounter: dummyTokenCounter,
       });
       // Entry was activated 1 message ago (cooldown=3), should not fire
@@ -402,11 +398,7 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
       const entries = [makeEntry({ id: '1', keys: ['dragon'], sticky: 3 })];
       const result = injector.scan({
         entries,
-        chatHistory: [
-          makeMessage('x'),
-          makeAssistantMessage('y', ['1']),
-          makeMessage('no dragon here'),
-        ],
+        chatHistory: [makeMessage('x'), makeAssistantMessage('y', ['1']), makeMessage('no dragon here')],
         tokenCounter: dummyTokenCounter,
       });
       // Entry was activated 1 message ago (sticky=3), should stay active
@@ -436,19 +428,13 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
       const entries = [makeEntry({ id: '1', keys: ['dragon'], sticky: 1 })];
       const result = injector.scan({
         entries,
-        chatHistory: [
-          makeMessage('x'),
-          makeAssistantMessage('y', ['1']),
-          makeMessage('a'),
-          makeMessage('dragon'),
-        ],
+        chatHistory: [makeMessage('x'), makeAssistantMessage('y', ['1']), makeMessage('a'), makeMessage('dragon')],
         tokenCounter: dummyTokenCounter,
       });
       // Sticky expired (activated 2 messages ago, sticky=1), but trigger is present
       expect(result.before.length).toBe(1);
       expect(result.activatedEntryIds).toContain('1');
     });
-
   });
 
   describe('combined effects', () => {
@@ -456,11 +442,7 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
       const entries = [makeEntry({ id: '1', keys: ['dragon'], sticky: 3, cooldown: 5 })];
       const result = injector.scan({
         entries,
-        chatHistory: [
-          makeMessage('x'),
-          makeAssistantMessage('y', ['1']),
-          makeMessage('no dragon here'),
-        ],
+        chatHistory: [makeMessage('x'), makeAssistantMessage('y', ['1']), makeMessage('no dragon here')],
         tokenCounter: dummyTokenCounter,
       });
       // Sticky should keep it active despite cooldown
@@ -471,12 +453,7 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
       const entries = [makeEntry({ id: '1', keys: ['dragon'], sticky: 1, cooldown: 3 })];
       const result = injector.scan({
         entries,
-        chatHistory: [
-          makeMessage('x'),
-          makeAssistantMessage('y', ['1']),
-          makeMessage('a'),
-          makeMessage('dragon'),
-        ],
+        chatHistory: [makeMessage('x'), makeAssistantMessage('y', ['1']), makeMessage('a'), makeMessage('dragon')],
         tokenCounter: dummyTokenCounter,
       });
       // Sticky expired (2 messages ago), cooldown=3 should block re-activation
@@ -488,11 +465,7 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
       const entries = [makeEntry({ id: '1', keys: ['dragon'], delay: 5, sticky: 10 })];
       const result = injector.scan({
         entries,
-        chatHistory: [
-          makeMessage('x'),
-          makeAssistantMessage('y', ['1']),
-          makeMessage('dragon'),
-        ],
+        chatHistory: [makeMessage('x'), makeAssistantMessage('y', ['1']), makeMessage('dragon')],
         tokenCounter: dummyTokenCounter,
       });
       // Only 3 messages total, delay=5 should block everything
@@ -506,11 +479,7 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
       // Simulate a branch where the entry was NOT activated in the parent
       const result = injector.scan({
         entries,
-        chatHistory: [
-          makeMessage('x'),
-          makeAssistantMessage('y', ['other-entry']),
-          makeMessage('no monsters here'),
-        ],
+        chatHistory: [makeMessage('x'), makeAssistantMessage('y', ['other-entry']), makeMessage('no monsters here')],
         tokenCounter: dummyTokenCounter,
       });
       // No activation of entry 1 on this branch, so sticky should not apply
@@ -522,12 +491,7 @@ describe('WorldInfoInjector — sticky, cooldown, delay', () => {
       // Parent branch: entry activated, then 2 more messages
       const parentResult = injector.scan({
         entries,
-        chatHistory: [
-          makeMessage('x'),
-          makeAssistantMessage('y', ['1']),
-          makeMessage('a'),
-          makeMessage('b'),
-        ],
+        chatHistory: [makeMessage('x'), makeAssistantMessage('y', ['1']), makeMessage('a'), makeMessage('b')],
         tokenCounter: dummyTokenCounter,
       });
       // Parent: activated 2 messages ago, sticky=3 → still active

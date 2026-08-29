@@ -9,7 +9,7 @@ import type { InlineContentPart } from '../../backends/BackendAdapter.js';
 import { applyRequestScript, RequestScriptError } from '../../backends/RequestScript.js';
 import { getLogger } from '../../lib/logger.js';
 
-const logger = getLogger('forge-image');
+const logger = getLogger('services/templates/ForgeImageTemplate');
 
 /**
  * Arguments the model may pass to `generate_image`. Single source of truth:
@@ -62,13 +62,15 @@ export class ForgeImageTemplate implements ToolTemplate {
             type: 'string',
             format: 'file',
             multiple: true,
-            description: 'Optional reference images (img2img, ControlNet, etc.). Available in the Lua script as the `files` table (array of base64 strings).',
+            description:
+              'Optional reference images (img2img, ControlNet, etc.). Available in the Lua script as the `files` table (array of base64 strings).',
             default: [],
           },
           requestScript: {
             type: 'string',
             format: 'textarea',
-            description: 'Lua script to mutate the outgoing HTTP request. Receives `request.url`, `request.method`, `request.headers`, and `request.body`. Uploaded images are available as `files` (array of base64 strings).',
+            description:
+              'Lua script to mutate the outgoing HTTP request. Receives `request.url`, `request.method`, `request.headers`, and `request.body`. Uploaded images are available as `files` (array of base64 strings).',
             default: '',
           },
         },
@@ -168,7 +170,12 @@ export class ForgeImageTemplate implements ToolTemplate {
 
     let attachment: Attachment;
     try {
-      attachment = await this.deps.attachments.create({ id: attachmentId, messageId: null, mimeType: 'image/png', filePath });
+      attachment = await this.deps.attachments.create({
+        id: attachmentId,
+        messageId: null,
+        mimeType: 'image/png',
+        filePath,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.warn({ err: msg }, 'ForgeImageTemplate: failed to create attachment');

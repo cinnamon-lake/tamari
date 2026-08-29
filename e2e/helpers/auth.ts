@@ -6,6 +6,11 @@ import { expect, type Page, type Locator } from '@playwright/test';
 
 export const TEST_SECRET = 'e2e-test-secret';
 
+/** Authorization header for direct REST calls against the test server. */
+export function authHeaders(): Record<string, string> {
+  return { Authorization: `Bearer ${TEST_SECRET}` };
+}
+
 /**
  * Log in via the auth modal when it shows. Contexts are usually
  * pre-authenticated via storageState (see global-setup.ts), in which case the

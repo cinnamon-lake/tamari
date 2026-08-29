@@ -37,16 +37,10 @@
  * Created quick replies are deleted in afterEach so their triggers can't
  * leak into other specs (QRs are global and the e2e server is shared).
  */
-import { test, expect } from '../fixtures/base.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import type { Page } from '@playwright/test';
-import { login } from '../helpers/auth.js';
 import { createLuaQuickReply, deleteLuaQuickReply, clickQuickReply } from '../helpers/quickReplies.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 /** createLuaQuickReply + checking one Auto-execute trigger checkbox. */
 async function createLuaQuickReplyWithTrigger(
@@ -61,18 +55,14 @@ async function createLuaQuickReplyWithTrigger(
   await expect(editor).toBeVisible();
   await editor.locator('#qr-label').fill(label);
   await editor.locator('#qr-script').fill(script);
-  const triggerBox = editor
-    .locator('label.qr-checkbox', { hasText: triggerLabel })
-    .locator('input[type="checkbox"]');
+  const triggerBox = editor.locator('label.qr-checkbox', { hasText: triggerLabel }).locator('input[type="checkbox"]');
   await triggerBox.check();
   await expect(triggerBox).toBeChecked();
   await editor.locator('button.btn-primary:has-text("Save")').click();
   await expect(editor).not.toBeVisible();
 
   // Sync point: the quickreply.created broadcast renders the bar button.
-  await expect(
-    page.locator('.quick-reply-bar .quick-reply-btn').filter({ hasText: label }),
-  ).toBeVisible();
+  await expect(page.locator('.quick-reply-bar .quick-reply-btn').filter({ hasText: label })).toBeVisible();
 }
 
 /**
@@ -99,19 +89,13 @@ async function deleteQuickReply(page: Page, label: string): Promise<void> {
 test.describe('Quick Reply auto-execute triggers', () => {
   const createdLabels: string[] = [];
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     for (const label of createdLabels.splice(0)) {
       await deleteQuickReply(page, label);
     }
   });
 
-  test('a User-message quick reply auto-executes without being clicked', async ({ page }) => {
-    const app = new App(page);
+  test('a User-message quick reply auto-executes without being clicked', async ({ page, app }) => {
     // Empty group chat: generation short-circuits before locking the chat, so
     // the auto-execute QR deterministically wins the lock (see header).
     await createEmptyGroupChat(page, uniqueName('QR Auto Group'));
@@ -129,13 +113,12 @@ test.describe('Quick Reply auto-execute triggers', () => {
     // Sending any message fires the trigger (generationHandlers action.send →
     // runAutoExecute); the narrator bubble appears with no QR button click.
     await app.sendUserMessage('auto trigger ok');
-    await expect(
-      page.locator('.message-bubble.system .message-content', { hasText: token }),
-    ).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('.message-bubble.system .message-content', { hasText: token })).toBeVisible({
+      timeout: 15000,
+    });
   });
 
-  test('a manually clicked erroring quick reply surfaces an error toast', async ({ page }) => {
-    const app = new App(page);
+  test('a manually clicked erroring quick reply surfaces an error toast', async ({ page, app }) => {
     const charName = uniqueName('QR Manual Err Char');
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 
@@ -148,8 +131,10 @@ test.describe('Quick Reply auto-execute triggers', () => {
     await expect(page.locator('.toast-container')).toContainText(token, { timeout: 15000 });
   });
 
-  test('an auto-executed erroring quick reply surfaces script.error (silent only hides busy-lock)', async ({ page }) => {
-    const app = new App(page);
+  test('an auto-executed erroring quick reply surfaces script.error (silent only hides busy-lock)', async ({
+    page,
+    app,
+  }) => {
     // Empty group chat, like the positive auto-execute test: the QR runs
     // deterministically instead of racing the generation for the chat lock.
     await createEmptyGroupChat(page, uniqueName('QR Auto Err Group'));
@@ -165,9 +150,7 @@ test.describe('Quick Reply auto-execute triggers', () => {
     await expect(page.locator('.toast-container')).toContainText(token, { timeout: 15000 });
   });
 
-  test('a Before-generation quick reply executes (lifecycle callbacks run outside the lock)', async ({ page }) => {
-    const app = new App(page);
-    await configureMockBackend(page);
+  test('a Before-generation quick reply executes (lifecycle callbacks run outside the lock)', async ({ page, app }) => {
     const charName = uniqueName('QR Before Char');
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 

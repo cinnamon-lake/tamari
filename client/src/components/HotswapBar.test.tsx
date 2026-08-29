@@ -49,15 +49,8 @@ describe('HotswapBar', () => {
 
   it('renders recently used characters sorted by latest chat', () => {
     const now = Date.now();
-    setState('characters', [
-      makeChar('c1', 'Alice'),
-      makeChar('c2', 'Bob'),
-      makeChar('c3', 'Charlie'),
-    ]);
-    setState('chats', [
-      makeChat('ch1', 'c1', 'Chat 1', now - 1000),
-      makeChat('ch2', 'c2', 'Chat 2', now),
-    ]);
+    setState('characters', [makeChar('c1', 'Alice'), makeChar('c2', 'Bob'), makeChar('c3', 'Charlie')]);
+    setState('chats', [makeChat('ch1', 'c1', 'Chat 1', now - 1000), makeChat('ch2', 'c2', 'Chat 2', now)]);
 
     render(() => <HotswapBar />);
     expect(screen.getByText('Bob')).toBeInTheDocument();

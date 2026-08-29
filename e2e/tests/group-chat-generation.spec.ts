@@ -15,16 +15,11 @@
  *    are patched over the app's WebSocket bus (`chat.update` with a merged
  *    metadata patch), mirroring what the panel's updateStrategy() sends.
  */
-import { test, expect } from '../fixtures/base.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import type { Page } from '@playwright/test';
-import { login } from '../helpers/auth.js';
 import { App } from '../helpers/app.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
 import { getLastLlmRequest, waitForNextLlmRequest, resetLlmRequests } from '../helpers/llm.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 async function fillPromptPopup(page: Page, value: string) {
   const popup = page.locator('.popup-modal');
@@ -117,7 +112,7 @@ async function patchGroupChatSettings(page: Page, chatId: string, patch: Record<
               reject(new Error(msg.message ?? 'chat.update failed'));
             }
           } catch (err) {
-            reject(err);
+            reject(err instanceof Error ? err : new Error(String(err)));
           }
         };
 
@@ -149,8 +144,7 @@ interface GroupSetup {
 }
 
 /** Create two characters and a group chat containing both, in insertion order A then B. */
-async function setupGroupWithTwoMembers(page: Page): Promise<GroupSetup> {
-  const app = new App(page);
+async function setupGroupWithTwoMembers(page: Page, app: App): Promise<GroupSetup> {
   const charA = uniqueName('GrpGen Alpha');
   const charB = uniqueName('GrpGen Beta');
   const groupName = uniqueName('GrpGen Group');
@@ -195,7 +189,17 @@ async function setupGroupWithTwoMembers(page: Page): Promise<GroupSetup> {
     { id: charBId, name: charB },
   ].sort((a, b) => (a.id < b.id ? -1 : 1));
 
-  return { app, charA, charB, charAId, charBId, firstName: byId[0]!.name, secondName: byId[1]!.name, groupName, chatId };
+  return {
+    app,
+    charA,
+    charB,
+    charAId,
+    charBId,
+    firstName: byId[0]!.name,
+    secondName: byId[1]!.name,
+    groupName,
+    chatId,
+  };
 }
 
 /** Wait until exactly `count` assistant bubbles exist, all with landed text and no active stream. */
@@ -238,10 +242,17 @@ async function sendUserMessageRobust(app: App, page: Page, text: string) {
       // before resending, otherwise the resend double-processes the message:
       // two user bubbles, two generations, and an extra assistant reply that
       // breaks the one-reply-per-send assertions below.
-      await expect(userBubbles).toHaveCount(before + 1, { timeout: 20000 }).catch(() => {});
+      await expect(userBubbles)
+        .toHaveCount(before + 1, { timeout: 20000 })
+        .catch(() => {});
       if (
         (await userBubbles.count()) === before + 1 &&
-        (await app.lastBubble('user').innerText().catch(() => '')).includes(text)
+        (
+          await app
+            .lastBubble('user')
+            .innerText()
+            .catch(() => '')
+        ).includes(text)
       ) {
         return;
       }
@@ -262,18 +273,12 @@ async function turnNumber(bubble: ReturnType<Page['locator']>): Promise<number> 
 test.describe('Group Chat Generation', () => {
   test.describe.configure({ mode: 'serial', timeout: 120000 });
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('NATURAL strategy: both members reply in member order', async ({ page }) => {
-    const { app, firstName, secondName } = await setupGroupWithTwoMembers(page);
+  test('NATURAL strategy: both members reply in member order', async ({ page, app }) => {
+    const { firstName, secondName } = await setupGroupWithTwoMembers(page, app);
 
     // NATURAL is the server default (DEFAULT_GROUP_SETTINGS.activationStrategy).
     const panel = await openGroupPanel(page);
@@ -302,8 +307,8 @@ test.describe('Group Chat Generation', () => {
     expect(turnSecond).toBeGreaterThan(turnFirst);
   });
 
-  test('LIST strategy: members alternate round-robin, one reply per send', async ({ page }) => {
-    const { app, firstName, secondName } = await setupGroupWithTwoMembers(page);
+  test('LIST strategy: members alternate round-robin, one reply per send', async ({ page, app }) => {
+    const { firstName, secondName } = await setupGroupWithTwoMembers(page, app);
 
     await setStrategyViaPanel(page, 'LIST');
 
@@ -324,8 +329,8 @@ test.describe('Group Chat Generation', () => {
     expect(cap.count).toBe(cap0.count + 2);
   });
 
-  test('MANUAL strategy: only the selected member replies', async ({ page }) => {
-    const { app, charB, charBId, chatId } = await setupGroupWithTwoMembers(page);
+  test('MANUAL strategy: only the selected member replies', async ({ page, app }) => {
+    const { charB, charBId, chatId } = await setupGroupWithTwoMembers(page, app);
 
     // manualCharacterId has no panel UI — patch it (plus the strategy) over WS.
     await patchGroupChatSettings(page, chatId, { activationStrategy: 'MANUAL', manualCharacterId: charBId });
@@ -340,8 +345,8 @@ test.describe('Group Chat Generation', () => {
     expect(cap.count).toBe(cap0.count + 1);
   });
 
-  test('POOLED strategy with min=max=1: exactly one member replies', async ({ page }) => {
-    const { app, chatId } = await setupGroupWithTwoMembers(page);
+  test('POOLED strategy with min=max=1: exactly one member replies', async ({ page, app }) => {
+    const { chatId } = await setupGroupWithTwoMembers(page, app);
 
     // pooledMinMembers/pooledMaxMembers have no panel UI — patch them over WS.
     await patchGroupChatSettings(page, chatId, {
@@ -360,8 +365,8 @@ test.describe('Group Chat Generation', () => {
     expect(cap.count).toBe(cap0.count + 1);
   });
 
-  test('strategy changes via the panel persist across reopen and reload', async ({ page }) => {
-    const { groupName } = await setupGroupWithTwoMembers(page);
+  test('strategy changes via the panel persist across reopen and reload', async ({ page, app }) => {
+    const { groupName } = await setupGroupWithTwoMembers(page, app);
 
     // Back and forth — each call already asserts persistence across a panel
     // close/reopen (the select re-reads server-broadcast state on remount).

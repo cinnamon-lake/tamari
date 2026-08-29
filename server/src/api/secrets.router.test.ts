@@ -3,6 +3,7 @@ import express from 'express';
 import request from 'supertest';
 import type { SecretService } from '../services/SecretService.js';
 import { createSecretsRouter } from './secrets.js';
+import { errorHandler } from '../middleware/errorHandler.js';
 
 const PASSWORD = 'test-password';
 
@@ -26,6 +27,7 @@ function createApp(secretService: SecretService, kind?: string) {
     });
   }
   app.use('/secrets', createSecretsRouter(secretService, PASSWORD));
+  app.use(errorHandler);
   return app;
 }
 
@@ -48,17 +50,13 @@ describe('createSecretsRouter', () => {
 
     const res = await request(app).get('/secrets').expect(200);
 
-    expect(res.body).toEqual([
-      { key: 'api_key', label: 'OpenAI', masked: true, hint: '••••alue' },
-    ]);
+    expect(res.body).toEqual([{ key: 'api_key', label: 'OpenAI', masked: true, hint: '••••alue' }]);
     expect(JSON.stringify(res.body)).not.toContain('decrypted-value');
     expect(secretService.list).toHaveBeenCalledWith(PASSWORD);
   });
 
   it('GET / returns plaintext only for the master credential', async () => {
-    vi.mocked(secretService.list).mockResolvedValue([
-      { key: 'api_key', value: 'decrypted-value', label: undefined },
-    ]);
+    vi.mocked(secretService.list).mockResolvedValue([{ key: 'api_key', value: 'decrypted-value', label: undefined }]);
     const masterApp = createApp(secretService, 'master');
 
     const res = await request(masterApp).get('/secrets').expect(200);
@@ -93,10 +91,7 @@ describe('createSecretsRouter', () => {
   it('returns a generic 500 without internals when the service fails', async () => {
     vi.mocked(secretService.set).mockRejectedValue(new Error('cipher exploded with super-secret-value'));
 
-    const res = await request(app)
-      .post('/secrets')
-      .send({ key: 'api_key', value: 'super-secret-value' })
-      .expect(500);
+    const res = await request(app).post('/secrets').send({ key: 'api_key', value: 'super-secret-value' }).expect(500);
 
     expect(res.body).toEqual({ error: 'Failed to set secret' });
     expect(JSON.stringify(res.body)).not.toContain('super-secret-value');

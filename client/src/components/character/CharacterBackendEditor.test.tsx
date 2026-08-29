@@ -11,19 +11,27 @@ describe('parseCharacterBackendLogic', () => {
   it('returns defaults when the extension is absent or malformed', () => {
     expect(parseCharacterBackendLogic(undefined)).toEqual({ enabled: false, luaSource: '', files: {} });
     expect(parseCharacterBackendLogic({})).toEqual({ enabled: false, luaSource: '', files: {} });
-    expect(parseCharacterBackendLogic({ contextualBackend: 'nope' })).toEqual({ enabled: false, luaSource: '', files: {} });
+    expect(parseCharacterBackendLogic({ contextualBackend: 'nope' })).toEqual({
+      enabled: false,
+      luaSource: '',
+      files: {},
+    });
   });
 
   it('parses a well-formed contextualBackend blob', () => {
-    expect(
-      parseCharacterBackendLogic({ contextualBackend: { enabled: true, luaSource: '-- lua' } }),
-    ).toEqual({ enabled: true, luaSource: '-- lua', files: {} });
+    expect(parseCharacterBackendLogic({ contextualBackend: { enabled: true, luaSource: '-- lua' } })).toEqual({
+      enabled: true,
+      luaSource: '-- lua',
+      files: {},
+    });
   });
 
   it('coerces non-boolean enabled and non-string luaSource to safe defaults', () => {
-    expect(
-      parseCharacterBackendLogic({ contextualBackend: { enabled: 1, luaSource: 42 } }),
-    ).toEqual({ enabled: false, luaSource: '', files: {} });
+    expect(parseCharacterBackendLogic({ contextualBackend: { enabled: 1, luaSource: 42 } })).toEqual({
+      enabled: false,
+      luaSource: '',
+      files: {},
+    });
   });
 
   it('parses the files map and drops garbage entries tolerantly', () => {
@@ -49,9 +57,11 @@ describe('parseCharacterBackendLogic', () => {
   });
 
   it('treats non-object files as absent', () => {
-    expect(
-      parseCharacterBackendLogic({ contextualBackend: { enabled: true, luaSource: '', files: 'nope' } }),
-    ).toEqual({ enabled: true, luaSource: '', files: {} });
+    expect(parseCharacterBackendLogic({ contextualBackend: { enabled: true, luaSource: '', files: 'nope' } })).toEqual({
+      enabled: true,
+      luaSource: '',
+      files: {},
+    });
   });
 });
 
@@ -96,9 +106,7 @@ describe('CharacterBackendEditor', () => {
 
   it('emits onChange when the Lua source is edited', () => {
     const onChange = vi.fn();
-    render(() => (
-      <CharacterBackendEditor value={{ enabled: true, luaSource: '', files: {} }} onChange={onChange} />
-    ));
+    render(() => <CharacterBackendEditor value={{ enabled: true, luaSource: '', files: {} }} onChange={onChange} />);
     fireEvent.input(screen.getByPlaceholderText(/function generate/), {
       target: { value: 'function generate(p, c) end' },
     });

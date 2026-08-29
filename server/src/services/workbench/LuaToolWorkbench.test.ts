@@ -94,7 +94,11 @@ describe('LuaToolWorkbench', () => {
     it('validates, saves, and returns the parsed definition', async () => {
       const { template, bus, registry, store } = makeTemplate();
       const res = await template.execute('luatool_create', { name: 'Echo', code: echoCode });
-      const parsed = JSON.parse(res.content as string) as { id: string; name: string; definition: { tools: Array<{ name: string }> } };
+      const parsed = JSON.parse(res.content as string) as {
+        id: string;
+        name: string;
+        definition: { tools: Array<{ name: string }> };
+      };
       expect(parsed.id).toBeTruthy();
       expect(parsed.definition.tools[0]?.name).toBe('echo_test');
       expect(store.size).toBe(1);
@@ -153,7 +157,11 @@ describe('LuaToolWorkbench', () => {
 
     it('runs raw unsaved code', async () => {
       const { template } = makeTemplate();
-      const res = await template.execute('luatool_test', { code: echoCode, toolName: 'echo_test', args: { text: 'raw' } });
+      const res = await template.execute('luatool_test', {
+        code: echoCode,
+        toolName: 'echo_test',
+        args: { text: 'raw' },
+      });
       const parsed = JSON.parse(res.content as string) as { content: string };
       expect(parsed.content).toBe('echo:raw os:nil');
     });
@@ -206,7 +214,11 @@ describe('LuaToolWorkbench', () => {
         registry: { invalidateLuaCache: vi.fn() },
         bus: { broadcast: vi.fn() } as never,
       });
-      await template.execute('luatool_test', { code: 'Tool = {}', toolName: 't' }, { chatId: 'chat1', clientId: 'client1' });
+      await template.execute(
+        'luatool_test',
+        { code: 'Tool = {}', toolName: 't' },
+        { chatId: 'chat1', clientId: 'client1' },
+      );
       expect(luaExecutor.execute).toHaveBeenCalledWith(
         'Tool = {}',
         't',

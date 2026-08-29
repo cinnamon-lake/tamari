@@ -93,9 +93,7 @@ describe('serializeResponseForm', () => {
   it('escapes free text so closing tags stay unambiguous', () => {
     const form = makeForm('<textarea name="flourish">he said "</flourish>" & <b>ran</b></textarea>');
     const xml = serializeResponseForm(form)!;
-    expect(xml).toContain(
-      '<flourish>he said &quot;&lt;/flourish&gt;&quot; &amp; &lt;b&gt;ran&lt;/b&gt;</flourish>',
-    );
+    expect(xml).toContain('<flourish>he said &quot;&lt;/flourish&gt;&quot; &amp; &lt;b&gt;ran&lt;/b&gt;</flourish>');
   });
 
   it('coerces invalid field names to valid XML names', () => {

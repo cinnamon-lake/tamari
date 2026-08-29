@@ -14,15 +14,18 @@
 - Anything that needs `justify-content: space-between` or `margin-left: auto`
 
 **Use `display: block` for:**
+
 - Plain text flow (paragraphs, headings, articles)
 - Single elements that don't align siblings
 
 **Avoid:**
+
 - `float`
 - `inline-block` alignment hacks
 - Absolute positioning unless genuinely overlaying (modals, popups, drag indicators)
 
 **Grid is allowed for:**
+
 - Character lists (auto-fill cards)
 - Dashboards / multi-column layouts
 - Anywhere 2D placement is semantically correct
@@ -50,6 +53,7 @@
 ```
 
 **Margins are only for:**
+
 - Pushing a single element away from its siblings (e.g., `margin-left: auto` to right-align)
 - Collapsing space between unrelated sections (rare)
 
@@ -135,6 +139,7 @@ This lives in the global reset and means you never need `&:first-child { margin-
 ```
 
 **Allowed fixed sizes:**
+
 - Avatars (`--avatar-size`)
 - Icons in buttons (`36px` touch targets)
 - Modals (`max-width`, `max-height`)
@@ -158,6 +163,7 @@ color: #e0e0e0;
 ```
 
 **Allowed exceptions:**
+
 - `rgba(...)` for backdrops / overlays where opacity is part of the effect
 - `transparent` and `currentColor`
 - `url(...)` gradients in theme tokens (if defined in `tokens.css`)
@@ -207,13 +213,13 @@ line-height: 1.6;
 
 **No magic numbers.** Use the token scale:
 
-| Token | Use |
-|-------|-----|
+| Token        | Use                    |
+| ------------ | ---------------------- |
 | `z-dropdown` | Menus, select popovers |
-| `z-sticky` | Sticky headers |
-| `z-modal` | Modals, dialogs |
-| `z-popover` | Tooltips, toasts |
-| `z-overlay` | Backdrop scrims |
+| `z-sticky`   | Sticky headers         |
+| `z-modal`    | Modals, dialogs        |
+| `z-popover`  | Tooltips, toasts       |
+| `z-overlay`  | Backdrop scrims        |
 
 ```css
 /* Good */
@@ -253,7 +259,7 @@ z-index: 1050;
 
 ## 12. Component Modifiers: Explicit Classes
 
-**App-state changes get a class. No attribute selectors or `:has()` to reflect *application* state.**
+**App-state changes get a class. No attribute selectors or `:has()` to reflect _application_ state.**
 
 ```css
 /* Good — app state is a modifier class toggled by the component */
@@ -269,7 +275,7 @@ button[aria-pressed="true"] {
 }
 ```
 
-**Exception — native widget state.** Selectors that read a *native* control's own state are permitted, because that state is the element's own (not app state duplicated into markup) and cannot drift from it:
+**Exception — native widget state.** Selectors that read a _native_ control's own state are permitted, because that state is the element's own (not app state duplicated into markup) and cannot drift from it:
 
 - `details[open]`, `summary` — the native disclosure widget.
 - `:has(input:checked)`, `:has(input:disabled)` — a container reflecting a nested native control's real state.
@@ -284,6 +290,7 @@ The ban is on `[data-active="true"]` / `[aria-pressed]`-style selectors that dup
 **Prefer container queries for components that appear in multiple contexts.**
 
 **If using breakpoints, only two:**
+
 - `768px` — mobile / tablet flip
 - `1200px` — wide desktop adjustments
 
@@ -314,11 +321,13 @@ When a class moves from `global.css` into a dedicated component CSS file (e.g. `
 ## 14. Minimal DOM — Divs Only for Semantics or Flexbox
 
 **Add a wrapper `div` only when:**
+
 - You need a flex/grid container to distribute/align children
 - The element carries semantic meaning (`<button>`, `<label>`, `<nav>`)
 - ARIA requires a specific role container
 
 **Don't add a div just to:**
+
 - Hang a class on it when the parent could handle it
 - Create a "layout shim" that `gap` or `padding` on the parent would solve
 - Apply `margin` that could be `gap` on the parent instead
@@ -346,6 +355,7 @@ When a class moves from `global.css` into a dedicated component CSS file (e.g. `
 ## 15. No Inline Styles
 
 **Inline styles are banned except for:**
+
 - Dynamic positioning (`top`, `left`, `transform`) for drag/resize/virtual-scroll
 - Dynamic sizing (`width`, `height`) for progress bars, charts, virtual lists
 - User-defined colors (`background-color: ${qr.color}`) where the value is data, not design
@@ -386,11 +396,11 @@ transition: transform var(--transition-fast);
 transition: transform 0.15s ease;
 ```
 
-| Token | Duration | Use |
-|-------|----------|-----|
-| `--transition-fast` | 100ms | Hover states, micro-interactions |
-| `--transition-base` | 200ms | Toggles, dropdowns |
-| `--transition-slow` | 300ms | Modals, page transitions |
+| Token               | Duration | Use                              |
+| ------------------- | -------- | -------------------------------- |
+| `--transition-fast` | 100ms    | Hover states, micro-interactions |
+| `--transition-base` | 200ms    | Toggles, dropdowns               |
+| `--transition-slow` | 300ms    | Modals, page transitions         |
 
 ---
 
@@ -426,6 +436,7 @@ Since users can write custom CSS, `!important` in our code starts an irreversibl
 ```
 
 If you find yourself reaching for `!important`, the real problem is usually:
+
 - A selector with too much specificity elsewhere
 - Inline styles that should be classes
 - A missing modifier class
@@ -461,6 +472,7 @@ If you find yourself reaching for `!important`, the real problem is usually:
 **Why:** Component-scoped variables keep the `:root` namespace clean and are self-documenting. You can override them for modifiers without repeating property declarations.
 
 **Rules:**
+
 - Global tokens (colors, spacing, radii, shadows, typography, z-index) → `:root`
 - Component internals (layout math, local overrides, computed values) → component class
 - Never define `--my-component-*` variables on `:root`
@@ -487,6 +499,7 @@ If you find yourself reaching for `!important`, the real problem is usually:
 ```
 
 **Rules:**
+
 - No IDs in component CSS (`#submit` is a specificity landmine)
 - Max two simple selectors per rule
 - Never use `!important` (see §18)
@@ -496,15 +509,15 @@ If you find yourself reaching for `!important`, the real problem is usually:
 
 ## 21. Base Classes: One Per Element Kind
 
-Every element of a given kind carries a **base class**. The base holds the *structure* every instance wants — display model, cursor, font, focus ring, min-size. The *skin* (color, background, border) lives in modifier classes applied **alongside** the base.
+Every element of a given kind carries a **base class**. The base holds the _structure_ every instance wants — display model, cursor, font, focus ring, min-size. The _skin_ (color, background, border) lives in modifier classes applied **alongside** the base.
 
 **Canonical bases:**
 
-| Base | Covers |
-|------|--------|
-| `.btn` | Buttons of every kind |
-| `.text-input` | Text fields, `<textarea>`, `<select>` (one base for all text-entry controls) |
-| `.section-heading` | Section/page headings |
+| Base               | Covers                                                                       |
+| ------------------ | ---------------------------------------------------------------------------- |
+| `.btn`             | Buttons of every kind                                                        |
+| `.text-input`      | Text fields, `<textarea>`, `<select>` (one base for all text-entry controls) |
+| `.section-heading` | Section/page headings                                                        |
 
 **Rules:**
 
@@ -556,7 +569,9 @@ Do not style HTML elements by tag name. Use a class. The sole exception is HTML 
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border-subtle);
 }
-.modal .text-input { /* only if a genuine modal-specific override is needed */ }
+.modal .text-input {
+  /* only if a genuine modal-specific override is needed */
+}
 
 /* Bad — input styling coupled to being inside .modal.
    .modal-content (not .modal) silently loses it and gets re-implemented. */
@@ -591,7 +606,7 @@ Do not style HTML elements by tag name. Use a class. The sole exception is HTML 
 }
 ```
 
-**Why:** a bare `.active` rule applies to every element in the app that carries the class, and `rg '\.active'` finds nothing useful. `.btn.active` scopes the state to exactly one component — the class string and the stylesheet both say *what* is active.
+**Why:** a bare `.active` rule applies to every element in the app that carries the class, and `rg '\.active'` finds nothing useful. `.btn.active` scopes the state to exactly one component — the class string and the stylesheet both say _what_ is active.
 
 ---
 
@@ -623,7 +638,7 @@ Do not style HTML elements by tag name. Use a class. The sole exception is HTML 
 }
 ```
 
-**Why:** with a single override direction, "what applies at width W" is answerable by reading the file top-to-bottom — later rules only ever *remove* desktop behavior. Mixed directions reintroduce the parsing-order fragility that §13's co-location rule exists to prevent. Combined with §13, exactly two legal queries exist: `@media (max-width: 768px)` and `@media (max-width: 1200px)`.
+**Why:** with a single override direction, "what applies at width W" is answerable by reading the file top-to-bottom — later rules only ever _remove_ desktop behavior. Mixed directions reintroduce the parsing-order fragility that §13's co-location rule exists to prevent. Combined with §13, exactly two legal queries exist: `@media (max-width: 768px)` and `@media (max-width: 1200px)`.
 
 ---
 
@@ -648,7 +663,7 @@ Do not style HTML elements by tag name. Use a class. The sole exception is HTML 
 ```
 
 - Shared atoms keep their base names (`.btn`, `.text-input`) — their domain is the design system itself (§21).
-- One-word component classes are fine when the word *is* the domain (`.sidebar`, `.chat-view`).
+- One-word component classes are fine when the word _is_ the domain (`.sidebar`, `.chat-view`).
 - **Applies to new classes.** Existing classes are user-facing CSS API (§16) — rename only by adding the new class alongside the old one, never by removing the old one.
 
 **Why:** prefixed names make every feature greppable end-to-end and make cross-component collisions impossible — no two components can both accidentally ship a bare `.list`.
@@ -657,25 +672,25 @@ Do not style HTML elements by tag name. Use a class. The sole exception is HTML 
 
 ## Summary Cheat Sheet
 
-| Decision | Rule |
-|----------|------|
-| Layout | `display: flex` + `gap` (for shells that align/distribute) |
-| Space between children | `gap` on parent |
-| Space before a section | `margin-top` |
-| Space inside a box | `padding-top/bottom/left/right` (explicit) |
-| Centering | `justify-content` / `align-items` on parent |
-| DOM wrappers | Only for flex containers or semantics |
-| Colors | `--color-*` tokens |
-| Variable scope | Global tokens on `:root`; component vars on component class |
-| Specificity | Max two simple selectors; no IDs in component CSS |
-| Sizing | `min-height` / `padding` over fixed `height` |
-| First/last child margins | Global reset handles it |
-| Selectors | One class, max one descendant |
-| Inline styles | Only for dynamic positioning/sizing |
-| Hookable elements | Every element has a class or fixed ID |
-| Base classes | One base per element kind (`.btn`, `.text-input`, `.section-heading`); variants applied alongside the base |
-| Element selectors | Only for HTML you don't control (markdown/sanitized); atoms get a class |
-| `!important` | Banned |
-| State modifiers | Compound with base (`.btn.active`), never a bare `.active` rule |
-| Media queries | `max-width` only; base rules are the desktop layout |
-| Class names | kebab-case + domain prefix (`.message-*`); binding for new classes |
+| Decision                 | Rule                                                                                                       |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Layout                   | `display: flex` + `gap` (for shells that align/distribute)                                                 |
+| Space between children   | `gap` on parent                                                                                            |
+| Space before a section   | `margin-top`                                                                                               |
+| Space inside a box       | `padding-top/bottom/left/right` (explicit)                                                                 |
+| Centering                | `justify-content` / `align-items` on parent                                                                |
+| DOM wrappers             | Only for flex containers or semantics                                                                      |
+| Colors                   | `--color-*` tokens                                                                                         |
+| Variable scope           | Global tokens on `:root`; component vars on component class                                                |
+| Specificity              | Max two simple selectors; no IDs in component CSS                                                          |
+| Sizing                   | `min-height` / `padding` over fixed `height`                                                               |
+| First/last child margins | Global reset handles it                                                                                    |
+| Selectors                | One class, max one descendant                                                                              |
+| Inline styles            | Only for dynamic positioning/sizing                                                                        |
+| Hookable elements        | Every element has a class or fixed ID                                                                      |
+| Base classes             | One base per element kind (`.btn`, `.text-input`, `.section-heading`); variants applied alongside the base |
+| Element selectors        | Only for HTML you don't control (markdown/sanitized); atoms get a class                                    |
+| `!important`             | Banned                                                                                                     |
+| State modifiers          | Compound with base (`.btn.active`), never a bare `.active` rule                                            |
+| Media queries            | `max-width` only; base rules are the desktop layout                                                        |
+| Class names              | kebab-case + domain prefix (`.message-*`); binding for new classes                                         |

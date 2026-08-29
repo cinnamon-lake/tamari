@@ -179,8 +179,16 @@ describe('dispatcher error and edge-case paths', () => {
 
       // Create avatar and asset files in storage
       const avatarPath = h.deps.storage.write('avatars', `${char.character.id}.png`, new Uint8Array([1, 2, 3]));
-      const thumbnailPath = h.deps.storage.write('avatars', `${char.character.id}_thumb.png`, new Uint8Array([4, 5, 6]));
-      const assetPath = h.deps.storage.write('character_assets', `${char.character.id}_asset.png`, new Uint8Array([7, 8, 9]));
+      const thumbnailPath = h.deps.storage.write(
+        'avatars',
+        `${char.character.id}_thumb.png`,
+        new Uint8Array([4, 5, 6]),
+      );
+      const assetPath = h.deps.storage.write(
+        'character_assets',
+        `${char.character.id}_asset.png`,
+        new Uint8Array([7, 8, 9]),
+      );
 
       expect(existsSync(h.deps.storage.resolve(avatarPath))).toBe(true);
       expect(existsSync(h.deps.storage.resolve(thumbnailPath))).toBe(true);

@@ -9,7 +9,7 @@
 import type { ZodType } from 'zod';
 import { getLogger } from './logger.js';
 
-const log = getLogger('safeJson');
+const log = getLogger('lib/safeJson');
 
 export function safeParseJson<T>(value: unknown, schema: ZodType<T>, fallback: T): T {
   if (typeof value !== 'string' || value === '') return fallback;

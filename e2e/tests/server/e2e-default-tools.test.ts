@@ -212,7 +212,11 @@ describe('e2e default built-in tools', () => {
       const { chatId } = await setupChat();
       await setupToolset(h.deps.toolRegistry!, 'agent', 'Agent Toolset');
 
-      await h.send(client, { type: 'action.send', chatId, content: 'Ask agent about quantum physics' } as ClientMessage);
+      await h.send(client, {
+        type: 'action.send',
+        chatId,
+        content: 'Ask agent about quantum physics',
+      } as ClientMessage);
       h.expectBroadcast('chat.snapshot');
       await h.send(client, { type: 'action.generate', chatId } as ClientMessage);
 
@@ -280,6 +284,7 @@ describe('e2e default built-in tools', () => {
         id: 'failing',
         supportsStreaming: true,
         supportsTools: false,
+        // eslint-disable-next-line require-yield -- mock must satisfy the AsyncGenerator stream interface while failing on the first next()
         async *stream() {
           throw new Error('Stream exploded');
         },

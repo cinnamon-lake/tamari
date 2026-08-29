@@ -233,8 +233,16 @@ describe('buildBackendSettings sampler wiring', () => {
     expect(params.typical_p).toBe(0.9);
     expect(params.cacheTTL).toBe('5m');
     for (const junk of [
-      'groq_model', 'proxy_password', 'reverse_proxy', 'scenario_format', 'custom_include_body',
-      'openrouter_sort_models', 'squash_system_messages', 'stream_openai', 'reasoning_effort', 'extensions',
+      'groq_model',
+      'proxy_password',
+      'reverse_proxy',
+      'scenario_format',
+      'custom_include_body',
+      'openrouter_sort_models',
+      'squash_system_messages',
+      'stream_openai',
+      'reasoning_effort',
+      'extensions',
     ]) {
       expect(params[junk], `${junk} must not reach the request body`).toBeUndefined();
     }

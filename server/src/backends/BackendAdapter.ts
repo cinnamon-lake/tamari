@@ -109,11 +109,7 @@ export interface BackendDebugStreamItem {
 }
 
 export type BackendStreamItem =
-  | TextStreamItem
-  | ReasoningStreamItem
-  | ReasoningSignatureStreamItem
-  | ToolCallStreamItem
-  | BackendDebugStreamItem;
+  TextStreamItem | ReasoningStreamItem | ReasoningSignatureStreamItem | ToolCallStreamItem | BackendDebugStreamItem;
 
 /** Consume an async generator stream, collecting all yielded items and the final return value. */
 export async function consumeStream<T, R>(gen: AsyncGenerator<T, R>): Promise<{ items: T[]; result: R }> {
@@ -176,7 +172,11 @@ export interface BackendAdapter {
    */
   readonly outputReasoning?: { pattern: string; prefix: string; suffix: string; separator: string };
 
-  stream(prompt: Prompt, signal: AbortSignal, ctx?: BackendCallContext): AsyncGenerator<BackendStreamItem, GenerationResult>;
+  stream(
+    prompt: Prompt,
+    signal: AbortSignal,
+    ctx?: BackendCallContext,
+  ): AsyncGenerator<BackendStreamItem, GenerationResult>;
 
   /**
    * Build the HTTP request this adapter would send for a prompt, without

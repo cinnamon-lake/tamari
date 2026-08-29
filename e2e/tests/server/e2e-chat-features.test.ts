@@ -286,7 +286,12 @@ describe('e2e chat features', () => {
     await h.send(client, { type: 'action.generate', chatId } as ClientMessage);
     const patched = h.expectBroadcast('message.snapshot');
 
-    await h.send(client, { type: 'chat.softFork', chatId, messageId: patched.message.id, name: 'Forked Chat' } as ClientMessage);
+    await h.send(client, {
+      type: 'chat.softFork',
+      chatId,
+      messageId: patched.message.id,
+      name: 'Forked Chat',
+    } as ClientMessage);
     const forked = h.expectBroadcast('chat.forked');
     expect(forked.chat.name).toBe('Forked Chat');
     expect(forked.chat.forkedFromChatId).toBe(chatId);
@@ -300,7 +305,12 @@ describe('e2e chat features', () => {
     await h.send(client, { type: 'action.generate', chatId } as ClientMessage);
     const patched = h.expectBroadcast('message.snapshot');
 
-    await h.send(client, { type: 'chat.hardFork', chatId, messageId: patched.message.id, name: 'Hard Forked Chat' } as ClientMessage);
+    await h.send(client, {
+      type: 'chat.hardFork',
+      chatId,
+      messageId: patched.message.id,
+      name: 'Hard Forked Chat',
+    } as ClientMessage);
     const forked = h.expectBroadcast('chat.forked');
     expect(forked.chat.name).toBe('Hard Forked Chat');
     expect(forked.chat.forkedFromChatId).toBe(chatId);

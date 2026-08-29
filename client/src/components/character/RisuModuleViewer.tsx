@@ -97,10 +97,17 @@ export function RisuModuleViewer(props: { characterId: string }) {
       const form = new FormData();
       form.append('file', file, file.name);
       const res = await apiFetch(attachUrl(), { method: 'POST', body: form });
-      const body = (await res.json().catch(() => ({}))) as { error?: string; module?: RisuModuleMeta; assetsStored?: number };
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        module?: RisuModuleMeta;
+        assetsStored?: number;
+      };
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
       setAttachNote(
-        t('character.risuModuleAttachSuccess', { name: body.module?.name ?? file.name, assets: body.assetsStored ?? 0 }),
+        t('character.risuModuleAttachSuccess', {
+          name: body.module?.name ?? file.name,
+          assets: body.assetsStored ?? 0,
+        }),
       );
       setExpanded(true);
       await refreshModules();
@@ -171,12 +178,7 @@ export function RisuModuleViewer(props: { characterId: string }) {
               {t('character.risuModulesToggle', { count: modules().length })}
             </button>
           </Show>
-          <button
-            class="text-btn small"
-            type="button"
-            disabled={attaching()}
-            onClick={() => fileInput?.click()}
-          >
+          <button class="text-btn small" type="button" disabled={attaching()} onClick={() => fileInput?.click()}>
             <i class="bi bi-upload" />{' '}
             {attaching() ? t('character.risuModuleAttaching') : t('character.risuModuleAttach')}
           </button>
@@ -201,105 +203,105 @@ export function RisuModuleViewer(props: { characterId: string }) {
         <Show when={modules().length > 0 && expanded()}>
           <p class="text-sm text-muted">{t('character.risuModulesDescription')}</p>
           <For each={modules()}>
-              {(m) => (
-                <div class="flex-col-sm">
-                  <button
-                    class="text-btn small"
-                    type="button"
-                    aria-pressed={selectedId() === m.id}
-                    onClick={() => selectModule(m.id)}
-                  >
-                    <strong>{m.name}</strong>
-                    <Show when={m.namespace}>
-                      <span class="text-xs text-muted"> ({m.namespace})</span>
-                    </Show>
-                  </button>
-                  <span class="text-xs text-muted">
-                    {t('character.risuModuleCounts', {
-                      triggers: m.counts.triggers,
-                      regex: m.counts.regex,
-                      lorebook: m.counts.lorebook,
-                      assets: m.counts.assets,
-                    })}
-                    <Show when={m.hasLua}> · {t('character.risuModuleHasLua')}</Show>
-                    <Show when={m.lowLevelAccess}> · {t('character.risuModuleLowLevel')}</Show>
-                  </span>
-                </div>
-              )}
-            </For>
+            {(m) => (
+              <div class="flex-col-sm">
+                <button
+                  class="text-btn small"
+                  type="button"
+                  aria-pressed={selectedId() === m.id}
+                  onClick={() => selectModule(m.id)}
+                >
+                  <strong>{m.name}</strong>
+                  <Show when={m.namespace}>
+                    <span class="text-xs text-muted"> ({m.namespace})</span>
+                  </Show>
+                </button>
+                <span class="text-xs text-muted">
+                  {t('character.risuModuleCounts', {
+                    triggers: m.counts.triggers,
+                    regex: m.counts.regex,
+                    lorebook: m.counts.lorebook,
+                    assets: m.counts.assets,
+                  })}
+                  <Show when={m.hasLua}> · {t('character.risuModuleHasLua')}</Show>
+                  <Show when={m.lowLevelAccess}> · {t('character.risuModuleLowLevel')}</Show>
+                </span>
+              </div>
+            )}
+          </For>
 
-            <Show when={selectedModule()}>
-              {(m) => (
-                <div class="risu-module-detail">
-                  <div class="flex-row-sm mt-sm">
-                    <For each={VIEWER_SECTIONS}>
-                      {(s) => (
-                        <button
-                          class="text-btn small"
-                          type="button"
-                          aria-pressed={section() === s}
-                          onClick={() => pickSection(s)}
-                        >
-                          {t(SECTION_LABEL_KEYS[s])}
-                        </button>
+          <Show when={selectedModule()}>
+            {(m) => (
+              <div class="risu-module-detail">
+                <div class="flex-row-sm mt-sm">
+                  <For each={VIEWER_SECTIONS}>
+                    {(s) => (
+                      <button
+                        class="text-btn small"
+                        type="button"
+                        aria-pressed={section() === s}
+                        onClick={() => pickSection(s)}
+                      >
+                        {t(SECTION_LABEL_KEYS[s])}
+                      </button>
+                    )}
+                  </For>
+                </div>
+                <Show when={sectionLoading()}>
+                  <p class="hint-text">{t('character.risuModuleLoading')}</p>
+                </Show>
+                <Show when={sectionError()}>
+                  <p class="hint-text text-danger">{sectionError()}</p>
+                </Show>
+                <Show when={!sectionLoading() && !sectionError() && sectionData() !== null}>
+                  <Show
+                    when={section() === 'triggers'}
+                    fallback={
+                      <pre class="font-mono text-sm" style={PRE_STYLE}>
+                        {JSON.stringify(sectionData(), null, 2)}
+                      </pre>
+                    }
+                  >
+                    <For each={(sectionData() as TriggerSummary[] | null) ?? []}>
+                      {(tr) => (
+                        <div class="flex-between">
+                          <span class="text-sm">
+                            #{tr.index} {tr.type}
+                            <Show when={tr.comment}> — {tr.comment}</Show>
+                          </span>
+                          <span class="flex-row-sm">
+                            <span class="text-xs text-muted">
+                              {t('character.risuModuleTriggerCounts', {
+                                effects: tr.effectCount,
+                                conditions: tr.conditionCount,
+                              })}
+                              <Show when={tr.hasLua}> · {t('character.risuModuleHasLua')}</Show>
+                            </span>
+                            <button class="text-btn small" type="button" onClick={() => void viewTrigger(tr.index)}>
+                              {t('character.risuModuleViewTrigger')}
+                            </button>
+                          </span>
+                        </div>
                       )}
                     </For>
-                  </div>
-                  <Show when={sectionLoading()}>
-                    <p class="hint-text">{t('character.risuModuleLoading')}</p>
-                  </Show>
-                  <Show when={sectionError()}>
-                    <p class="hint-text text-danger">{sectionError()}</p>
-                  </Show>
-                  <Show when={!sectionLoading() && !sectionError() && sectionData() !== null}>
-                    <Show
-                      when={section() === 'triggers'}
-                      fallback={
-                        <pre class="font-mono text-sm" style={PRE_STYLE}>
-                          {JSON.stringify(sectionData(), null, 2)}
-                        </pre>
-                      }
-                    >
-                      <For each={(sectionData() as TriggerSummary[] | null) ?? []}>
-                        {(tr) => (
-                          <div class="flex-between">
-                            <span class="text-sm">
-                              #{tr.index} {tr.type}
-                              <Show when={tr.comment}> — {tr.comment}</Show>
-                            </span>
-                            <span class="flex-row-sm">
-                              <span class="text-xs text-muted">
-                                {t('character.risuModuleTriggerCounts', {
-                                  effects: tr.effectCount,
-                                  conditions: tr.conditionCount,
-                                })}
-                                <Show when={tr.hasLua}> · {t('character.risuModuleHasLua')}</Show>
-                              </span>
-                              <button class="text-btn small" type="button" onClick={() => void viewTrigger(tr.index)}>
-                                {t('character.risuModuleViewTrigger')}
-                              </button>
-                            </span>
-                          </div>
-                        )}
-                      </For>
-                      <Show when={triggerDetail()}>
-                        {(d) => (
-                          <>
-                            <span class="text-xs text-muted">
-                              {t('character.risuModuleTriggerDetail', { index: d().index })}
-                            </span>
-                            <pre class="font-mono text-sm" style={PRE_STYLE}>
-                              {JSON.stringify(d().data, null, 2)}
-                            </pre>
-                          </>
-                        )}
-                      </Show>
+                    <Show when={triggerDetail()}>
+                      {(d) => (
+                        <>
+                          <span class="text-xs text-muted">
+                            {t('character.risuModuleTriggerDetail', { index: d().index })}
+                          </span>
+                          <pre class="font-mono text-sm" style={PRE_STYLE}>
+                            {JSON.stringify(d().data, null, 2)}
+                          </pre>
+                        </>
+                      )}
                     </Show>
                   </Show>
-                  <span class="text-xs text-muted">{m().filePath}</span>
-                </div>
-              )}
-            </Show>
+                </Show>
+                <span class="text-xs text-muted">{m().filePath}</span>
+              </div>
+            )}
+          </Show>
         </Show>
       </div>
     </>

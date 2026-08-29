@@ -51,10 +51,12 @@ async function streamCumulativeChunks(adapter: BackendAdapter) {
     body: createMockStream(CUMULATIVE_SSE_LINES),
   } as Response);
   try {
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Say hello' }], tokenUsage: { prompt: 5, completion: 50 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Say hello' }], tokenUsage: { prompt: 5, completion: 50 } },
+        new AbortController().signal,
+      ),
+    );
     return { tokens: items.filter((i) => i.type === 'text').map((i) => i.token), result };
   } finally {
     vi.unstubAllGlobals();

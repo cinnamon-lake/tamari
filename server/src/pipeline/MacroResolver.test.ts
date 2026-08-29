@@ -245,8 +245,7 @@ describe('MacroResolver', () => {
       '{{? {{equal::{{getvar::place}}::shrine}}&&{{equal::{{getvar::situ}}::known}}&&{{equal::{{getvar::lang}}::English}}}}';
     expect(resolver.resolve(expr, varCtx)).toBe('true');
 
-    const expr2 =
-      '{{? {{equal::{{getvar::place}}::shrine}}&&{{equal::{{getvar::situ}}::unknown}}}}';
+    const expr2 = '{{? {{equal::{{getvar::place}}::shrine}}&&{{equal::{{getvar::situ}}::unknown}}}}';
     expect(resolver.resolve(expr2, varCtx)).toBe('');
   });
 
@@ -284,7 +283,8 @@ describe('MacroResolver', () => {
       ...ctx,
       macroVars: { place: '하쿠레이_신사', situ: '아는_상황', lang: 'English' },
     };
-    const greeting = '{% if {{equal::{{getvar::place}}::하쿠레이_신사}} && {{equal::{{getvar::situ}}::아는_상황}} && {{equal::{{getvar::lang}}::English}} %}Hello from Hakurei Shrine!{% endif %}';
+    const greeting =
+      '{% if {{equal::{{getvar::place}}::하쿠레이_신사}} && {{equal::{{getvar::situ}}::아는_상황}} && {{equal::{{getvar::lang}}::English}} %}Hello from Hakurei Shrine!{% endif %}';
     expect(resolver.resolve(greeting, varCtx)).toBe('Hello from Hakurei Shrine!');
   });
 
@@ -296,10 +296,7 @@ describe('MacroResolver', () => {
 
   it('multi-pass: setvar in one field, getvar in another', () => {
     const r = MacroResolver.createStorageResolver();
-    const results = r.resolveAll(
-      ['{{setvar::x::hello}}', '{{getvar::x}}'],
-      { ...ctx, macroVars: {}, globalVars: {} },
-    );
+    const results = r.resolveAll(['{{setvar::x::hello}}', '{{getvar::x}}'], { ...ctx, macroVars: {}, globalVars: {} });
     expect(results[0]).toBe('');
     expect(results[1]).toBe('hello');
   });
@@ -312,10 +309,7 @@ describe('MacroResolver', () => {
 
   it('multi-pass: reverse field order also works', () => {
     const r = MacroResolver.createStorageResolver();
-    const results = r.resolveAll(
-      ['{{getvar::x}}', '{{setvar::x::hello}}'],
-      { ...ctx, macroVars: {}, globalVars: {} },
-    );
+    const results = r.resolveAll(['{{getvar::x}}', '{{setvar::x::hello}}'], { ...ctx, macroVars: {}, globalVars: {} });
     // Multi-pass is across ALL fields, so setvar in field 1 resolves before
     // getvar in field 0 is retried in pass 2.
     expect(results[0]).toBe('hello');
@@ -333,37 +327,25 @@ describe('MacroResolver', () => {
 
   it('multi-pass: diamond dependency pattern', () => {
     const r = MacroResolver.createStorageResolver();
-    const result = r.resolve(
-      '{{setvar::base::x}}{{getvar::base}} {{getvar::base}}',
-      { ...ctx, macroVars: {} },
-    );
+    const result = r.resolve('{{setvar::base::x}}{{getvar::base}} {{getvar::base}}', { ...ctx, macroVars: {} });
     expect(result).toBe('x x');
   });
 
   it('multi-pass: multiple setvars for same key, last wins', () => {
     const r = MacroResolver.createStorageResolver();
-    const result = r.resolve(
-      '{{setvar::x::first}} {{setvar::x::second}} {{getvar::x}}',
-      ctx,
-    );
+    const result = r.resolve('{{setvar::x::first}} {{setvar::x::second}} {{getvar::x}}', ctx);
     expect(result).toBe('  second');
   });
 
   it('multi-pass: setvar with macro value', () => {
     const r = MacroResolver.createStorageResolver();
-    const result = r.resolve(
-      '{{setvar::greet::Hello {{user}}}}{{getvar::greet}}',
-      ctx,
-    );
+    const result = r.resolve('{{setvar::greet::Hello {{user}}}}{{getvar::greet}}', ctx);
     expect(result).toBe('Hello TestUser');
   });
 
   it('blocks: if with unresolved condition returns empty until resolved', () => {
     const r = MacroResolver.createStorageResolver();
-    const result = r.resolve(
-      '{% if {{getvar::flag}} %}shown{% endif %}',
-      { ...ctx, macroVars: {} },
-    );
+    const result = r.resolve('{% if {{getvar::flag}} %}shown{% endif %}', { ...ctx, macroVars: {} });
     // flag never set → condition never resolves → block returns empty
     expect(result).toBe('');
   });
@@ -379,37 +361,25 @@ describe('MacroResolver', () => {
 
   it('blocks: unless with truthy condition hides content', () => {
     const r = MacroResolver.createStorageResolver();
-    const result = r.resolve(
-      '{% unless {{user}} %}hidden{% endunless %}',
-      ctx,
-    );
+    const result = r.resolve('{% unless {{user}} %}hidden{% endunless %}', ctx);
     expect(result).toBe('');
   });
 
   it('blocks: unless with empty condition shows content', () => {
     const r = MacroResolver.createStorageResolver();
-    const result = r.resolve(
-      '{% unless %}shown{% endunless %}',
-      ctx,
-    );
+    const result = r.resolve('{% unless %}shown{% endunless %}', ctx);
     expect(result).toBe('shown');
   });
 
   it('blocks: for loop with nested content', () => {
     const r = MacroResolver.createStorageResolver();
-    const result = r.resolve(
-      '{% for item::a::b::c %}[{{item}}]{% endfor %}',
-      ctx,
-    );
+    const result = r.resolve('{% for item::a::b::c %}[{{item}}]{% endfor %}', ctx);
     expect(result).toBe('[a][b][c]');
   });
 
   it('blocks: for loop index macro', () => {
     const r = MacroResolver.createStorageResolver();
-    const result = r.resolve(
-      '{% for i::x::y::z %}{{forIndex}}{% endfor %}',
-      ctx,
-    );
+    const result = r.resolve('{% for i::x::y::z %}{{forIndex}}{% endfor %}', ctx);
     expect(result).toBe('012');
   });
 
@@ -446,9 +416,7 @@ describe('MacroResolver', () => {
         throw new Error('block error');
       },
     });
-    expect(r.resolve('{% kaboom %}x{% endkaboom %}', ctx)).toBe(
-      '[Error: block threw: block error]',
-    );
+    expect(r.resolve('{% kaboom %}x{% endkaboom %}', ctx)).toBe('[Error: block threw: block error]');
   });
 
   it('edge cases: empty template', () => {
@@ -490,24 +458,18 @@ describe('MacroResolver', () => {
 
   it('boolean expressions: || short-circuits correctly', () => {
     const r = MacroResolver.createStorageResolver();
-    expect(
-      r.resolve('{% if {{equal::a::a}}||{{equal::b::c}} %}yes{% endif %}', ctx),
-    ).toBe('yes');
+    expect(r.resolve('{% if {{equal::a::a}}||{{equal::b::c}} %}yes{% endif %}', ctx)).toBe('yes');
   });
 
   it('boolean expressions: && requires both sides', () => {
     const r = MacroResolver.createStorageResolver();
-    expect(
-      r.resolve('{% if {{equal::a::a}}&&{{equal::b::c}} %}yes{% else %}no{% endif %}', ctx),
-    ).toBe('no');
+    expect(r.resolve('{% if {{equal::a::a}}&&{{equal::b::c}} %}yes{% else %}no{% endif %}', ctx)).toBe('no');
   });
 
   it('boolean expressions: mixed && and ||', () => {
     const r = MacroResolver.createStorageResolver();
     // a||b&&c  →  (a||b)&&c  because && binds tighter
-    expect(
-      r.resolve('{% if {{equal::x::y}}||{{equal::a::a}}&&{{equal::b::b}} %}yes{% endif %}', ctx),
-    ).toBe('yes');
+    expect(r.resolve('{% if {{equal::x::y}}||{{equal::a::a}}&&{{equal::b::b}} %}yes{% endif %}', ctx)).toBe('yes');
   });
 
   it('caching: repeated resolve returns cached result', () => {
@@ -548,10 +510,10 @@ describe('MacroResolver', () => {
 
   it('resolveAll: shared context accumulates setvars across fields', () => {
     const r = MacroResolver.createStorageResolver();
-    const results = r.resolveAll(
-      ['{{setvar::x::1}}', '{{setvar::y::2}}', '{{getvar::x}}-{{getvar::y}}'],
-      { ...ctx, macroVars: {} },
-    );
+    const results = r.resolveAll(['{{setvar::x::1}}', '{{setvar::y::2}}', '{{getvar::x}}-{{getvar::y}}'], {
+      ...ctx,
+      macroVars: {},
+    });
     expect(results).toEqual(['', '', '1-2']);
   });
 });

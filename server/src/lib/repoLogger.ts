@@ -8,7 +8,7 @@
 
 import { getLogger } from './logger.js';
 
-const log = getLogger('repos');
+const log = getLogger('lib/repoLogger');
 
 /**
  * Wrap a repository so that every async method is logged at debug level.

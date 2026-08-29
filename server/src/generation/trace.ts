@@ -62,5 +62,5 @@ export async function composeGenerationTrace(
   });
 
   const traceError = record.meta?.traceError;
-  return { lines, error: traceError ? renderTraceError(traceError) : record.errorMessage ?? undefined };
+  return { lines, error: traceError ? renderTraceError(traceError) : (record.errorMessage ?? undefined) };
 }

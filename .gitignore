@@ -56,6 +56,9 @@ e2e/.auth/
 /e2e/local/
 /e2e/.local-results/
 
+# UX audit screenshot output
+/e2e/ux-audit/shots/
+
 # Claude Code (per-user local settings; not shared)
 .claude/settings.local.json
 .claude/settings.local.json.tmp.*
@@ -63,3 +66,4 @@ e2e/.auth/
 # Reference codebases
 /Risuai/
 /old/
+/repos/

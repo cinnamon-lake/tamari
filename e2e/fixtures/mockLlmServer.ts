@@ -164,7 +164,13 @@ function sendModels(res: http.ServerResponse, claudeShape: boolean) {
     // Anthropic GET /models — see ClaudeModelListSchema.
     sendJson(res, 200, {
       data: [
-        { type: 'model', id: 'mock-claude', display_name: 'Mock Claude', max_input_tokens: 200000, created_at: '2025-01-01T00:00:00Z' },
+        {
+          type: 'model',
+          id: 'mock-claude',
+          display_name: 'Mock Claude',
+          max_input_tokens: 200000,
+          created_at: '2025-01-01T00:00:00Z',
+        },
       ],
       has_more: false,
       first_id: 'mock-claude',
@@ -412,7 +418,10 @@ const EMBED_DIM = 256;
  */
 function embedText(text: string): number[] {
   const vec = new Array<number>(EMBED_DIM).fill(0);
-  const tokens = text.toLowerCase().split(/[^a-z0-9_]+/i).filter(Boolean);
+  const tokens = text
+    .toLowerCase()
+    .split(/[^a-z0-9_]+/i)
+    .filter(Boolean);
   for (const token of tokens) {
     let h = 5381;
     for (let i = 0; i < token.length; i++) {
@@ -626,7 +635,12 @@ async function sendCompletion(res: http.ServerResponse, body: unknown, defaultTe
             index: 0,
             delta: {
               tool_calls: [
-                { index: 0, id: `call-${randomUUID()}`, type: 'function', function: { name: tool.name, arguments: tool.args } },
+                {
+                  index: 0,
+                  id: `call-${randomUUID()}`,
+                  type: 'function',
+                  function: { name: tool.name, arguments: tool.args },
+                },
               ],
             },
             finish_reason: 'tool_calls',
@@ -836,9 +850,10 @@ async function sendGeminiStream(res: http.ServerResponse, body: unknown, default
     text = `inject:${injected.join(',')}`;
   }
 
-  const genConfig = typeof reqBody.generationConfig === 'object' && reqBody.generationConfig !== null
-    ? (reqBody.generationConfig as Record<string, unknown>)
-    : {};
+  const genConfig =
+    typeof reqBody.generationConfig === 'object' && reqBody.generationConfig !== null
+      ? (reqBody.generationConfig as Record<string, unknown>)
+      : {};
   text = cutAtStopStrings(text, getStopList(genConfig, 'stopSequences'));
 
   res.writeHead(200, {
@@ -892,7 +907,7 @@ async function sendGeminiStream(res: http.ServerResponse, body: unknown, default
     }
     if (resultCount < sequence.length) {
       const tool = sequence[resultCount]!;
-      let args: Record<string, unknown> = {};
+      let args: Record<string, unknown>;
       try {
         args = JSON.parse(tool.args) as Record<string, unknown>;
       } catch {
@@ -994,6 +1009,7 @@ export function startMockLlmServer(options: MockLlmServerOptions = {}): Promise<
   const defaultText = options.defaultText ?? DEFAULT_RESPONSE;
 
   return new Promise((resolve, reject) => {
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- async request handler; the body is fully wrapped in try/catch so rejections cannot escape
     const server = http.createServer(async (req, res) => {
       try {
         const url = new URL(req.url ?? '/', 'http://localhost');

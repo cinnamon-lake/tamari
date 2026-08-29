@@ -10,7 +10,7 @@ import { applyMigrations } from './runMigrations.js';
 import { ProfiledClient, createProfilerConfig, isProfilingEnabled } from './profiler.js';
 import { WriteSerializingClient } from './WriteSerializingClient.js';
 
-const log = getLogger('db');
+const log = getLogger('db/index');
 
 export interface DbConfig {
   path: string;

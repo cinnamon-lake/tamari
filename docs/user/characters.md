@@ -15,20 +15,20 @@ All text fields are macro-resolved. Card fields are resolved fresh on every gene
 
 Open a character in the editor (sidebar → **Characters** → pencil icon) to edit these. Each field also fills the macro of the same name — `{{description}}`, `{{personality}}`, `{{scenario}}` — so prompt lists and World Info entries can reference them directly.
 
-| Field | What it does |
-|-------|--------------|
-| **Name** | Display name; fills `{{char}}`. |
-| **Nickname** | V3 card field carried for compatibility. Stored and exported, but nothing in the default pipeline sends it to the model. |
-| **Description** | The main free-form field — who the character is. Interpolated where the active prompt list places its `charDescription` marker; if the list has no such marker, it is never sent. |
-| **Personality** | Short trait summary, interpolated via the `charPersonality` marker. |
-| **Scenario** | The situation the chat starts in, interpolated via the `scenario` marker. |
-| **First Message** | The opening greeting. Becomes the chat's first message when you start chatting (see [Greetings](#greetings)). |
-| **Message Example** | Example dialogue showing the character's voice, interpolated via the `dialogueExamples` marker. |
-| **System Prompt** | Card-level override of the prompt list's `main` prompt content. Ignored if that prompt sets `forbidOverrides`. |
-| **Post-History Instructions (Jailbreak)** | Card-level override of the prompt list's `jailbreak` prompt content — instructions injected after the chat history. |
-| **Creator Notes** | Free-form notes. No built-in marker interpolates them, so they never reach the model unless a custom prompt list references them. |
-| **Tags** | Organization/filtering in the sidebar. Never sent to the model. |
-| **Creator / Version / Source** | Card metadata (Source is edited one URL per line). Never sent to the model. |
+| Field                                     | What it does                                                                                                                                                                      |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Name**                                  | Display name; fills `{{char}}`.                                                                                                                                                   |
+| **Nickname**                              | V3 card field carried for compatibility. Stored and exported, but nothing in the default pipeline sends it to the model.                                                          |
+| **Description**                           | The main free-form field — who the character is. Interpolated where the active prompt list places its `charDescription` marker; if the list has no such marker, it is never sent. |
+| **Personality**                           | Short trait summary, interpolated via the `charPersonality` marker.                                                                                                               |
+| **Scenario**                              | The situation the chat starts in, interpolated via the `scenario` marker.                                                                                                         |
+| **First Message**                         | The opening greeting. Becomes the chat's first message when you start chatting (see [Greetings](#greetings)).                                                                     |
+| **Message Example**                       | Example dialogue showing the character's voice, interpolated via the `dialogueExamples` marker.                                                                                   |
+| **System Prompt**                         | Card-level override of the prompt list's `main` prompt content. Ignored if that prompt sets `forbidOverrides`.                                                                    |
+| **Post-History Instructions (Jailbreak)** | Card-level override of the prompt list's `jailbreak` prompt content — instructions injected after the chat history.                                                               |
+| **Creator Notes**                         | Free-form notes. No built-in marker interpolates them, so they never reach the model unless a custom prompt list references them.                                                 |
+| **Tags**                                  | Organization/filtering in the sidebar. Never sent to the model.                                                                                                                   |
+| **Creator / Version / Source**            | Card metadata (Source is edited one URL per line). Never sent to the model.                                                                                                       |
 
 > **Note:** Description, Personality, Scenario, and Message Example only reach the model because the active prompt list contains the matching markers. If a field seems to be ignored, check which prompt list is active before rewriting the card.
 
@@ -85,7 +85,7 @@ At the bottom right of the editor:
 
 Click **Change Avatar** in the editor's **Content** tab and pick an image. By default a crop dialog lets you frame the picture before it's stored; the server downsizes avatars to at most 512 px and generates a 96 px square thumbnail for lists.
 
-- To skip the crop step, enable *Settings → "Never resize avatars (skip crop dialog)"*.
+- To skip the crop step, enable _Settings → "Never resize avatars (skip crop dialog)"_.
 - PNG card imports reuse the card image as the avatar automatically; CharX imports use the card's icon asset.
 - Avatars are per character. Personas (your own identity) have their own avatars — see [Personas](./personas.md).
 

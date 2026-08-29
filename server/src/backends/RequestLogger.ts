@@ -10,7 +10,7 @@
 
 import { getLogger } from '../lib/logger.js';
 
-const log = getLogger('backend');
+const log = getLogger('backends/RequestLogger');
 
 const SENSITIVE_HEADERS = new Set(['authorization', 'x-api-key', 'api-key', 'x-auth-token']);
 
@@ -60,7 +60,10 @@ export function logRequest(
   const body = formatBody(init.body);
   const safeUrl = scrubUrlQuery(url);
 
-  log.info({ adapterId, method, url: safeUrl, headers, bodyLength: body.length }, `${adapterId} → ${method} ${safeUrl} (${body.length} chars)`);
+  log.info(
+    { adapterId, method, url: safeUrl, headers, bodyLength: body.length },
+    `${adapterId} → ${method} ${safeUrl} (${body.length} chars)`,
+  );
   // The full (credential-scrubbed) body, always: prompt-list debugging needs it.
   log.info({ adapterId, body }, `${adapterId} request body`);
 }
@@ -108,7 +111,12 @@ function carriesFinishSignal(delta: unknown): boolean {
   if (typeof first('choices')?.['finish_reason'] === 'string') return true;
   if (typeof first('candidates')?.['finishReason'] === 'string') return true;
   const inner = d['delta'];
-  if (typeof inner === 'object' && inner !== null && typeof (inner as Record<string, unknown>)['stop_reason'] === 'string') return true;
+  if (
+    typeof inner === 'object' &&
+    inner !== null &&
+    typeof (inner as Record<string, unknown>)['stop_reason'] === 'string'
+  )
+    return true;
   if (typeof d['finish_reason'] === 'string') return true;
   if (d['stop'] === true) return true;
   return false;

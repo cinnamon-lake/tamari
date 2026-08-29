@@ -19,14 +19,26 @@ function makeMockDeps(): {
       }),
     } as unknown as FileStorage,
     attachments: {
-      create: vi.fn(async ({ id, messageId, mimeType, filePath }: { id: string; messageId: number | null; mimeType: string; filePath: string }) => ({
-        id,
-        messageId,
-        mimeType,
-        filePath,
-        url: `/api/attachments/${id}`,
-        meta: {},
-      })),
+      create: vi.fn(
+        async ({
+          id,
+          messageId,
+          mimeType,
+          filePath,
+        }: {
+          id: string;
+          messageId: number | null;
+          mimeType: string;
+          filePath: string;
+        }) => ({
+          id,
+          messageId,
+          mimeType,
+          filePath,
+          url: `/api/attachments/${id}`,
+          meta: {},
+        }),
+      ),
     } as unknown as IAttachmentRepository,
     secretService: { get: vi.fn() } as unknown as SecretService,
     secretsPassword: 'test-password',
@@ -48,7 +60,9 @@ describe('SpeakTemplate', () => {
 
   it('returns error when text is missing', async () => {
     const result = await template.execute('speak', {}, { config: { provider: 'fishaudio' } });
-    expect(typeof result.content === 'string' ? result.content : (result.content[0] as { text: string }).text).toContain('text is required');
+    expect(
+      typeof result.content === 'string' ? result.content : (result.content[0] as { text: string }).text,
+    ).toContain('text is required');
   });
 
   it('returns error when no TTS provider is configured', async () => {
@@ -58,14 +72,21 @@ describe('SpeakTemplate', () => {
 
   it('generates audio and returns attachment macro', async () => {
     const fakeAudio = new Uint8Array([0x52, 0x49, 0x46, 0x46]); // RIFF header
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      headers: new Headers({ 'content-type': 'audio/wav' }),
-      arrayBuffer: async () => fakeAudio.buffer,
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'audio/wav' }),
+          arrayBuffer: async () => fakeAudio.buffer,
+        }) as Response,
+    );
 
-    const result = await template.execute('speak', { text: 'Hello world' }, { config: { provider: 'fishaudio', baseUrl: 'http://localhost:8080/v1' } });
+    const result = await template.execute(
+      'speak',
+      { text: 'Hello world' },
+      { config: { provider: 'fishaudio', baseUrl: 'http://localhost:8080/v1' } },
+    );
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
@@ -85,22 +106,33 @@ describe('SpeakTemplate', () => {
     expect(typeof result.extra!.attachmentUrl).toBe('string');
     expect(result.extra!.attachmentMimeType).toBe('audio/wav');
 
-    expect(deps.storage.write).toHaveBeenCalledWith('attachments', expect.stringMatching(/\.[\w]+$/), expect.any(Uint8Array));
+    expect(deps.storage.write).toHaveBeenCalledWith(
+      'attachments',
+      expect.stringMatching(/\.[\w]+$/),
+      expect.any(Uint8Array),
+    );
     expect(deps.attachments.create).toHaveBeenCalledTimes(1);
   });
 
   it('uses toolset config for provider and voice', async () => {
     const fakeAudio = new Uint8Array([0x00]);
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      headers: new Headers({ 'content-type': 'audio/mp3' }),
-      arrayBuffer: async () => fakeAudio.buffer,
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'audio/mp3' }),
+          arrayBuffer: async () => fakeAudio.buffer,
+        }) as Response,
+    );
 
-    await template.execute('speak', { text: 'hello' }, {
-      config: { provider: 'kokoro', voiceId: 'custom-voice', baseUrl: 'http://kokoro:8880/v1' },
-    });
+    await template.execute(
+      'speak',
+      { text: 'hello' },
+      {
+        config: { provider: 'kokoro', voiceId: 'custom-voice', baseUrl: 'http://kokoro:8880/v1' },
+      },
+    );
 
     const [url] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(url).toBe('http://kokoro:8880/v1/audio/speech');
@@ -112,17 +144,24 @@ describe('SpeakTemplate', () => {
 
   it('mutates request via requestScript', async () => {
     const fakeAudio = new Uint8Array([0x00]);
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      headers: new Headers({ 'content-type': 'audio/wav' }),
-      arrayBuffer: async () => fakeAudio.buffer,
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'audio/wav' }),
+          arrayBuffer: async () => fakeAudio.buffer,
+        }) as Response,
+    );
 
     const script = 'request.body.format = "mp3"';
-    await template.execute('speak', { text: 'hello' }, {
-      config: { provider: 'fishaudio', baseUrl: 'http://example.com:8080/v1', requestScript: script },
-    });
+    await template.execute(
+      'speak',
+      { text: 'hello' },
+      {
+        config: { provider: 'fishaudio', baseUrl: 'http://example.com:8080/v1', requestScript: script },
+      },
+    );
 
     const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const body = JSON.parse(init.body as string);
@@ -130,30 +169,41 @@ describe('SpeakTemplate', () => {
   });
 
   it('returns error when referenceAudio is provided without referenceText', async () => {
-    const result = await template.execute('speak', { text: 'hello' }, {
-      config: { provider: 'fishaudio', baseUrl: 'http://localhost:8080/v1', referenceAudio: 'base64data' },
-    });
+    const result = await template.execute(
+      'speak',
+      { text: 'hello' },
+      {
+        config: { provider: 'fishaudio', baseUrl: 'http://localhost:8080/v1', referenceAudio: 'base64data' },
+      },
+    );
     expect(result.content).toContain('referenceText is required');
   });
 
   it('sends inline references when referenceAudio and referenceText are provided', async () => {
     const fakeAudio = new Uint8Array([0x00]);
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      headers: new Headers({ 'content-type': 'audio/wav' }),
-      arrayBuffer: async () => fakeAudio.buffer,
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'audio/wav' }),
+          arrayBuffer: async () => fakeAudio.buffer,
+        }) as Response,
+    );
 
-    await template.execute('speak', { text: 'hello' }, {
-      config: {
-        provider: 'fishaudio',
-        baseUrl: 'http://localhost:8080/v1',
-        voiceId: 'custom-voice',
-        referenceAudio: 'base64data',
-        referenceText: 'reference transcript',
+    await template.execute(
+      'speak',
+      { text: 'hello' },
+      {
+        config: {
+          provider: 'fishaudio',
+          baseUrl: 'http://localhost:8080/v1',
+          voiceId: 'custom-voice',
+          referenceAudio: 'base64data',
+          referenceText: 'reference transcript',
+        },
       },
-    });
+    );
 
     const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const body = JSON.parse(init.body as string);
@@ -163,13 +213,20 @@ describe('SpeakTemplate', () => {
   });
 
   it('returns error on fetch failure', async () => {
-    global.fetch = vi.fn(async () => ({
-      ok: false,
-      status: 500,
-      text: async () => 'Internal Server Error',
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: false,
+          status: 500,
+          text: async () => 'Internal Server Error',
+        }) as Response,
+    );
 
-    const result = await template.execute('speak', { text: 'hello' }, { config: { provider: 'fishaudio', baseUrl: 'http://localhost:8080/v1' } });
+    const result = await template.execute(
+      'speak',
+      { text: 'hello' },
+      { config: { provider: 'fishaudio', baseUrl: 'http://localhost:8080/v1' } },
+    );
     expect(result.content).toContain('TTS generation failed');
   });
 
@@ -181,14 +238,21 @@ describe('SpeakTemplate', () => {
     { mime: 'audio/aac', ext: 'aac' },
     { mime: 'audio/opus', ext: 'opus' },
   ])('uses .$ext extension for $mime', async ({ mime, ext }) => {
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      headers: new Headers({ 'content-type': mime }),
-      arrayBuffer: async () => new Uint8Array([0x00]).buffer,
-    } as Response));
+    global.fetch = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': mime }),
+          arrayBuffer: async () => new Uint8Array([0x00]).buffer,
+        }) as Response,
+    );
 
-    await template.execute('speak', { text: 'test' }, { config: { provider: 'fishaudio', baseUrl: 'http://localhost:8080/v1' } });
+    await template.execute(
+      'speak',
+      { text: 'test' },
+      { config: { provider: 'fishaudio', baseUrl: 'http://localhost:8080/v1' } },
+    );
 
     const writeCall = (deps.storage.write as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(writeCall[1]).toMatch(new RegExp(`\\.${ext}$`));

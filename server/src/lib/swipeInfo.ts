@@ -29,8 +29,6 @@ export async function getChatSnapshotMessages(
 
   const swipes = headId !== null ? await chats.getSiblings(headId) : [];
   const activeSwipe = chat?.activeChildId ? swipes.find((s) => s.id === chat.activeChildId) : undefined;
-  const messages = activeSwipe && !bulk.some((m) => m.id === activeSwipe.id)
-    ? [...bulk, activeSwipe]
-    : bulk;
+  const messages = activeSwipe && !bulk.some((m) => m.id === activeSwipe.id) ? [...bulk, activeSwipe] : bulk;
   return { messages, bulk, swipes };
 }

@@ -18,12 +18,7 @@ describe('character import helpers', () => {
     });
 
     it('filters non-object items from array', () => {
-      const entries = [
-        { keys: ['a'], content: 'A' },
-        null,
-        42,
-        { keys: ['b'], content: 'B' },
-      ];
+      const entries = [{ keys: ['a'], content: 'A' }, null, 42, { keys: ['b'], content: 'B' }];
       expect(normalizeV3Entries(entries)).toEqual([
         { keys: ['a'], content: 'A' },
         { keys: ['b'], content: 'B' },

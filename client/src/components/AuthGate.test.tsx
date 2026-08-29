@@ -39,9 +39,10 @@ describe('AuthGate', () => {
   });
 
   it('submitting the password exchanges it for a session token and reconnects', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ token: 'session-token-1' }), { status: 200 }),
-    ));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ token: 'session-token-1' }), { status: 200 })),
+    );
 
     render(() => (
       <AuthGate>
@@ -60,9 +61,10 @@ describe('AuthGate', () => {
   });
 
   it('rejects a wrong password without storing anything', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ error: 'Invalid password' }), { status: 401 }),
-    ));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'Invalid password' }), { status: 401 })),
+    );
 
     render(() => (
       <AuthGate>

@@ -13,6 +13,7 @@
  * character/CharacterEditor.tsx (fields, save, delete).
  */
 import { expect, type Locator, type Page } from '@playwright/test';
+import { wsPoll, wsRpc } from './ws.js';
 
 export interface CreateCharacterOptions {
   name: string;
@@ -32,28 +33,6 @@ export class App {
   constructor(readonly page: Page) {}
 
   // ── low-level affordances ───────────────────────────────────────────────
-
-  /**
-   * Legacy helper: character/chat/message action buttons used to be
-   * opacity:0 until hover, so this injects one style tag (idempotent) that
-   * keeps them visible for automation. The app no longer hover-gates these
-   * actions (message and chat-row actions are always visible), so the
-   * override is a harmless no-op kept to avoid churning every journey.
-   */
-  async revealHoverButtons(): Promise<void> {
-    await this.page.evaluate(() => {
-      if (document.body.dataset.stHoverHack) return;
-      const style = document.createElement('style');
-      style.id = 'st-hover-hack';
-      style.textContent = [
-        '.character-list .character-actions { opacity: 1 !important; }',
-        '.chat-actions { opacity: 1 !important; }',
-        '.message-actions { opacity: 1 !important; transform: none !important; }',
-      ].join('\n');
-      document.head.appendChild(style);
-      document.body.dataset.stHoverHack = '1';
-    });
-  }
 
   /**
    * Expand a message bubble's collapsed tool-activity dropdown, if any.
@@ -84,7 +63,6 @@ export class App {
 
   /** Click a per-message action button by its title (Edit/Hide/Unhide/Delete/Fork/Regenerate/Continue). */
   async clickMessageAction(message: Locator, title: string): Promise<void> {
-    await this.revealHoverButtons();
     // evaluate().click() is used elsewhere in the suite because programmatic
     // clicks on hover-revealed buttons are more reliable than Playwright's.
     await message.locator(`button[title="${title}"]`).evaluate((el: HTMLButtonElement) => el.click());
@@ -108,40 +86,16 @@ export class App {
       await this.createCharacterViaEditor(opts);
       return '';
     }
-    const id = await this.page.evaluate(
-      (card) => {
-        return new Promise<string>((resolve, reject) => {
-          const token = localStorage.getItem('st_auth_token') ?? '';
-          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const ws = new WebSocket(`${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`);
-          const timer = setTimeout(() => {
-            ws.close();
-            reject(new Error('createCharacter timed out'));
-          }, 10000);
-          ws.onopen = () => ws.send(JSON.stringify({ type: 'auth' }));
-          ws.onmessage = (event) => {
-            const msg = JSON.parse(event.data as string);
-            if (msg.type === 'snapshot') {
-              ws.send(JSON.stringify({ type: 'character.create', data: card }));
-            } else if (msg.type === 'character.created' && msg.character?.name === card.name) {
-              clearTimeout(timer);
-              ws.close();
-              resolve(msg.character.id as string);
-            } else if (msg.type === 'error') {
-              clearTimeout(timer);
-              ws.close();
-              reject(new Error((msg.message as string) ?? 'character.create failed'));
-            }
-          };
-          ws.onerror = () => {
-            clearTimeout(timer);
-            ws.close();
-            reject(new Error('createCharacter websocket error'));
-          };
-        });
-      },
-      { name: opts.name, description: opts.description ?? '', firstMes: opts.firstMes ?? '', ...(opts.postHistoryInstructions !== undefined ? { postHistoryInstructions: opts.postHistoryInstructions } : {}) },
-    );
+    const card = {
+      name: opts.name,
+      description: opts.description ?? '',
+      firstMes: opts.firstMes ?? '',
+      ...(opts.postHistoryInstructions !== undefined ? { postHistoryInstructions: opts.postHistoryInstructions } : {}),
+    };
+    const id = await wsRpc<string>(this.page, { type: 'character.create', data: card }, 'character.created', {
+      match: { path: 'character.name', value: card.name },
+      pick: 'character.id',
+    });
     // Filter by name before asserting: a leftover search from a prior startChat
     // (and pagination across a long suite run) can otherwise hide the new row.
     await this.page.locator('input[placeholder="Search characters..."]').fill(opts.name);
@@ -154,12 +108,12 @@ export class App {
     await this.page.locator('[title="Create character"]').click();
     const editor = this.page.locator('.character-editor-modal');
     await expect(editor).toBeVisible();
-    await editor.locator('.text-input').first().fill(opts.name);
+    await editor.getByTestId('character-name').fill(opts.name);
     if (opts.description !== undefined) {
-      await editor.locator('.textarea-input').nth(0).fill(opts.description);
+      await editor.getByTestId('character-description').fill(opts.description);
     }
     if (opts.firstMes !== undefined) {
-      await editor.locator('.textarea-input').nth(3).fill(opts.firstMes);
+      await editor.getByTestId('character-first-mes').fill(opts.firstMes);
     }
     if (opts.lorebookBookLabel) {
       await editor.locator('.lorebook-selector select').selectOption({ label: opts.lorebookBookLabel });
@@ -196,9 +150,7 @@ export class App {
     await expect(editor.locator('.entry-editor')).toBeVisible();
     await editor.locator('.entry-editor label:has-text("Keys") input').fill(key);
     await editor.locator('.entry-editor label:has-text("Keys") input').blur();
-    await editor
-      .locator('.entry-editor label:has-text("Content") textarea')
-      .fill(`[WI] ${token}`);
+    await editor.locator('.entry-editor label:has-text("Content") textarea').fill(`[WI] ${token}`);
     await editor.locator('.entry-editor label:has-text("Content") textarea').blur();
 
     await this.page.locator('.modal-overlay:has(.worldinfo-modal)').click({ position: { x: 0, y: 0 } });
@@ -215,7 +167,6 @@ export class App {
 
   /** Filter the character list to `name`, open a new chat, and select it. */
   async startChat(characterName: string): Promise<void> {
-    await this.revealHoverButtons();
     await this.page.locator('input[placeholder="Search characters..."]').fill(characterName);
     const row = this.characterRow(characterName);
     await row.waitFor({ state: 'visible' });
@@ -233,7 +184,10 @@ export class App {
     await button.click();
 
     // The client auto-selects new chats, but explicit selection is more reliable.
-    const chatItem = this.page.locator('.chat-item').filter({ hasText: new RegExp(characterName) }).first();
+    const chatItem = this.page
+      .locator('.chat-item')
+      .filter({ hasText: new RegExp(characterName) })
+      .first();
     await expect(chatItem).toBeVisible({ timeout: 10000 });
     await chatItem.click();
 
@@ -298,7 +252,10 @@ export class App {
    * `userText` overrides the bubble assertion for messages that render
    * differently than typed (e.g. `{{setvar}}` resolves to empty text).
    */
-  async sendUserMessage(text: string, { expectReply = false, userText }: { expectReply?: boolean; userText?: string } = {}): Promise<Locator> {
+  async sendUserMessage(
+    text: string,
+    { expectReply = false, userText }: { expectReply?: boolean; userText?: string } = {},
+  ): Promise<Locator> {
     const input = this.messageInput();
     await input.fill(text);
     // Capture the assistant-bubble count BEFORE the click. The click dispatches
@@ -307,9 +264,7 @@ export class App {
     // captured AFTER the click can already include that bubble — making
     // `count > beforeAssistant` unsatisfiable for the very reply we are waiting
     // on, and producing a false 60s timeout.
-    const beforeAssistant = expectReply
-      ? await this.page.locator('.message-bubble.assistant').count()
-      : 0;
+    const beforeAssistant = expectReply ? await this.page.locator('.message-bubble.assistant').count() : 0;
     await this.page.locator('.message-input-area .send-btn').click();
     await expect(input).toHaveValue('');
     const userBubble = this.lastBubble('user');
@@ -369,9 +324,7 @@ export class App {
 
   /** The swipe arrow lives inside the last assistant message's swipe-actions slot. */
   private swipeButton(direction: 'left' | 'right'): Locator {
-    return this.lastBubble('assistant').locator(
-      `button.action-btn.swipe-btn[title="Swipe ${direction}"]`,
-    );
+    return this.lastBubble('assistant').locator(`button.action-btn.swipe-btn[title="Swipe ${direction}"]`);
   }
 
   async swipe(direction: 'left' | 'right'): Promise<void> {
@@ -398,7 +351,6 @@ export class App {
   }
 
   async renameActiveChat(newName: string): Promise<void> {
-    await this.revealHoverButtons();
     await this.page.locator('.chat-item.active [title="Rename"]').evaluate((el: HTMLButtonElement) => el.click());
     const input = this.page.locator('.chat-rename-input');
     await input.fill(newName);
@@ -425,11 +377,7 @@ export class App {
    * runners the snapshot lands after the modal would otherwise open.
    */
   async waitForInitialSnapshot(timeout = 15000): Promise<void> {
-    await this.page.waitForFunction(
-      () => document.body.dataset['snapshotApplied'] === 'true',
-      undefined,
-      { timeout },
-    );
+    await this.page.waitForFunction(() => document.body.dataset['snapshotApplied'] === 'true', undefined, { timeout });
   }
 
   async openSettings(): Promise<Locator> {
@@ -448,9 +396,7 @@ export class App {
   /** Open settings, flip the named checkbox, close settings. */
   async toggleSetting(labelText: string): Promise<void> {
     const settings = await this.openSettings();
-    const checkbox = settings.locator(
-      `label.checkbox-row:has-text("${labelText}") input[type="checkbox"]`,
-    );
+    const checkbox = settings.locator(`label.checkbox-row:has-text("${labelText}") input[type="checkbox"]`);
     const before = await checkbox.isChecked();
     await checkbox.click();
     await expect(checkbox).toBeChecked({ checked: !before });
@@ -464,9 +410,7 @@ export class App {
    */
   async ensureSetting(labelText: string, desired: boolean): Promise<void> {
     const settings = await this.openSettings();
-    const checkbox = settings.locator(
-      `label.checkbox-row:has-text("${labelText}") input[type="checkbox"]`,
-    );
+    const checkbox = settings.locator(`label.checkbox-row:has-text("${labelText}") input[type="checkbox"]`);
     if ((await checkbox.isChecked()) !== desired) {
       await checkbox.click();
       await expect(checkbox).toBeChecked({ checked: desired });
@@ -487,60 +431,10 @@ export class App {
    * helpers) until the key matches `expected`.
    */
   async waitForSettingSaved(key: string, expected?: unknown, timeout = 10000): Promise<void> {
-    await this.page.evaluate(
-      async ({ key, expected, timeout }) => {
-        const token = localStorage.getItem('st_auth_token') ?? '';
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`);
-        const deadline = Date.now() + timeout;
-
-        const matches = (value: unknown): boolean =>
-          expected === undefined ? value !== undefined : JSON.stringify(value) === JSON.stringify(expected);
-
-        return await new Promise<void>((resolve, reject) => {
-          let lastSeen: unknown;
-          const ask = () => ws.send(JSON.stringify({ type: 'settings.get' }));
-          ws.onopen = () => {
-            ws.send(JSON.stringify({ type: 'auth' }));
-            ask();
-          };
-          ws.onmessage = (event) => {
-            try {
-              const msg = JSON.parse(event.data as string);
-              if (msg.type === 'settings.loaded') {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                lastSeen = (msg.settings as any)?.[key];
-                if (matches(lastSeen)) {
-                  ws.close();
-                  resolve();
-                } else if (Date.now() > deadline) {
-                  ws.close();
-                  reject(
-                    new Error(
-                      `waitForSettingSaved: "${key}" did not become ${JSON.stringify(expected)} within ${timeout}ms (last: ${JSON.stringify(lastSeen)})`,
-                    ),
-                  );
-                } else {
-                  setTimeout(ask, 150);
-                }
-              }
-              if (msg.type === 'error') {
-                ws.close();
-                reject(new Error(msg.message ?? 'settings.get failed'));
-              }
-            } catch (err) {
-              ws.close();
-              reject(err);
-            }
-          };
-          ws.onerror = () => {
-            ws.close();
-            reject(new Error('WebSocket error'));
-          };
-        });
-      },
-      { key, expected, timeout },
-    );
+    await wsPoll(this.page, { type: 'settings.get' }, 'settings.loaded', `settings.${key}`, expected, {
+      timeout,
+      label: 'waitForSettingSaved',
+    });
   }
 
   /**
@@ -550,72 +444,23 @@ export class App {
    * settings.get, then polls backendConfig.select until the field matches.
    */
   async waitForBackendConfigSaved(field: string, expected: unknown, timeout = 10000): Promise<void> {
-    await this.page.evaluate(
-      async ({ field, expected, timeout }) => {
-        const token = localStorage.getItem('st_auth_token') ?? '';
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`);
-        const deadline = Date.now() + timeout;
-
-        return await new Promise<void>((resolve, reject) => {
-          let configId = '';
-          const ask = () => {
-            if (!configId) {
-              ws.send(JSON.stringify({ type: 'settings.get' }));
-            } else {
-              ws.send(JSON.stringify({ type: 'backendConfig.select', backendConfigId: configId }));
-            }
-          };
-          ws.onopen = () => {
-            ws.send(JSON.stringify({ type: 'auth' }));
-            ask();
-          };
-          ws.onmessage = (event) => {
-            try {
-              const msg = JSON.parse(event.data as string);
-              if (msg.type === 'settings.loaded') {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                configId = String((msg.settings as any)?.activeBackendConfigId ?? '');
-                if (!configId) {
-                  ws.close();
-                  reject(new Error('waitForBackendConfigSaved: no active backend config'));
-                  return;
-                }
-                ask();
-              }
-              if (msg.type === 'backendConfig.snapshot') {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const value = (msg.backendConfig as any)?.[field];
-                if (JSON.stringify(value) === JSON.stringify(expected)) {
-                  ws.close();
-                  resolve();
-                } else if (Date.now() > deadline) {
-                  ws.close();
-                  reject(
-                    new Error(
-                      `waitForBackendConfigSaved: "${field}" did not become ${JSON.stringify(expected)} within ${timeout}ms (last: ${JSON.stringify(value)})`,
-                    ),
-                  );
-                } else {
-                  setTimeout(ask, 150);
-                }
-              }
-              if (msg.type === 'error') {
-                ws.close();
-                reject(new Error(msg.message ?? 'backendConfig poll failed'));
-              }
-            } catch (err) {
-              ws.close();
-              reject(err);
-            }
-          };
-          ws.onerror = () => {
-            ws.close();
-            reject(new Error('WebSocket error'));
-          };
-        });
-      },
-      { field, expected, timeout },
+    const loaded = await wsRpc<{ settings?: { activeBackendConfigId?: string } }>(
+      this.page,
+      { type: 'settings.get' },
+      'settings.loaded',
+      { timeout },
+    );
+    const configId = String(loaded?.settings?.activeBackendConfigId ?? '');
+    if (!configId) {
+      throw new Error('waitForBackendConfigSaved: no active backend config');
+    }
+    await wsPoll(
+      this.page,
+      { type: 'backendConfig.select', backendConfigId: configId },
+      'backendConfig.snapshot',
+      `backendConfig.${field}`,
+      expected,
+      { timeout, label: 'waitForBackendConfigSaved' },
     );
   }
 }

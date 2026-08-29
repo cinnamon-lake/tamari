@@ -9,7 +9,9 @@ describe('materializeChat', () => {
   });
 
   it('resolves immediately if there is no active chat', async () => {
-    vi.spyOn(serverStoreModule, 'state', 'get').mockReturnValue({ activeChat: null } as unknown as typeof serverStoreModule.state);
+    vi.spyOn(serverStoreModule, 'state', 'get').mockReturnValue({
+      activeChat: null,
+    } as unknown as typeof serverStoreModule.state);
     const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
     await materializeChat('chat-1');
     expect(sendSpy).not.toHaveBeenCalled();
@@ -57,11 +59,13 @@ describe('materializeChat', () => {
 
     const promise = materializeChat('chat-1');
 
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'chat.materialize',
-      chatId: 'chat-1',
-      selectedIndex: 0,
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'chat.materialize',
+        chatId: 'chat-1',
+        selectedIndex: 0,
+      }),
+    );
 
     // Simulate server responding with snapshot
     const chatSnapshotHandlers = handlers.get('chat.snapshot') ?? new Set();
@@ -86,10 +90,12 @@ describe('materializeChat', () => {
 
     const promise = materializeChat('chat-1');
 
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'chat.materialize',
-      selectedIndex: 2,
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'chat.materialize',
+        selectedIndex: 2,
+      }),
+    );
 
     const chatSnapshotHandlers = handlers.get('chat.snapshot') ?? new Set();
     chatSnapshotHandlers.forEach((h) => h({ chat: { id: 'chat-1' } }));

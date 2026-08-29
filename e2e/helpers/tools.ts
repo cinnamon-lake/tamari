@@ -83,7 +83,7 @@ export async function enableBuiltinToolset(
               reject(new Error(msg.message ?? 'Toolset creation failed'));
             }
           } catch (err) {
-            reject(err);
+            reject(err instanceof Error ? err : new Error(String(err)));
           }
         };
 
@@ -130,7 +130,7 @@ export async function deleteToolset(page: Page, toolsetId: string): Promise<void
             reject(new Error(msg.message ?? 'Toolset deletion failed'));
           }
         } catch (err) {
-          reject(err);
+          reject(err instanceof Error ? err : new Error(String(err)));
         }
       };
 

@@ -315,79 +315,17 @@ body {
   }
 }
 
-/* ─── Skeleton screens ─── */
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--color-bg-tertiary) 25%,
-    var(--color-bg-elevated) 50%,
-    var(--color-bg-tertiary) 75%
-  );
-  background-size: 200% 100%;
-  border-radius: var(--radius-sm);
-  animation: skeleton-pulse var(--duration-medium) ease-in-out infinite;
-}
-
-@keyframes skeleton-pulse {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-.skeleton-text {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-
-.skeleton-line {
-  width: 100%;
-}
-
-.skeleton-avatar {
-  border-radius: var(--radius-full);
-}
-
-.skeleton-card {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding-top: var(--space-sm);
-  padding-bottom: var(--space-sm);
-  padding-left: var(--space-sm);
-  padding-right: var(--space-sm);
-  background: var(--color-bg-secondary);
-  border-radius: var(--radius-md);
-}
-
-.skeleton-card-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .skeleton {
-    animation: none;
-    opacity: 0.6;
-  }
-}
-
 /* ─── RTL support ─── */
-[dir="rtl"] .app-shell {
+[dir='rtl'] .app-shell {
   grid-template-columns: 1fr var(--sidebar-width);
 }
 
-[dir="rtl"] .sidebar {
+[dir='rtl'] .sidebar {
   border-right: none;
   border-left: 1px solid var(--color-border-subtle);
 }
 
-[dir="rtl"] .skip-link {
+[dir='rtl'] .skip-link {
   left: auto;
   right: 0;
 }

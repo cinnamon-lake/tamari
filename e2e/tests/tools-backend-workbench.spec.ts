@@ -1,12 +1,8 @@
-import { test, expect, type Page } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, patchActiveBackendConfig, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Page } from '../fixtures/base.js';
+import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 /** Mock LLM origin (host:port) as it appears in dry-run request URLs. */
 const MOCK_ORIGIN = (process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876').replace(/^https?:\/\//, '');
@@ -45,7 +41,7 @@ async function activeBackendConfigId(page: Page): Promise<string> {
             reject(new Error(msg.message ?? 'WS snapshot failed'));
           }
         } catch (err) {
-          reject(err);
+          reject(err instanceof Error ? err : new Error(String(err)));
         }
       };
 
@@ -64,23 +60,16 @@ async function activeBackendConfigId(page: Page): Promise<string> {
 test.describe('Backend Workbench Tools', () => {
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    // Clear any requestScript the model "wrote" during the test, then reset.
+    // Clear any requestScript the model "wrote" during the test.
     await patchActiveBackendConfig(page, { providerParams: {} });
-    await resetBackendConfig(page);
     if (toolsetId) {
       await deleteToolset(page, toolsetId);
       toolsetId = undefined;
     }
   });
 
-  test('reading /backends/<id>.json returns the active config with the api key redacted', async ({ page }) => {
-    const app = new App(page);
+  test('reading /backends/<id>.json returns the active config with the api key redacted', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -102,8 +91,7 @@ test.describe('Backend Workbench Tools', () => {
     await expect(result).not.toContainText('mock-api-key');
   });
 
-  test('write + test_backend dry: script mutates the real adapter request', async ({ page }) => {
-    const app = new App(page);
+  test('write + test_backend dry: script mutates the real adapter request', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({
@@ -141,8 +129,7 @@ test.describe('Backend Workbench Tools', () => {
     await expect(dry).not.toContainText('authorization');
   });
 
-  test('test_backend live fires a real request and reports ok', async ({ page }) => {
-    const app = new App(page);
+  test('test_backend live fires a real request and reports ok', async ({ page, app }) => {
     toolsetId = await enableBuiltinToolset(page, 'workbench');
 
     await app.createCharacterAndChat({

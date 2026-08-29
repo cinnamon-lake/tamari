@@ -12,7 +12,7 @@
  */
 
 import { logger } from '../lib/logger.js';
-import { applyRequestScript } from '../backends/RequestScript.js';
+import { BaseTtsAdapter } from './BaseTtsAdapter.js';
 import type { TtsAdapter, TtsVoice, TtsGenerateOptions, TtsResult } from './TtsAdapter.js';
 
 export interface GptSoVitsConfig {
@@ -20,20 +20,9 @@ export interface GptSoVitsConfig {
   requestScript?: string;
 }
 
-export class GptSoVitsAdapter implements TtsAdapter {
+export class GptSoVitsAdapter extends BaseTtsAdapter<GptSoVitsConfig> implements TtsAdapter {
   readonly id = 'gptsovits';
   readonly name = 'GPT-SoVITS';
-
-  constructor(private config: GptSoVitsConfig) {}
-
-  private get baseUrl(): string {
-    return this.config.baseUrl.replace(/\/$/, '');
-  }
-
-  private async applyScript(url: string, init: RequestInit): Promise<{ url: string; init: RequestInit }> {
-    if (!this.config.requestScript) return { url, init };
-    return applyRequestScript(url, init, this.config.requestScript);
-  }
 
   async healthCheck(signal?: AbortSignal): Promise<boolean> {
     // GPT-SoVITS has no free probe without a configured ref-audio path; reachability
@@ -79,7 +68,10 @@ export class GptSoVitsAdapter implements TtsAdapter {
     });
     const res = await fetch(url, init);
     if (!res.ok) {
-      const t = await res.text().catch((err) => { logger.debug({ err }, 'TTS error body read failed'); return 'Unknown error'; });
+      const t = await res.text().catch((err) => {
+        logger.debug({ err }, 'TTS error body read failed');
+        return 'Unknown error';
+      });
       throw new Error(`TTS generation failed: HTTP ${res.status} - ${t}`);
     }
     const contentType = res.headers.get('content-type') ?? 'audio/wav';

@@ -10,18 +10,12 @@
  * Provider keys, endpoints, auth headers and payload fields are verified
  * against server/src/tts/*.ts; the mock routes against e2e/fixtures/mockLlmServer.ts.
  */
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { resetLlmRequests } from '../helpers/llm.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { App } from '../helpers/app.js';
+import { uniqueName } from '../helpers/names.js';
 
 const MOCK_URL = process.env.MOCK_LLM_URL ?? 'http://127.0.0.1:9876';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
 
 interface CapturedTtsRequest {
   route: string;
@@ -218,19 +212,15 @@ const PROVIDERS: ProviderCase[] = [
 // providers collide on route prefixes (/tts, /v1/audio/speech) — one test at
 // a time with a reset in beforeEach keeps each capture unambiguous.
 test.describe.serial('TTS providers (speak tool)', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
   for (const provider of PROVIDERS) {
-    test(`provider ${provider.id}: speaks and hits the adapter endpoint with correct auth + payload`, async ({ page }) => {
-      const app = new App(page);
+    test(`provider ${provider.id}: speaks and hits the adapter endpoint with correct auth + payload`, async ({
+      page,
+      app,
+    }) => {
       const text = `hello from ${provider.id}`;
       const toolsetId = await enableBuiltinToolset(page, 'speak', {
         provider: provider.id,
@@ -262,8 +252,7 @@ test.describe.serial('TTS providers (speak tool)', () => {
     });
   }
 
-  test('error path: TTS endpoint failure surfaces in the tool result', async ({ page }) => {
-    const app = new App(page);
+  test('error path: TTS endpoint failure surfaces in the tool result', async ({ page, app }) => {
     // Azure joins `${baseUrl}/cognitiveservices/v1`, so a bogus baseUrl segment
     // yields /nope/cognitiveservices/v1 — the mock answers 404, and the adapter
     // throws "TTS generation failed: HTTP 404 - ...".

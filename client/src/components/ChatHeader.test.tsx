@@ -79,10 +79,12 @@ describe('ChatHeader', () => {
 
     await new Promise((r) => setTimeout(r, 10));
 
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'chat.delete',
-      chatId: 'chat-1',
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'chat.delete',
+        chatId: 'chat-1',
+      }),
+    );
   });
 
   it('does not delete when popup is cancelled', async () => {

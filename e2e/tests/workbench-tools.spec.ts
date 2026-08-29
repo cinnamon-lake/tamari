@@ -1,12 +1,8 @@
-import { test, expect, type Page } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import type { Page } from '../fixtures/base.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
 import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 /**
  * Create a character over the app's WS bus and return its server-generated id,
@@ -30,7 +26,9 @@ async function createCharacterViaWs(page: Page, charName: string, firstMes?: str
           try {
             const msg = JSON.parse(event.data as string);
             if (msg.type === 'snapshot') {
-              ws.send(JSON.stringify({ type: 'character.create', data: { name: cn, ...(fm ? { firstMes: fm } : {}) } }));
+              ws.send(
+                JSON.stringify({ type: 'character.create', data: { name: cn, ...(fm ? { firstMes: fm } : {}) } }),
+              );
             }
             if (msg.type === 'character.created' && msg.character?.name === cn) {
               ws.close();
@@ -41,7 +39,7 @@ async function createCharacterViaWs(page: Page, charName: string, firstMes?: str
               reject(new Error(msg.message ?? 'WS creation failed'));
             }
           } catch (err) {
-            reject(err);
+            reject(err instanceof Error ? err : new Error(String(err)));
           }
         };
 
@@ -80,13 +78,7 @@ test.describe.configure({ mode: 'serial' });
 test.describe('Workbench VFS Tools', () => {
   const toolsetIds: string[] = [];
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     while (toolsetIds.length > 0) {
       await deleteToolset(page, toolsetIds.pop()!);
     }
@@ -100,8 +92,7 @@ test.describe('Workbench VFS Tools', () => {
     });
   }
 
-  test('grep finds a substring and a regex match inside one character entity', async ({ page }) => {
-    const app = new App(page);
+  test('grep finds a substring and a regex match inside one character entity', async ({ page, app }) => {
     await setupWorkbenchChat(page, app);
     const characterId = await createCharacterViaWs(page, uniqueName('Grep Target'));
 
@@ -131,8 +122,7 @@ test.describe('Workbench VFS Tools', () => {
     await expect(results.last()).toContainText('A dragon sleeps here.');
   });
 
-  test('edit replaces a unique string and refuses an ambiguous one', async ({ page }) => {
-    const app = new App(page);
+  test('edit replaces a unique string and refuses an ambiguous one', async ({ page, app }) => {
     await setupWorkbenchChat(page, app);
     const characterId = await createCharacterViaWs(page, uniqueName('Edit Target'));
 
@@ -171,14 +161,17 @@ test.describe('Workbench VFS Tools', () => {
     await expect(results.last()).toContainText('replaceAll: true');
   });
 
-  test('read pages a file with offset/limit and truncates long files with a hint', async ({ page }) => {
-    const app = new App(page);
+  test('read pages a file with offset/limit and truncates long files with a hint', async ({ page, app }) => {
     await setupWorkbenchChat(page, app);
     const characterId = await createCharacterViaWs(page, uniqueName('Read Target'));
 
-    const fiveLines = ['line-one-alpha', 'line-two-bravo', 'line-three-charlie', 'line-four-delta', 'line-five-echo'].join(
-      '\n',
-    );
+    const fiveLines = [
+      'line-one-alpha',
+      'line-two-bravo',
+      'line-three-charlie',
+      'line-four-delta',
+      'line-five-echo',
+    ].join('\n');
     await app.sendUserMessage(
       `tool:write${JSON.stringify({
         path: `/characters/${characterId}/description`,
@@ -212,8 +205,7 @@ test.describe('Workbench VFS Tools', () => {
     await expect(results.last()).toContainText('[truncated — 410 lines total; page with offset/limit');
   });
 
-  test('run with no verb returns the verb menu', async ({ page }) => {
-    const app = new App(page);
+  test('run with no verb returns the verb menu', async ({ page, app }) => {
     await setupWorkbenchChat(page, app);
 
     await app.sendUserMessage('tool:run{}', { expectReply: true, userText: 'run' });
@@ -228,8 +220,7 @@ test.describe('Workbench VFS Tools', () => {
     await expect(result).toContainText('- move_lorebook_entry');
   });
 
-  test('/backends: write creates a config, read returns it, rm is refused', async ({ page }) => {
-    const app = new App(page);
+  test('/backends: write creates a config, read returns it, rm is refused', async ({ page, app }) => {
     await setupWorkbenchChat(page, app);
 
     const name = uniqueName('WB Backend');
@@ -264,8 +255,7 @@ test.describe('Workbench VFS Tools', () => {
     await expect(results.last()).toContainText('backend configs have no delete');
   });
 
-  test('/toolsets: read returns the toolset JSON; a write disables it', async ({ page }) => {
-    const app = new App(page);
+  test('/toolsets: read returns the toolset JSON; a write disables it', async ({ page, app }) => {
     await setupWorkbenchChat(page, app);
     // Disable target is a SECOND toolset: tools are re-collected at every
     // generation, so disabling the workbench toolset itself would end the
@@ -288,8 +278,7 @@ test.describe('Workbench VFS Tools', () => {
     await expect(results.nth(2)).toContainText('"enabled": false');
   });
 
-  test('/luatools: ls the entity dir, read + rewrite code.lua', async ({ page }) => {
-    const app = new App(page);
+  test('/luatools: ls the entity dir, read + rewrite code.lua', async ({ page, app }) => {
     await setupWorkbenchChat(page, app);
 
     const name = uniqueName('WB Echo Tool');
@@ -332,8 +321,7 @@ test.describe('Workbench VFS Tools', () => {
     await expect(results.nth(3)).toContainText('return "echo2:"');
   });
 
-  test('/quickreplies: read the created reply JSON; a write updates the label', async ({ page }) => {
-    const app = new App(page);
+  test('/quickreplies: read the created reply JSON; a write updates the label', async ({ page, app }) => {
     await setupWorkbenchChat(page, app);
 
     const label = uniqueName('WB QR');
@@ -371,8 +359,7 @@ test.describe('Workbench VFS Tools', () => {
     await expect(results.nth(2)).not.toContainText(label);
   });
 
-  test('/custom-backends: create, ls, read source + meta, test_custom_backend, rm the dir', async ({ page }) => {
-    const app = new App(page);
+  test('/custom-backends: create, ls, read source + meta, test_custom_backend, rm the dir', async ({ page, app }) => {
     await setupWorkbenchChat(page, app);
 
     const name = uniqueName('WB Custom Backend');
@@ -416,16 +403,17 @@ test.describe('Workbench VFS Tools', () => {
     await expect(results.nth(4)).toContainText(`Deleted custom backend "${customId}".`);
   });
 
-  test('error paths: missing entity, read-only write, collection grep', async ({ page }) => {
-    const app = new App(page);
+  test('error paths: missing entity, read-only write, collection grep', async ({ page, app }) => {
     await setupWorkbenchChat(page, app);
     const characterId = await createCharacterViaWs(page, uniqueName('Err Target'));
 
     await app.sendUserMessage(
-      `tool:read${JSON.stringify({ path: '/characters/00000000-0000-0000-0000-000000000000/meta.json' })},write${JSON.stringify({
-        path: `/characters/${characterId}/modules/00000000-0000-0000-0000-000000000000.json`,
-        content: '{}',
-      })},grep${JSON.stringify({ path: '/characters/', pattern: 'dragon' })}`,
+      `tool:read${JSON.stringify({ path: '/characters/00000000-0000-0000-0000-000000000000/meta.json' })},write${JSON.stringify(
+        {
+          path: `/characters/${characterId}/modules/00000000-0000-0000-0000-000000000000.json`,
+          content: '{}',
+        },
+      )},grep${JSON.stringify({ path: '/characters/', pattern: 'dragon' })}`,
       { expectReply: true, userText: 'read' },
     );
 

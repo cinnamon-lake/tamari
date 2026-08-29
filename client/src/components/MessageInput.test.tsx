@@ -23,7 +23,15 @@ describe('MessageInput', () => {
     vi.restoreAllMocks();
     setState('activeChat', null);
     setState('settings', {});
-    setState('generation', { status: 'idle', activeId: null, chatId: null, targetMessageId: null, streamingText: '', streamingReasoning: '', impersonationDraft: '' });
+    setState('generation', {
+      status: 'idle',
+      activeId: null,
+      chatId: null,
+      targetMessageId: null,
+      streamingText: '',
+      streamingReasoning: '',
+      impersonationDraft: '',
+    });
     setActiveChatId(null);
   });
 
@@ -49,11 +57,13 @@ describe('MessageInput', () => {
     screen.getByTitle('Send').click();
 
     await new Promise((r) => setTimeout(r, 0));
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'action.sendAndGenerate',
-      chatId: 'chat-1',
-      content: 'Hello world',
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'action.sendAndGenerate',
+        chatId: 'chat-1',
+        content: 'Hello world',
+      }),
+    );
     // The paired action.send / action.generate frames are gone — one atomic
     // message per send so the server can't reorder them.
     expect(sendSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'action.send' }));
@@ -88,10 +98,12 @@ describe('MessageInput', () => {
     setActiveChatId('chat-1');
     render(() => <MessageInput />);
     screen.getByTitle('Impersonate').click();
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'action.impersonate',
-      chatId: 'chat-1',
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'action.impersonate',
+        chatId: 'chat-1',
+      }),
+    );
   });
 
   it('shows stop button during streaming', () => {
@@ -123,10 +135,12 @@ describe('MessageInput', () => {
     });
     render(() => <MessageInput />);
     screen.getByText('Stop').click();
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'action.stop',
-      generationId: 'gen-1',
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'action.stop',
+        generationId: 'gen-1',
+      }),
+    );
   });
 
   it('disables input during streaming', () => {
@@ -160,7 +174,9 @@ describe('MessageInput', () => {
     fireEvent.input(textarea, { target: { value: '/lock' } });
     screen.getByTitle('Send').click();
     await new Promise((r) => setTimeout(r, 0));
-    expect(screen.getByPlaceholderText<HTMLTextAreaElement>('Input is locked. Type /unlock to enable.')).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText<HTMLTextAreaElement>('Input is locked. Type /unlock to enable.'),
+    ).toBeInTheDocument();
   });
 
   it('sends quick continue when enabled and clicked', () => {
@@ -169,10 +185,12 @@ describe('MessageInput', () => {
     setState('settings', { quickContinue: true });
     render(() => <MessageInput />);
     screen.getByTitle('Quick Continue').click();
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'action.continue',
-      chatId: 'chat-1',
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'action.continue',
+        chatId: 'chat-1',
+      }),
+    );
   });
 
   it('sends on Enter when send-on-enter is enabled', async () => {
@@ -200,8 +218,8 @@ describe('MessageInput', () => {
     fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter', shiftKey: true });
 
     await new Promise((r) => setTimeout(r, 0));
-    const actionSendCalls = sendSpy.mock.calls.filter(
-      (c) => String((c[0] as Record<string, string>).type).startsWith('action.send'),
+    const actionSendCalls = sendSpy.mock.calls.filter((c) =>
+      String((c[0] as Record<string, string>).type).startsWith('action.send'),
     );
     expect(actionSendCalls).toHaveLength(0);
   });
@@ -214,7 +232,9 @@ describe('MessageInput', () => {
     screen.getByTitle('Send').click();
     await new Promise((r) => setTimeout(r, 0));
 
-    const sendCalls = sendSpy.mock.calls.filter((c) => String((c[0] as Record<string, string>).type).startsWith('action.send'));
+    const sendCalls = sendSpy.mock.calls.filter((c) =>
+      String((c[0] as Record<string, string>).type).startsWith('action.send'),
+    );
     expect(sendCalls).toHaveLength(0);
   });
 
@@ -259,11 +279,13 @@ describe('MessageInput', () => {
     screen.getByTitle('Send').click();
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'action.sendAndGenerate',
-      content: 'Look at this',
-      attachments: expect.arrayContaining([expect.objectContaining({ id: 'att-0' })]),
-    }));
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'action.sendAndGenerate',
+        content: 'Look at this',
+        attachments: expect.arrayContaining([expect.objectContaining({ id: 'att-0' })]),
+      }),
+    );
   });
 
   it('shows macro autocomplete when typing {{', () => {

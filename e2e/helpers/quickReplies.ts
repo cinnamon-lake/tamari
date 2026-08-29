@@ -15,10 +15,6 @@
  */
 import { expect, type Locator, type Page } from '@playwright/test';
 
-export function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
-
 /**
  * Create a global Lua quick reply via the chat view's quick reply bar (`+`
  * button → QuickReplyEditor; the scope select defaults to 'global'). Requires
@@ -35,9 +31,7 @@ export async function createLuaQuickReply(page: Page, label: string, script: str
   await expect(editor).not.toBeVisible();
 
   // Sync point: the quickreply.created broadcast renders the button.
-  await expect(
-    page.locator('.quick-reply-bar .quick-reply-btn').filter({ hasText: label }),
-  ).toBeVisible();
+  await expect(page.locator('.quick-reply-bar .quick-reply-btn').filter({ hasText: label })).toBeVisible();
 }
 
 /**
@@ -65,7 +59,7 @@ export async function clickQuickReply(page: Page, label: string): Promise<void> 
 }
 
 /** The content node of the most recent narrator (system-role) bubble. */
-export function lastNarratorBubble(page: Page): Locator {
+function lastNarratorBubble(page: Page): Locator {
   return page.locator('.message-bubble.system .message-content').last();
 }
 

@@ -1,11 +1,6 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 const MAIN_LUA = `local util = require('lib/util')
 function generate(prompt, ctx)
@@ -19,17 +14,7 @@ end
 return M`;
 
 test.describe('Backend logic editor (multi-file)', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
   async function openLogicTab(page: import('@playwright/test').Page, app: App, name: string) {
-    await app.revealHoverButtons();
     await page.locator('input[placeholder="Search characters..."]').fill(name);
     const row = app.characterRow(name);
     await row.waitFor({ state: 'visible' });
@@ -40,8 +25,7 @@ test.describe('Backend logic editor (multi-file)', () => {
     return editor;
   }
 
-  test('file tabs persist across reload and the dry-run resolves require through WS', async ({ page }) => {
-    const app = new App(page);
+  test('file tabs persist across reload and the dry-run resolves require through WS', async ({ page, app }) => {
     const name = uniqueName('Backend Editor Host');
     await app.createCharacter({ name, firstMes: 'Ready.' });
 

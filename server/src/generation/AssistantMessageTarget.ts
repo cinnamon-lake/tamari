@@ -43,7 +43,7 @@ import type { GenerationTarget, ResolvedGenerationBackend, ToolContextMessage } 
 import { FULL_BRANCH_MESSAGE_LIMIT } from './GenerationTarget.js';
 import { resolveEffectiveSettings } from './appendOnlyLocks.js';
 
-const log = getLogger('AssistantMessageTarget');
+const log = getLogger('generation/AssistantMessageTarget');
 
 export interface AssistantMessageTargetDeps {
   chats: IChatRepository;
@@ -447,9 +447,7 @@ export class AssistantMessageTarget implements GenerationTarget {
       }
       default: {
         const _exhaustive: never = item;
-        throw new Error(
-          `Unhandled BackendStreamItem variant: ${String((_exhaustive as { type?: string }).type)}`,
-        );
+        throw new Error(`Unhandled BackendStreamItem variant: ${String((_exhaustive as { type?: string }).type)}`);
       }
     }
     this.streamedSinceLastSettle = true;
@@ -565,9 +563,9 @@ export class AssistantMessageTarget implements GenerationTarget {
   }
 
   async autoContinueTarget(): Promise<GenerationTarget | null> {
-    const allSettings = (Object.keys(this.allSettings).length > 0
-      ? this.allSettings
-      : await this.deps.settings.list()) as import('@tamari/types').SettingsMap;
+    const allSettings = (
+      Object.keys(this.allSettings).length > 0 ? this.allSettings : await this.deps.settings.list()
+    ) as import('@tamari/types').SettingsMap;
     if (!allSettings.autoContinueEnabled) return null;
 
     const updated = await this.deps.chats.getMessageById(this.message!.id);
@@ -575,16 +573,16 @@ export class AssistantMessageTarget implements GenerationTarget {
     // Count lazily instead of trusting extra.tokenCount: the persisted count is
     // a display value frozen with whatever tokenizer was active at write time.
     const content = updated ? getMessageText(updated.extra.parts) : '';
-    const tokenCount = content.trim()
-      ? tokenCounterProvider.provideTokenCounter(this.model).count(content)
-      : 0;
+    const tokenCount = content.trim() ? tokenCounterProvider.provideTokenCounter(this.model).count(content) : 0;
     if (!(tokenCount > 0 && tokenCount < targetLength)) return null;
 
     // Resolve character from message or chat (as handleContinue does).
     const chat = await this.deps.chats.getChatById(this.chatId);
-    let character: Character | null = chat?.characterId ? await this.deps.characters.getById(chat.characterId) ?? null : null;
+    let character: Character | null = chat?.characterId
+      ? ((await this.deps.characters.getById(chat.characterId)) ?? null)
+      : null;
     if (!character && updated?.extra.characterId) {
-      character = await this.deps.characters.getById(str(updated.extra.characterId)) ?? null;
+      character = (await this.deps.characters.getById(str(updated.extra.characterId))) ?? null;
     }
 
     return AssistantMessageTarget.continueFrom(
@@ -713,7 +711,8 @@ export class AssistantMessageTarget implements GenerationTarget {
 
     // Recompute the last text part: for continues we prepend the original
     // text; for fresh / tool-follow-up text parts we use only the new text.
-    const isNewTextPart = lastTextPartIndex !== -1 && lastTextPartIndex >= this.initialPartCount && this.initialPartCount > 0;
+    const isNewTextPart =
+      lastTextPartIndex !== -1 && lastTextPartIndex >= this.initialPartCount && this.initialPartCount > 0;
     if (lastTextPartIndex !== -1) {
       const baseText = isNewTextPart ? '' : this.existingLastText;
       (parts[lastTextPartIndex] as { type: 'text'; text: string }).text = baseText + this.streamingText;
@@ -724,12 +723,13 @@ export class AssistantMessageTarget implements GenerationTarget {
       // When reasoning is found, replace the text part with a reasoning part
       // followed by a text part containing the remaining content.
       const r = this.outputReasoning;
-      const lastText = lastTextPartIndex !== -1
-        ? (parts[lastTextPartIndex] as { type: 'text'; text: string }).text
-        : '';
+      const lastText =
+        lastTextPartIndex !== -1 ? (parts[lastTextPartIndex] as { type: 'text'; text: string }).text : '';
       const parsed = extractReasoning(lastText, r.pattern, r.prefix, r.suffix);
       if (parsed.reasoning && lastTextPartIndex !== -1) {
-        parts.splice(lastTextPartIndex, 1,
+        parts.splice(
+          lastTextPartIndex,
+          1,
           { type: 'reasoning', text: parsed.reasoning },
           { type: 'text', text: parsed.content },
         );
@@ -742,9 +742,7 @@ export class AssistantMessageTarget implements GenerationTarget {
     // the append-only lock resolver: under append-only they are all neutral,
     // so persisted text stays the raw provider stream.
     const eff = this.effective();
-    const lastTextPart = lastTextPartIndex !== -1
-      ? (parts[lastTextPartIndex] as { type: 'text'; text: string })
-      : null;
+    const lastTextPart = lastTextPartIndex !== -1 ? (parts[lastTextPartIndex] as { type: 'text'; text: string }) : null;
     if (lastTextPart) {
       lastTextPart.text = applyOutputWhitespace(lastTextPart.text, eff.whitespaceMode);
 
@@ -835,9 +833,7 @@ export class AssistantMessageTarget implements GenerationTarget {
     if (members.length === 0) return content;
 
     // Collect names of other members
-    const otherMemberIds = members
-      .filter((m) => m.characterId !== character.id)
-      .map((m) => m.characterId);
+    const otherMemberIds = members.filter((m) => m.characterId !== character.id).map((m) => m.characterId);
     const otherChars = await this.deps.characters.getByIds(otherMemberIds);
     const otherNames = otherChars.map((c) => c.name);
     if (otherNames.length === 0) return content;

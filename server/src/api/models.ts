@@ -7,9 +7,6 @@
  */
 
 import { Router } from 'express';
-import { getLogger } from '../lib/logger.js';
-
-const log = getLogger('api/models');
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
 import type { IBackendConfigRepository } from '../repos/BackendConfigRepository.js';
 import type { SecretService } from '../services/SecretService.js';
@@ -19,6 +16,7 @@ import type { BackendAdapter } from '../backends/BackendAdapter.js';
 import { buildBackendSettings } from '../backends/buildBackendSettings.js';
 import { resolveSecretSettings } from '../services/SecretResolver.js';
 import { OpenRouterModelCache } from '../backends/OpenRouterModelCache.js';
+import { apiError, ApiError } from '../middleware/errorHandler.js';
 
 export function createModelsRouter(
   settingsRepo: ISettingsRepository,
@@ -54,9 +52,8 @@ export function createModelsRouter(
       const models = await adapter.listModels();
       res.json({ items: models, total: models.length });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      log.error({ message }, 'model listing error');
-      res.status(502).json({ error: 'Failed to fetch models' });
+      // Upstream failure → 502 (not a generic 500); the central handler logs the cause.
+      throw apiError('MODELS_FETCH_FAILED', 'Failed to fetch models', 502, { cause: err });
     }
   });
 
@@ -69,14 +66,13 @@ export function createModelsRouter(
     try {
       const model = await openRouterCache.getModel(req.params.id);
       if (!model) {
-        res.status(404).json({ error: 'Model not found' });
-        return;
+        throw apiError('NOT_FOUND', 'Model not found', 404);
       }
       res.json(model);
     } catch (err) {
+      if (err instanceof ApiError) throw err;
       const message = err instanceof Error ? err.message : String(err);
-      log.error({ message }, 'failed to fetch model');
-      res.status(502).json({ error: 'Failed to fetch model', details: message });
+      throw apiError('MODEL_FETCH_FAILED', 'Failed to fetch model', 502, { details: message, cause: err });
     }
   });
 
@@ -91,8 +87,7 @@ export function createModelsRouter(
       res.json({ items: providers, total: providers.length });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      log.error({ message }, 'failed to fetch providers');
-      res.status(502).json({ error: 'Failed to fetch providers', details: message });
+      throw apiError('PROVIDERS_FETCH_FAILED', 'Failed to fetch providers', 502, { details: message, cause: err });
     }
   });
 

@@ -40,10 +40,12 @@ describe('LlamaCppBackendAdapter', () => {
       body: createMockStream(['data: {"content":"","stop":true}']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Once upon a time' }], tokenUsage: { prompt: 10, completion: 100 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Once upon a time' }], tokenUsage: { prompt: 10, completion: 100 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -71,10 +73,12 @@ describe('LlamaCppBackendAdapter', () => {
       body: createMockStream(['data: {"content":"","stop":true}']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Hi' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Hi' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -98,10 +102,12 @@ describe('LlamaCppBackendAdapter', () => {
       ]),
     } as Response);
 
-    const { items, result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Say hello' }], tokenUsage: { prompt: 5, completion: 50 } },
-      new AbortController().signal,
-    ));
+    const { items, result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Say hello' }], tokenUsage: { prompt: 5, completion: 50 } },
+        new AbortController().signal,
+      ),
+    );
     const tokens = items.filter((i) => i.type === 'text').map((i) => i.token);
 
     expect(tokens).toEqual(['Hello', ' world', '!']);
@@ -122,10 +128,12 @@ describe('LlamaCppBackendAdapter', () => {
       body: createMockStream(['data: {"content":"x","stop":true,"stopped_limit":true,"tokens_predicted":1}']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
 
     expect(result.finishReason).toBe('length');
   });
@@ -143,10 +151,12 @@ describe('LlamaCppBackendAdapter', () => {
       text: async () => 'Server busy',
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
 
     expect(result.finishReason).toBe('error');
     expect(result.error).toContain('503');
@@ -166,10 +176,12 @@ describe('LlamaCppBackendAdapter', () => {
       body: createMockStream(['data: {"content":"","stop":true}']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -192,10 +204,12 @@ describe('LlamaCppBackendAdapter', () => {
       body: createMockStream(['data: {"content":"","stop":true}']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -217,10 +231,12 @@ describe('LlamaCppBackendAdapter', () => {
       body: createMockStream(['data: {"content":"","stop":true}']),
     } as Response);
 
-    const { result } = await consumeStream(adapter.stream(
-      { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
-      new AbortController().signal,
-    ));
+    const { result } = await consumeStream(
+      adapter.stream(
+        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        new AbortController().signal,
+      ),
+    );
     expect(result.finishReason).toBe('stop');
 
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit];

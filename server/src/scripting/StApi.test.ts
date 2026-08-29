@@ -493,7 +493,7 @@ describe('StApi', () => {
       const filtered = await st.get_chats(characterId);
       expect(filtered).toHaveLength(1);
       const other = crypto.randomUUID();
-      expect((await st.get_chats(other))).toHaveLength(0);
+      expect(await st.get_chats(other)).toHaveLength(0);
     });
 
     it('get_message_at supports positive and negative indices', async () => {
@@ -964,7 +964,12 @@ describe('StApi', () => {
       });
       expect(result.name).toBe('New NPC');
       const created = await h.deps.characters.getById(result.id);
-      expect(created).toMatchObject({ name: 'New NPC', description: 'A background character', personality: 'Gruff', tags: ['npc'] });
+      expect(created).toMatchObject({
+        name: 'New NPC',
+        description: 'A background character',
+        personality: 'Gruff',
+        tags: ['npc'],
+      });
 
       const createdMsg = client.messages.find((m: any) => m.type === 'character.created');
       expect(createdMsg).toMatchObject({ character: { id: result.id, name: 'New NPC' } });
@@ -1145,12 +1150,35 @@ describe('StApi', () => {
 
     it('excludes chat actions, history mutation, and lifecycle', () => {
       const excluded = [
-        'send', 'continue', 'impersonate', 'regenerate', 'trigger', 'stop',
-        'swipe', 'cut', 'edit', 'delete', 'hide', 'unhide', 'set_message_role',
-        'set_message_extra', 'set_reasoning', 'clear_reasoning', 'add_swipe',
-        'set_active_child', 'repair_active_child', 'comment', 'send_as',
-        'send_narrator', 'reset_chat', 'new_chat', 'temp_chat', 'delete_chat',
-        'branch', 'checkpoint', 'hard_fork',
+        'send',
+        'continue',
+        'impersonate',
+        'regenerate',
+        'trigger',
+        'stop',
+        'swipe',
+        'cut',
+        'edit',
+        'delete',
+        'hide',
+        'unhide',
+        'set_message_role',
+        'set_message_extra',
+        'set_reasoning',
+        'clear_reasoning',
+        'add_swipe',
+        'set_active_child',
+        'repair_active_child',
+        'comment',
+        'send_as',
+        'send_narrator',
+        'reset_chat',
+        'new_chat',
+        'temp_chat',
+        'delete_chat',
+        'branch',
+        'checkpoint',
+        'hard_fork',
       ];
       for (const key of excluded) {
         expect(toolSt[key], `"${key}" should be excluded`).toBeUndefined();

@@ -36,7 +36,11 @@ async function requireGroupChatAndCharacter(
   return character;
 }
 
-export async function addChatMember(deps: ChatMembershipDeps, chatId: string, characterId: string): Promise<ChatMember> {
+export async function addChatMember(
+  deps: ChatMembershipDeps,
+  chatId: string,
+  characterId: string,
+): Promise<ChatMember> {
   const character = await requireGroupChatAndCharacter(deps, 'add_chat_member', chatId, characterId);
   const member = await deps.chatMembers.addMember(chatId, characterId);
   deps.chatMetaBroadcast.broadcastGroupMemberAdded(chatId, toChatMemberSummary(member, character));

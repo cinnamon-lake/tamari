@@ -93,7 +93,10 @@ export function CharacterRegexEditor(props: CharacterRegexEditorProps) {
                   {r.name} {r.disabled && <span class="text-danger">{t('settings.regex.disabledLabel')}</span>}
                 </div>
                 <div class="worldinfo-meta">
-                  {r.findRegex} → {r.replaceLua?.trim() ? t('settings.regex.luaBadge') : r.replaceString || t('settings.regex.emptyLabel')}
+                  {r.findRegex} →{' '}
+                  {r.replaceLua?.trim()
+                    ? t('settings.regex.luaBadge')
+                    : r.replaceString || t('settings.regex.emptyLabel')}
                 </div>
                 <div class="worldinfo-meta">
                   {[
@@ -107,10 +110,22 @@ export function CharacterRegexEditor(props: CharacterRegexEditorProps) {
                 </div>
               </div>
               <div class="section-actions">
-                <button class="icon-btn small" onClick={() => setEditing({ ...r })} title={t('common.edit')} aria-label={t('common.edit')} type="button">
+                <button
+                  class="icon-btn small"
+                  onClick={() => setEditing({ ...r })}
+                  title={t('common.edit')}
+                  aria-label={t('common.edit')}
+                  type="button"
+                >
                   <i class="bi bi-pencil" />
                 </button>
-                <button class="icon-btn small danger" onClick={() => removeRule(r.id)} title={t('common.delete')} aria-label={t('common.delete')} type="button">
+                <button
+                  class="icon-btn small danger"
+                  onClick={() => removeRule(r.id)}
+                  title={t('common.delete')}
+                  aria-label={t('common.delete')}
+                  type="button"
+                >
                   <i class="bi bi-trash" />
                 </button>
               </div>
@@ -131,11 +146,21 @@ export function CharacterRegexEditor(props: CharacterRegexEditorProps) {
             </h4>
             <label class="field-label">
               {t('common.name')}
-              <input value={r().name} onInput={(e) => updateEditingField('name', e.currentTarget.value)} placeholder={t('settings.regex.namePlaceholder')} class="input" />
+              <input
+                value={r().name}
+                onInput={(e) => updateEditingField('name', e.currentTarget.value)}
+                placeholder={t('settings.regex.namePlaceholder')}
+                class="input"
+              />
             </label>
             <label class="field-label">
               {t('settings.regex.findField')}
-              <input value={r().findRegex} onInput={(e) => updateEditingField('findRegex', e.currentTarget.value)} placeholder={t('settings.regex.findPlaceholder')} class="input" />
+              <input
+                value={r().findRegex}
+                onInput={(e) => updateEditingField('findRegex', e.currentTarget.value)}
+                placeholder={t('settings.regex.findPlaceholder')}
+                class="input"
+              />
             </label>
             <div class="flex-row-sm">
               <button
@@ -164,44 +189,87 @@ export function CharacterRegexEditor(props: CharacterRegexEditorProps) {
               fallback={
                 <label class="field-label">
                   {t('settings.regex.replaceField')}
-                  <textarea rows={2} value={r().replaceString} onInput={(e) => updateEditingField('replaceString', e.currentTarget.value)} placeholder={t('settings.regex.replacePlaceholder')} class="textarea" />
+                  <textarea
+                    rows={2}
+                    value={r().replaceString}
+                    onInput={(e) => updateEditingField('replaceString', e.currentTarget.value)}
+                    placeholder={t('settings.regex.replacePlaceholder')}
+                    class="textarea"
+                  />
                 </label>
               }
             >
               <label class="field-label">
                 {t('settings.regex.luaReplaceField')}
-                <textarea rows={6} value={r().replaceLua} onInput={(e) => updateEditingField('replaceLua', e.currentTarget.value)} placeholder={t('settings.regex.luaReplacePlaceholder')} class="textarea font-mono" />
+                <textarea
+                  rows={6}
+                  value={r().replaceLua}
+                  onInput={(e) => updateEditingField('replaceLua', e.currentTarget.value)}
+                  placeholder={t('settings.regex.luaReplacePlaceholder')}
+                  class="textarea font-mono"
+                />
                 <span class="hint-text">{t('settings.regex.luaReplaceHint')}</span>
               </label>
             </Show>
             <div class="flex-between">
               <label class="checkbox-row">
-                <input type="checkbox" checked={r().prompt} onChange={(e) => updateEditingField('prompt', e.currentTarget.checked)} class="checkbox" />
+                <input
+                  type="checkbox"
+                  checked={r().prompt}
+                  onChange={(e) => updateEditingField('prompt', e.currentTarget.checked)}
+                  class="checkbox"
+                />
                 {t('settings.regex.placementPrompt')}
               </label>
               <label class="checkbox-row">
-                <input type="checkbox" checked={r().display} onChange={(e) => updateEditingField('display', e.currentTarget.checked)} class="checkbox" />
+                <input
+                  type="checkbox"
+                  checked={r().display}
+                  onChange={(e) => updateEditingField('display', e.currentTarget.checked)}
+                  class="checkbox"
+                />
                 {t('settings.regex.placementDisplay')}
               </label>
               <label class="checkbox-row">
-                <input type="checkbox" checked={r().disabled} onChange={(e) => updateEditingField('disabled', e.currentTarget.checked)} class="checkbox" />
+                <input
+                  type="checkbox"
+                  checked={r().disabled}
+                  onChange={(e) => updateEditingField('disabled', e.currentTarget.checked)}
+                  class="checkbox"
+                />
                 {t('settings.regex.disabledCheckbox')}
               </label>
             </div>
             <div class="flex-between">
               <label class="checkbox-row">
-                <input type="checkbox" checked={r().userInput} onChange={(e) => updateEditingField('userInput', e.currentTarget.checked)} class="checkbox" />
+                <input
+                  type="checkbox"
+                  checked={r().userInput}
+                  onChange={(e) => updateEditingField('userInput', e.currentTarget.checked)}
+                  class="checkbox"
+                />
                 {t('settings.regex.placementUserInput')}
               </label>
               <label class="checkbox-row">
-                <input type="checkbox" checked={r().aiOutput} onChange={(e) => updateEditingField('aiOutput', e.currentTarget.checked)} class="checkbox" />
+                <input
+                  type="checkbox"
+                  checked={r().aiOutput}
+                  onChange={(e) => updateEditingField('aiOutput', e.currentTarget.checked)}
+                  class="checkbox"
+                />
                 {t('settings.regex.placementAiOutput')}
               </label>
             </div>
 
             <label class="field-label mt-sm">
               {t('settings.regex.testInput')}
-              <textarea rows={3} value={testInput()} onInput={(e) => setTestInput(e.currentTarget.value)} placeholder={t('settings.regex.testInputPlaceholder')} class="textarea" />
+              <textarea
+                rows={3}
+                value={testInput()}
+                onInput={(e) => setTestInput(e.currentTarget.value)}
+                placeholder={t('settings.regex.testInputPlaceholder')}
+                class="textarea"
+              />
             </label>
             <label class="field-label">
               {t('settings.regex.testOutput')}

@@ -13,7 +13,11 @@ function rowToToolset(row: unknown): Toolset {
     templateId: r.template_id,
     name: r.name,
     config: safeParseJson(r.config, z.record(z.string(), z.unknown()), {}),
-    toolOverrides: safeParseJson(r.tool_overrides, z.record(z.string(), z.unknown()), {}) as unknown as Toolset['toolOverrides'],
+    toolOverrides: safeParseJson(
+      r.tool_overrides,
+      z.record(z.string(), z.unknown()),
+      {},
+    ) as unknown as Toolset['toolOverrides'],
     enabled: Boolean(r.enabled),
     agentVisible: Boolean(r.agent_visible),
     createdAt: r.created_at,
@@ -141,4 +145,5 @@ export class ToolsetRepository implements IToolsetRepository {
       args: [id],
     });
     if (rs.rowsAffected === 0) throw new NotFoundError('Toolset', id);
-  }}
+  }
+}

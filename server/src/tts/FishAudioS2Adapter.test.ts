@@ -142,12 +142,16 @@ describe('FishAudioS2Adapter', () => {
     expect(body.get('text')).toBe('Hello');
     const audio = body.get('audio');
     expect(audio).toBeInstanceOf(Blob);
-    expect((init as RequestInit).headers).toEqual(expect.objectContaining({
-      Authorization: 'Bearer test-key',
-    }));
-    expect((init as RequestInit).headers).not.toEqual(expect.objectContaining({
-      'Content-Type': 'application/json',
-    }));
+    expect((init as RequestInit).headers).toEqual(
+      expect.objectContaining({
+        Authorization: 'Bearer test-key',
+      }),
+    );
+    expect((init as RequestInit).headers).not.toEqual(
+      expect.objectContaining({
+        'Content-Type': 'application/json',
+      }),
+    );
   });
 
   it('addVoice throws when server returns success=false', async () => {

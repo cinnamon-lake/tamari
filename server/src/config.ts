@@ -54,7 +54,10 @@ export function loadConfig(): ServerConfig {
   const disableCsrf = process.env.DISABLE_CSRF === 'true';
   // SILLYTAVERN_SECRET accepted as a pre-rebrand fallback.
   const secret = process.env.TAMARI_SECRET ?? process.env.SILLYTAVERN_SECRET ?? randomBytes(32).toString('hex');
-  const wsOrigins = process.env.WS_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean) ?? [];
+  const wsOrigins =
+    process.env.WS_ORIGINS?.split(',')
+      .map((o) => o.trim())
+      .filter(Boolean) ?? [];
   const httpJsonLimit = process.env.HTTP_JSON_LIMIT ?? '5mb';
   const wsMaxPayloadBytes = parseInt(process.env.WS_MAX_PAYLOAD_BYTES ?? String(1024 * 1024), 10);
   const avatarMaxFileSizeBytes = parseInt(process.env.AVATAR_MAX_FILE_SIZE_BYTES ?? String(50 * 1024 * 1024), 10);

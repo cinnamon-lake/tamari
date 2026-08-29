@@ -69,7 +69,9 @@ function makeCharacter(overrides: Partial<import('@tamari/types').Character> = {
   };
 }
 
-function makeCharacterSummary(overrides: Partial<import('@tamari/types').CharacterSummary> = {}): import('@tamari/types').CharacterSummary {
+function makeCharacterSummary(
+  overrides: Partial<import('@tamari/types').CharacterSummary> = {},
+): import('@tamari/types').CharacterSummary {
   return {
     id: 'char-1',
     name: 'Test Char',
@@ -139,7 +141,9 @@ function makePersona(overrides: Partial<import('@tamari/types').Persona> = {}): 
   };
 }
 
-function makePersonaSummary(overrides: Partial<import('@tamari/types').PersonaSummary> = {}): import('@tamari/types').PersonaSummary {
+function makePersonaSummary(
+  overrides: Partial<import('@tamari/types').PersonaSummary> = {},
+): import('@tamari/types').PersonaSummary {
   return {
     id: 'persona-1',
     name: 'Test Persona',
@@ -151,7 +155,9 @@ function makePersonaSummary(overrides: Partial<import('@tamari/types').PersonaSu
   };
 }
 
-function makeBackendConfig(overrides: Partial<import('@tamari/types').BackendConfig> = {}): import('@tamari/types').BackendConfig {
+function makeBackendConfig(
+  overrides: Partial<import('@tamari/types').BackendConfig> = {},
+): import('@tamari/types').BackendConfig {
   return {
     id: 'bc-1',
     name: 'Test BackendConfig',
@@ -186,7 +192,9 @@ function makeBackendConfig(overrides: Partial<import('@tamari/types').BackendCon
   };
 }
 
-function makeBackendConfigSummary(overrides: Partial<import('@tamari/types').BackendConfigSummary> = {}): import('@tamari/types').BackendConfigSummary {
+function makeBackendConfigSummary(
+  overrides: Partial<import('@tamari/types').BackendConfigSummary> = {},
+): import('@tamari/types').BackendConfigSummary {
   return {
     id: 'bc-1',
     name: 'Test BackendConfig',
@@ -194,7 +202,9 @@ function makeBackendConfigSummary(overrides: Partial<import('@tamari/types').Bac
   };
 }
 
-function makePromptList(overrides: Partial<import('@tamari/types').PromptList> = {}): import('@tamari/types').PromptList {
+function makePromptList(
+  overrides: Partial<import('@tamari/types').PromptList> = {},
+): import('@tamari/types').PromptList {
   return {
     id: 'pl-1',
     name: 'Test PromptList',
@@ -207,7 +217,9 @@ function makePromptList(overrides: Partial<import('@tamari/types').PromptList> =
   };
 }
 
-function makePromptListSummary(overrides: Partial<import('@tamari/types').PromptListSummary> = {}): import('@tamari/types').PromptListSummary {
+function makePromptListSummary(
+  overrides: Partial<import('@tamari/types').PromptListSummary> = {},
+): import('@tamari/types').PromptListSummary {
   return {
     id: 'pl-1',
     name: 'Test PromptList',
@@ -215,7 +227,9 @@ function makePromptListSummary(overrides: Partial<import('@tamari/types').Prompt
   };
 }
 
-function makeQuickReply(overrides: Partial<import('@tamari/types').QuickReply> = {}): import('@tamari/types').QuickReply {
+function makeQuickReply(
+  overrides: Partial<import('@tamari/types').QuickReply> = {},
+): import('@tamari/types').QuickReply {
   return {
     id: 'qr-1',
     scope: 'global',
@@ -233,7 +247,9 @@ function makeQuickReply(overrides: Partial<import('@tamari/types').QuickReply> =
   };
 }
 
-function makeChatMember(overrides: Partial<import('@tamari/types').ChatMemberSummary> = {}): import('@tamari/types').ChatMemberSummary {
+function makeChatMember(
+  overrides: Partial<import('@tamari/types').ChatMemberSummary> = {},
+): import('@tamari/types').ChatMemberSummary {
   return {
     chatId: 'chat-1',
     characterId: 'char-1',
@@ -855,7 +871,12 @@ describe('serverStore', () => {
     });
 
     it('generation.started and generation.done reset streamingDebug', () => {
-      setState('generation', { ...state.generation, chatId: 'chat-1', status: 'streaming', streamingDebug: 'leftover' });
+      setState('generation', {
+        ...state.generation,
+        chatId: 'chat-1',
+        status: 'streaming',
+        streamingDebug: 'leftover',
+      });
       mockWs.simulateMessage({ type: 'generation.started', generationId: 'gen-2', chatId: 'chat-1', messageId: 2 });
       expect(state.generation.streamingDebug).toBe('');
       setState('generation', 'streamingDebug', 'some debug');
@@ -1035,14 +1056,20 @@ describe('serverStore', () => {
 
     it('backendConfig.created does not mutate list directly', () => {
       setState('backendConfigs', []);
-      mockWs.simulateMessage({ type: 'backendConfig.created', backendConfig: makeBackendConfig({ id: 'bc1', name: 'New' }) });
+      mockWs.simulateMessage({
+        type: 'backendConfig.created',
+        backendConfig: makeBackendConfig({ id: 'bc1', name: 'New' }),
+      });
       expect(state.backendConfigs).toHaveLength(0);
     });
 
     it('backendConfig.updated updates activeBackendConfig', () => {
       setActiveBackendConfigId('bc1');
       setState('activeBackendConfig', makeBackendConfig({ id: 'bc1', name: 'Old' }));
-      mockWs.simulateMessage({ type: 'backendConfig.updated', backendConfig: makeBackendConfig({ id: 'bc1', name: 'New' }) });
+      mockWs.simulateMessage({
+        type: 'backendConfig.updated',
+        backendConfig: makeBackendConfig({ id: 'bc1', name: 'New' }),
+      });
       expect(state.activeBackendConfig?.name).toBe('New');
     });
 
@@ -1056,7 +1083,10 @@ describe('serverStore', () => {
 
     it('backendConfig.snapshot updates activeBackendConfig when IDs match', () => {
       setActiveBackendConfigId('bc1');
-      mockWs.simulateMessage({ type: 'backendConfig.snapshot', backendConfig: makeBackendConfig({ id: 'bc1', name: 'Updated' }) });
+      mockWs.simulateMessage({
+        type: 'backendConfig.snapshot',
+        backendConfig: makeBackendConfig({ id: 'bc1', name: 'Updated' }),
+      });
       expect(state.activeBackendConfig?.name).toBe('Updated');
     });
 
@@ -1098,7 +1128,9 @@ describe('serverStore', () => {
   // ---------- toolset handlers ----------
 
   describe('toolset handlers', () => {
-    const makeToolset = (overrides: Partial<import('@tamari/types').Toolset> = {}): import('@tamari/types').Toolset => ({
+    const makeToolset = (
+      overrides: Partial<import('@tamari/types').Toolset> = {},
+    ): import('@tamari/types').Toolset => ({
       id: 'ts-1',
       templateId: 'tpl-1',
       name: 'Test Toolset',
@@ -1195,7 +1227,10 @@ describe('serverStore', () => {
 
     it('promptList.snapshot updates activePromptList when IDs match', () => {
       setActivePromptListId('pl1');
-      mockWs.simulateMessage({ type: 'promptList.snapshot', promptList: makePromptList({ id: 'pl1', name: 'Updated' }) });
+      mockWs.simulateMessage({
+        type: 'promptList.snapshot',
+        promptList: makePromptList({ id: 'pl1', name: 'Updated' }),
+      });
       expect(state.activePromptList?.name).toBe('Updated');
     });
   });

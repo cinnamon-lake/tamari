@@ -3,6 +3,7 @@ import express, { type RequestHandler } from 'express';
 import request from 'supertest';
 import { TestHarness } from '../testing/TestHarness.js';
 import { createFilesRouter } from './files.js';
+import { errorHandler } from '../middleware/errorHandler.js';
 
 const minimalPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
@@ -17,6 +18,7 @@ const denyAuth: RequestHandler = (_req, res) => {
 function createApp(harness: TestHarness, requireAuth: RequestHandler) {
   const app = express();
   app.use('/files', createFilesRouter(harness.deps.storage, requireAuth));
+  app.use(errorHandler);
   return app;
 }
 
@@ -56,16 +58,12 @@ describe('createFilesRouter', () => {
   describe('path traversal guard', () => {
     // NOTE: a bare '..' / '%2E%2E' segment is normalized away by the HTTP client
     // before Express sees it (404); these cases exercise the router-side guard.
-    it.each([
-      '..%2Fsecret.png',
-      '%2E%2E%2F%2E%2E%2Fsecret.png',
-      'sub%2Fsecret.png',
-      '%2Fetc%2Fpasswd',
-    ])('rejects %s with 400', async (fileName) => {
-      const res = await request(createApp(h, allowAuth))
-        .get(`/files/avatars/${fileName}`)
-        .expect(400);
-      expect(res.body.error).toBe('Invalid file name');
-    });
+    it.each(['..%2Fsecret.png', '%2E%2E%2F%2E%2E%2Fsecret.png', 'sub%2Fsecret.png', '%2Fetc%2Fpasswd'])(
+      'rejects %s with 400',
+      async (fileName) => {
+        const res = await request(createApp(h, allowAuth)).get(`/files/avatars/${fileName}`).expect(400);
+        expect(res.body.error).toBe('Invalid file name');
+      },
+    );
   });
 });

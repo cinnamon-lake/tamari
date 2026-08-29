@@ -60,7 +60,10 @@ describe('composeGenerationTrace', () => {
         traceError: { code: 'LUA_ERROR', layer: 'custom-backend(research)', message: 'boom' },
       },
     });
-    const byId = new Map([[root.id, root], [child.id, child]]);
+    const byId = new Map([
+      [root.id, root],
+      [child.id, child],
+    ]);
     const trace = await composeGenerationTrace(child, async (id) => byId.get(id));
 
     expect(trace.lines).toEqual([

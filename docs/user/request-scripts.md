@@ -14,12 +14,12 @@ The script is stored per backend config in `providerParams.requestScript`, so di
 
 Your script receives a mutable global `request` table. Whatever it contains when the script finishes is what gets sent:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `request.url` | string | The full request URL |
-| `request.method` | string | HTTP method (usually `POST`) |
-| `request.headers` | table | Request headers, keyed by header name |
-| `request.body` | table | The JSON request body as a Lua table |
+| Field             | Type   | Description                           |
+| ----------------- | ------ | ------------------------------------- |
+| `request.url`     | string | The full request URL                  |
+| `request.method`  | string | HTTP method (usually `POST`)          |
+| `request.headers` | table  | Request headers, keyed by header name |
+| `request.body`    | table  | The JSON request body as a Lua table  |
 
 > **Note:** `request.body` is a Lua table, not a string. Mutate it directly (`request.body.temperature = 0.7`) — tamari serializes it back to JSON automatically after the script runs.
 
@@ -40,7 +40,7 @@ If the script throws an error or times out, the generation fails with a `Request
 - **5-second timeout.** A runaway script (e.g. an accidental `while true do end`) fails the generation with a request-script error — it can never hang the server.
 - **Sandboxed.** There is no `io`, `os`, `debug`, `package`, `require`, `load`, `loadstring`, `loadfile`, or `dofile`. You get plain Lua plus the `request` table.
 - **SSRF protection.** If your script rewrites `request.url`, the final URL is validated before sending: only `http:`/`https:` is allowed, and private, loopback, link-local, and unspecified address ranges are blocked. Hostnames are resolved and every returned IP is re-checked, so DNS-rebinding tricks don't work either.
-- **Loopback exception.** If the backend's *configured* endpoint is itself loopback (`localhost`, `127.x`, `::1` — e.g. a local llama.cpp), the script may keep targeting loopback. A script can never redirect a *cloud* backend's request to `127.x`.
+- **Loopback exception.** If the backend's _configured_ endpoint is itself loopback (`localhost`, `127.x`, `::1` — e.g. a local llama.cpp), the script may keep targeting loopback. A script can never redirect a _cloud_ backend's request to `127.x`.
 
 ## Examples
 

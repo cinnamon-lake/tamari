@@ -46,7 +46,9 @@ describe('ContextMenu', () => {
 
   it('does not close when clicking inside the menu', () => {
     const onClose = vi.fn();
-    const { container } = render(() => <ContextMenu x={0} y={0} items={[{ label: 'Edit', onClick: vi.fn() }]} onClose={onClose} />);
+    const { container } = render(() => (
+      <ContextMenu x={0} y={0} items={[{ label: 'Edit', onClick: vi.fn() }]} onClose={onClose} />
+    ));
 
     const menu = container.querySelector('.context-menu');
     expect(menu).toBeInTheDocument();

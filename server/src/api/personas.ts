@@ -9,13 +9,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
-import { getLogger } from '../lib/logger.js';
+import { apiError } from '../middleware/errorHandler.js';
 import type { IPersonaRepository } from '../repos/PersonaRepository.js';
 import type { FileStorage } from '../services/FileStorage.js';
 import type { EventBus } from '../bus/EventBus.js';
 import { setPersonaAvatarFromBuffer } from '../services/personaAvatar.js';
-
-const log = getLogger('api/personas');
 
 const AVATAR_MIME_ALLOWLIST = new Set(['image/png', 'image/jpeg', 'image/webp']);
 
@@ -37,27 +35,19 @@ export function createPersonasRouter(
   const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: avatarMaxFileSizeBytes } });
 
   router.post('/:id/avatar', avatarUpload.single('avatar'), async (req, res) => {
-    try {
-      const persona = await personas.getById(z.string().parse(req.params.id));
-      if (!persona) {
-        res.status(404).json({ error: 'Persona not found' });
-        return;
-      }
-      const mimeError = validateAvatarMime(req.file);
-      if (mimeError) {
-        res.status(400).json({ error: mimeError });
-        return;
-      }
-      if (!req.file) {
-        res.status(400).json({ error: 'No file uploaded' });
-        return;
-      }
-      await setPersonaAvatarFromBuffer({ personas, storage, bus }, persona, req.file.buffer);
-      res.json({ success: true });
-    } catch (err) {
-      log.error({ err }, 'api/personas: avatar upload error');
-      res.status(500).json({ error: 'Upload failed' });
+    const persona = await personas.getById(z.string().parse(req.params.id));
+    if (!persona) {
+      throw apiError('NOT_FOUND', 'Persona not found', 404);
     }
+    const mimeError = validateAvatarMime(req.file);
+    if (mimeError) {
+      throw apiError('INVALID_AVATAR', mimeError, 400);
+    }
+    if (!req.file) {
+      throw apiError('NO_FILE', 'No file uploaded', 400);
+    }
+    await setPersonaAvatarFromBuffer({ personas, storage, bus }, persona, req.file.buffer);
+    res.json({ success: true });
   });
 
   return router;

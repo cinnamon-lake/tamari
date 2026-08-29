@@ -266,7 +266,6 @@
 
 /* Tool instances inside a toolset */
 
-
 /* Standalone Custom Lua Tools panel */
 .lua-tools-panel {
   display: flex;
@@ -294,7 +293,6 @@
 
 /* Lua tool editor --------------------------------------------------------- */
 
-
 .lua-tool-editor-fields {
   display: grid;
   grid-template-columns: 2fr 1fr;
@@ -306,7 +304,6 @@
   .lua-tool-editor-fields {
     grid-template-columns: 1fr;
   }
-
 
   .instance-row-editor {
     padding-top: var(--space-sm);

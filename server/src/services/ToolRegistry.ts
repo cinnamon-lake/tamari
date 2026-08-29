@@ -115,7 +115,12 @@ export class ToolRegistry {
     return this.wrapLuaTemplate(luaTemplate);
   }
 
-  private wrapLuaTemplate(luaTemplate: { id: string; name: string; code: string; sandbox?: LuaRuntimeOptions }): ToolTemplate {
+  private wrapLuaTemplate(luaTemplate: {
+    id: string;
+    name: string;
+    code: string;
+    sandbox?: LuaRuntimeOptions;
+  }): ToolTemplate {
     const executor = this.luaExecutor!;
     return {
       id: luaTemplate.id,
@@ -133,7 +138,8 @@ export class ToolRegistry {
         this.luaDefCache.set(luaTemplate.id, { def: result, ts: Date.now() });
         return result;
       },
-      execute: (toolName, args, context) => executor.execute(luaTemplate.code, toolName, args, context, luaTemplate.sandbox),
+      execute: (toolName, args, context) =>
+        executor.execute(luaTemplate.code, toolName, args, context, luaTemplate.sandbox),
       // Deliberate no-ops: for Lua templates the executor owns the whole
       // state protocol (deserialize → execute → serialize) inside
       // LuaToolExecutor.execute(), so the registry-level calls below must be
@@ -148,7 +154,15 @@ export class ToolRegistry {
     this.luaDefCache.clear();
   }
 
-  async getDefinitionsByToolsets(toolsets: Array<{ templateId: string; toolOverrides: Record<string, { name?: string; description?: string; parameterDescriptions?: Record<string, string> }> }>): Promise<BackendToolDefinition[]> {
+  async getDefinitionsByToolsets(
+    toolsets: Array<{
+      templateId: string;
+      toolOverrides: Record<
+        string,
+        { name?: string; description?: string; parameterDescriptions?: Record<string, string> }
+      >;
+    }>,
+  ): Promise<BackendToolDefinition[]> {
     const results: BackendToolDefinition[] = [];
     for (const ts of toolsets) {
       const template = await this.getTemplate(ts.templateId);
@@ -185,7 +199,7 @@ export class ToolRegistry {
 
     // Find the toolset that owns this tool name
     const allToolsets = await this.toolsetRepo.list();
-    let owningToolset: typeof allToolsets[0] | undefined;
+    let owningToolset: (typeof allToolsets)[0] | undefined;
     let matchedToolDef: ToolTemplateToolDef | undefined;
 
     for (const ts of allToolsets) {
@@ -235,7 +249,10 @@ export class ToolRegistry {
       try {
         template.deserialize(stateSnapshot);
       } catch (err) {
-        logger.warn({ err, stateSnapshot: String(stateSnapshot).slice(0, 200) }, 'ToolRegistry: deserialize failed, starting fresh');
+        logger.warn(
+          { err, stateSnapshot: String(stateSnapshot).slice(0, 200) },
+          'ToolRegistry: deserialize failed, starting fresh',
+        );
       }
     }
 

@@ -11,11 +11,11 @@ import { str } from '../../lib/coerce.js';
 import { getLogger } from '../../lib/logger.js';
 import type { Migration } from '../runMigrations.js';
 
-const log = getLogger('db');
+const log = getLogger('db/migrations/015_message_parts_data');
 
 const migration: Migration = {
   async up({ db }) {
-    const rs = await db.execute("SELECT id, extra FROM messages WHERE extra LIKE '%\"parts\"%'");
+    const rs = await db.execute('SELECT id, extra FROM messages WHERE extra LIKE \'%"parts"%\'');
     let migrated = 0;
     for (const row of rs.rows) {
       const id = Number(row.id);

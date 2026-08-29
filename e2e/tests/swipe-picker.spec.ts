@@ -1,10 +1,5 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
+import { uniqueName } from '../helpers/names.js';
 
 async function createCharacterAndChat(page: import('@playwright/test').Page, charName: string) {
   await page.locator('[title="Create character"]').click();
@@ -25,7 +20,10 @@ async function createCharacterAndChat(page: import('@playwright/test').Page, cha
   await page.addStyleTag({ content: '.character-list .character-actions { opacity: 1 !important; }' });
   await charRow.locator('[title="New chat"]').click({ force: true });
 
-  const chatItem = page.locator('.chat-item').filter({ hasText: new RegExp(charName) }).first();
+  const chatItem = page
+    .locator('.chat-item')
+    .filter({ hasText: new RegExp(charName) })
+    .first();
   await expect(chatItem).toBeVisible({ timeout: 10000 });
   await chatItem.click();
 
@@ -49,16 +47,7 @@ async function waitForAssistantReply(page: import('@playwright/test').Page, text
 }
 
 test.describe('Swipe Picker', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('opens the swipe picker popup and jumps to a specific swipe', async ({ page }) => {
+  test('opens the swipe picker popup and jumps to a specific swipe', async ({ page, app: _app }) => {
     const charName = uniqueName('SwipePicker');
     await createCharacterAndChat(page, charName);
 
@@ -101,7 +90,7 @@ test.describe('Swipe Picker', () => {
     await expect(page.locator('.swipe-counter')).toContainText('/2');
   });
 
-  test('shows content previews in the swipe picker', async ({ page }) => {
+  test('shows content previews in the swipe picker', async ({ page, app: _app }) => {
     const charName = uniqueName('SwipePreview');
     await createCharacterAndChat(page, charName);
 

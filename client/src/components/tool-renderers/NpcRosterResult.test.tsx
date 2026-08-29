@@ -68,14 +68,20 @@ describe('NpcRosterResult', () => {
     setState('characters', [{ name: 'Marta' } as any]);
     render(() => <NpcRosterResult content="NPC registered: Marta" extra={validExtra} />);
 
-    const martaBtn = screen.getByText('Marta').closest('.npc-roster-item')!.querySelector<HTMLButtonElement>('.npc-promote-btn')!;
+    const martaBtn = screen
+      .getByText('Marta')
+      .closest('.npc-roster-item')!
+      .querySelector<HTMLButtonElement>('.npc-promote-btn')!;
     expect(martaBtn).toBeDisabled();
     expect(martaBtn).toHaveTextContent('Promoted');
     fireEvent.click(martaBtn);
     expect(sendSpy).not.toHaveBeenCalled();
 
     // Other entries stay promotable.
-    const bramBtn = screen.getByText('Bram').closest('.npc-roster-item')!.querySelector<HTMLButtonElement>('.npc-promote-btn')!;
+    const bramBtn = screen
+      .getByText('Bram')
+      .closest('.npc-roster-item')!
+      .querySelector<HTMLButtonElement>('.npc-promote-btn')!;
     expect(bramBtn).toBeEnabled();
   });
 
@@ -93,20 +99,27 @@ describe('NpcRosterResult', () => {
   });
 
   it('falls back to plain content when npcs is not an object', () => {
-    render(() => <NpcRosterResult content="NPC registered: Marta" extra={{ renderType: 'npc_roster', npcs: 'nope' }} />);
+    render(() => (
+      <NpcRosterResult content="NPC registered: Marta" extra={{ renderType: 'npc_roster', npcs: 'nope' }} />
+    ));
     expect(document.querySelectorAll('.npc-roster-item')).toHaveLength(0);
     expect(screen.getByText('NPC registered: Marta')).toBeInTheDocument();
   });
 
   it('falls back to plain content when npcs is an array', () => {
-    render(() => <NpcRosterResult content="NPC registered: Marta" extra={{ renderType: 'npc_roster', npcs: ['Marta'] }} />);
+    render(() => (
+      <NpcRosterResult content="NPC registered: Marta" extra={{ renderType: 'npc_roster', npcs: ['Marta'] }} />
+    ));
     expect(document.querySelectorAll('.npc-roster-item')).toHaveLength(0);
     expect(screen.getByText('NPC registered: Marta')).toBeInTheDocument();
   });
 
   it('falls back to plain content when an entry is malformed', () => {
     render(() => (
-      <NpcRosterResult content="NPC registered: Marta" extra={{ renderType: 'npc_roster', npcs: { Marta: 'Innkeeper' } }} />
+      <NpcRosterResult
+        content="NPC registered: Marta"
+        extra={{ renderType: 'npc_roster', npcs: { Marta: 'Innkeeper' } }}
+      />
     ));
     expect(document.querySelectorAll('.npc-roster-item')).toHaveLength(0);
     expect(screen.getByText('NPC registered: Marta')).toBeInTheDocument();
@@ -114,7 +127,10 @@ describe('NpcRosterResult', () => {
 
   it('falls back to plain content when a field has the wrong type', () => {
     render(() => (
-      <NpcRosterResult content="NPC registered: Marta" extra={{ renderType: 'npc_roster', npcs: { Marta: { description: 42 } } }} />
+      <NpcRosterResult
+        content="NPC registered: Marta"
+        extra={{ renderType: 'npc_roster', npcs: { Marta: { description: 42 } } }}
+      />
     ));
     expect(document.querySelectorAll('.npc-roster-item')).toHaveLength(0);
     expect(screen.getByText('NPC registered: Marta')).toBeInTheDocument();

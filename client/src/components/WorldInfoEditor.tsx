@@ -3,8 +3,8 @@ import { state } from '../stores/serverStore.js';
 import { activeWorldInfoId, setActiveWorldInfoId } from '../stores/uiStore.js';
 import { bus } from '../bus/WebSocketBus.js';
 import { confirmPopup } from '../stores/popupStore.js';
-import { onEnterActivate, trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
-import { createBackdropDismiss } from '../lib/backdropDismiss.js';
+import { onEnterActivate } from '../lib/focusUtils.js';
+import { Modal } from './Modal.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import { useI18n } from '../i18n/index.js';
 import { IdBadge } from './IdBadge.js';
@@ -14,13 +14,9 @@ import './WorldInfoEditor.css';
 export function WorldInfoEditor(props: { onClose: () => void }) {
   const { t } = useI18n();
 
-  const close = () => {
-    restoreFocus();
-    props.onClose();
-  };
+  const close = () => props.onClose();
 
   onMount(() => {
-    saveFocus();
     bus.send({ type: 'worldinfo.list' });
   });
 
@@ -38,54 +34,51 @@ export function WorldInfoEditor(props: { onClose: () => void }) {
   };
 
   return (
-    <div class="modal-overlay" {...createBackdropDismiss(close)}>
-      <div class="modal worldinfo-modal" role="dialog" aria-modal="true" aria-label={t('worldInfo.modalAriaLabel')} onKeyDown={(e) => trapFocus(e.currentTarget, e)} onClick={(e) => e.stopPropagation()}>
-        <div class="modal-header-row">
-          <h2 class="modal-title">{t('worldInfo.title')}</h2>
-          <button class="icon-btn" onClick={close} title={t('common.close')} aria-label={t('common.close')} type="button">
-            <i class="bi bi-x-lg" />
-          </button>
+    <Modal
+      title={t('worldInfo.title')}
+      onClose={close}
+      class="modal worldinfo-modal"
+      ariaLabel={t('worldInfo.modalAriaLabel')}
+      showCloseButton
+    >
+      <Show
+        when={!activeWorldInfoId()}
+        fallback={
+          <Show
+            when={activeBook()}
+            fallback={
+              <div class="empty-state empty-state-lg">
+                <i class="bi bi-arrow-repeat" />
+                <div class="loading-text">{t('worldInfo.loadingBook')}</div>
+              </div>
+            }
+          >
+            {(book) => <BookEditor book={book()} onBack={() => setActiveWorldInfoId(null)} />}
+          </Show>
+        }
+      >
+        <div class="worldinfo-list">
+          <For each={state.worldInfo}>
+            {(book) => (
+              <div
+                id={book.id}
+                class="selectable-item worldinfo-item"
+                onClick={() => {
+                  setActiveWorldInfoId(book.id);
+                  bus.send({ type: 'worldinfo.select', bookId: book.id });
+                }}
+              >
+                <span class="worldinfo-name">{book.name}</span>
+                <span class="worldinfo-meta">{t('worldInfo.entriesCount', { count: book.entries.length })}</span>
+              </div>
+            )}
+          </For>
         </div>
-
-        <Show
-          when={!activeWorldInfoId()}
-          fallback={
-            <Show
-              when={activeBook()}
-              fallback={
-                <div class="empty-state empty-state-lg">
-                  <i class="bi bi-arrow-repeat" />
-                  <div class="loading-text">{t('worldInfo.loadingBook')}</div>
-                </div>
-              }
-            >
-              {(book) => <BookEditor book={book()} onBack={() => setActiveWorldInfoId(null)} />}
-            </Show>
-          }
-        >
-          <div class="worldinfo-list">
-            <For each={state.worldInfo}>
-              {(book) => (
-                <div
-                  id={book.id}
-                  class="selectable-item worldinfo-item"
-                  onClick={() => {
-                    setActiveWorldInfoId(book.id);
-                    bus.send({ type: 'worldinfo.select', bookId: book.id });
-                  }}
-                >
-                  <span class="worldinfo-name">{book.name}</span>
-                  <span class="worldinfo-meta">{t('worldInfo.entriesCount', { count: book.entries.length })}</span>
-                </div>
-              )}
-            </For>
-          </div>
-          <button class="btn btn-primary primary-btn" onClick={createBook} type="button">
-            <i class="bi bi-plus-lg" /> {t('worldInfo.newLorebook')}
-          </button>
-        </Show>
-      </div>
-    </div>
+        <button class="btn btn-primary primary-btn" onClick={createBook} type="button">
+          <i class="bi bi-plus-lg" /> {t('worldInfo.newLorebook')}
+        </button>
+      </Show>
+    </Modal>
   );
 }
 
@@ -204,13 +197,27 @@ function BookEditor(props: { book: WorldInfo; onBack: () => void }) {
                 <Show
                   when={editingEntryId() === id && entry()}
                   fallback={
-                    <div id={id} class="selectable-item entry-row" role="button" tabindex={0} onKeyDown={onEnterActivate} onClick={() => setEditingEntryId(id)}>
+                    <div
+                      id={id}
+                      class="selectable-item entry-row"
+                      role="button"
+                      tabindex={0}
+                      onKeyDown={onEnterActivate}
+                      onClick={() => setEditingEntryId(id)}
+                    >
                       <span class="entry-keys">{entry()?.keys.join(', ')}</span>
                       <span class="entry-content-preview">{entry()?.content.slice(0, 60)}...</span>
                     </div>
                   }
                 >
-                  {(e) => <EntryEditor id={id} entry={e()} onSave={(patch) => updateEntry(id, patch)} onDelete={() => deleteEntry(id)} />}
+                  {(e) => (
+                    <EntryEditor
+                      id={id}
+                      entry={e()}
+                      onSave={(patch) => updateEntry(id, patch)}
+                      onDelete={() => deleteEntry(id)}
+                    />
+                  )}
                 </Show>
               );
             }}
@@ -237,7 +244,10 @@ function BookEditor(props: { book: WorldInfo; onBack: () => void }) {
 
         <Show when={testResults()}>
           <div class="test-results">
-            <Show when={(testResults()?.length ?? 0) > 0} fallback={<p class="text-muted">{t('worldInfo.noEntriesTriggered')}</p>}>
+            <Show
+              when={(testResults()?.length ?? 0) > 0}
+              fallback={<p class="text-muted">{t('worldInfo.noEntriesTriggered')}</p>}
+            >
               <For each={testResults()}>
                 {(result) => (
                   <div id={result.entry.id} class="test-result-item">
@@ -260,7 +270,12 @@ function BookEditor(props: { book: WorldInfo; onBack: () => void }) {
   );
 }
 
-function EntryEditor(props: { entry: WorldInfoEntry; onSave: (patch: Partial<Omit<WorldInfoEntry, 'id'>>) => void; onDelete: () => void; id?: string }) {
+function EntryEditor(props: {
+  entry: WorldInfoEntry;
+  onSave: (patch: Partial<Omit<WorldInfoEntry, 'id'>>) => void;
+  onDelete: () => void;
+  id?: string;
+}) {
   const { t } = useI18n();
   const [keys, setKeys] = createSignal(props.entry.keys.join(', '));
   const [content, setContent] = createSignal(props.entry.content);
@@ -371,7 +386,13 @@ function EntryEditor(props: { entry: WorldInfoEntry; onSave: (patch: Partial<Omi
       </label>
       <label class="field-label">
         {t('worldInfo.contentLabel')}
-        <textarea class="textarea" rows={3} value={content()} onInput={(e) => setContent(e.currentTarget.value)} onBlur={save} />
+        <textarea
+          class="textarea"
+          rows={3}
+          value={content()}
+          onInput={(e) => setContent(e.currentTarget.value)}
+          onBlur={save}
+        />
       </label>
       <div class="entry-row-inline">
         <label class="field-label">
@@ -384,11 +405,21 @@ function EntryEditor(props: { entry: WorldInfoEntry; onSave: (patch: Partial<Omi
               scheduleSave();
             }}
           >
-            <option class="select-option" value="before_char">{t('worldInfo.positionBeforeChar')}</option>
-            <option class="select-option" value="after_char">{t('worldInfo.positionAfterChar')}</option>
-            <option class="select-option" value="top">{t('worldInfo.positionTop')}</option>
-            <option class="select-option" value="bottom">{t('worldInfo.positionBottom')}</option>
-            <option class="select-option" value="atDepth">{t('worldInfo.positionAtDepth')}</option>
+            <option class="select-option" value="before_char">
+              {t('worldInfo.positionBeforeChar')}
+            </option>
+            <option class="select-option" value="after_char">
+              {t('worldInfo.positionAfterChar')}
+            </option>
+            <option class="select-option" value="top">
+              {t('worldInfo.positionTop')}
+            </option>
+            <option class="select-option" value="bottom">
+              {t('worldInfo.positionBottom')}
+            </option>
+            <option class="select-option" value="atDepth">
+              {t('worldInfo.positionAtDepth')}
+            </option>
           </select>
         </label>
         <Show when={position() === 'atDepth'}>
@@ -415,15 +446,27 @@ function EntryEditor(props: { entry: WorldInfoEntry; onSave: (patch: Partial<Omi
                 scheduleSave();
               }}
             >
-              <option class="select-option" value="system">{t('worldInfo.roleSystem')}</option>
-              <option class="select-option" value="user">{t('worldInfo.roleUser')}</option>
-              <option class="select-option" value="assistant">{t('worldInfo.roleAssistant')}</option>
+              <option class="select-option" value="system">
+                {t('worldInfo.roleSystem')}
+              </option>
+              <option class="select-option" value="user">
+                {t('worldInfo.roleUser')}
+              </option>
+              <option class="select-option" value="assistant">
+                {t('worldInfo.roleAssistant')}
+              </option>
             </select>
           </label>
         </Show>
         <label class="field-label" title={t('worldInfo.entryHints.order')}>
           {t('worldInfo.orderLabel')}
-          <input class="input" type="number" value={order()} onInput={(e) => setOrder(Number(e.currentTarget.value))} onBlur={save} />
+          <input
+            class="input"
+            type="number"
+            value={order()}
+            onInput={(e) => setOrder(Number(e.currentTarget.value))}
+            onBlur={save}
+          />
         </label>
         <label class="field-label" title={t('worldInfo.entryHints.probability')}>
           {t('worldInfo.probabilityLabel')}
@@ -524,7 +567,12 @@ function EntryEditor(props: { entry: WorldInfoEntry; onSave: (patch: Partial<Omi
       <Show when={selective()}>
         <label class="field-label">
           {t('worldInfo.secondaryKeysLabel')}
-          <input class="input" value={secondaryKeys()} onInput={(e) => setSecondaryKeys(e.currentTarget.value)} onBlur={save} />
+          <input
+            class="input"
+            value={secondaryKeys()}
+            onInput={(e) => setSecondaryKeys(e.currentTarget.value)}
+            onBlur={save}
+          />
         </label>
       </Show>
       <div class="entry-actions">

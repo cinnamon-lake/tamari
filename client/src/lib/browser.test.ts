@@ -38,8 +38,7 @@ describe('browser detection', () => {
   it('detects Firefox', () => {
     vi.stubGlobal('navigator', {
       ...navigator,
-      userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0',
       platform: 'Win32',
     });
     expect(isFirefox()).toBe(true);
@@ -121,7 +120,10 @@ describe('applyBrowserFixes', () => {
   });
 });
 
-function createCopyEvent(clipboardData?: { setData: ReturnType<typeof vi.fn>; getData: ReturnType<typeof vi.fn> }): Event {
+function createCopyEvent(clipboardData?: {
+  setData: ReturnType<typeof vi.fn>;
+  getData: ReturnType<typeof vi.fn>;
+}): Event {
   const event = new Event('copy', { bubbles: true, cancelable: true });
   Object.defineProperty(event, 'clipboardData', {
     value: clipboardData,
@@ -135,8 +137,7 @@ describe('Firefox copy sanitization', () => {
     document.body.innerHTML = '';
     vi.stubGlobal('navigator', {
       ...navigator,
-      userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0',
       platform: 'Win32',
     });
   });

@@ -84,7 +84,11 @@ describe('MemoryToolTemplate', () => {
         { chatId: 'chat-1' },
       );
       expect(withFocus.content).toBe('range summary');
-      expect(summarizeRange).toHaveBeenCalledWith('chat-1', { startMessageId: 1, endMessageId: 5, focus: 'the battle' });
+      expect(summarizeRange).toHaveBeenCalledWith('chat-1', {
+        startMessageId: 1,
+        endMessageId: 5,
+        focus: 'the battle',
+      });
 
       const noFocus = await template.execute(
         'memory_summarize_range',

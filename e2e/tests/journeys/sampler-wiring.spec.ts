@@ -17,10 +17,7 @@
 import { journeyTest as test, expect } from '../../fixtures/journey.js';
 import { patchActiveBackendConfig } from '../../helpers/backendConfig.js';
 import { getLastLlmRequest, resetLlmRequests, waitForNextLlmRequest } from '../../helpers/llm.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../../helpers/names.js';
 
 async function openBackendConfigModal(page: import('@playwright/test').Page) {
   const btn = page.locator('button.settings-btn:has-text("Backend Config")');
@@ -35,9 +32,7 @@ async function closeBackendConfigModal(page: import('@playwright/test').Page) {
   await page
     .locator('.modal-overlay:has(.modal.settings-modal:has-text("Backend Config"))')
     .click({ position: { x: 0, y: 0 } });
-  await expect(
-    page.locator('.modal.settings-modal').filter({ hasText: 'Backend Config' }),
-  ).not.toBeVisible();
+  await expect(page.locator('.modal.settings-modal').filter({ hasText: 'Backend Config' })).not.toBeVisible();
 }
 
 test.describe('Sampler wiring journey', () => {

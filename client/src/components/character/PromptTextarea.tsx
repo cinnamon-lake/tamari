@@ -1,7 +1,6 @@
 import { createSignal, Show, onMount } from 'solid-js';
 import { useI18n } from '../../i18n/index.js';
-import { trapFocus } from '../../lib/focusUtils.js';
-import { createBackdropDismiss } from '../../lib/backdropDismiss.js';
+import { Modal } from '../Modal.js';
 
 /**
  * Labeled, auto-growing textarea for long-form card fields (description,
@@ -17,6 +16,8 @@ export interface PromptTextareaProps {
   rows?: number;
   /** Show the expand-to-modal button. Default true. */
   expandable?: boolean;
+  /** Stable selector hook for e2e/user tooling, applied to the textarea. */
+  testId?: string;
 }
 
 /** Grow a textarea to fit its content, capped at half the viewport height. */
@@ -55,6 +56,7 @@ export function PromptTextarea(props: PromptTextareaProps) {
       </span>
       <textarea
         class="textarea-input autogrow"
+        data-testid={props.testId}
         rows={props.rows ?? 3}
         ref={areaRef}
         value={props.value}
@@ -83,7 +85,6 @@ interface ExpandedTextModalProps {
 }
 
 function ExpandedTextModal(props: ExpandedTextModalProps) {
-  const { t } = useI18n();
   let areaRef: HTMLTextAreaElement | undefined;
 
   onMount(() => {
@@ -91,31 +92,19 @@ function ExpandedTextModal(props: ExpandedTextModalProps) {
   });
 
   return (
-    <div class="modal-overlay" {...createBackdropDismiss(props.onClose)}>
-      <div
-        class="modal expanded-text-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label={props.label}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') props.onClose();
-          else trapFocus(e.currentTarget, e);
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div class="modal-header-row">
-          <h2 class="modal-title">{props.label}</h2>
-          <button class="icon-btn" onClick={props.onClose} title={t('common.close')} aria-label={t('common.close')} type="button">
-            <i class="bi bi-x-lg" />
-          </button>
-        </div>
-        <textarea
-          class="textarea-input expanded-textarea"
-          ref={areaRef}
-          value={props.value}
-          onInput={(e) => props.onInput(e.currentTarget.value)}
-        />
-      </div>
-    </div>
+    <Modal
+      title={props.label}
+      onClose={props.onClose}
+      class="modal expanded-text-modal"
+      ariaLabel={props.label}
+      showCloseButton
+    >
+      <textarea
+        class="textarea-input expanded-textarea"
+        ref={areaRef}
+        value={props.value}
+        onInput={(e) => props.onInput(e.currentTarget.value)}
+      />
+    </Modal>
   );
 }

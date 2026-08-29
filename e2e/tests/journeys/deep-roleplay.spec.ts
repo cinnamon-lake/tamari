@@ -13,8 +13,7 @@ import { journeyTest as test, expect } from '../../fixtures/journey.js';
 import { enableBuiltinToolset, deleteToolset } from '../../helpers/tools.js';
 
 // Minimal 1x1 transparent PNG (matches attachments.spec.ts).
-const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 test.describe('Deep Roleplay Journey', () => {
   test('one chat layers author note, world info, reasoning, a tool call, and an attachment', async ({ app, page }) => {

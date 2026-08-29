@@ -31,7 +31,7 @@ import type { IAttachmentRepository } from '../repos/AttachmentRepository.js';
 import type { ToolContext, ToolTemplateDefinition, ToolExecuteResult } from './ToolTemplate.js';
 import { findLatestStateSnapshot, TOOL_STATE_KEY } from './toolState.js';
 
-const log = getLogger('lua-tool-executor');
+const log = getLogger('services/LuaToolExecutor');
 
 /** Media deps for the `attachments.create` global (allowFiles sandbox flag). */
 export interface LuaToolMediaDeps {
@@ -163,7 +163,13 @@ export class LuaToolExecutor {
           execResult = run.result;
         } else {
           try {
-            execResult = await (tt.execute as (args: Record<string, unknown>, context: Record<string, unknown>, toolName: string) => Promise<unknown>)(args, luaContext, toolName);
+            execResult = await (
+              tt.execute as (
+                args: Record<string, unknown>,
+                context: Record<string, unknown>,
+                toolName: string,
+              ) => Promise<unknown>
+            )(args, luaContext, toolName);
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             if (!msg.includes('attempt to yield')) throw err;
@@ -352,7 +358,11 @@ export class LuaToolExecutor {
     return wrapped;
   }
 
-  private async loadTemplate(code: string, sandbox?: LuaRuntimeOptions, budget?: ExecutionBudget): Promise<LoadedTemplate | { error: string }> {
+  private async loadTemplate(
+    code: string,
+    sandbox?: LuaRuntimeOptions,
+    budget?: ExecutionBudget,
+  ): Promise<LoadedTemplate | { error: string }> {
     // The armed hook deadline is the template's wall ceiling — total life
     // from creation (compile + getDefinition + execute + serialize; media
     // pipelines legitimately await slow APIs inside it).
@@ -386,7 +396,7 @@ export class LuaToolExecutor {
         cleanup();
         return { error: 'Lua tool must return a table with a getDefinition function (assign to global "Tool")' };
       }
-      const rawDef = await (toolTable as Record<string, unknown>).getDefinition as () => Promise<unknown>;
+      const rawDef = (await (toolTable as Record<string, unknown>).getDefinition) as () => Promise<unknown>;
       const defResult = await rawDef();
       if (!defResult || typeof defResult !== 'object') {
         cleanup();

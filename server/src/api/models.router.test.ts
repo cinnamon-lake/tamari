@@ -3,6 +3,7 @@ import express from 'express';
 import request from 'supertest';
 import { TestHarness } from '../testing/TestHarness.js';
 import { createModelsRouter } from './models.js';
+import { errorHandler } from '../middleware/errorHandler.js';
 
 vi.mock('../backends/factory.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../backends/factory.js')>()),
@@ -16,7 +17,11 @@ const fakeSecretService = { get: vi.fn() } as unknown as SecretService;
 
 function createApp(harness: TestHarness) {
   const app = express();
-  app.use('/models', createModelsRouter(harness.deps.settings, harness.deps.backendConfigs, fakeSecretService, 'test-password'));
+  app.use(
+    '/models',
+    createModelsRouter(harness.deps.settings, harness.deps.backendConfigs, fakeSecretService, 'test-password'),
+  );
+  app.use(errorHandler);
   return app;
 }
 

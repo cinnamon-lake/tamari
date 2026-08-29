@@ -1,10 +1,7 @@
 import { test, expect } from '../fixtures/base.js';
 import { login } from '../helpers/auth.js';
 import { deleteNonDefaultPersonas } from '../helpers/personas.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 /**
  * Send a ClientMessage through a temporary WebSocket connection.
@@ -68,7 +65,10 @@ test.describe('Full App Flow', () => {
     await page.locator('.persona-modal .back-btn').click();
     await expect(page.locator('.persona-modal .persona-list')).toBeVisible();
     await expect(page.locator('.persona-modal')).toContainText(personaName);
-    await page.locator('.modal-overlay').first().click({ position: { x: 10, y: 10 } });
+    await page
+      .locator('.modal-overlay')
+      .first()
+      .click({ position: { x: 10, y: 10 } });
     await expect(page.locator('.persona-modal')).not.toBeVisible();
 
     // ── 2. Create a character ──
@@ -102,7 +102,9 @@ test.describe('Full App Flow', () => {
 
     // Verify the message appears and the input clears
     await expect(input).toHaveValue('');
-    await expect(page.locator('.message-bubble', { hasText: 'Hello from the full flow test!' })).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.message-bubble', { hasText: 'Hello from the full flow test!' })).toBeVisible({
+      timeout: 5000,
+    });
 
     // ── 5. Fork the conversation ──
     const userMsg = page.locator('.message-bubble', { hasText: 'Hello from the full flow test!' });

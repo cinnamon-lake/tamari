@@ -1,0 +1,24 @@
+# Dependencies & build outputs (all levels)
+**/node_modules
+**/dist
+**/.vite
+
+# Runtime data & reference codebases
+/data-v2
+/data
+/old
+/repos
+
+# Coverage & test artifacts
+**/coverage
+**/.coverage
+/test-results
+e2e/test-results
+e2e/playwright-report
+e2e/.auth
+e2e/local
+e2e/.local-results
+e2e/ux-audit/shots
+
+# Lockfile (generated)
+package-lock.json

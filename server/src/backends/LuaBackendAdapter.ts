@@ -56,7 +56,7 @@ import { renderTraceError } from '../generation/trace.js';
 import { str } from '../lib/coerce.js';
 import { getLogger } from '../lib/logger.js';
 
-const log = getLogger('lua-backend');
+const log = getLogger('backends/LuaBackendAdapter');
 
 /** Simulator backends may legitimately run for minutes across sub-generations. */
 const LUA_GENERATE_TIMEOUT_MS = 10 * 60 * 1000;
@@ -94,7 +94,12 @@ export interface DelegatedGenerateResult {
  */
 export interface CustomBackendDelegate {
   /** Run a full generation against a backend config, consuming the stream. */
-  generate(configId: string | null, prompt: Prompt, signal: AbortSignal, ctx?: BackendCallContext): Promise<DelegatedGenerateResult>;
+  generate(
+    configId: string | null,
+    prompt: Prompt,
+    signal: AbortSignal,
+    ctx?: BackendCallContext,
+  ): Promise<DelegatedGenerateResult>;
   /** Resolve a backend config to an adapter for native passthrough streaming. */
   resolveAdapter(configId: string | null): Promise<BackendAdapter>;
 }
@@ -142,9 +147,7 @@ function parseLuaToolCalls(value: unknown): ToolCall[] {
   } else if (value && typeof value === 'object') {
     const keys = Object.keys(value);
     if (keys.length === 0 || !keys.every((k) => /^\d+$/.test(k))) return [];
-    entries = keys
-      .sort((a, b) => Number(a) - Number(b))
-      .map((k) => (value as Record<string, unknown>)[k]);
+    entries = keys.sort((a, b) => Number(a) - Number(b)).map((k) => (value as Record<string, unknown>)[k]);
   } else {
     return [];
   }
@@ -180,11 +183,16 @@ export function toLuaLiteral(value: unknown): string {
       '"' +
       value.replace(/[\\"\n\r]/g, (ch) => {
         switch (ch) {
-          case '\\': return '\\\\';
-          case '"': return '\\"';
-          case '\n': return '\\n';
-          case '\r': return '\\r';
-          default: return ch;
+          case '\\':
+            return '\\\\';
+          case '"':
+            return '\\"';
+          case '\n':
+            return '\\n';
+          case '\r':
+            return '\\r';
+          default:
+            return ch;
         }
       }) +
       '"'
@@ -259,7 +267,10 @@ export class LuaBackendAdapter implements BackendAdapter {
     signal: AbortSignal,
     ctx?: BackendCallContext,
   ): AsyncGenerator<BackendStreamItem, GenerationResult> {
-    const { lua, cleanup } = await this.runtime.createState({ allowNet: true, vfsFiles: this.vfsFiles }, this.generateTimeoutMs);
+    const { lua, cleanup } = await this.runtime.createState(
+      { allowNet: true, vfsFiles: this.vfsFiles },
+      this.generateTimeoutMs,
+    );
     // Captured print() output — drained as backendDebug stream items. Declared
     // outside the try so the catch path can drain whatever a failing script
     // printed before it errored.
@@ -438,17 +449,19 @@ export class LuaBackendAdapter implements BackendAdapter {
         // mutated only inside the promise callbacks below.
         const gen = { settled: false, failed: false, value: undefined as unknown, error: undefined as unknown };
         const genPromise: Promise<unknown> = lua.doString('return generate(__prompt, __ctx)');
-        void genPromise.then(
-          (v) => {
-            gen.value = v;
-          },
-          (e: unknown) => {
-            gen.failed = true;
-            gen.error = e;
-          },
-        ).finally(() => {
-          gen.settled = true;
-        });
+        void genPromise
+          .then(
+            (v) => {
+              gen.value = v;
+            },
+            (e: unknown) => {
+              gen.failed = true;
+              gen.error = e;
+            },
+          )
+          .finally(() => {
+            gen.settled = true;
+          });
         while (!gen.settled) {
           for (const item of drainPrints()) yield item;
           // At most one extra interval after generate() resolves — negligible
@@ -498,7 +511,9 @@ export class LuaBackendAdapter implements BackendAdapter {
       ) {
         const pt = (raw as Record<string, unknown>)['__passthrough'];
         const configId = pt === true ? null : String(pt);
-        const passthroughPrompt = normalizeResponseFormat(((raw as Record<string, unknown>)['prompt'] ?? prompt) as Prompt);
+        const passthroughPrompt = normalizeResponseFormat(
+          ((raw as Record<string, unknown>)['prompt'] ?? prompt) as Prompt,
+        );
         let adapter: BackendAdapter;
         try {
           adapter = await this.delegate.resolveAdapter(configId);

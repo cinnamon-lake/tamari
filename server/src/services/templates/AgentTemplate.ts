@@ -23,7 +23,7 @@ import { TOOL_STATE_KEY } from '../toolState.js';
 import { getLogger } from '../../lib/logger.js';
 import { str } from '../../lib/coerce.js';
 
-const logger = getLogger('agent-tool');
+const logger = getLogger('services/templates/AgentTemplate');
 
 const DEFAULT_AGENT_SYSTEM_PROMPT =
   'You are a helpful, concise assistant. Complete the task accurately and return only the result.';
@@ -32,7 +32,10 @@ const DEFAULT_AGENT_SYSTEM_PROMPT =
 const AgentArgs = z.object({
   prompt: z.string().describe('The task or question to give the agent. Be specific and self-contained.'),
   system: z.string().optional().describe('Override the system prompt for this call (defaults to the toolset config).'),
-  backend: z.string().optional().describe('Backend config id for this call (defaults to the toolset config, then the active config).'),
+  backend: z
+    .string()
+    .optional()
+    .describe('Backend config id for this call (defaults to the toolset config, then the active config).'),
 });
 
 export interface AgentTemplateDeps {
@@ -106,9 +109,7 @@ class AgentTemplate implements ToolTemplate {
     // template's stock system prompt / the active backend config.
     const toolConfig = context.config ?? {};
     const system =
-      str(parsed.data.system).trim() ||
-      str(toolConfig['systemPrompt']).trim() ||
-      DEFAULT_AGENT_SYSTEM_PROMPT;
+      str(parsed.data.system).trim() || str(toolConfig['systemPrompt']).trim() || DEFAULT_AGENT_SYSTEM_PROMPT;
     const backendOverride = str(parsed.data.backend) || str(toolConfig['backendConfigId']) || undefined;
 
     const target = new TranscriptTarget(this.deps.targetDeps, {
@@ -125,7 +126,10 @@ class AgentTemplate implements ToolTemplate {
       backendOverride,
     });
 
-    logger.info({ depth: depth + 1, backendOverride, prompt: userPrompt.slice(0, 200) }, 'run_agent: running sub-agent');
+    logger.info(
+      { depth: depth + 1, backendOverride, prompt: userPrompt.slice(0, 200) },
+      'run_agent: running sub-agent',
+    );
 
     try {
       // Nested run under the parent's tenure (context.lock may be undefined
@@ -138,9 +142,10 @@ class AgentTemplate implements ToolTemplate {
 
       if (outcome.error) {
         if (outcome.error === 'NO_BACKEND' || !record) {
-          const message = outcome.error === 'NO_BACKEND'
-            ? 'no backend configured. Set API key and model in settings.'
-            : outcome.error;
+          const message =
+            outcome.error === 'NO_BACKEND'
+              ? 'no backend configured. Set API key and model in settings.'
+              : outcome.error;
           return { content: `Agent error: ${message}` };
         }
         const trace = await composeGenerationTrace(record, (id) => this.deps.generations.getById(id));
@@ -170,9 +175,10 @@ class AgentTemplate implements ToolTemplate {
       // Recovered nested-tool failures: the run completed, but a tool the
       // sub-agent called errored — surface that as a warning note, not an error.
       const failedTools = (record?.meta?.toolCalls ?? []).filter((t) => t.isError === true);
-      const warnings = failedTools.length > 0
-        ? failedTools.map((t) => `tool ${t.name} failed inside the sub-agent (recovered)`).join('; ')
-        : undefined;
+      const warnings =
+        failedTools.length > 0
+          ? failedTools.map((t) => `tool ${t.name} failed inside the sub-agent (recovered)`).join('; ')
+          : undefined;
 
       const extra: Record<string, unknown> = { generationId: outcome.generationId };
       if (Object.keys(stateMap).length > 0) extra[TOOL_STATE_KEY] = stateMap;
@@ -187,6 +193,8 @@ class AgentTemplate implements ToolTemplate {
     }
   }
 
-  serialize(): string { return ''; }
+  serialize(): string {
+    return '';
+  }
   deserialize(_raw: string): void {}
 }

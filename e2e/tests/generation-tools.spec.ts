@@ -1,13 +1,7 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 async function createCharacterAndChat(page: any, charName: string) {
   await page.locator('[title="Create character"]').click();
@@ -30,7 +24,10 @@ async function createCharacterAndChat(page: any, charName: string) {
   await newChatBtn.waitFor({ state: 'visible' });
   await newChatBtn.click({ force: true });
 
-  const chatItem = page.locator('.chat-item').filter({ hasText: new RegExp(charName) }).first();
+  const chatItem = page
+    .locator('.chat-item')
+    .filter({ hasText: new RegExp(charName) })
+    .first();
   await expect(chatItem).toBeVisible({ timeout: 10000 });
   await chatItem.click();
 
@@ -51,20 +48,14 @@ async function sendUserMessage(page: any, text: string) {
 test.describe('Generation Tools', () => {
   let toolsetId: string | undefined;
 
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
-  });
-
   test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
     if (toolsetId) {
       await deleteToolset(page, toolsetId);
       toolsetId = undefined;
     }
   });
 
-  test('executes a built-in tool and renders the result', async ({ page }) => {
+  test('executes a built-in tool and renders the result', async ({ page, app }) => {
     const charName = uniqueName('Tool Character');
 
     toolsetId = await enableBuiltinToolset(page, 'lua_encouragement');
@@ -78,7 +69,7 @@ test.describe('Generation Tools', () => {
 
     // The message should render the tool call and its executed result.
     // Both collapse into the tool-activity dropdown (a text part follows them).
-    await new App(page).expandToolActivity(assistantBubble);
+    await app.expandToolActivity(assistantBubble);
     await expect(assistantBubble.locator('.tool-call-block').first()).toBeVisible({ timeout: 10000 });
     const resultBlock = assistantBubble.locator('.tool-result-block').first();
     await expect(resultBlock).toBeVisible({ timeout: 10000 });
@@ -87,8 +78,7 @@ test.describe('Generation Tools', () => {
     await expectNoAxeViolations(page);
   });
 
-  test('executes multiple tools in sequence before answering', async ({ page }) => {
-    const app = new App(page);
+  test('executes multiple tools in sequence before answering', async ({ page, app }) => {
     const diceId = await enableBuiltinToolset(page, 'lua_dice');
     const encourageId = await enableBuiltinToolset(page, 'lua_encouragement');
     try {

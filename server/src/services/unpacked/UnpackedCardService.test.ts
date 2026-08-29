@@ -151,9 +151,7 @@ beforeEach(async () => {
 });
 
 function broadcastsOf(type: string): Array<Record<string, unknown>> {
-  return broadcast.mock.calls
-    .map((call) => call[0] as Record<string, unknown>)
-    .filter((msg) => msg['type'] === type);
+  return broadcast.mock.calls.map((call) => call[0] as Record<string, unknown>).filter((msg) => msg['type'] === type);
 }
 
 describe('settings gate', () => {

@@ -36,7 +36,9 @@ describe('RegexRulesModal', () => {
     render(() => <RegexRulesModal onClose={() => {}} />);
 
     screen.getByText('New Regex Rule').click();
-    const radios = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="radio"][name="regexReplaceType"]'));
+    const radios = Array.from(
+      document.querySelectorAll<HTMLInputElement>('input[type="radio"][name="regexReplaceType"]'),
+    );
     expect(radios.length).toBe(2);
     const [textRadio, luaRadio] = radios as [HTMLInputElement, HTMLInputElement];
     expect(textRadio.checked).toBe(true);

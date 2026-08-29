@@ -35,7 +35,13 @@ describe('OpenAITtsAdapter', () => {
     expect(url).toBe('https://api.openai.com/v1/audio/speech');
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer sk-test');
     const body = JSON.parse(init.body as string);
-    expect(body).toEqual({ model: 'gpt-4o-mini-tts', input: 'Hello', voice: 'coral', response_format: 'mp3', speed: 1.25 });
+    expect(body).toEqual({
+      model: 'gpt-4o-mini-tts',
+      input: 'Hello',
+      voice: 'coral',
+      response_format: 'mp3',
+      speed: 1.25,
+    });
   });
 
   it('returns the built-in voice enum (no network call)', async () => {

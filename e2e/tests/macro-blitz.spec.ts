@@ -1,12 +1,6 @@
-import { test, expect } from '../fixtures/base.js';
-import { login } from '../helpers/auth.js';
-import { configureMockBackend, resetBackendConfig } from '../helpers/backendConfig.js';
+import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { getLastLlmRequest, resetLlmRequests, waitForNextLlmRequest } from '../helpers/llm.js';
-import { App } from '../helpers/app.js';
-
-function uniqueName(base: string): string {
-  return `${base} ${Date.now()}`;
-}
+import { uniqueName } from '../helpers/names.js';
 
 /** The whole captured request body as one searchable string. */
 function bodyString(captured: { body: unknown }): string {
@@ -14,18 +8,11 @@ function bodyString(captured: { body: unknown }): string {
 }
 
 test.describe('Macro Blitz', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await configureMockBackend(page);
+  test.beforeEach(async () => {
     await resetLlmRequests();
   });
 
-  test.afterEach(async ({ page }) => {
-    await resetBackendConfig(page);
-  });
-
-  test('blocks ({%if}/{%unless}/{%for}) and the {{?}} boolean evaluator resolve', async ({ page }) => {
-    const app = new App(page);
+  test('blocks ({%if}/{%unless}/{%for}) and the {{?}} boolean evaluator resolve', async ({ app }) => {
     const charName = uniqueName('Block Char');
     await app.createCharacterAndChat({
       name: charName,
@@ -62,11 +49,11 @@ test.describe('Macro Blitz', () => {
     expect(all).not.toContain('{{forIndex}}');
   });
 
-  test('time/date macros resolve to the current UTC clock values', async ({ page }) => {
-    const app = new App(page);
+  test('time/date macros resolve to the current UTC clock values', async ({ app }) => {
     await app.createCharacterAndChat({
       name: uniqueName('Date Char'),
-      description: 'ISO=[{{isodate}}] DATE=[{{date}}] WD=[{{weekday}}] DTF=[{{datetimeformat::YYYY/MM/DD}}] TM=[{{time}}]',
+      description:
+        'ISO=[{{isodate}}] DATE=[{{date}}] WD=[{{weekday}}] DTF=[{{datetimeformat::YYYY/MM/DD}}] TM=[{{time}}]',
       firstMes: 'Ready.',
     });
 
@@ -77,7 +64,12 @@ test.describe('Macro Blitz', () => {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
     const iso = now.toISOString().slice(0, 10);
-    const longDate = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+    const longDate = now.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
     const weekday = now.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
     const dtf = `${now.getUTCFullYear()}/${pad(now.getUTCMonth() + 1)}/${pad(now.getUTCDate())}`;
 
@@ -95,8 +87,7 @@ test.describe('Macro Blitz', () => {
     expect(all).not.toContain('{{time}}');
   });
 
-  test('chat inspection macros see the placeholder on generate and content on continue', async ({ page }) => {
-    const app = new App(page);
+  test('chat inspection macros see the placeholder on generate and content on continue', async ({ page, app }) => {
     await app.createCharacterAndChat({
       name: uniqueName('Inspect Char'),
       description: 'prev=[{{lastCharMessage}}] u=[{{lastUserMessage}}] lm=[{{lastMessage}}]',
@@ -125,8 +116,7 @@ test.describe('Macro Blitz', () => {
     await expect(page.locator('.message-bubble.streaming')).toHaveCount(0, { timeout: 30000 });
   });
 
-  test('random macros resolve in range without residue', async ({ page }) => {
-    const app = new App(page);
+  test('random macros resolve in range without residue', async ({ app }) => {
     await app.createCharacterAndChat({
       name: uniqueName('Random Char'),
       description: 'P=[{{pick::alpha::beta}}] R=[{{random::5::9}}]',
@@ -142,8 +132,7 @@ test.describe('Macro Blitz', () => {
     expect(all).not.toContain('{{random');
   });
 
-  test('utility macros resolve, comments vanish, and {{.var}} chains across turns', async ({ page }) => {
-    const app = new App(page);
+  test('utility macros resolve, comments vanish, and {{.var}} chains across turns', async ({ app }) => {
     await app.createCharacterAndChat({
       name: uniqueName('Utility Char'),
       description:
@@ -180,8 +169,7 @@ test.describe('Macro Blitz', () => {
     expect(second).not.toContain('{{.blitzkey}}');
   });
 
-  test('model/config macros resolve and unknown macros pass through literally', async ({ page }) => {
-    const app = new App(page);
+  test('model/config macros resolve and unknown macros pass through literally', async ({ app }) => {
     await app.createCharacterAndChat({
       name: uniqueName('Config Char'),
       description: 'M=[{{model}}] C=[{{maxContext}}] U=[{{not_a_real_macro}}]',

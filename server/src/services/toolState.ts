@@ -27,7 +27,10 @@ export const TOOL_STATE_KEY = '_toolState';
  * before a top-level `_toolState` map on the message extra. Accepts anything
  * with a message `extra` (full repo Messages, ToolContextMessages, …).
  */
-export function findLatestStateSnapshot(stateKey: string, messages?: Array<{ extra?: MessageExtra }>): string | undefined {
+export function findLatestStateSnapshot(
+  stateKey: string,
+  messages?: Array<{ extra?: MessageExtra }>,
+): string | undefined {
   if (!messages || messages.length === 0) return undefined;
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i]!;

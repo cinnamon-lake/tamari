@@ -592,7 +592,12 @@ describe('ChatCompletionRenderer', () => {
       id: 1,
       parentId: null,
       role: 'tool',
-      extra: { parts: [{ type: 'text', text: 'Sunny' }], toolCallId: 'call_1', toolName: 'get_weather', isError: false },
+      extra: {
+        parts: [{ type: 'text', text: 'Sunny' }],
+        toolCallId: 'call_1',
+        toolName: 'get_weather',
+        isError: false,
+      },
       createdAt: 1,
       updatedAt: 1,
     };
@@ -850,18 +855,12 @@ describe('chatHistory marker position', () => {
   });
 
   it('renders prompts ordered before the marker before the history', () => {
-    const result = renderer.render(
-      splitCollection([{ id: 'main' }, { id: 'chatHistory' }]),
-      renderOpts(history()),
-    );
+    const result = renderer.render(splitCollection([{ id: 'main' }, { id: 'chatHistory' }]), renderOpts(history()));
     expect(indexOfText(result, 'CONTENT:main')).toBeLessThan(indexOfText(result, 'HIST_USER'));
   });
 
   it('falls back to the legacy layout when no marker is present', () => {
-    const result = renderer.render(
-      splitCollection([{ id: 'main' }, { id: 'jailbreak' }]),
-      renderOpts(history()),
-    );
+    const result = renderer.render(splitCollection([{ id: 'main' }, { id: 'jailbreak' }]), renderOpts(history()));
     const jbIdx = indexOfText(result, 'CONTENT:jailbreak');
     expect(jbIdx).toBeGreaterThanOrEqual(0);
     expect(jbIdx).toBeLessThan(indexOfText(result, 'HIST_USER'));

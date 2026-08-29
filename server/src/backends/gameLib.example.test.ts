@@ -6,11 +6,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { LuaRuntime } from '../scripting/LuaRuntime.js';
-import {
-  LuaBackendAdapter,
-  type CustomBackendDelegate,
-  type DelegatedGenerateResult,
-} from './LuaBackendAdapter.js';
+import { LuaBackendAdapter, type CustomBackendDelegate, type DelegatedGenerateResult } from './LuaBackendAdapter.js';
 import { consumeStream, type BackendStreamItem, type Prompt } from './BackendAdapter.js';
 
 const LIB_FILES: Record<string, string> = Object.fromEntries(
@@ -406,7 +402,11 @@ async function roll(
   adapter: LuaBackendAdapter,
   scriptState: string | undefined,
   cmd: string,
-): Promise<{ text: string; scriptState?: string; result: { finishReason: string; error?: string; scriptState?: string } }> {
+): Promise<{
+  text: string;
+  scriptState?: string;
+  result: { finishReason: string; error?: string; scriptState?: string };
+}> {
   const prompt: Prompt = {
     messages: [
       { role: 'system', content: 'Base system prompt.' },
@@ -509,7 +509,7 @@ describe('lib/rolling', () => {
     t = await roll(adapter, t.scriptState, 'inspect:roll#1');
     expect(t.text).toContain('user: I need a knight.');
     expect(t.text).toContain('→ get_character({"id":"ser-aldric"})');
-    expect(t.text).toContain('← the knight\'s file');
+    expect(t.text).toContain("← the knight's file");
     expect(t.text).toContain('assistant: State your business.');
   });
 

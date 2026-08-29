@@ -69,9 +69,7 @@ describe('RAGService', () => {
 
     it('deletes a world info index from memory', async () => {
       const service = createService(true);
-      await service.indexWorldInfoEntries('book-1', [
-        { id: 'e1', content: 'hello', retrievalMode: 'semantic' },
-      ]);
+      await service.indexWorldInfoEntries('book-1', [{ id: 'e1', content: 'hello', retrievalMode: 'semantic' }]);
       await service.deleteWorldInfoIndex('book-1');
       expect((service as unknown as { indices: Map<string, unknown> }).indices.has('wi:book-1')).toBe(false);
     });

@@ -256,7 +256,8 @@ const BUILTIN_TEMPLATES: Map<string, InstructTemplate> = new Map([
       // Every assistant turn carries the structural <think>/<response> channels,
       // even when empty (see encoding_k3.py), so the empty think + response open
       // is baked into the prefix — messages without stored reasoning stay well-formed.
-      assistantPrefix: '<|open|>message role="assistant"<|sep|><|open|>think<|sep|><|close|>think<|sep|><|open|>response<|sep|>',
+      assistantPrefix:
+        '<|open|>message role="assistant"<|sep|><|open|>think<|sep|><|close|>think<|sep|><|open|>response<|sep|>',
       assistantSuffix: '<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|>',
       // The response prefix opens the <think> channel; the model closes it and
       // opens <response> before the visible content, so the reasoning block's
@@ -607,7 +608,6 @@ const BUILTIN_TEMPLATES: Map<string, InstructTemplate> = new Map([
       responsePrefix: '<beginning_of_sentence>ai name=assistant\n',
     },
   ],
-
 ]);
 
 function fallbackTemplate(): InstructTemplate {
@@ -657,5 +657,3 @@ export function parseCustomInstructTemplates(raw: unknown): Record<string, Instr
   }
   return Object.keys(result).length > 0 ? result : undefined;
 }
-
-

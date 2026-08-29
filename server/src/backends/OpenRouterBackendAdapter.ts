@@ -38,8 +38,6 @@ export interface OpenRouterAdapterConfig extends OpenAIAdapterConfig {
   reasoningSummary?: 'auto' | 'concise' | 'detailed';
 }
 
-
-
 export class OpenRouterBackendAdapter extends OpenAIBackendAdapter {
   readonly id = 'openrouter';
   private modelCache = new OpenRouterModelCache();
@@ -80,8 +78,7 @@ export class OpenRouterBackendAdapter extends OpenAIBackendAdapter {
     if (
       typeof prompt.cacheDepth === 'number' &&
       prompt.cacheDepth >= 0 &&
-      (this.openRouterConfig.model.startsWith('anthropic/claude') ||
-        this.openRouterConfig.model.startsWith('claude-'))
+      (this.openRouterConfig.model.startsWith('anthropic/claude') || this.openRouterConfig.model.startsWith('claude-'))
     ) {
       this.injectOpenRouterCacheControls(body.messages, prompt.cacheDepth, cacheTTL);
     }
@@ -104,11 +101,7 @@ export class OpenRouterBackendAdapter extends OpenAIBackendAdapter {
    * Inject `cache_control` into OpenRouter messages for Claude models.
    * Mirrors the old `cachingAtDepthForOpenRouterClaude` + `cachingSystemPromptForOpenRouter`.
    */
-  private injectOpenRouterCacheControls(
-    messages: OpenAIChatMessage[],
-    cachingAtDepth: number,
-    ttl?: string,
-  ): void {
+  private injectOpenRouterCacheControls(messages: OpenAIChatMessage[], cachingAtDepth: number, ttl?: string): void {
     const cacheControl = { type: 'ephemeral', ...(ttl ? { ttl } : {}) };
 
     // 1. System prompt caching

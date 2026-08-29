@@ -1,11 +1,10 @@
-import { Show, createSignal, For, createEffect } from 'solid-js';
+import { Show, createSignal, For } from 'solid-js';
 import { state } from '../stores/serverStore.js';
 import { setActiveChatId } from '../stores/uiStore.js';
 import { bus } from '../bus/WebSocketBus.js';
 import { confirmPopup } from '../stores/popupStore.js';
 import { useI18n } from '../i18n/index.js';
-import { trapFocus, saveFocus, restoreFocus } from '../lib/focusUtils.js';
-import { createBackdropDismiss } from '../lib/backdropDismiss.js';
+import { Modal } from './Modal.js';
 
 export interface CheckpointsPanelProps {
   open: boolean;
@@ -18,26 +17,12 @@ export function CheckpointsPanel(props: CheckpointsPanelProps) {
 
   const activeChat = () => state.activeChat;
 
-  // Capture the element that had focus before the panel opened so it can be
-  // restored on close. Only saves on the closed→open transition.
-  let wasOpen = false;
-  createEffect(() => {
-    const nowOpen = props.open;
-    if (nowOpen && !wasOpen) saveFocus();
-    wasOpen = nowOpen;
-  });
-
-  const close = () => {
-    restoreFocus();
-    props.onClose();
-  };
+  const close = () => props.onClose();
 
   const checkpoints = () => {
     const chat = activeChat();
     if (!chat) return [];
-    return state.chats
-      .filter((c) => c.forkedFromChatId === chat.id)
-      .sort((a, b) => b.createdAt - a.createdAt);
+    return state.chats.filter((c) => c.forkedFromChatId === chat.id).sort((a, b) => b.createdAt - a.createdAt);
   };
 
   const createCheckpoint = () => {
@@ -77,56 +62,66 @@ export function CheckpointsPanel(props: CheckpointsPanelProps) {
 
   return (
     <Show when={props.open}>
-      <div class="modal-overlay" {...createBackdropDismiss(close)}>
-        <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="checkpoints-panel-title" onKeyDown={(e) => trapFocus(e.currentTarget, e)}>
-          <h2 class="modal-title" id="checkpoints-panel-title">
+      <Modal
+        title={
+          <>
             <i class="bi bi-bookmark" /> {t('chatHeader.checkpoints')}
-          </h2>
+          </>
+        }
+        onClose={close}
+        class="modal settings-modal"
+        titleId="checkpoints-panel-title"
+      >
+        <button class="btn btn-primary primary-btn mb-md" onClick={createCheckpoint} type="button">
+          <i class="bi bi-plus-lg" /> {t('chatHeader.createCheckpoint')}
+        </button>
 
-          <button class="btn btn-primary primary-btn mb-md" onClick={createCheckpoint} type="button">
-            <i class="bi bi-plus-lg" /> {t('chatHeader.createCheckpoint')}
-          </button>
-
-          <Show when={checkpoints().length > 0} fallback={<p class="text-muted">{t('chatHeader.noCheckpoints')}</p>}>
-            <div class="worldinfo-list">
-              <For each={checkpoints()}>
-                {(cp) => (
-                  <div id={cp.id} class="selectable-item worldinfo-item">
-                    <div class="checkpoint-info">
-                      <div class="worldinfo-name">{cp.name}</div>
-                      <div class="worldinfo-meta">
-                        {t('chatHeader.checkpointMeta', {
-                          id: cp.forkedAtMessageId ?? 0,
-                          date: new Date(cp.createdAt * 1000).toLocaleString(),
-                        })}
-                      </div>
-                    </div>
-                    <div class="section-actions">
-                      <button class="icon-btn small" onClick={() => restoreCheckpoint(cp.id)} title={t('chatHeader.restore')} aria-label={t('chatHeader.restore')} type="button">
-                        <i class="bi bi-box-arrow-in-right" />
-                      </button>
-                      <button
-                        class="icon-btn small danger"
-                        onClick={() => deleteCheckpoint(cp.id)}
-                        title={t('common.delete')} aria-label={t('common.delete')}
-                        type="button"
-                      >
-                        <i class="bi bi-trash" />
-                      </button>
+        <Show when={checkpoints().length > 0} fallback={<p class="text-muted">{t('chatHeader.noCheckpoints')}</p>}>
+          <div class="worldinfo-list">
+            <For each={checkpoints()}>
+              {(cp) => (
+                <div id={cp.id} class="selectable-item worldinfo-item">
+                  <div class="checkpoint-info">
+                    <div class="worldinfo-name">{cp.name}</div>
+                    <div class="worldinfo-meta">
+                      {t('chatHeader.checkpointMeta', {
+                        id: cp.forkedAtMessageId ?? 0,
+                        date: new Date(cp.createdAt * 1000).toLocaleString(),
+                      })}
                     </div>
                   </div>
-                )}
-              </For>
-            </div>
-          </Show>
-
-          <div class="modal-actions">
-            <button class="btn" type="button" onClick={close}>
-              {t('common.close')}
-            </button>
+                  <div class="section-actions">
+                    <button
+                      class="icon-btn small"
+                      onClick={() => restoreCheckpoint(cp.id)}
+                      title={t('chatHeader.restore')}
+                      aria-label={t('chatHeader.restore')}
+                      type="button"
+                    >
+                      <i class="bi bi-box-arrow-in-right" />
+                    </button>
+                    <button
+                      class="icon-btn small danger"
+                      onClick={() => deleteCheckpoint(cp.id)}
+                      title={t('common.delete')}
+                      aria-label={t('common.delete')}
+                      type="button"
+                    >
+                      <i class="bi bi-trash" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </For>
           </div>
+        </Show>
+
+        <div class="modal-actions">
+          <button class="btn" type="button" onClick={close}>
+            {t('common.close')}
+          </button>
         </div>
-      </div>
+      </Modal>
     </Show>
   );
 }
