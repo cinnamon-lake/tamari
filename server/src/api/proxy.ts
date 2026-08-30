@@ -7,6 +7,8 @@
  * config (secrets resolved, custom/Lua backends included), and forwards the
  * conversation. Request-level sampling knobs (temperature, max_tokens, …) are
  * deliberately NOT threaded through — the backend config's settings rule.
+ * Tool definitions and tool_use/tool_result history blocks ARE forwarded to
+ * the adapter; adapters without tool support ignore them.
  *
  * See https://platform.claude.com/docs/en/api/http/beta/messages/create for
  * the request/response shape this emulates.
@@ -26,6 +28,7 @@ import { getLogger } from '../lib/logger.js';
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
 import type { IBackendConfigRepository } from '../repos/BackendConfigRepository.js';
 import type { BackendAdapter, FinishReason, PipelineMessage, Prompt } from '../backends/BackendAdapter.js';
+import type { ContentPart, InlineContentPart, ToolDefinition } from '@tamari/types';
 import { consumeStream } from '../backends/BackendAdapter.js';
 import { buildBackendSettings } from '../backends/buildBackendSettings.js';
 
@@ -44,10 +47,38 @@ const ImageBlockSchema = z.object({
   ]),
 });
 
-const ContentBlockSchema = z.discriminatedUnion('type', [TextBlockSchema, ImageBlockSchema]);
+/** Blocks that can appear inline in tool_result content (per the anthropic API). */
+const InlineBlockSchema = z.discriminatedUnion('type', [TextBlockSchema, ImageBlockSchema]);
 
-// Extra fields anthropic clients send (max_tokens, temperature, metadata, …)
-// are intentionally dropped: the backend config owns sampling.
+const ToolUseBlockSchema = z.object({
+  type: z.literal('tool_use'),
+  id: z.string(),
+  name: z.string(),
+  input: z.record(z.string(), z.unknown()),
+});
+
+const ToolResultBlockSchema = z.object({
+  type: z.literal('tool_result'),
+  tool_use_id: z.string(),
+  content: z.union([z.string(), z.array(InlineBlockSchema)]).optional(),
+  is_error: z.boolean().optional(),
+});
+
+const ContentBlockSchema = z.discriminatedUnion('type', [
+  TextBlockSchema,
+  ImageBlockSchema,
+  ToolUseBlockSchema,
+  ToolResultBlockSchema,
+]);
+
+const ToolSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  input_schema: z.record(z.string(), z.unknown()).optional(),
+});
+
+// Extra fields anthropic clients send (max_tokens, temperature, tool_choice,
+// metadata, …) are intentionally dropped: the backend config owns sampling.
 const CreateMessageSchema = z.object({
   model: z.string().min(1),
   messages: z
@@ -59,12 +90,52 @@ const CreateMessageSchema = z.object({
     )
     .min(1),
   system: z.union([z.string(), z.array(TextBlockSchema)]).optional(),
+  tools: z.array(ToolSchema).optional(),
 });
 
 type CreateMessageBody = z.infer<typeof CreateMessageSchema>;
+type ContentBlock = z.infer<typeof ContentBlockSchema>;
+type InlineBlock = z.infer<typeof InlineBlockSchema>;
 
 function anthropicError(res: Response, status: number, type: string, message: string): void {
   res.status(status).json({ type: 'error', error: { type, message } });
+}
+
+function toInlinePart(block: InlineBlock): InlineContentPart {
+  if (block.type === 'text') return { type: 'text', text: block.text };
+  return block.source.type === 'base64'
+    ? {
+        type: 'image',
+        source: `data:${block.source.media_type};base64,${block.source.data}`,
+        mimeType: block.source.media_type,
+      }
+    : { type: 'image', source: block.source.url };
+}
+
+function toContentPart(block: ContentBlock): ContentPart {
+  if (block.type === 'tool_use') {
+    return { type: 'tool_use', id: block.id, name: block.name, input: block.input };
+  }
+  if (block.type === 'tool_result') {
+    return {
+      type: 'tool_result',
+      toolUseId: block.tool_use_id,
+      content:
+        block.content === undefined || typeof block.content === 'string'
+          ? (block.content ?? '')
+          : block.content.map(toInlinePart),
+      ...(block.is_error !== undefined ? { isError: block.is_error } : {}),
+    };
+  }
+  return toInlinePart(block);
+}
+
+/** Anthropic `{name, description, input_schema}` → pipeline ToolDefinition. */
+function toToolDefinitions(tools: NonNullable<CreateMessageBody['tools']>): ToolDefinition[] {
+  return tools.map((t) => ({
+    type: 'function',
+    function: { name: t.name, description: t.description, parameters: t.input_schema },
+  }));
 }
 
 function toPipelineMessages(body: CreateMessageBody): PipelineMessage[] {
@@ -78,19 +149,7 @@ function toPipelineMessages(body: CreateMessageBody): PipelineMessage[] {
       messages.push({ role: m.role, content: m.content });
       continue;
     }
-    messages.push({
-      role: m.role,
-      content: m.content.map((block) => {
-        if (block.type === 'text') return { type: 'text' as const, text: block.text };
-        return block.source.type === 'base64'
-          ? {
-              type: 'image' as const,
-              source: `data:${block.source.media_type};base64,${block.source.data}`,
-              mimeType: block.source.media_type,
-            }
-          : { type: 'image' as const, source: block.source.url };
-      }),
-    });
+    messages.push({ role: m.role, content: m.content.map(toContentPart) });
   }
   return messages;
 }
@@ -220,6 +279,7 @@ export function createProxyRouter(
       const prompt: Prompt = {
         messages: toPipelineMessages(body),
         tokenUsage: { prompt: 0, completion: config.maxTokens ?? 0 },
+        ...(body.tools && body.tools.length > 0 ? { tools: toToolDefinitions(body.tools) } : {}),
       };
       const { items, result } = await consumeStream(adapter.stream(prompt, abort.signal));
 

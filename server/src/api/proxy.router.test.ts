@@ -282,6 +282,110 @@ describe('createProxyRouter', () => {
     expect(res.body.stop_reason).toBe('tool_use');
   });
 
+  it('forwards tool definitions and tool_use/tool_result history to the adapter', async () => {
+    await seedConfig(h);
+    const adapter = makeAdapter({
+      stream: vi.fn(async function* () {
+        yield { type: 'toolCall' as const, id: 'call_2', name: 'get_weather', arguments: { city: 'Bergen' } };
+        return {
+          finishReason: 'stop' as const,
+          usage: { promptTokens: 8, completionTokens: 6 },
+          toolCalls: [{ id: 'call_2', name: 'get_weather', arguments: { city: 'Bergen' } }],
+        };
+      }),
+    });
+    const { app } = createApp(h, adapter);
+
+    const res = await request(app)
+      .post('/v1/messages')
+      .set('x-api-key', API_KEY)
+      .send({
+        model: `${CONFIG_ID}-Test Config`,
+        tools: [
+          {
+            name: 'get_weather',
+            description: 'Get the weather for a city',
+            input_schema: { type: 'object', properties: { city: { type: 'string' } } },
+          },
+        ],
+        messages: [
+          { role: 'user', content: 'weather?' },
+          {
+            role: 'assistant',
+            content: [{ type: 'tool_use', id: 'call_1', name: 'get_weather', input: { city: 'Oslo' } }],
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_1',
+                is_error: false,
+                content: [{ type: 'text', text: 'sunny, 20°C' }],
+              },
+            ],
+          },
+        ],
+      })
+      .expect(200);
+
+    // The loop can continue: the follow-up tool_use comes back to the client.
+    expect(res.body.content).toEqual([
+      { type: 'tool_use', id: 'call_2', name: 'get_weather', input: { city: 'Bergen' } },
+    ]);
+    expect(res.body.stop_reason).toBe('tool_use');
+
+    expect(adapter.stream).toHaveBeenCalledWith(
+      {
+        messages: [
+          { role: 'user', content: 'weather?' },
+          {
+            role: 'assistant',
+            content: [{ type: 'tool_use', id: 'call_1', name: 'get_weather', input: { city: 'Oslo' } }],
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                toolUseId: 'call_1',
+                isError: false,
+                content: [{ type: 'text', text: 'sunny, 20°C' }],
+              },
+            ],
+          },
+        ],
+        tokenUsage: { prompt: 0, completion: 300 },
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'get_weather',
+              description: 'Get the weather for a city',
+              parameters: { type: 'object', properties: { city: { type: 'string' } } },
+            },
+          },
+        ],
+      },
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('omits the prompt tools key when the request has none', async () => {
+    await seedConfig(h);
+    const adapter = makeAdapter();
+    const { app } = createApp(h, adapter);
+
+    await request(app)
+      .post('/v1/messages')
+      .set('x-api-key', API_KEY)
+      .send({ model: `${CONFIG_ID}-Test Config`, messages: [{ role: 'user', content: 'hi' }] })
+      .expect(200);
+
+    const prompt = (adapter.stream as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Record<string, unknown>;
+    expect(prompt).not.toHaveProperty('tools');
+  });
+
   it('returns an anthropic-style error when the adapter reports failure', async () => {
     await seedConfig(h);
     const adapter = makeAdapter({
