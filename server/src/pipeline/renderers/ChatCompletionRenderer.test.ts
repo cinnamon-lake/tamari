@@ -784,6 +784,105 @@ describe('ChatCompletionRenderer', () => {
     expect(parts.some((p) => p.type === 'video')).toBe(false);
     expect(parts.some((p) => p.type === 'text' && p.text === '[Attached video]')).toBe(true);
   });
+
+  const makeToolResultMediaMsg = (): Message => ({
+    id: 1,
+    parentId: null,
+    role: 'assistant',
+    extra: {
+      parts: [
+        { type: 'tool_use', id: 'call_1', name: 'make_image', input: {} },
+        {
+          type: 'tool_result',
+          toolUseId: 'call_1',
+          name: 'make_image',
+          content: [
+            { type: 'text', text: 'Generated:' },
+            { type: 'image', source: 'data:image/png;base64,AAAA', mimeType: 'image/png' },
+          ],
+        },
+      ],
+    },
+    createdAt: 1,
+    updatedAt: 1,
+  });
+
+  const findToolResult = (result: ReturnType<ChatCompletionRenderer['render']>) => {
+    const assistantMsg = result.messages.find((m) => m.role === 'assistant');
+    expect(assistantMsg).toBeDefined();
+    expect(Array.isArray(assistantMsg!.content)).toBe(true);
+    const parts = assistantMsg!.content as Array<{ type: string; content?: unknown }>;
+    const toolResult = parts.find((p) => p.type === 'tool_result');
+    expect(toolResult).toBeDefined();
+    return toolResult!;
+  };
+
+  it('keeps media in tool_result content when the backend supports it', () => {
+    const result = renderer.render(makeCollection(), {
+      macroResolver: MacroResolver.createPromptResolver(),
+      macroCtx: { userName: 'User', charName: 'Bot' },
+      tokenCounter,
+      chatHistory: [makeToolResultMediaMsg()],
+      maxContext: 4096,
+      maxResponseTokens: 512,
+      supportsImages: true,
+    });
+
+    const content = findToolResult(result).content as Array<{ type: string }>;
+    expect(content.some((p) => p.type === 'image')).toBe(true);
+  });
+
+  it('replaces unsupported media in tool_result content with a placeholder when verbose mode is on', () => {
+    const result = renderer.render(makeCollection(), {
+      macroResolver: MacroResolver.createPromptResolver(),
+      macroCtx: { userName: 'User', charName: 'Bot' },
+      tokenCounter,
+      chatHistory: [makeToolResultMediaMsg()],
+      maxContext: 4096,
+      maxResponseTokens: 512,
+      supportsImages: false,
+      mediaVerboseMode: true,
+    });
+
+    const content = findToolResult(result).content as Array<{ type: string; text?: string }>;
+    expect(content.some((p) => p.type === 'image')).toBe(false);
+    expect(content.some((p) => p.type === 'text' && p.text === 'Generated:')).toBe(true);
+    expect(content.some((p) => p.type === 'text' && p.text === '[Attached image]')).toBe(true);
+  });
+
+  it('omits unsupported media in tool_result content entirely when verbose mode is off', () => {
+    const result = renderer.render(makeCollection(), {
+      macroResolver: MacroResolver.createPromptResolver(),
+      macroCtx: { userName: 'User', charName: 'Bot' },
+      tokenCounter,
+      chatHistory: [makeToolResultMediaMsg()],
+      maxContext: 4096,
+      maxResponseTokens: 512,
+      supportsImages: false,
+      mediaVerboseMode: false,
+    });
+
+    const content = findToolResult(result).content as Array<{ type: string }>;
+    expect(content).toEqual([{ type: 'text', text: 'Generated:' }]);
+  });
+
+  it('renders an empty string when all tool_result content is filtered out', () => {
+    const msg = makeToolResultMediaMsg();
+    const parts = msg.extra.parts as Array<{ type: string; content?: unknown }>;
+    parts[1]!.content = [{ type: 'image', source: 'data:image/png;base64,AAAA', mimeType: 'image/png' }];
+
+    const result = renderer.render(makeCollection(), {
+      macroResolver: MacroResolver.createPromptResolver(),
+      macroCtx: { userName: 'User', charName: 'Bot' },
+      tokenCounter,
+      chatHistory: [msg],
+      maxContext: 4096,
+      maxResponseTokens: 512,
+      supportsImages: false,
+    });
+
+    expect(findToolResult(result).content).toBe('');
+  });
 });
 
 describe('chatHistory marker position', () => {

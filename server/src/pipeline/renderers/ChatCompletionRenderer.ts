@@ -10,7 +10,7 @@
 
 import { getMessageText } from '@tamari/types';
 import { str } from '../../lib/coerce.js';
-import type { PipelineMessage, ContentPart, TextPart } from '../../backends/BackendAdapter.js';
+import type { PipelineMessage, ContentPart, InlineContentPart, TextPart } from '../../backends/BackendAdapter.js';
 import type { PromptDef } from '../PromptManager.js';
 import type { RenderOptions, PromptCollection, ChatRenderResult, PromptRenderer } from './Renderer.js';
 import { PROMPT_SEPARATOR } from './Renderer.js';
@@ -160,6 +160,9 @@ export class ChatCompletionRenderer implements PromptRenderer {
         parts = parts.map((p) =>
           p.type === 'text' ? { ...p, text: opts.macroResolver.resolve(p.text, opts.macroCtx) } : p,
         );
+        // Drop media the backend can't consume — including media nested inside
+        // tool_result content (e.g. images returned by image-gen tools).
+        parts = this.filterUnsupportedMedia(parts, opts);
         // Collapse to string when only a single text part remains
         const singlePart = parts.length === 1 ? parts[0] : undefined;
         if (singlePart?.type === 'text') {
@@ -293,6 +296,42 @@ export class ChatCompletionRenderer implements PromptRenderer {
       messages: finalMessages,
       tokenUsage: { prompt: promptTokens, completion: opts.maxResponseTokens },
     };
+  }
+
+  /** Keep, placeholder, or drop a single media part per the backend's support. */
+  private filterMediaPart<P extends ContentPart>(part: P, opts: RenderOptions): P | TextPart | null {
+    switch (part.type) {
+      case 'image':
+        if (opts.supportsImages !== false) return part;
+        return opts.mediaVerboseMode ? { type: 'text', text: '[Attached image]' } : null;
+      case 'audio':
+        if (opts.supportsAudio !== false) return part;
+        return opts.mediaVerboseMode ? { type: 'text', text: '[Attached audio]' } : null;
+      case 'video':
+        if (opts.supportsVideo !== false) return part;
+        return opts.mediaVerboseMode ? { type: 'text', text: '[Attached video]' } : null;
+      default:
+        return part;
+    }
+  }
+
+  /** Drop media the active backend can't consume — top-level parts and media
+      nested inside tool_result content (e.g. images returned by image-gen
+      tools). Verbose mode leaves `[Attached …]` placeholders instead. */
+  private filterUnsupportedMedia(parts: ContentPart[], opts: RenderOptions): ContentPart[] {
+    const out: ContentPart[] = [];
+    for (const part of parts) {
+      if (part.type === 'tool_result' && Array.isArray(part.content)) {
+        const content = part.content
+          .map((c) => this.filterMediaPart(c, opts))
+          .filter((c): c is InlineContentPart => c !== null);
+        out.push({ ...part, content: content.length > 0 ? content : '' });
+        continue;
+      }
+      const kept = this.filterMediaPart(part, opts);
+      if (kept) out.push(kept);
+    }
+    return out;
   }
 
   private resolveMarkerContent(prompt: PromptDef, markers: Record<string, string>): PromptDef {
