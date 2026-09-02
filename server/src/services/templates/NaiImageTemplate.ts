@@ -20,13 +20,42 @@ const logger = getLogger('services/templates/NaiImageTemplate');
  * the LLM-facing `parameters` schema (via `z.toJSONSchema`) and the runtime
  * validation in `execute` both derive from this, so they can't drift.
  */
+const NaiCharacterPrompt = z.object({
+  prompt: z
+    .string()
+    .describe('Tags describing this character only: appearance, clothing, pose, expression. Keep it focused on the character.'),
+  negative_prompt: z.string().optional().describe('Things to avoid for this character. Defaults to empty.'),
+  x: z.number().min(0).max(1).optional().describe('Horizontal center of the character (0 = left, 1 = right). Defaults to 0.5.'),
+  y: z.number().min(0).max(1).optional().describe('Vertical center of the character (0 = top, 1 = bottom). Defaults to 0.5.'),
+});
+
 const NaiImageArgs = z.object({
-  prompt: z.string().describe('Detailed description of the image to generate, in NovelAI tag style.'),
+  prompt: z.string().describe(
+    'Detailed description of the image. Comma-separated Danbooru-style tags ' +
+      '(e.g. "1girl, purple hair, bob cut, looking at viewer, smug, cowboy shot"), plain English ' +
+      'sentences, or a mix of both. Start with character counts, then character/series names, then the rest.',
+  ),
   orientation: z
     .enum(['square', 'portrait', 'landscape'])
     .optional()
     .describe('Image orientation. Defaults to square.'),
-  negative_prompt: z.string().optional().describe('Things to avoid in the image.'),
+  negative_prompt: z
+    .string()
+    .optional()
+    .describe(
+      'Things to avoid in the image. Defaults to NovelAI\'s "heavy" undesired-content preset, which ' +
+        'already covers general quality issues — override only to ban specific concepts (e.g. "text" ' +
+        'if text keeps appearing). Note that overriding replaces the preset entirely.',
+    ),
+  character_prompts: z
+    .array(NaiCharacterPrompt)
+    .optional()
+    .describe(
+      'Per-character prompts for multi-character scenes. Describe each character separately here ' +
+        'instead of mixing their traits into the main prompt; the main prompt should still state how ' +
+        'many characters there are (e.g. "2girls") and the shared scene/background. The model closely ' +
+        'follows the x/y position of each character, so spread them across the canvas.',
+    ),
   seed: z
     .number()
     .int()
@@ -101,7 +130,18 @@ export class NaiImageTemplate implements ToolTemplate {
         {
           name: 'generate_image',
           description:
-            'Generate an anime-style image using NovelAI Diffusion. Provide a detailed text prompt describing the desired image (tag style works best, e.g. "1girl, purple hair, ..."). When an image is successfully generated, the result will include a reference in the format {{attachment::ID}}. To display the image in your response, include this exact reference.',
+            'Generate an anime-style image using NovelAI Diffusion (V5 by default). Prompting rules:\n' +
+            '- Tags and natural language both work and can be freely mixed. V5 understands full English sentences well, so when in doubt, describe the scene precisely in plain words instead of guessing tags.\n' +
+            '- Commas are always parsed as tag separators, even inside natural language — write natural-language parts without commas.\n' +
+            '- Use only tags that actually exist on Danbooru. If you suspect a tag does not exist, do not use it. Most established anime characters and series DO have Danbooru tags, so reference them by name (e.g. "hatsune miku, vocaloid").\n' +
+            '- Tag order: character counts first ("1girl", "2boys"), then character and series names, then everything else in any order.\n' +
+            '- Tag ONLY what should be visible in the image. If it would not be visible in the finished picture, do not tag it.\n' +
+            '- Always lock in the framing explicitly: "portrait", "upper body", "cowboy shot", "full body", "close-up", etc. If omitted, the model picks one at random.\n' +
+            '- Always lock in eye direction ("looking at viewer", "looking to the side", "looking away") and hand positions ("hands on own hips", "hand in own hair", "arms at sides") — eyes and hands drift when left unspecified.\n' +
+            '- To render legible text in the image (V5 handles English, Japanese, Chinese), put the exact wording in quotes in a natural-language sentence, e.g. A speech bubble saying "Hello world!". Avoid the "no text" tag when you want text.\n' +
+            '- Useful V5 tags: "high complexity" for normal detailed images ("low"/"ultra complexity" for more stylized looks), "transparent background" for a true alpha-channel background, "depthness" for deeper shading, "year XXXX" to bias the art style toward a given year.\n' +
+            '- For scenes with multiple characters, pass character_prompts and describe each character separately there.\n' +
+            'When an image is successfully generated, the result will include a reference in the format {{attachment::ID}}. To display the image in your response, include this exact reference.',
           parameters: z.toJSONSchema(NaiImageArgs) as Record<string, unknown>,
         },
       ],
@@ -133,6 +173,13 @@ export class NaiImageTemplate implements ToolTemplate {
     const size = ORIENTATION_SIZES[orientation] ?? { width: 1024, height: 1024 };
     const seed = parsed.data.seed ?? Math.floor(Math.random() * 0xffffffff) + 1;
     const negativePrompt = parsed.data.negative_prompt ?? DEFAULT_NEGATIVE_PROMPT;
+    const characters = (parsed.data.character_prompts ?? [])
+      .map((c) => ({
+        prompt: c.prompt.trim(),
+        uc: c.negative_prompt ?? '',
+        center: { x: c.x ?? 0.5, y: c.y ?? 0.5 },
+      }))
+      .filter((c) => c.prompt.length > 0);
 
     // Mirrors the payload the NovelAI web UI sends for nai-diffusion-5
     // (params_version 4, v4_prompt caption structure, karras schedule).
@@ -162,17 +209,23 @@ export class NaiImageTemplate implements ToolTemplate {
         legacy_uc: false,
         normalize_reference_strength_multiple: true,
         inpaintImg2ImgStrength: 1,
-        characterPrompts: [],
+        characterPrompts: characters.map((c) => ({ prompt: c.prompt, uc: c.uc, center: c.center, enabled: true })),
         straight_alpha: true,
         tag_hint_qt: 1,
         tag_hint_uc_preset: 2,
         v4_prompt: {
-          caption: { base_caption: prompt, char_captions: [] },
+          caption: {
+            base_caption: prompt,
+            char_captions: characters.map((c) => ({ char_caption: c.prompt, centers: [c.center] })),
+          },
           use_coords: false,
           use_order: true,
         },
         v4_negative_prompt: {
-          caption: { base_caption: negativePrompt, char_captions: [] },
+          caption: {
+            base_caption: negativePrompt,
+            char_captions: characters.map((c) => ({ char_caption: c.uc, centers: [c.center] })),
+          },
           legacy_uc: false,
         },
         negative_prompt: negativePrompt,

@@ -142,6 +142,50 @@ describe('NaiImageTemplate', () => {
     expect(body.parameters.height).toBe(1216);
   });
 
+  it('maps character prompts into characterPrompts and v4 captions', async () => {
+    global.fetch = vi.fn(async () => makeZipResponse({ 'image_0.png': new Uint8Array([1]) }));
+
+    await template.execute(
+      'generate_image',
+      {
+        prompt: '2girls, park',
+        character_prompts: [
+          { prompt: 'girl, red hair', negative_prompt: 'bad anatomy', x: 0.25, y: 0.5 },
+          { prompt: '  ', x: 0.75 }, // empty prompt: dropped
+        ],
+      },
+      { config: { apiKey: 'k' } },
+    );
+
+    const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const body = JSON.parse(init.body as string);
+    expect(body.parameters.characterPrompts).toEqual([
+      { prompt: 'girl, red hair', uc: 'bad anatomy', center: { x: 0.25, y: 0.5 }, enabled: true },
+    ]);
+    expect(body.parameters.v4_prompt.caption.char_captions).toEqual([
+      { char_caption: 'girl, red hair', centers: [{ x: 0.25, y: 0.5 }] },
+    ]);
+    expect(body.parameters.v4_negative_prompt.caption.char_captions).toEqual([
+      { char_caption: 'bad anatomy', centers: [{ x: 0.25, y: 0.5 }] },
+    ]);
+  });
+
+  it('defaults character prompt uc to empty and center to 0.5', async () => {
+    global.fetch = vi.fn(async () => makeZipResponse({ 'image_0.png': new Uint8Array([1]) }));
+
+    await template.execute(
+      'generate_image',
+      { prompt: '1boy', character_prompts: [{ prompt: 'boy, black hair' }] },
+      { config: { apiKey: 'k' } },
+    );
+
+    const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const body = JSON.parse(init.body as string);
+    expect(body.parameters.characterPrompts).toEqual([
+      { prompt: 'boy, black hair', uc: '', center: { x: 0.5, y: 0.5 }, enabled: true },
+    ]);
+  });
+
   it('maps landscape orientation to 1216x832', async () => {
     global.fetch = vi.fn(async () => makeZipResponse({ 'image_0.png': new Uint8Array([1]) }));
 
