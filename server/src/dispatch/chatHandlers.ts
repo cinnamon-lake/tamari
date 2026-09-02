@@ -38,6 +38,7 @@ export function buildChatHandlers(
     quickReplies,
     chatBroadcast,
     chatMetaBroadcast,
+    attachments,
   } = deps;
 
   return {
@@ -68,6 +69,10 @@ export function buildChatHandlers(
             strictHtmlSanitization: strictHtml,
             userName,
             charName,
+            attachmentLookup: async (id) => {
+              const att = await attachments.getById(id);
+              return att ? { url: att.url, mimeType: att.mimeType } : undefined;
+            },
           });
           return { ...msg, renderedHtml: html };
         }),

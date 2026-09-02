@@ -52,9 +52,8 @@ export function authenticatedSrc(url: string): string {
 
 /**
  * Post-render fix-up for raw-HTML sinks (innerHTML): rewrites media element
- * sources of token-checked routes to their authenticated form. Called after
- * each renderedHtml update; setting attributes here does not feed back into
- * Solid's tracked reads.
+ * sources of token-checked routes to their authenticated form. Setting
+ * attributes here does not feed back into Solid's tracked reads.
  */
 export function applyAuthTokenToMedia(root: ParentNode): void {
   const media = root.querySelectorAll('img[src], audio[src], video[src], source[src]');
@@ -64,4 +63,18 @@ export function applyAuthTokenToMedia(root: ParentNode): void {
     const next = authenticatedSrc(src);
     if (next !== src) el.setAttribute('src', next);
   }
+}
+
+/**
+ * Token-rewrite media sources inside an HTML string BEFORE it reaches the
+ * DOM. Doing it pre-insert avoids the race where the browser fetches the
+ * untokened src the moment innerHTML is parsed (a post-insert fix-up can
+ * run too late — and did, see the createRenderEffect regression).
+ */
+export function authenticateMediaInHtml(html: string): string {
+  if (!getAuthToken()) return html;
+  if (!html.includes('/api/attachments/') && !html.includes('/files/')) return html;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  applyAuthTokenToMedia(doc);
+  return doc.body.innerHTML;
 }

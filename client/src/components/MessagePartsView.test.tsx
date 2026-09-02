@@ -1,7 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import type { ContentPart, Message } from '@tamari/types';
 import { MessagePartsView } from './MessagePartsView.js';
+import { setAuthToken, clearAuthToken } from '../lib/auth.js';
 
 function makeMessage(parts: ContentPart[], renderedHtml?: (string | null)[]): Message {
   return {
@@ -283,5 +285,57 @@ describe('MessagePartsView', () => {
     expect(details).not.toBeNull();
     expect(details!.open).toBe(true);
     expect(screen.getByTestId('edit-0')).toBeInTheDocument();
+  });
+});
+
+describe('MessagePartsView attachment token rewrite', () => {
+  afterEach(() => clearAuthToken());
+
+  it('tokens attachment media in renderedHtml on initial render', () => {
+    setAuthToken('abc123');
+    render(() => (
+      <MessagePartsView
+        message={makeMessage(
+          [{ type: 'text', text: 'look' }],
+          ['<p>look</p><img class="message-inline-img" src="/api/attachments/att-1" alt="">'],
+        )}
+      />
+    ));
+    const img = document.querySelector('.message-part-text img');
+    expect(img?.getAttribute('src')).toContain('/api/attachments/att-1?token=abc123');
+  });
+
+  it('tokens attachment media when renderedHtml arrives later (streaming)', () => {
+    setAuthToken('abc123');
+    const [msg, setMsg] = createSignal<Message>(
+      makeMessage([{ type: 'text', text: 'look' }], ['<p>look</p>']),
+    );
+    render(() => <MessagePartsView message={msg()} />);
+    setMsg(
+      makeMessage(
+        [{ type: 'text', text: 'look' }],
+        ['<p>look</p><img class="message-inline-img" src="/api/attachments/att-1" alt="">'],
+      ),
+    );
+    const img = document.querySelector('.message-part-text img');
+    expect(img?.getAttribute('src')).toContain('/api/attachments/att-1?token=abc123');
+  });
+
+  it('tokens attachment media inside collapsed tool-activity parts', () => {
+    setAuthToken('abc123');
+    render(() => (
+      <MessagePartsView
+        message={makeMessage(
+          [
+            { type: 'tool_result', toolUseId: 'c1', content: 'ok' },
+            { type: 'text', text: 'mid' },
+            { type: 'text', text: 'final' },
+          ],
+          [null, '<p>mid</p><img class="message-inline-img" src="/api/attachments/att-1" alt="">', '<p>final</p>'],
+        )}
+      />
+    ));
+    const img = document.querySelector('.tool-activity-content img');
+    expect(img?.getAttribute('src')).toContain('/api/attachments/att-1?token=abc123');
   });
 });

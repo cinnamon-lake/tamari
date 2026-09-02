@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, authenticatedUrl } from './apiFetch.js';
+import { apiFetch, authenticatedUrl, authenticateMediaInHtml } from './apiFetch.js';
 import { setAuthToken, clearAuthToken } from './auth.js';
 
 describe('apiFetch', () => {
@@ -72,5 +72,37 @@ describe('authenticatedUrl', () => {
   it('URL-encodes the token', () => {
     setAuthToken('a/b+c');
     expect(authenticatedUrl('/api/test')).toBe('/api/test?token=a%2Fb%2Bc');
+  });
+});
+
+describe('authenticateMediaInHtml', () => {
+  beforeEach(() => {
+    clearAuthToken();
+  });
+
+  it('rewrites attachment media sources with the token', () => {
+    setAuthToken('abc123');
+    const out = authenticateMediaInHtml(
+      '<p>look</p><img class="message-inline-img" src="/api/attachments/att-1" alt="">' +
+        '<audio src="/api/attachments/att-2"></audio>',
+    );
+    expect(out).toContain('src="/api/attachments/att-1?token=abc123"');
+    expect(out).toContain('src="/api/attachments/att-2?token=abc123"');
+  });
+
+  it('leaves other sources untouched', () => {
+    setAuthToken('abc123');
+    const out = authenticateMediaInHtml(
+      '<img src="https://example.com/x.png"><img src="/api/characters/c1/assets/a.png">' +
+        '<img src="/api/attachments/att-1">',
+    );
+    expect(out).toContain('src="https://example.com/x.png"');
+    expect(out).toContain('src="/api/characters/c1/assets/a.png"');
+    expect(out).toContain('src="/api/attachments/att-1?token=abc123"');
+  });
+
+  it('passes HTML through unchanged when no token is set', () => {
+    const html = '<p>x</p><img src="/api/attachments/att-1">';
+    expect(authenticateMediaInHtml(html)).toBe(html);
   });
 });

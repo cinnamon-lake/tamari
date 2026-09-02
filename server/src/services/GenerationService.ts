@@ -103,6 +103,7 @@ export class GenerationService {
       chatBroadcast,
       generationBroadcast,
       assembly,
+      attachments,
     } = this.deps;
     return {
       chats,
@@ -114,6 +115,7 @@ export class GenerationService {
       chatBroadcast,
       generationBroadcast,
       assembly,
+      attachments,
     };
   }
 

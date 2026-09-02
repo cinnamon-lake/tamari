@@ -1,7 +1,7 @@
-import { For, Show, createMemo, createRenderEffect, type JSX } from 'solid-js';
+import { For, Show, createMemo, type JSX } from 'solid-js';
 import type { ContentPart, InlineContentPart, Message, TextPart, ToolResultPart } from '@tamari/types';
 import { getToolRenderer } from './tool-renderers/index.js';
-import { applyAuthTokenToMedia, authenticatedSrc } from '../lib/apiFetch.js';
+import { authenticateMediaInHtml, authenticatedSrc } from '../lib/apiFetch.js';
 
 /**
  * Renders a message's content parts. Only text parts carry server-rendered
@@ -67,6 +67,12 @@ function renderInlineMedia(part: InlineContentPart): JSX.Element {
 export function MessagePartsView(props: MessagePartsViewProps) {
   const parts = createMemo(() => props.message.extra.parts ?? []);
   const renderedHtml = createMemo(() => props.message.renderedHtml ?? []);
+  // Server-rendered HTML can embed <img>/<audio>/<video> pointing at
+  // token-checked routes (/api/attachments, /files). Media elements cannot
+  // send headers, so rewrite those sources to query-param form in the HTML
+  // string BEFORE it reaches the DOM — a post-insert fix-up races the
+  // browser's fetch of the untokened src.
+  const tokenedHtml = createMemo(() => renderedHtml().map((h) => (h == null ? h : authenticateMediaInHtml(h))));
   const widgetToolUseIds = createMemo(() => collectWidgetToolUseIds(parts()));
 
   // Everything before the last text part (tool calls/results, reasoning,
@@ -88,17 +94,6 @@ export function MessagePartsView(props: MessagePartsViewProps) {
     () => props.editingPartIndex != null && props.editingPartIndex < collapsedParts().length,
   );
 
-  // Server-rendered HTML can embed <img>/<audio>/<video> pointing at
-  // token-checked routes (/api/attachments, /files). Media elements cannot
-  // send headers, so rewrite those sources to query-param form after every
-  // innerHTML swap.
-  const bindTokenedMedia = (el: HTMLElement): void => {
-    createRenderEffect(() => {
-      void renderedHtml();
-      applyAuthTokenToMedia(el);
-    });
-  };
-
   const renderPart = (part: ContentPart, index: () => number): JSX.Element => {
     switch (part.type) {
       case 'text': {
@@ -106,7 +101,7 @@ export function MessagePartsView(props: MessagePartsViewProps) {
           <Show
             when={props.editingPartIndex === index() && props.renderEditArea !== undefined}
             fallback={
-              <div class="message-part-text" ref={bindTokenedMedia} innerHTML={renderedHtml()[index()] ?? ''} />
+              <div class="message-part-text" innerHTML={tokenedHtml()[index()] ?? ''} />
             }
           >
             {props.renderEditArea!(index(), part.text)}
@@ -201,8 +196,8 @@ export function MessagePartsView(props: MessagePartsViewProps) {
         when={parts().length > 0}
         fallback={
           // Legacy messages without parts: single rendered block.
-          <Show when={renderedHtml()[0] != null}>
-            <div class="message-part-text" ref={bindTokenedMedia} innerHTML={renderedHtml()[0] ?? ''} />
+          <Show when={tokenedHtml()[0] != null}>
+            <div class="message-part-text" innerHTML={tokenedHtml()[0] ?? ''} />
           </Show>
         }
       >

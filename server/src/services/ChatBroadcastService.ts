@@ -6,6 +6,7 @@ import type {
   IPersonaRepository,
   ISettingsRepository,
   ICharacterAssetRepository,
+  IAttachmentRepository,
 } from '../repos/index.js';
 import { getChatSnapshotMessages } from '../lib/swipeInfo.js';
 import {
@@ -27,6 +28,8 @@ export interface ChatBroadcastServiceDeps {
   personas: IPersonaRepository;
   settings: ISettingsRepository;
   characterAssets?: ICharacterAssetRepository;
+  /** Enables cross-message {{attachment::ID}} resolution at render time. */
+  attachments?: IAttachmentRepository;
 }
 
 export class ChatBroadcastService {
@@ -285,6 +288,7 @@ export class ChatBroadcastService {
     const characterAssets =
       character && this.deps.characterAssets ? await this.deps.characterAssets.listForCharacter(character.id) : [];
 
+    const attachmentsRepo = this.deps.attachments;
     return {
       message,
       character,
@@ -293,6 +297,12 @@ export class ChatBroadcastService {
       strictHtmlSanitization: strictHtml,
       userName,
       charName,
+      attachmentLookup: attachmentsRepo
+        ? async (id) => {
+            const att = await attachmentsRepo.getById(id);
+            return att ? { url: att.url, mimeType: att.mimeType } : undefined;
+          }
+        : undefined,
     };
   }
 

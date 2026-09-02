@@ -161,4 +161,36 @@ describe('renderMessageParts', () => {
     expect(html).toContain('border-radius:4px');
     expect(html.toLowerCase()).toContain('z-index:5');
   });
+
+  it('resolves {{attachment::ID}} from this message\'s tool_result extras', async () => {
+    const html = await renderMessageParts(
+      makeCtx([
+        {
+          type: 'tool_result',
+          toolUseId: 'call-1',
+          content: 'generated',
+          extra: { attachmentId: 'att-1', attachmentUrl: '/api/attachments/att-1', attachmentMimeType: 'image/png' },
+        },
+        { type: 'text', text: 'Look: {{attachment::att-1}}' },
+      ]),
+    );
+    expect(html[1]).toContain('<img class="message-inline-img" src="/api/attachments/att-1"');
+  });
+
+  it('resolves {{attachment::ID}} pointing at another message via attachmentLookup', async () => {
+    const html = await renderMessageParts({
+      ...makeCtx([{ type: 'text', text: 'Again: {{attachment::att-9}}' }]),
+      attachmentLookup: async (id: string) =>
+        id === 'att-9' ? { url: '/api/attachments/att-9', mimeType: 'audio/mpeg' } : undefined,
+    });
+    expect(html[0]).toContain('<audio class="message-inline-audio" controls="" src="/api/attachments/att-9"');
+  });
+
+  it('leaves {{attachment::ID}} untouched when the lookup finds nothing', async () => {
+    const html = await renderMessageParts({
+      ...makeCtx([{ type: 'text', text: 'Broken: {{attachment::nope}}' }]),
+      attachmentLookup: async () => undefined,
+    });
+    expect(html[0]).toContain('{{attachment::nope}}');
+  });
 });

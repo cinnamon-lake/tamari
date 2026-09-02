@@ -31,6 +31,7 @@ import type { IChatMemberRepository } from '../repos/ChatMemberRepository.js';
 import type { IPersonaRepository } from '../repos/PersonaRepository.js';
 import type { ISettingsRepository } from '../repos/SettingsRepository.js';
 import type { IBackendConfigRepository } from '../repos/BackendConfigRepository.js';
+import type { IAttachmentRepository } from '../repos/AttachmentRepository.js';
 import type { ChatBroadcastService } from '../services/ChatBroadcastService.js';
 import type { GenerationBroadcastService } from '../services/GenerationBroadcastService.js';
 import type { ToolResult } from '../services/ToolRegistry.js';
@@ -55,6 +56,9 @@ export interface AssistantMessageTargetDeps {
   chatBroadcast: ChatBroadcastService;
   generationBroadcast: GenerationBroadcastService;
   assembly: ChatPromptAssembly;
+  /** When present, tool-produced attachments are linked to the message so
+      orphan cleanup (DataMaid) doesn't delete media the message references. */
+  attachments?: IAttachmentRepository;
 }
 
 interface FreshAnchor {
@@ -462,6 +466,17 @@ export class AssistantMessageTarget implements GenerationTarget {
       isError: outcome.isError,
       extra: outcome.extra,
     });
+    // Link tool-generated media (images/audio) to this message. Tools create
+    // attachments with messageId NULL; without the link, orphan cleanup
+    // (DataMaid) deletes files the message still references.
+    const attachmentId = outcome.extra?.attachmentId;
+    if (typeof attachmentId === 'string' && this.deps.attachments && this.message) {
+      try {
+        await this.deps.attachments.linkToMessage(attachmentId, this.message.id);
+      } catch (err) {
+        log.warn({ err, attachmentId, messageId: this.message.id }, 'tool attachment link failed');
+      }
+    }
     await this.chain(() => this.persistCurrentParts(this.roundToolCalls));
   }
 

@@ -152,6 +152,9 @@ const strictConfig = {
   ALLOWED_ATTR: ['href', 'title'],
 };
 
+/** Matches {{attachment::ID}} — ids never contain braces or colons. */
+const ATTACHMENT_MACRO_RE = /\{\{attachment::([^}:]+)\}\}/g;
+
 export interface DisplayRenderContext {
   message: Message;
   character?: Character;
@@ -160,6 +163,10 @@ export interface DisplayRenderContext {
   strictHtmlSanitization?: boolean;
   userName: string;
   charName: string;
+  /** Repo-backed lookup for {{attachment::ID}} references that point at
+      attachments from OTHER messages (a new swipe, a later turn). Without
+      it, only attachments in this message's own parts/extra resolve. */
+  attachmentLookup?: (id: string) => Promise<{ url: string; mimeType: string } | undefined>;
 }
 
 /**
@@ -206,6 +213,29 @@ export async function renderTextPartHtml(text: string, ctx: DisplayRenderContext
           attachments[id] = { url, mimeType: typeof mimeType === 'string' ? mimeType : '' };
         }
       }
+    }
+  }
+
+  // Cross-message references: resolve {{attachment::ID}} macros whose id isn't
+  // part of this message (e.g. the model re-referencing an older image).
+  if (ctx.attachmentLookup) {
+    const missing = new Set<string>();
+    for (const m of resolved.matchAll(ATTACHMENT_MACRO_RE)) {
+      const id = (m[1] ?? '').trim();
+      if (id && !attachments[id]) missing.add(id);
+    }
+    if (missing.size > 0) {
+      const lookup = ctx.attachmentLookup;
+      await Promise.all(
+        [...missing].map(async (id) => {
+          try {
+            const found = await lookup(id);
+            if (found) attachments[id] = found;
+          } catch {
+            // Lookup failure leaves the macro untouched.
+          }
+        }),
+      );
     }
   }
 

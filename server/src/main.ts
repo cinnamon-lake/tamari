@@ -372,6 +372,7 @@ const chatBroadcast = new ChatBroadcastService({
   personas,
   settings,
   characterAssets,
+  attachments,
 });
 
 const generationBroadcast = new GenerationBroadcastService({ bus });

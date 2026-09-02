@@ -208,6 +208,46 @@ describe('AssistantMessageTarget.write part accumulation', () => {
     const persisted = messages.get(target.messageId!);
     expect(persisted?.extra.parts?.some((p) => p.type === 'tool_result' && p.toolUseId === 'tc-1')).toBe(true);
   });
+
+  it('writeToolOutcome links a tool-generated attachment to the message', async () => {
+    const fakes = makeDeps({});
+    const linkToMessage = vi.fn(async () => ({}));
+    fakes.deps.attachments = { linkToMessage } as unknown as AssistantMessageTargetDeps['attachments'];
+    const target = AssistantMessageTarget.forNewMessage({ chatId: CHAT.id, character: CHARACTER }, fakes.deps);
+    target.bindGeneration('gen-1');
+    await target.prepare();
+
+    target.write({ type: 'toolCall', id: 'tc-1', name: 'generate_image', arguments: {} });
+    await target.writeToolOutcome(
+      { id: 'tc-1', name: 'generate_image', arguments: {} },
+      {
+        id: 'tc-1',
+        name: 'generate_image',
+        content: [{ type: 'text', text: 'done' }],
+        isError: false,
+        extra: { attachmentId: 'att-1', attachmentUrl: '/api/attachments/att-1', attachmentMimeType: 'image/png' },
+      },
+    );
+
+    expect(linkToMessage).toHaveBeenCalledWith('att-1', target.messageId);
+  });
+
+  it('writeToolOutcome does not touch attachments when the outcome has none', async () => {
+    const fakes = makeDeps({});
+    const linkToMessage = vi.fn(async () => ({}));
+    fakes.deps.attachments = { linkToMessage } as unknown as AssistantMessageTargetDeps['attachments'];
+    const target = AssistantMessageTarget.forNewMessage({ chatId: CHAT.id, character: CHARACTER }, fakes.deps);
+    target.bindGeneration('gen-1');
+    await target.prepare();
+
+    target.write({ type: 'toolCall', id: 'tc-1', name: 'roll', arguments: {} });
+    await target.writeToolOutcome(
+      { id: 'tc-1', name: 'roll', arguments: {} },
+      { id: 'tc-1', name: 'roll', content: [{ type: 'text', text: '4' }], isError: false },
+    );
+
+    expect(linkToMessage).not.toHaveBeenCalled();
+  });
 });
 
 // ── Throttled flush / abort ──────────────────────────────────────────────
