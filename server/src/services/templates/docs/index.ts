@@ -3,6 +3,7 @@ import { BACKENDS_DOC } from './backends.js';
 import { WORKBENCH_DOC } from './workbench.js';
 import { CUSTOM_BACKENDS_DOC } from './customBackends.js';
 import { REQUEST_SCRIPTS_DOC } from './requestScripts.js';
+import { REQUEST_TRANSFORMERS_DOC } from './requestTransformers.js';
 import { MACROS_DOC } from './macros.js';
 import { REGEXES_DOC } from './regexes.js';
 import { LOREBOOKS_DOC } from './lorebooks.js';
@@ -19,6 +20,7 @@ export const DOCS_TOPICS = [
   'workbench',
   'custom_backends',
   'request_scripts',
+  'request_transformers',
   'macros',
   'regexes',
   'lorebooks',
@@ -38,6 +40,7 @@ export const DOCS_CONTENT: Record<DocsTopic, string> = {
   workbench: WORKBENCH_DOC,
   custom_backends: CUSTOM_BACKENDS_DOC,
   request_scripts: REQUEST_SCRIPTS_DOC,
+  request_transformers: REQUEST_TRANSFORMERS_DOC,
   macros: MACROS_DOC,
   regexes: REGEXES_DOC,
   lorebooks: LOREBOOKS_DOC,

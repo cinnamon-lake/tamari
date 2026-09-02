@@ -214,6 +214,9 @@ export function SettingsModal(props: { onClose: () => void }) {
       <section class="settings-section">
         <h3 class="section-heading">{t('settings.postProcessing.heading')}</h3>
 
+        {/* The old whitespaceMode control moved to transformer chains (request-time). */}
+        <p class="hint-text">{t('settings.postProcessing.transformerHint')}</p>
+
         <Show when={appendOnlyLayout()}>
           <p class="hint-text">{t('settings.postProcessing.disabledByAppendOnly')}</p>
         </Show>

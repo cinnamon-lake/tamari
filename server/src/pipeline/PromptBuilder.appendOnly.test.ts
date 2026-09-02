@@ -270,7 +270,7 @@ describe('append-only prompt layout', () => {
     expect(prompt.messages[lastUserIdx]!.content).toBe('second');
   });
 
-  it('reasoning is always re-sent verbatim (forced on, even when the setting is off)', async () => {
+  it('reasoning is re-sent verbatim under append-only (the renderer never strips)', async () => {
     const old = makeMsg('assistant', 'answer', {
       parts: [
         { type: 'reasoning', text: 'thinking out loud' },
@@ -280,7 +280,6 @@ describe('append-only prompt layout', () => {
     const prompt = await builder.build(
       makeOpts({
         chatHistory: [old, makeMsg('assistant', 'latest answer')],
-        reasoningAddToPrompts: false,
         ...APPEND_ONLY,
       }),
     );
@@ -368,7 +367,6 @@ describe('append-only output side (AssistantMessageTarget)', () => {
         appendOnlyPromptLayout: true,
         trimSentences: true,
         removeXML: true,
-        whitespaceMode: 'full',
       })),
       get: vi.fn(async () => undefined),
     };

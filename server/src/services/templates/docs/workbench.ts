@@ -118,5 +118,5 @@ Each writable key is also a per-field file (\`meta.json/name\`, \`meta.json/tags
 
 ## Related topics
 
-\`characters\` (card fields), \`backends\` (config fields, providerParams), \`custom_backends\` (Lua backend contract), \`request_scripts\` (request transformer), \`regexes\` (rule fields), \`lorebooks\` (entry fields, \`@@\` decorators), \`toolsets\` (Lua tool templates), \`quick_replies\` (the \`st\` API), \`prompt_lists\`, \`macros\`.
+\`characters\` (card fields), \`backends\` (config fields, providerParams), \`custom_backends\` (Lua backend contract), \`request_scripts\` (Lua HTTP request rewrite), \`request_transformers\` (message-array transform chains), \`regexes\` (rule fields), \`lorebooks\` (entry fields, \`@@\` decorators), \`toolsets\` (Lua tool templates), \`quick_replies\` (the \`st\` API), \`prompt_lists\`, \`macros\`.
 `;

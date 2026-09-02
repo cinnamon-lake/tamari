@@ -40,6 +40,8 @@ import type { ICharacterAssetRepository } from '../repos/CharacterAssetRepositor
 import type { IToolsetRepository } from '../repos/ToolsetRepository.js';
 import type { ICustomBackendRepository } from '../repos/CustomBackendRepository.js';
 import type { IScriptBlobRepository } from '../repos/ScriptBlobRepository.js';
+import type { ITransformerChainRepository } from '../repos/TransformerChainRepository.js';
+import type { ITransformerScriptRepository } from '../repos/TransformerScriptRepository.js';
 import type { BackendAdapterFactory } from '../backends/factory.js';
 import type { LuaRuntime } from '../scripting/LuaRuntime.js';
 import type { ToolRegistry } from './ToolRegistry.js';
@@ -128,6 +130,8 @@ export interface TestSessionServiceDeps {
   memoryService?: MemoryService;
   toolRegistry?: ToolRegistry;
   toolsetRepo?: IToolsetRepository;
+  transformerChains?: ITransformerChainRepository;
+  transformerScripts?: ITransformerScriptRepository;
   maxToolRounds?: number;
 }
 
@@ -176,6 +180,8 @@ export class TestSessionService {
       memoryService: deps.memoryService,
       toolRegistry: deps.toolRegistry,
       toolsetRepo: deps.toolsetRepo,
+      transformerChains: deps.transformerChains,
+      transformerScripts: deps.transformerScripts,
     });
     this.runner = new GenerationRunner({
       bus: this.bus,

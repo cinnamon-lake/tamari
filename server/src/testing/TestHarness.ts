@@ -31,6 +31,8 @@ import {
   ExtensionDataRepository,
   CustomBackendRepository,
   ScriptBlobRepository,
+  TransformerChainRepository,
+  TransformerScriptRepository,
 } from '../repos/index.js';
 import type { ICharacterRepository } from '../repos/CharacterRepository.js';
 import type { IWorldInfoRepository } from '../repos/WorldInfoRepository.js';
@@ -134,6 +136,8 @@ export class TestHarness {
     const toolTemplates = new ToolTemplateRepository(this.db);
     this.extensionData = new ExtensionDataRepository(this.db);
     const customBackends = new CustomBackendRepository(this.db);
+    const transformerChains = new TransformerChainRepository(this.db);
+    const transformerScripts = new TransformerScriptRepository(this.db);
     const scriptBlobs = new ScriptBlobRepository(this.db);
     const luaRuntime = new LuaRuntime();
 
@@ -278,6 +282,8 @@ export class TestHarness {
       toolsets,
       toolTemplates,
       customBackends,
+      transformerChains,
+      transformerScripts,
       luaRuntime,
       chatBroadcast,
       chatMetaBroadcast,

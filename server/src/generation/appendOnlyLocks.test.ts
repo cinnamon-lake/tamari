@@ -10,19 +10,16 @@ describe('resolveEffectiveSettings', () => {
   it('passes values through when append-only is off', () => {
     const eff = resolveEffectiveSettings(
       makeSettings({
-        whitespaceMode: 'full',
         removeXML: true,
         singleLine: true,
         trimSentences: true,
         autoFixGeneratedMarkdown: true,
         disableGroupTrimming: false,
         customStoppingStringsMacro: true,
-        reasoningAddToPrompts: false,
       }),
     );
     expect(eff).toEqual({
       appendOnly: false,
-      whitespaceMode: 'full',
       removeXML: true,
       singleLine: true,
       trimSentences: true,
@@ -30,7 +27,6 @@ describe('resolveEffectiveSettings', () => {
       disableGroupTrimming: false,
       storageMacrosEnabled: true,
       customStoppingStringsMacro: true,
-      reasoningAddToPrompts: false,
       memorySummaryEnabled: true,
     });
   });
@@ -39,19 +35,16 @@ describe('resolveEffectiveSettings', () => {
     const eff = resolveEffectiveSettings(
       makeSettings({
         appendOnlyPromptLayout: true,
-        whitespaceMode: 'full',
         removeXML: true,
         singleLine: true,
         trimSentences: true,
         autoFixGeneratedMarkdown: true,
         disableGroupTrimming: false,
         customStoppingStringsMacro: true,
-        reasoningAddToPrompts: false,
       }),
     );
     expect(eff).toEqual({
       appendOnly: true,
-      whitespaceMode: 'none',
       removeXML: false,
       singleLine: false,
       trimSentences: false,
@@ -59,7 +52,6 @@ describe('resolveEffectiveSettings', () => {
       disableGroupTrimming: true,
       storageMacrosEnabled: false,
       customStoppingStringsMacro: false,
-      reasoningAddToPrompts: true,
       memorySummaryEnabled: false,
     });
   });

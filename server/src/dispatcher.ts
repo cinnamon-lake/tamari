@@ -26,6 +26,7 @@ import { buildBackendConfigHandlers } from './dispatch/backendConfigHandlers.js'
 import { buildPromptListHandlers } from './dispatch/promptListHandlers.js';
 import { buildQuickReplyHandlers } from './dispatch/quickReplyHandlers.js';
 import { buildCustomBackendHandlers } from './dispatch/customBackendHandlers.js';
+import { buildTransformerHandlers } from './dispatch/transformerHandlers.js';
 import { buildToolHandlers } from './dispatch/toolHandlers.js';
 
 export type { DispatcherDeps } from './dispatch/types.js';
@@ -64,6 +65,7 @@ export function createDispatcher(deps: DispatcherDeps) {
     ...buildPromptListHandlers(deps),
     ...buildQuickReplyHandlers(deps),
     ...buildCustomBackendHandlers(deps),
+    ...buildTransformerHandlers(deps),
     ...buildToolHandlers(deps),
   } satisfies HandlerMap;
 

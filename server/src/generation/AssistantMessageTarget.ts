@@ -23,7 +23,7 @@
 import { getLogger } from '../lib/logger.js';
 import { str } from '../lib/coerce.js';
 import { getMessageText } from '@tamari/types';
-import type { AppSettings, Message, Character, MessageExtra, ContentPart } from '@tamari/types';
+import type { Message, Character, MessageExtra, ContentPart } from '@tamari/types';
 import type { BackendStreamItem, GenerationResult, Prompt, ToolCall } from '../backends/BackendAdapter.js';
 import type { IChatRepository } from '../repos/ChatRepository.js';
 import type { ICharacterRepository } from '../repos/CharacterRepository.js';
@@ -70,11 +70,6 @@ interface ContinueAnchor {
 }
 
 type Anchor = FreshAnchor | ContinueAnchor;
-
-function applyOutputWhitespace(content: string, mode: AppSettings['whitespaceMode']): string {
-  if (mode !== 'full') return content;
-  return content.replace(/\s+/g, (match) => (match.includes('\n') ? '\n\n' : ' '));
-}
 
 export class AssistantMessageTarget implements GenerationTarget {
   readonly persistent = true;
@@ -744,8 +739,6 @@ export class AssistantMessageTarget implements GenerationTarget {
     const eff = this.effective();
     const lastTextPart = lastTextPartIndex !== -1 ? (parts[lastTextPartIndex] as { type: 'text'; text: string }) : null;
     if (lastTextPart) {
-      lastTextPart.text = applyOutputWhitespace(lastTextPart.text, eff.whitespaceMode);
-
       if (eff.removeXML) {
         lastTextPart.text = lastTextPart.text.replace(/<[^>]+>/g, '');
       }

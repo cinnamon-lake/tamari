@@ -11,7 +11,14 @@
  */
 
 import { getMessageText } from '@tamari/types';
-import type { Message, Character, WorldInfoEntry, MemorySummary, MacroGenerationType } from '@tamari/types';
+import type {
+  Message,
+  Character,
+  WorldInfoEntry,
+  MemorySummary,
+  MacroGenerationType,
+  TransformerStep,
+} from '@tamari/types';
 import type { Prompt } from '../backends/BackendAdapter.js';
 import type { WorldInfoInjector } from './WorldInfoInjector.js';
 import { MacroResolver, type MacroContext } from './MacroResolver.js';
@@ -42,12 +49,23 @@ export interface BuildOptions {
   maxContext: number;
   maxResponseTokens: number;
   model?: string;
+  /** Provider id of the active backend (transformer ctx, e.g. 'claude'). */
+  backendProvider?: string;
   /** Optional persona description */
   personaDescription?: string;
   /** Custom stopping strings for this generation */
   stopStrings?: string[];
-  /** Whether to include reasoning blocks in prompt context */
-  reasoningAddToPrompts?: boolean;
+  /**
+   * Request transformer chain for this generation (resolved by
+   * ChatPromptAssembly from `backendConfig.transformerChainId`): ordered
+   * steps plus the Lua sources for `lua` steps, keyed by script id. Runs in
+   * the `requestTransformers` stage after render. Absent under append-only
+   * (the byte-prefix invariant forbids post-render rewriting).
+   */
+  transformers?: {
+    steps: TransformerStep[];
+    luaSources: Map<string, string>;
+  };
   /** Regex rules for prompt transformation */
   regexRules?: RegexRule[];
   /** Optional rolling memory summary to inject before chat history. */

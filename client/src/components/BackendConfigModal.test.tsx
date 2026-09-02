@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { BackendConfigModal } from './BackendConfigModal.js';
 import { setState } from '../stores/serverStore.js';
 import { bus } from '../bus/WebSocketBus.js';
-import type { BackendConfig, CustomBackend } from '@tamari/types';
+import type { BackendConfig, CustomBackend, TransformerChain } from '@tamari/types';
 
 function makeConfig(overrides: Partial<BackendConfig> = {}): BackendConfig {
   return {
@@ -34,6 +34,7 @@ function makeConfig(overrides: Partial<BackendConfig> = {}): BackendConfig {
     supportsImages: true,
     supportsAudio: true,
     supportsVideo: true,
+    transformerChainId: null,
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
@@ -400,5 +401,72 @@ describe('BackendConfigModal model picker on config switch', () => {
     // The fresh list lands → select returns with the new config's model.
     const option = await screen.findByRole('option', { name: 'Model B' });
     expect((option.closest('select') as HTMLSelectElement).value).toBe('model-b');
+  });
+});
+
+function makeTransformerChain(overrides: Partial<TransformerChain> = {}): TransformerChain {
+  return {
+    id: 'tc-1',
+    name: 'Default Chain',
+    description: '',
+    steps: [],
+    createdAt: 0,
+    updatedAt: 0,
+    ...overrides,
+  };
+}
+
+describe('BackendConfigModal transformer chain selector', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }));
+    setState('settings', {});
+    setState('transformerChains', [
+      makeTransformerChain({ id: 'tc-1', name: 'Default Chain' }),
+      makeTransformerChain({ id: 'tc-2', name: 'Aggressive Squash' }),
+    ]);
+    setState('activeBackendConfig', makeConfig({ id: 'cfg-chain', transformerChainId: 'tc-1' }));
+  });
+
+  afterEach(() => {
+    setState('transformerChains', []);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('requests the chain list on mount and renders the current selection', () => {
+    const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
+    render(() => <BackendConfigModal onClose={() => {}} />);
+    expect(sendSpy).toHaveBeenCalledWith({ type: 'transformerchain.list' });
+    const select = screen.getByTestId<HTMLSelectElement>('backend-config-transformer-chain');
+    expect(select.value).toBe('tc-1');
+    expect(screen.getByRole('option', { name: 'Aggressive Squash' })).toBeInTheDocument();
+  });
+
+  it('writes transformerChainId as a top-level patch field on save', () => {
+    const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
+    render(() => <BackendConfigModal onClose={() => {}} />);
+
+    fireEvent.change(screen.getByTestId('backend-config-transformer-chain'), { target: { value: 'tc-2' } });
+    vi.advanceTimersByTime(600);
+
+    const update = sendSpy.mock.calls.map((c) => c[0]).find((m) => m.type === 'backendConfig.update');
+    expect(update).toBeDefined();
+    const patch = (update as { patch: { transformerChainId?: string | null } }).patch;
+    expect(patch.transformerChainId).toBe('tc-2');
+  });
+
+  it('writes null when None is selected', () => {
+    const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
+    render(() => <BackendConfigModal onClose={() => {}} />);
+
+    fireEvent.change(screen.getByTestId('backend-config-transformer-chain'), { target: { value: '' } });
+    vi.advanceTimersByTime(600);
+
+    const update = sendSpy.mock.calls.map((c) => c[0]).find((m) => m.type === 'backendConfig.update');
+    expect(update).toBeDefined();
+    const patch = (update as { patch: { transformerChainId?: string | null } }).patch;
+    expect(patch.transformerChainId).toBeNull();
   });
 });

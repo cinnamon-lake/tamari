@@ -471,7 +471,7 @@ describe('e2e prompt integration', () => {
     expect(systemContents.some((c) => c.includes('Always end with a poetic flourish.'))).toBe(true);
   });
 
-  it('includes reasoning blocks in prompt history when reasoningAddToPrompts is enabled', async () => {
+  it('includes reasoning blocks in prompt history by default', async () => {
     // Use a backend that emits reasoning on the first generation
     const backend = new TrivialBackendAdapter([
       [
@@ -488,17 +488,13 @@ describe('e2e prompt integration', () => {
     await h.initSchema();
     client = h.connectClient();
 
-    // Enable debug prompts and reasoning in prompts
+    // Enable debug prompts. Reasoning needs no opt-in: the global
+    // `reasoningAddToPrompts` setting was removed — reasoning blocks are
+    // always included unless the backend config's transformer chain carries
+    // an enabled strip-reasoning step (fresh DBs have none).
     await h.send(client, {
       type: 'settings.set',
       key: 'debugPrompts',
-      value: true,
-    } as ClientMessage);
-    h.expectBroadcast('settings.changed');
-
-    await h.send(client, {
-      type: 'settings.set',
-      key: 'reasoningAddToPrompts',
       value: true,
     } as ClientMessage);
     h.expectBroadcast('settings.changed');

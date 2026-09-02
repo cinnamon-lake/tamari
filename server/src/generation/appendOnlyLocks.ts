@@ -10,17 +10,16 @@
  * once and read the *effective* values from the result.
  *
  * New byte-mutating features must be added here, not gated ad-hoc at the call
- * site.
+ * site. (Request transformer chains are not a per-feature lock: they are
+ * disabled wholesale under append-only — ChatPromptAssembly simply never
+ * resolves the chain.)
  */
 
-import type { AppSettings, SettingsMap } from '@tamari/types';
+import type { SettingsMap } from '@tamari/types';
 
 export interface EffectiveGenerationSettings {
   /** The raw flag, for prompt-stage plumbing (`caching.appendOnly`). */
   appendOnly: boolean;
-  /** Whitespace normalization rewrites bytes — locked to 'none' (covers both
-      the input pass in GenerationService and the output pass at stream settle). */
-  whitespaceMode: AppSettings['whitespaceMode'];
   removeXML: boolean;
   singleLine: boolean;
   trimSentences: boolean;
@@ -31,9 +30,6 @@ export interface EffectiveGenerationSettings {
   storageMacrosEnabled: boolean;
   /** Macro resolution in custom stop strings — off; strings stay literal. */
   customStoppingStringsMacro: boolean;
-  /** Reasoning must be re-sent verbatim (the provider snapshot includes it) —
-      forced on. */
-  reasoningAddToPrompts: boolean;
   /** A rolling summary prepended before history mutates already-sent bytes
       every updateInterval — off (the summary is neither used nor refreshed). */
   memorySummaryEnabled: boolean;
@@ -43,7 +39,6 @@ export function resolveEffectiveSettings(settings: SettingsMap): EffectiveGenera
   if (settings['appendOnlyPromptLayout'] !== true) {
     return {
       appendOnly: false,
-      whitespaceMode: settings.whitespaceMode,
       removeXML: Boolean(settings['removeXML']),
       singleLine: Boolean(settings['singleLine']),
       trimSentences: Boolean(settings['trimSentences']),
@@ -51,13 +46,11 @@ export function resolveEffectiveSettings(settings: SettingsMap): EffectiveGenera
       disableGroupTrimming: Boolean(settings['disableGroupTrimming']),
       storageMacrosEnabled: true,
       customStoppingStringsMacro: Boolean(settings['customStoppingStringsMacro']),
-      reasoningAddToPrompts: Boolean(settings['reasoningAddToPrompts']),
       memorySummaryEnabled: true,
     };
   }
   return {
     appendOnly: true,
-    whitespaceMode: 'none',
     removeXML: false,
     singleLine: false,
     trimSentences: false,
@@ -65,7 +58,6 @@ export function resolveEffectiveSettings(settings: SettingsMap): EffectiveGenera
     disableGroupTrimming: true,
     storageMacrosEnabled: false,
     customStoppingStringsMacro: false,
-    reasoningAddToPrompts: true,
     memorySummaryEnabled: false,
   };
 }

@@ -33,10 +33,8 @@ export const settings = {
   },
   postProcessing: {
     heading: 'Post-processing',
-    whitespaceHandling: 'Whitespace handling',
-    whitespaceNone: 'No whitespace manipulation',
-    whitespaceEssential: 'Essential whitespace manipulation',
-    whitespaceFull: 'Full whitespace manipulation',
+    transformerHint:
+      'Request-time whitespace handling and reasoning control moved to transformer chains — attach one to a backend config (Backend Config → Transformer Chain).',
     removeXml: 'Remove XML tags from output',
     singleLine: 'Single-line mode (trim to first newline)',
     trimSentences: 'Trim to end of last complete sentence',

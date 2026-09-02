@@ -11,6 +11,7 @@ const EXPECTED_ANCHORS: Record<(typeof DOCS_TOPICS)[number], string> = {
   workbench: '# Workbench',
   custom_backends: '# Custom Backends',
   request_scripts: '# Request Scripts',
+  request_transformers: '# Request Transformers',
   macros: '# Macros',
   regexes: '# Regex Rules',
   lorebooks: '# Lorebooks',

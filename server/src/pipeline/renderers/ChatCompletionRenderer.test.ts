@@ -395,7 +395,7 @@ describe('ChatCompletionRenderer', () => {
     expect(historyMessages[1]!.content).toBe('Hi');
   });
 
-  it('keeps reasoning in all assistant messages when reasoningAddToPrompts is true', () => {
+  it('keeps reasoning in all assistant messages (the renderer never strips)', () => {
     const macroResolver = MacroResolver.createPromptResolver();
     const result = renderer.render(makeCollection(), {
       macroResolver,
@@ -426,7 +426,6 @@ describe('ChatCompletionRenderer', () => {
       ],
       maxContext: 4096,
       maxResponseTokens: 512,
-      reasoningAddToPrompts: true,
     });
 
     const assistantMsgs = result.messages.filter((m) => m.role === 'assistant');
@@ -448,58 +447,11 @@ describe('ChatCompletionRenderer', () => {
     expect(assistantMsgs[2]!.content).toBe('');
   });
 
-  it('strips reasoning from old assistant messages when reasoningAddToPrompts is false', () => {
-    const macroResolver = MacroResolver.createPromptResolver();
-    const result = renderer.render(makeCollection(), {
-      macroResolver,
-      macroCtx: { userName: 'User', charName: 'Bot' },
-      tokenCounter,
-      chatHistory: [
-        makeMsg(1, 'user', 'Hello'),
-        {
-          ...makeMsg(2, 'assistant', 'Hi there'),
-          extra: {
-            parts: [
-              { type: 'reasoning', text: 'Thinking about greeting' },
-              { type: 'text', text: 'Hi there' },
-            ],
-          },
-        },
-        makeMsg(3, 'user', 'How are you?'),
-        {
-          ...makeMsg(4, 'assistant', 'Doing great'),
-          extra: {
-            parts: [
-              { type: 'reasoning', text: 'Checking mood' },
-              { type: 'text', text: 'Doing great' },
-            ],
-          },
-        },
-        makeMsg(5, 'assistant', ''), // empty stream target
-      ],
-      maxContext: 4096,
-      maxResponseTokens: 512,
-      reasoningAddToPrompts: false,
-    });
+  // Stripping reasoning/tool blocks from old assistant messages moved to the
+  // strip-reasoning request transformer (server/src/transformers); the
+  // renderer always keeps them now.
 
-    const assistantMsgs = result.messages.filter((m) => m.role === 'assistant');
-    expect(assistantMsgs.length).toBe(3);
-
-    // msg 2 (old) should have reasoning stripped → collapses to plain text
-    const msg2 = assistantMsgs[0]!;
-    expect(typeof msg2.content).toBe('string');
-    expect(msg2.content).toBe('Hi there');
-
-    // msg 4 (previous assistant before stream target) should also be stripped
-    const msg4 = assistantMsgs[1]!;
-    expect(typeof msg4.content).toBe('string');
-    expect(msg4.content).toBe('Doing great');
-
-    // empty stream target — protected as the latest assistant, but has no parts
-    expect(assistantMsgs[2]!.content).toBe('');
-  });
-
-  it('strips reasoning and tool_use from old assistant messages', () => {
+  it('keeps legacy extra.toolCalls on old assistant messages', () => {
     const macroResolver = MacroResolver.createPromptResolver();
     const result = renderer.render(makeCollection(), {
       macroResolver,
@@ -509,58 +461,8 @@ describe('ChatCompletionRenderer', () => {
         makeMsg(1, 'user', 'What is the weather?'),
         {
           ...makeMsg(2, 'assistant', 'Let me check'),
+          // Legacy shape: tool calls in extra.toolCalls, no parts array.
           extra: {
-            parts: [
-              { type: 'reasoning', text: 'Need weather data' },
-              { type: 'text', text: 'Let me check' },
-              { type: 'tool_use', id: 'call_1', name: 'get_weather', input: {} },
-            ],
-          },
-        },
-        makeMsg(3, 'user', 'Thanks'),
-        {
-          ...makeMsg(4, 'assistant', 'You are welcome'),
-          extra: {
-            parts: [
-              { type: 'reasoning', text: 'Being polite' },
-              { type: 'text', text: 'You are welcome' },
-            ],
-          },
-        },
-      ],
-      maxContext: 4096,
-      maxResponseTokens: 512,
-      reasoningAddToPrompts: false,
-    });
-
-    const assistantMsgs = result.messages.filter((m) => m.role === 'assistant');
-    expect(assistantMsgs.length).toBe(2);
-
-    // Old message: reasoning and tool_use stripped → collapses to plain text
-    const oldMsg = assistantMsgs[0]!;
-    expect(typeof oldMsg.content).toBe('string');
-    expect(oldMsg.content).toBe('Let me check');
-
-    // Latest message: reasoning kept
-    const latestMsg = assistantMsgs[1]!;
-    expect(Array.isArray(latestMsg.content)).toBe(true);
-    const latestParts = latestMsg.content as Array<{ type: string }>;
-    expect(latestParts.some((p) => p.type === 'reasoning')).toBe(true);
-    expect(latestParts.some((p) => p.type === 'text')).toBe(true);
-  });
-
-  it('strips legacy extra.toolCalls from old assistant messages', () => {
-    const macroResolver = MacroResolver.createPromptResolver();
-    const result = renderer.render(makeCollection(), {
-      macroResolver,
-      macroCtx: { userName: 'User', charName: 'Bot' },
-      tokenCounter,
-      chatHistory: [
-        makeMsg(1, 'user', 'What is the weather?'),
-        {
-          ...makeMsg(2, 'assistant', 'Let me check'),
-          extra: {
-            parts: [{ type: 'text', text: 'Let me check' }],
             toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'Paris' } }],
           },
         },
@@ -569,16 +471,15 @@ describe('ChatCompletionRenderer', () => {
       ],
       maxContext: 4096,
       maxResponseTokens: 512,
-      reasoningAddToPrompts: false,
     });
 
     const assistantMsgs = result.messages.filter((m) => m.role === 'assistant');
     expect(assistantMsgs.length).toBe(2);
 
-    // Old message: legacy toolCalls stripped → plain text
-    const oldMsg = assistantMsgs[0]!;
-    expect(typeof oldMsg.content).toBe('string');
-    expect(oldMsg.content).toBe('Let me check');
+    // Old message: legacy toolCalls render as tool_use parts (the legacy
+    // shape has no text parts, so the tool call stands alone).
+    const oldParts = assistantMsgs[0]!.content as Array<{ type: string }>;
+    expect(oldParts.some((p) => p.type === 'tool_use')).toBe(true);
 
     // Latest message: plain text (no parts)
     const latestMsg = assistantMsgs[1]!;

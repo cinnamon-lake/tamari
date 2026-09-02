@@ -92,8 +92,6 @@ export interface AdapterFactoryInput {
   instructTemplate?: string;
   /** User-defined instruct templates (keyed by template ID). */
   customInstructTemplates?: Record<string, InstructTemplate>;
-  /** Whether past reasoning blocks are inlined into flat text prompts. */
-  reasoningAddToPrompts?: boolean;
   openaiParams?: GenerationParams;
   textgenParams?: GenerationParams;
   claudeParams?: GenerationParams;
@@ -128,7 +126,6 @@ export function buildAdapterFactoryInput(
     contextLength: parseNumber(settings['contextLength']),
     instructTemplate: parseOptionalString(settings['instructTemplate']),
     customInstructTemplates: parseCustomInstructTemplates(settings['instructTemplates']),
-    reasoningAddToPrompts: parseOptionalBoolean(settings['reasoningAddToPrompts']),
     openaiParams: parseParams(settings['openai.params']),
     textgenParams: parseParams(settings['textgen.params']),
     claudeParams: parseParams(settings['claude.params']),
@@ -147,11 +144,15 @@ export function buildAdapterFactoryInput(
 }
 
 /** Shared text-formatting config for text-completion adapters: the adapter
-    owns the chat→string flattening, so it needs the resolved template. */
+    owns the chat→string flattening, so it needs the resolved template.
+    Reasoning parts that survive to the adapter are always inlined with the
+    template's delimiters — stripping them from older turns is the
+    strip-reasoning request transformer's job (the parts never reach the
+    adapter when a chain removes them). */
 function textFormatting(input: AdapterFactoryInput): { template: InstructTemplate; includeReasoning: boolean } {
   return {
     template: getInstructTemplate(input.instructTemplate, input.customInstructTemplates),
-    includeReasoning: input.reasoningAddToPrompts ?? false,
+    includeReasoning: true,
   };
 }
 

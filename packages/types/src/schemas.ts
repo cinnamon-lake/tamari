@@ -5,6 +5,7 @@
 import { z } from 'zod';
 
 import type { MessageExtra } from './db.js';
+import { TransformerChainSchema, TransformerScriptSchema, TransformerStepSchema } from './transformers.js';
 
 type UnwrapDefault<S> = S extends z.ZodDefault<infer Inner> ? Inner : S;
 
@@ -60,6 +61,24 @@ export const CustomBackendInsertSchema = z.object({
 });
 
 export const CustomBackendUpdateSchema = makeUpdateSchema(CustomBackendInsertSchema.shape);
+
+// ---------- Request Transformer schemas ----------
+
+export const TransformerChainInsertSchema = z.object({
+  name: z.string().min(1).max(256),
+  description: z.string().default(''),
+  steps: z.array(TransformerStepSchema).default([]),
+});
+
+export const TransformerChainUpdateSchema = makeUpdateSchema(TransformerChainInsertSchema.shape);
+
+export const TransformerScriptInsertSchema = z.object({
+  name: z.string().min(1).max(256),
+  description: z.string().default(''),
+  luaSource: z.string().default(''),
+});
+
+export const TransformerScriptUpdateSchema = makeUpdateSchema(TransformerScriptInsertSchema.shape);
 
 // ---------- Character schemas ----------
 
@@ -216,6 +235,8 @@ export const BackendConfigCreateInputSchema = z.object({
   supportsImages: z.boolean().default(true),
   supportsAudio: z.boolean().default(true),
   supportsVideo: z.boolean().default(true),
+  /** Request transformer chain applied to the rendered prompt; null = none. */
+  transformerChainId: z.string().nullable().optional(),
 });
 
 export const BackendConfigUpdateSchema = makeUpdateSchema(BackendConfigCreateInputSchema.shape);
@@ -304,7 +325,10 @@ const _AppSettingsSchema = z.object({
   chatMessageLoadLimit: z.number().int().default(30),
   promptHistoryLimit: z.number().int().default(100),
   instructTemplates: z.array(z.unknown()).default([]),
-  reasoningAddToPrompts: z.boolean().default(false),
+  // reasoningAddToPrompts / whitespaceMode were removed (migration 020):
+  // request transforms now live on transformer chains referenced by backend
+  // configs. Reasoning blocks are always re-sent unless a chain contains an
+  // enabled strip-reasoning step.
 
   // Auto-continue
   autoContinueEnabled: z.boolean().default(false),
@@ -318,8 +342,8 @@ const _AppSettingsSchema = z.object({
   // WI, macros, prompt/output regex, and output post-processing.
   appendOnlyPromptLayout: z.boolean().default(false),
 
-  // Post-processing
-  whitespaceMode: z.enum(['none', 'essential', 'full']).default('none'),
+  // Post-processing (whitespace normalization moved to the `whitespace`
+  // request transformer — see transformer chains)
   removeXML: z.boolean().default(false),
   singleLine: z.boolean().default(false),
   trimSentences: z.boolean().default(false),
@@ -589,6 +613,8 @@ export const BackendConfigSchema = z.object({
   supportsImages: z.boolean(),
   supportsAudio: z.boolean(),
   supportsVideo: z.boolean(),
+  /** Request transformer chain applied to the rendered prompt (migration 019). */
+  transformerChainId: z.string().nullable(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });
@@ -1034,6 +1060,29 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     delegateResponse: z.string().optional(),
     requestId: z.string().optional(),
   }),
+  z.object({ type: z.literal('transformerchain.list') }),
+  z.object({ type: z.literal('transformerchain.get'), id: z.string() }),
+  // Upsert: presence of `id` decides update vs create (id assigned server-side).
+  z.object({
+    type: z.literal('transformerchain.save'),
+    id: z.string().optional(),
+    data: TransformerChainInsertSchema,
+  }),
+  z.object({ type: z.literal('transformerchain.delete'), id: z.string() }),
+  z.object({ type: z.literal('transformerscript.list') }),
+  z.object({ type: z.literal('transformerscript.get'), id: z.string() }),
+  z.object({
+    type: z.literal('transformerscript.save'),
+    id: z.string().optional(),
+    data: TransformerScriptInsertSchema,
+  }),
+  z.object({ type: z.literal('transformerscript.delete'), id: z.string() }),
+  // Load-check a Lua transformer script without saving it (request/response).
+  z.object({
+    type: z.literal('transformerscript.validate'),
+    luaSource: z.string(),
+    requestId: z.string().optional(),
+  }),
   z.object({ type: z.literal('toolset.create'), data: ToolsetCreateSchema }),
   z.object({ type: z.literal('toolset.update'), toolsetId: z.string(), patch: ToolsetUpdateSchema }),
   z.object({ type: z.literal('toolset.delete'), toolsetId: z.string() }),
@@ -1375,6 +1424,55 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('custombackend.testResult'),
     requestId: z.string().optional(),
     outcome: CustomBackendTestOutcomeSchema,
+    clientId: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('transformerchain.listed'),
+    items: z.array(TransformerChainSchema),
+    clientId: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('transformerchain.snapshot'),
+    item: TransformerChainSchema,
+    clientId: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('transformerchain.created'),
+    item: TransformerChainSchema,
+    clientId: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('transformerchain.updated'),
+    item: TransformerChainSchema,
+    clientId: z.string().optional(),
+  }),
+  z.object({ type: z.literal('transformerchain.deleted'), id: z.string(), clientId: z.string().optional() }),
+  z.object({
+    type: z.literal('transformerscript.listed'),
+    items: z.array(TransformerScriptSchema),
+    clientId: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('transformerscript.snapshot'),
+    item: TransformerScriptSchema,
+    clientId: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('transformerscript.created'),
+    item: TransformerScriptSchema,
+    clientId: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('transformerscript.updated'),
+    item: TransformerScriptSchema,
+    clientId: z.string().optional(),
+  }),
+  z.object({ type: z.literal('transformerscript.deleted'), id: z.string(), clientId: z.string().optional() }),
+  z.object({
+    type: z.literal('transformerscript.validated'),
+    requestId: z.string().optional(),
+    ok: z.boolean(),
+    error: z.string().optional(),
     clientId: z.string().optional(),
   }),
   z.object({

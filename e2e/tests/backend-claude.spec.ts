@@ -79,10 +79,7 @@ function collectParts(
 }
 
 /** Settings this spec mutates, with their schema defaults — restored in afterEach. */
-const TOUCHED_SETTINGS: Array<[string, unknown]> = [
-  ['customStoppingStrings', []],
-  ['reasoningAddToPrompts', false],
-];
+const TOUCHED_SETTINGS: Array<[string, unknown]> = [['customStoppingStrings', []]];
 
 test.describe('Claude backend adapter', () => {
   test.describe.configure({ mode: 'serial' });
@@ -149,11 +146,11 @@ test.describe('Claude backend adapter', () => {
     expect(cap.headers['anthropic-version']).toBe('2023-06-01');
   });
 
-  test('streams a thinking block and re-sends it signed on the next turn', async ({ page, app }) => {
-    // Keep reasoning blocks in the prompt so the second turn exercises the
+  test('streams a thinking block and re-sends it signed on the next turn', async ({ app }) => {
+    // Reasoning blocks are always kept in prompts by default (the global
+    // reasoningAddToPrompts setting is gone; stripping is an opt-in
+    // strip-reasoning transformer step), so the second turn exercises the
     // adapter's reasoning-part conversion (signature → thinking block).
-    await setSetting(page, 'reasoningAddToPrompts', true);
-
     const charName = `Claude Think ${Date.now()}`;
     await app.createCharacterAndChat({ name: charName, firstMes: `I am ${charName}.` });
 

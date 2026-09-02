@@ -27,6 +27,8 @@ import { TokenCounter, type ITokenCounter } from '../tokenizers/TokenCounter.js'
 import type { ExampleMessage, ExampleBuilder } from './ExampleBuilder.js';
 import type { ChatCompletionRenderer } from './renderers/ChatCompletionRenderer.js';
 import type { WorldInfoEntry, RegexRule, MemorySummary, GenerationParams } from '@tamari/types';
+import { executeChain } from '../transformers/chainExecutor.js';
+import type { TransformerContext } from '../transformers/types.js';
 
 /** The subset of PromptBuilder the stage closures call (all `@internal`). */
 export interface PromptBuilderStageHost {
@@ -312,9 +314,6 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
           maxContext: opts.maxContext,
           maxResponseTokens: opts.maxResponseTokens,
           model: opts.model,
-          // Append-only: reasoning is always re-sent verbatim (the provider's
-          // snapshot includes it).
-          reasoningAddToPrompts: appendOnly ? true : opts.reasoningAddToPrompts,
           supportsImages: opts.media?.supportsImages ?? true,
           supportsAudio: opts.media?.supportsAudio ?? true,
           supportsVideo: opts.media?.supportsVideo ?? true,
@@ -359,6 +358,44 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
           wiActivations: ctx.wi.activatedEntryIds,
           ...(appendOnlyTrace ? { appendOnlyTrace } : {}),
         };
+      },
+    },
+    {
+      // Request transformers: run the backend config's chain over the final
+      // rendered messages. Post-render placement means it works identically
+      // for chat-completion and text-completion adapters (both consume
+      // Prompt.messages). Under append-only the chain is never resolved
+      // (ChatPromptAssembly skips it — post-render rewriting would break the
+      // byte-prefix invariant); if a caller passes one anyway, it is dropped
+      // with a trace note.
+      id: 'requestTransformers',
+      async run(ctx) {
+        if (!ctx.result) return;
+        const transformers = ctx.opts.transformers;
+        if (ctx.opts.caching?.appendOnly) {
+          if (transformers && transformers.steps.length > 0) {
+            ctx.result.transformerTrace = ['request transformers disabled under append-only prompt layout'];
+          }
+          return;
+        }
+        if (!transformers || transformers.steps.length === 0) return;
+        const tctx: TransformerContext = {
+          userName: ctx.opts.userName,
+          charName: ctx.opts.character?.name,
+          generationType: ctx.opts.macro?.lastGenerationType,
+          model: ctx.opts.model,
+          backendProvider: ctx.opts.backendProvider,
+        };
+        const { messages, trace } = await executeChain(
+          ctx.result.messages,
+          transformers.steps,
+          tctx,
+          transformers.luaSources,
+        );
+        ctx.result.messages = messages;
+        if (trace.length > 0) {
+          ctx.result.transformerTrace = [...(ctx.result.transformerTrace ?? []), ...trace];
+        }
       },
     },
   ];

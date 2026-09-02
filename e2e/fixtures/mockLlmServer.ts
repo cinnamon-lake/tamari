@@ -48,6 +48,8 @@
  *                         Claude thinking block + Gemini thought parts)
  *   tool:name[{json}],name2[{json2}],...
  *                      -> emit one tool call per round, walking the sequence
+ *                         (position = tool results sent after the selector's
+ *                         user message, i.e. within the current turn only)
  *   [WI] TOKEN / [AN] TOKEN anywhere in the prompt -> reply "inject:TOKEN,..."
  *
  * Selector precedence: length:/slow: are checked before respond:/seq:.
@@ -619,13 +621,24 @@ async function sendCompletion(res: http.ServerResponse, body: unknown, defaultTe
   // results already in history; when the sequence is exhausted, the "model"
   // answers with plain text. This models multi-tool sequences (call A, see
   // result, think, call B, …) instead of stopping after the first result.
+  //
+  // Only results from THIS turn count: they are the ones sent after the
+  // selector's user message. Older turns keep their tool calls/results in the
+  // prompt now, so a global count would instantly exhaust every sequence.
   const toolSpecMatch = lastUserContent.match(/^tool:(.+)$/i);
   if (toolSpecMatch) {
     const sequence = parseToolSequence(toolSpecMatch[1]!);
     const reqMessages = Array.isArray((body as Record<string, unknown>)?.messages)
       ? ((body as Record<string, unknown>).messages as Record<string, unknown>[])
       : [];
-    const resultCount = reqMessages.filter((m) => m?.role === 'tool').length;
+    let lastUserIdx = -1;
+    for (let i = reqMessages.length - 1; i >= 0; i--) {
+      if (reqMessages[i]?.role === 'user') {
+        lastUserIdx = i;
+        break;
+      }
+    }
+    const resultCount = reqMessages.filter((m, i) => i > lastUserIdx && m?.role === 'tool').length;
     if (resultCount < sequence.length) {
       const tool = sequence[resultCount]!;
       const toolChunk = {
@@ -791,13 +804,22 @@ async function sendClaudeMessages(res: http.ServerResponse, body: unknown, defau
   }
 
   // Tool use mode: tool_use block with input_json_delta chunks. Walks the
-  // sequence by counting tool_result blocks already in the history.
+  // sequence by counting tool_result blocks already in the history — but only
+  // those sent after the selector's user message (older turns keep their tool
+  // history in the prompt, so a global count would exhaust the sequence).
   const toolSpecMatch = lastUserText.match(/^tool:(.+)$/i);
   if (toolSpecMatch) {
     const sequence = parseToolSequence(toolSpecMatch[1]!);
     const messages = Array.isArray(reqBody.messages) ? reqBody.messages : [];
+    let lastUserIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if ((messages[i] as Record<string, unknown>)?.role === 'user') {
+        lastUserIdx = i;
+        break;
+      }
+    }
     let resultCount = 0;
-    for (const m of messages) {
+    for (const m of messages.slice(lastUserIdx + 1)) {
       const content = (m as Record<string, unknown>)?.content;
       if (!Array.isArray(content)) continue;
       for (const part of content) {
@@ -892,13 +914,22 @@ async function sendGeminiStream(res: http.ServerResponse, body: unknown, default
   }
 
   // Tool mode: a single functionCall part. Walks the sequence by counting
-  // functionResponse parts already in the history.
+  // functionResponse parts already in the history — but only those sent after
+  // the selector's user entry (older turns keep their tool history in the
+  // prompt, so a global count would exhaust the sequence).
   const toolSpecMatch = lastUserText.match(/^tool:(.+)$/i);
   if (toolSpecMatch) {
     const sequence = parseToolSequence(toolSpecMatch[1]!);
     const contents = Array.isArray(reqBody.contents) ? reqBody.contents : [];
+    let lastUserIdx = -1;
+    for (let i = contents.length - 1; i >= 0; i--) {
+      if ((contents[i] as Record<string, unknown>)?.role === 'user') {
+        lastUserIdx = i;
+        break;
+      }
+    }
     let resultCount = 0;
-    for (const c of contents) {
+    for (const c of contents.slice(lastUserIdx + 1)) {
       const parts = (c as Record<string, unknown>)?.parts;
       if (!Array.isArray(parts)) continue;
       for (const part of parts) {

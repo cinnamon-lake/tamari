@@ -30,7 +30,6 @@ describe('PromptBuilder reasoning reconstruction', () => {
       userName: 'User',
       maxContext: 4096,
       maxResponseTokens: 100,
-      reasoningAddToPrompts: true,
     });
 
     const assistantMsg = prompt.messages.find((m) => m.role === 'assistant');
@@ -42,7 +41,7 @@ describe('PromptBuilder reasoning reconstruction', () => {
     expect(parts.some((p) => p.type === 'text' && p.text === 'Hi there')).toBe(true);
   });
 
-  it('always includes reasoning for chat-completion mode regardless of addToPrompts', async () => {
+  it('always includes reasoning for chat-completion mode (stripping is the strip-reasoning transformer)', async () => {
     const chatHistory: Message[] = [
       makeMsg('user', 'Hello'),
       makeMsg('assistant', 'Hi there', {
@@ -58,7 +57,6 @@ describe('PromptBuilder reasoning reconstruction', () => {
       userName: 'User',
       maxContext: 4096,
       maxResponseTokens: 100,
-      reasoningAddToPrompts: false,
     });
 
     const assistantMsg = prompt.messages.find((m) => m.role === 'assistant');
@@ -82,7 +80,6 @@ describe('PromptBuilder reasoning reconstruction', () => {
       userName: 'User',
       maxContext: 4096,
       maxResponseTokens: 100,
-      reasoningAddToPrompts: true,
     });
 
     const userMsg = prompt.messages.find((m) => m.role === 'user');
@@ -97,7 +94,6 @@ describe('PromptBuilder reasoning reconstruction', () => {
       userName: 'User',
       maxContext: 4096,
       maxResponseTokens: 100,
-      reasoningAddToPrompts: true,
     });
 
     const assistantMsg = prompt.messages.find((m) => m.role === 'assistant');

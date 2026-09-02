@@ -88,20 +88,6 @@ export class ChatCompletionRenderer implements PromptRenderer {
       }
     }
 
-    // Identify the latest assistant message (the streaming target) so we can
-    // preserve its reasoning / tool blocks even when stripping them from older
-    // messages.  The target is always the last assistant in the branch — for a
-    // fresh generation it's the empty placeholder, for continue/regenerate it's
-    // the existing message being extended.
-    let latestAssistantId: string | number | null = null;
-    for (let i = opts.chatHistory.length - 1; i >= 0; i--) {
-      const m = opts.chatHistory[i];
-      if (m?.role === 'assistant') {
-        latestAssistantId = m.id;
-        break;
-      }
-    }
-
     // Add the full chat history. We iterate newest-first (unshift) so the
     // absolute-prompt depth accounting below counts from the end of history.
     // The trailing empty assistant message (stream target) is NOT stripped here.
@@ -138,24 +124,10 @@ export class ChatCompletionRenderer implements PromptRenderer {
       let content: string | ContentPart[] = resolvedText;
 
       if (msg.role === 'assistant' && msg.extra.parts && msg.extra.parts.length > 0) {
+        // Reasoning / tool blocks are always re-sent in full — stripping them
+        // from older turns is the strip-reasoning request transformer's job
+        // (opt-in via a transformer chain, post-render).
         let parts = msg.extra.parts;
-        // Strip reasoning / tool blocks from old assistant messages when the
-        // user opts to keep the context lean. The latest assistant message
-        // (the streaming target) always keeps its blocks so the model can
-        // continue coherently.
-        if (!opts.reasoningAddToPrompts && msg.id !== latestAssistantId) {
-          const stripped = parts.filter(
-            (p) => p.type !== 'reasoning' && p.type !== 'tool_use' && p.type !== 'tool_result',
-          );
-          // Only keep the very last block if it's text; anything else is
-          // effectively request corruption for a stripped old message.
-          const lastStripped = stripped[stripped.length - 1];
-          if (lastStripped?.type === 'text') {
-            parts = [lastStripped];
-          } else {
-            parts = [];
-          }
-        }
         // Resolve macros in the remaining text part(s)
         parts = parts.map((p) =>
           p.type === 'text' ? { ...p, text: opts.macroResolver.resolve(p.text, opts.macroCtx) } : p,
@@ -174,10 +146,7 @@ export class ChatCompletionRenderer implements PromptRenderer {
       } else if (msg.role === 'assistant' && msg.extra.toolCalls) {
         const parts: ContentPart[] = [];
         const tc = msg.extra.toolCalls;
-        const stripBlocks = !opts.reasoningAddToPrompts && msg.id !== latestAssistantId;
         for (const call of tc) {
-          // Skip legacy tool calls for old assistants when stripping
-          if (stripBlocks) continue;
           parts.push({
             type: 'tool_use',
             id: call.id,

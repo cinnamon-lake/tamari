@@ -32,6 +32,8 @@ import {
   ExtensionDataRepository,
   CustomBackendRepository,
   ScriptBlobRepository,
+  TransformerChainRepository,
+  TransformerScriptRepository,
 } from './repos/index.js';
 import type { ISettingsRepository } from './repos/SettingsRepository.js';
 import type { ICharacterRepository } from './repos/CharacterRepository.js';
@@ -171,6 +173,8 @@ const extensionData = withLogging(new ExtensionDataRepository(db), 'extensionDat
 const attachments = withLogging(new AttachmentRepository(db), 'attachments');
 const customBackends = withLogging(new CustomBackendRepository(db), 'customBackends');
 const scriptBlobs = withLogging(new ScriptBlobRepository(db), 'scriptBlobs');
+const transformerChains = withLogging(new TransformerChainRepository(db), 'transformerChains');
+const transformerScripts = withLogging(new TransformerScriptRepository(db), 'transformerScripts');
 const secrets = withLogging(new SecretRepository(db), 'secrets');
 const secretService = new SecretService(secrets);
 
@@ -343,6 +347,8 @@ const testSessions = new TestSessionService({
   memoryService,
   toolRegistry,
   toolsetRepo: toolsets,
+  transformerChains,
+  transformerScripts,
   maxToolRounds: config.maxToolRounds,
 });
 const cardTest = new CardTestService({ testSessions });
@@ -382,6 +388,8 @@ const chatPromptAssembly = new ChatPromptAssembly({
   memoryService,
   toolRegistry,
   toolsetRepo: toolsets,
+  transformerChains,
+  transformerScripts,
 });
 const generationRunner = new GenerationRunner({
   bus,
@@ -499,6 +507,8 @@ const dispatch = createDispatcher({
   quickReplyService,
   quickReplies,
   customBackends,
+  transformerChains,
+  transformerScripts,
   luaRuntime,
   ragService,
   toolRegistry,

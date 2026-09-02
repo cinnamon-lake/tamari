@@ -186,6 +186,7 @@ function makeBackendConfig(
     supportsImages: true,
     supportsAudio: true,
     supportsVideo: true,
+    transformerChainId: null,
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
@@ -241,6 +242,34 @@ function makeQuickReply(
     language: 'javascript',
     autoExecute: 0,
     orderIndex: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    ...overrides,
+  };
+}
+
+function makeTransformerChain(
+  overrides: Partial<import('@tamari/types').TransformerChain> = {},
+): import('@tamari/types').TransformerChain {
+  return {
+    id: 'tc-1',
+    name: 'Test Chain',
+    description: '',
+    steps: [],
+    createdAt: 0,
+    updatedAt: 0,
+    ...overrides,
+  };
+}
+
+function makeTransformerScript(
+  overrides: Partial<import('@tamari/types').TransformerScript> = {},
+): import('@tamari/types').TransformerScript {
+  return {
+    id: 'ts-1',
+    name: 'Test Script',
+    description: '',
+    luaSource: 'return messages',
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
@@ -1268,6 +1297,67 @@ describe('serverStore', () => {
       setState('quickReplies', [makeQuickReply({ id: 'qr1' })]);
       mockWs.simulateMessage({ type: 'quickreply.deleted', id: 'qr1' });
       expect(state.quickReplies).toHaveLength(0);
+    });
+  });
+
+  // ---------- transformer chain/script handlers ----------
+
+  describe('transformer handlers', () => {
+    it('transformerchain.listed replaces the list', () => {
+      mockWs.simulateMessage({ type: 'transformerchain.listed', items: [makeTransformerChain({ id: 'tc-1' })] });
+      expect(state.transformerChains).toHaveLength(1);
+      expect(state.transformerChains[0]?.name).toBe('Test Chain');
+    });
+
+    it('transformerchain.created appends a new chain, deduped', () => {
+      mockWs.simulateMessage({ type: 'transformerchain.created', item: makeTransformerChain({ id: 'tc-1' }) });
+      mockWs.simulateMessage({ type: 'transformerchain.created', item: makeTransformerChain({ id: 'tc-1' }) });
+      expect(state.transformerChains).toHaveLength(1);
+    });
+
+    it('transformerchain.updated replaces in list and ignores unknown ids', () => {
+      setState('transformerChains', [makeTransformerChain({ id: 'tc-1', name: 'Old' })]);
+      mockWs.simulateMessage({
+        type: 'transformerchain.updated',
+        item: makeTransformerChain({ id: 'tc-1', name: 'New' }),
+      });
+      expect(state.transformerChains[0]?.name).toBe('New');
+      mockWs.simulateMessage({
+        type: 'transformerchain.updated',
+        item: makeTransformerChain({ id: 'tc-99', name: 'Unknown' }),
+      });
+      expect(state.transformerChains).toHaveLength(1);
+    });
+
+    it('transformerchain.deleted removes from list', () => {
+      setState('transformerChains', [makeTransformerChain({ id: 'tc-1' })]);
+      mockWs.simulateMessage({ type: 'transformerchain.deleted', id: 'tc-1' });
+      expect(state.transformerChains).toHaveLength(0);
+    });
+
+    it('transformerscript.listed replaces the list', () => {
+      mockWs.simulateMessage({ type: 'transformerscript.listed', items: [makeTransformerScript({ id: 'ts-1' })] });
+      expect(state.transformerScripts).toHaveLength(1);
+    });
+
+    it('transformerscript.updated replaces in list and ignores unknown ids', () => {
+      setState('transformerScripts', [makeTransformerScript({ id: 'ts-1', name: 'Old' })]);
+      mockWs.simulateMessage({
+        type: 'transformerscript.updated',
+        item: makeTransformerScript({ id: 'ts-1', name: 'New' }),
+      });
+      expect(state.transformerScripts[0]?.name).toBe('New');
+      mockWs.simulateMessage({
+        type: 'transformerscript.updated',
+        item: makeTransformerScript({ id: 'ts-99' }),
+      });
+      expect(state.transformerScripts).toHaveLength(1);
+    });
+
+    it('transformerscript.deleted removes from list', () => {
+      setState('transformerScripts', [makeTransformerScript({ id: 'ts-1' })]);
+      mockWs.simulateMessage({ type: 'transformerscript.deleted', id: 'ts-1' });
+      expect(state.transformerScripts).toHaveLength(0);
     });
   });
 

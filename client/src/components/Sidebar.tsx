@@ -22,6 +22,8 @@ import { SettingsModal } from './SettingsModal.js';
 import { BackendConfigModal } from './BackendConfigModal.js';
 import { SecretsModal } from './SecretsModal.js';
 import { CustomBackendsModal } from './CustomBackendsModal.js';
+import { TransformerChainsModal } from './TransformerChainsModal.js';
+import { TransformerScriptsModal } from './TransformerScriptsModal.js';
 import { PromptListModal } from './PromptListModal.js';
 import { InstructTemplatesModal } from './InstructTemplatesModal.js';
 import { RegexRulesModal } from './RegexRulesModal.js';
@@ -811,6 +813,26 @@ export function Sidebar() {
           <button
             class="settings-btn"
             onClick={() => {
+              openAppModal('transformerChains');
+              setMobileOpen(false);
+            }}
+            type="button"
+          >
+            <i class="bi bi-funnel" /> {t('transformers.chainsTitle')}
+          </button>
+          <button
+            class="settings-btn"
+            onClick={() => {
+              openAppModal('transformerScripts');
+              setMobileOpen(false);
+            }}
+            type="button"
+          >
+            <i class="bi bi-code-slash" /> {t('transformers.scriptsTitle')}
+          </button>
+          <button
+            class="settings-btn"
+            onClick={() => {
               openAppModal('promptLists');
               setMobileOpen(false);
             }}
@@ -885,6 +907,14 @@ export function Sidebar() {
 
       <Show when={isAppModalOpen('customBackends')}>
         <CustomBackendsModal onClose={() => closeAppModal('customBackends')} />
+      </Show>
+
+      <Show when={isAppModalOpen('transformerChains')}>
+        <TransformerChainsModal onClose={() => closeAppModal('transformerChains')} />
+      </Show>
+
+      <Show when={isAppModalOpen('transformerScripts')}>
+        <TransformerScriptsModal onClose={() => closeAppModal('transformerScripts')} />
       </Show>
 
       <Show when={isAppModalOpen('promptLists')}>

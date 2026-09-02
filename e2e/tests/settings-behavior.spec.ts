@@ -1,5 +1,5 @@
 import { smokeTest as test, expect } from '../fixtures/smoke.js';
-import { setSetting } from '../helpers/settings.js';
+import { setTransformerSteps, resetTransformerChain } from '../helpers/transformers.js';
 import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
 import { uniqueName } from '../helpers/names.js';
 
@@ -121,15 +121,16 @@ test.describe('Settings — Behavior', () => {
     const name = uniqueName('BehaviorPost');
     await app.createCharacterAndChat({ name, firstMes: `Hello from ${name}.` });
 
-    // whitespaceMode 'full': user input is collapsed before it reaches the LLM.
-    await setSetting(page, 'whitespaceMode', 'full');
+    // whitespace 'full' transformer (request-time only — the global
+    // whitespaceMode setting is gone): the user turn is collapsed in the
+    // outgoing request; the mock echoes the collapsed selector as its reply.
+    await setTransformerSteps(page, [{ kind: 'builtin', id: 'whitespace', enabled: true, params: { mode: 'full' } }]);
     const before = (await getLastLlmRequest()).count;
     await app.sendUserMessage('respond:wide    gaps   here', { expectReply: true });
     const captured = await waitForNextLlmRequest(before);
     expect(lastUserContent(captured.body)).toBe('respond:wide gaps here');
-    // The reply is rendered collapsed as well.
     expect(await app.lastAssistantText()).toBe('wide gaps here');
-    await setSetting(page, 'whitespaceMode', 'none');
+    await resetTransformerChain(page);
 
     // trimSentences: dangling final fragment is cut.
     await app.ensureSetting('Trim to end of last complete sentence', true);
@@ -224,38 +225,5 @@ test.describe('Settings — Behavior', () => {
     await app.ensureSetting('Only play sound when unfocused', true);
     await app.ensureSetting('Smooth streaming (typewriter effect)', false);
     await app.ensureSetting('Fade in streamed text', true);
-  });
-
-  test('whitespace handling radios persist across reload', async ({ page, app }) => {
-    test.setTimeout(90000);
-
-    const modal = await app.openSettings();
-    await modal.locator('label.radio-row:has-text("Full whitespace manipulation") input').click();
-    await app.waitForSettingSaved('whitespaceMode', 'full');
-    await app.closeSettings();
-
-    await page.reload();
-    await page.locator('.app-shell').waitFor({ state: 'visible', timeout: 10000 });
-    // The modal's signals initialize from state.settings at open time — wait
-    // for the post-reload snapshot or the radio renders defaults (slow-runner
-    // read race, seen on Windows CI).
-    await app.waitForInitialSnapshot();
-    const modal2 = await app.openSettings();
-    await expect(modal2.locator('input[name="whitespaceMode"][value="full"]')).toBeChecked();
-
-    await modal2.locator('label.radio-row:has-text("Essential whitespace manipulation") input').click();
-    await app.waitForSettingSaved('whitespaceMode', 'essential');
-    await app.closeSettings();
-
-    await page.reload();
-    await page.locator('.app-shell').waitFor({ state: 'visible', timeout: 10000 });
-    await app.waitForInitialSnapshot();
-    const modal3 = await app.openSettings();
-    await expect(modal3.locator('input[name="whitespaceMode"][value="essential"]')).toBeChecked();
-
-    // Reset to the default.
-    await modal3.locator('label.radio-row:has-text("No whitespace manipulation") input').click();
-    await expect(modal3.locator('input[name="whitespaceMode"][value="none"]')).toBeChecked();
-    await app.closeSettings();
   });
 });

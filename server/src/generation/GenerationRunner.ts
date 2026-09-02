@@ -298,6 +298,9 @@ export class GenerationRunner {
         ...(capturePrompts && roundPrompts.length > 0 ? { prompts: roundPrompts } : {}),
         // Append-only layout: suppressions/hoists recorded by prompt assembly.
         ...(firstPrompt?.appendOnlyTrace ? { appendOnly: firstPrompt.appendOnlyTrace } : {}),
+        // Request transformer notes (skipped/failed steps) from the
+        // post-render requestTransformers stage.
+        ...(firstPrompt?.transformerTrace?.length ? { transformers: firstPrompt.transformerTrace } : {}),
       });
 
       while (rounds < maxToolRounds) {

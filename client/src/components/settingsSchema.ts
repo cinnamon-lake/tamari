@@ -268,19 +268,6 @@ export function postProcessingFields(t: T): SettingsFieldDef[] {
   const appendOnly = { key: 'appendOnlyPromptLayout', is: true };
   return [
     {
-      key: 'whitespaceMode',
-      type: 'string',
-      format: 'radio',
-      label: t('settings.postProcessing.whitespaceHandling'),
-      default: 'none',
-      disabledWhen: appendOnly,
-      options: [
-        { value: 'none', label: t('settings.postProcessing.whitespaceNone') },
-        { value: 'essential', label: t('settings.postProcessing.whitespaceEssential') },
-        { value: 'full', label: t('settings.postProcessing.whitespaceFull') },
-      ],
-    },
-    {
       key: 'removeXML',
       type: 'boolean',
       label: t('settings.postProcessing.removeXml'),

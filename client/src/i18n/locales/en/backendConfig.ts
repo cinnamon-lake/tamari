@@ -78,7 +78,6 @@ export const backendConfig = {
   logitBiasPlaceholder: 'e.g. 12345:5 or word:-10',
 
   // Reasoning
-  includeReasoning: 'Include reasoning blocks in prompt context',
   disabledByAppendOnly: '(forced on by append-only prompt layout)',
   openrouterReasoning: 'OpenRouter Reasoning',
   reasoningEffort: 'Reasoning Effort',

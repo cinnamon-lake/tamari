@@ -36,7 +36,7 @@ describe('applyMigrations', () => {
     const client = makeClient();
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(18);
+    expect(await userVersion(client)).toBe(20);
 
     const tables = await client.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name");
     const names = tables.rows.map((r) => String(r.name));
@@ -78,7 +78,7 @@ describe('applyMigrations', () => {
     await applyMigrations(client);
     // Second run must be a no-op: no errors, version unchanged.
     await applyMigrations(client);
-    expect(await userVersion(client)).toBe(18);
+    expect(await userVersion(client)).toBe(20);
     client.close();
   });
 
@@ -90,7 +90,7 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 1');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(18);
+    expect(await userVersion(client)).toBe(20);
     // 002's ALTER was tolerated as duplicate and its UPDATE re-ran cleanly.
     const rs = await client.execute("SELECT name FROM pragma_table_info('chats')");
     expect(rs.rows.map((r) => String(r.name))).toContain('materialized');
@@ -115,7 +115,7 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 9');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(18);
+    expect(await userVersion(client)).toBe(20);
 
     const migrated = await client.execute("SELECT content, extra FROM messages WHERE role = 'user'");
     expect(String(migrated.rows[0]?.content)).toBe('');
@@ -161,7 +161,7 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 14');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(18);
+    expect(await userVersion(client)).toBe(20);
 
     const rows = await client.execute('SELECT idx, type, data FROM message_parts ORDER BY idx');
     expect(rows.rows.map((r) => [Number(r.idx), String(r.type)])).toEqual([
@@ -213,7 +213,7 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 15');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(18);
+    expect(await userVersion(client)).toBe(20);
 
     // Both lists gained both utility prompts with the legacy customizations.
     for (const id of ['list-a', 'list-b']) {
@@ -264,6 +264,99 @@ describe('applyMigrations', () => {
     client.close();
   });
 
+  it('migration 019/020 seeds the Default chain, links configs, and drops the old settings keys', async () => {
+    const client = makeClient();
+    await applyMigrations(client);
+
+    const { BackendConfigRepository } = await import('../repos/BackendConfigRepository.js');
+    const { TransformerChainRepository } = await import('../repos/TransformerChainRepository.js');
+    const configs = new BackendConfigRepository(client);
+    const chains = new TransformerChainRepository(client);
+
+    await configs.create('cfg-a', {
+      name: 'A',
+      description: '',
+      backendProvider: 'openai',
+      generationMode: 'chat',
+      model: 'm',
+      instructTemplate: '',
+      providerParams: {},
+      stopStrings: [],
+      openrouterProvider: null,
+      logitBias: null,
+    });
+
+    // Simulate a pre-020 settings blob with the legacy keys.
+    await client.execute({
+      sql: 'INSERT INTO settings (id, blob) VALUES (0, ?) ON CONFLICT(id) DO UPDATE SET blob = excluded.blob',
+      args: [JSON.stringify({ whitespaceMode: 'full', reasoningAddToPrompts: false, userName: 'Tester' })],
+    });
+
+    // Rewind to just before 019 and re-run. The first pass already seeded the
+    // Default chain from an empty settings blob — remove it so the re-run
+    // exercises the real migration path.
+    await client.execute('DELETE FROM transformer_chains');
+    await client.execute('PRAGMA user_version = 18');
+    await applyMigrations(client);
+
+    expect(await userVersion(client)).toBe(20);
+
+    // The Default chain carries whitespace(full) + an enabled strip-reasoning
+    // (the old reasoningAddToPrompts === false meant "strip").
+    const chain = await chains.getById('default');
+    expect(chain?.name).toBe('Default');
+    expect(chain?.steps).toEqual([
+      { kind: 'builtin', id: 'whitespace', enabled: true, params: { mode: 'full' } },
+      { kind: 'builtin', id: 'strip-reasoning', enabled: true },
+    ]);
+
+    // The config points at it.
+    expect((await configs.getById('cfg-a'))?.transformerChainId).toBe('default');
+
+    // The old keys are gone; unrelated settings survive.
+    const settingsRow = await client.execute('SELECT blob FROM settings WHERE id = 0');
+    const blob = JSON.parse(String(settingsRow.rows[0]?.blob)) as Record<string, unknown>;
+    expect(blob.whitespaceMode).toBeUndefined();
+    expect(blob.reasoningAddToPrompts).toBeUndefined();
+    expect(blob.userName).toBe('Tester');
+
+    // Idempotent: re-running changes nothing (chain not recreated, config
+    // keeps a manually reassigned chain).
+    await configs.update('cfg-a', { transformerChainId: 'other' });
+    await client.execute('PRAGMA user_version = 18');
+    await applyMigrations(client);
+    expect((await configs.getById('cfg-a'))?.transformerChainId).toBe('other');
+    expect((await chains.list()).length).toBe(1);
+
+    client.close();
+  });
+
+  it('migration 020 maps essential → trim and omits strip-reasoning without the legacy key', async () => {
+    const client = makeClient();
+    await applyMigrations(client);
+
+    const { TransformerChainRepository } = await import('../repos/TransformerChainRepository.js');
+    const chains = new TransformerChainRepository(client);
+
+    // Legacy blob with whitespaceMode 'essential' and NO reasoningAddToPrompts
+    // key (e.g. an import that never persisted the default).
+    await client.execute({
+      sql: 'INSERT INTO settings (id, blob) VALUES (0, ?) ON CONFLICT(id) DO UPDATE SET blob = excluded.blob',
+      args: [JSON.stringify({ whitespaceMode: 'essential' })],
+    });
+
+    // The first pass already seeded the Default chain from an empty settings
+    // blob — remove it so the re-run exercises the real migration path.
+    await client.execute('DELETE FROM transformer_chains');
+    await client.execute('PRAGMA user_version = 18');
+    await applyMigrations(client);
+
+    const chain = await chains.getById('default');
+    expect(chain?.steps).toEqual([{ kind: 'builtin', id: 'whitespace', enabled: true, params: { mode: 'trim' } }]);
+
+    client.close();
+  });
+
   it('migration 017 moves global claudeCache* settings into claude/openrouter backend configs', async () => {
     const client = makeClient();
     await applyMigrations(client);
@@ -302,7 +395,7 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 16');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(18);
+    expect(await userVersion(client)).toBe(20);
 
     const claude = await repo.getById('cfg-claude');
     expect(claude?.providerParams).toEqual({ cacheMode: 'manual', cacheDepth: 2, cacheTTL: '1h' });

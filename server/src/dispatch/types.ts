@@ -31,6 +31,8 @@ import type { ITokenCounter } from '../tokenizers/TokenCounter.js';
 import type { FileStorage } from '../services/FileStorage.js';
 import type { IQuickReplyRepository } from '../repos/QuickReplyRepository.js';
 import type { ICustomBackendRepository } from '../repos/CustomBackendRepository.js';
+import type { ITransformerChainRepository } from '../repos/TransformerChainRepository.js';
+import type { ITransformerScriptRepository } from '../repos/TransformerScriptRepository.js';
 import type { LuaRuntime } from '../scripting/LuaRuntime.js';
 import type { RAGService } from '../services/RAGService.js';
 import type { ToolRegistry } from '../services/ToolRegistry.js';
@@ -62,6 +64,8 @@ export interface DispatcherDeps {
   quickReplyService: QuickReplyService;
   quickReplies: IQuickReplyRepository;
   customBackends: ICustomBackendRepository;
+  transformerChains: ITransformerChainRepository;
+  transformerScripts: ITransformerScriptRepository;
   /** Lua runtime for custombackend.test dry-runs. */
   luaRuntime: LuaRuntime;
   ragService?: RAGService;

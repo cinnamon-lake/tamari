@@ -24,8 +24,6 @@ export interface RenderOptions {
   maxContext: number;
   maxResponseTokens: number;
   model?: string;
-  /** Whether to include past reasoning blocks in prompt context */
-  reasoningAddToPrompts?: boolean;
   /** Media types supported by the active backend */
   supportsImages?: boolean;
   supportsAudio?: boolean;

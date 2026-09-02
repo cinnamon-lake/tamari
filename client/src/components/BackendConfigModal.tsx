@@ -51,9 +51,6 @@ export function BackendConfigModal(props: { onClose: () => void }) {
   const [promptHistoryLimit, setPromptHistoryLimit] = createSignal(activeBackendConfig()?.promptHistoryLimit ?? 50);
   const [instructTemplate, setInstructTemplate] = createSignal(activeBackendConfig()?.instructTemplate ?? '');
   const [stopStrings, setStopStrings] = createSignal((activeBackendConfig()?.stopStrings ?? []).join('\n'));
-  const [reasoningAddToPrompts, setReasoningAddToPrompts] = createSignal(
-    Boolean(state.settings['reasoningAddToPrompts']),
-  );
   const [openrouterReasoningEffort, setOpenrouterReasoningEffort] = createSignal(
     state.settings['openrouter.reasoningEffort'] ?? '',
   );
@@ -78,6 +75,9 @@ export function BackendConfigModal(props: { onClose: () => void }) {
   );
   // `mock` provider: the inline canned-response script (providerParams.mockScript).
   const [mockScript, setMockScript] = createSignal(str(activeBackendConfig()?.providerParams?.['mockScript']));
+  // Top-level config field (not a providerParam): the request transformer
+  // chain applied to the rendered prompt. '' means none.
+  const [transformerChainId, setTransformerChainId] = createSignal(activeBackendConfig()?.transformerChainId ?? '');
   // Prompt caching for the claude/openrouter providers: providerParams.cacheMode
   // ('off' | 'auto' | 'manual'), cacheDepth (manual mode only) and cacheTTL —
   // consumed server-side by ChatPromptAssembly and the adapters, never sent as
@@ -199,6 +199,8 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     // Cheap — keeps the `custom` provider dropdown populated even when the
     // Custom Backends modal was never opened this session.
     bus.send({ type: 'custombackend.list' });
+    // Same for the transformer-chain dropdown (top-level transformerChainId).
+    bus.send({ type: 'transformerchain.list' });
 
     // Duplicate Config activates its copy: react to the server's confirmation
     // with the regular switch flow (flush edits → settings.set → select).
@@ -296,6 +298,7 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     setCustomBackendId(str(config.providerParams?.['customBackendId']));
     setDelegateConfigId(str(config.providerParams?.['delegateConfigId']));
     setMockScript(str(config.providerParams?.['mockScript']));
+    setTransformerChainId(config.transformerChainId ?? '');
     const configCacheMode = config.providerParams?.['cacheMode'];
     setCacheMode(configCacheMode === 'auto' || configCacheMode === 'manual' ? configCacheMode : 'off');
     setCacheDepth(Number(config.providerParams?.['cacheDepth'] ?? 0));
@@ -415,6 +418,7 @@ export function BackendConfigModal(props: { onClose: () => void }) {
         supportsImages: supportsImages(),
         supportsAudio: supportsAudio(),
         supportsVideo: supportsVideo(),
+        transformerChainId: transformerChainId() || null,
       },
     });
     setTimeout(() => setSaving(false), 300);
@@ -444,6 +448,7 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     customBackendId();
     delegateConfigId();
     mockScript();
+    transformerChainId();
     cacheMode();
     cacheDepth();
     cacheTTL();
@@ -468,17 +473,13 @@ export function BackendConfigModal(props: { onClose: () => void }) {
   // with the initial values — those must NOT trigger writes (a settings.set
   // costs a DB write plus a settings.changed fan-out to every client), so
   // only send keys whose value actually changed.
-  let prevReasoningAddToPrompts = reasoningAddToPrompts();
   let prevReasoningEffort = openrouterReasoningEffort();
   let prevReasoningSummary = openrouterReasoningSummary();
   createEffect(() => {
-    const rp = reasoningAddToPrompts();
     const re = openrouterReasoningEffort();
     const rs = openrouterReasoningSummary();
-    if (rp !== prevReasoningAddToPrompts) bus.send({ type: 'settings.set', key: 'reasoningAddToPrompts', value: rp });
     if (re !== prevReasoningEffort) bus.send({ type: 'settings.set', key: 'openrouter.reasoningEffort', value: re });
     if (rs !== prevReasoningSummary) bus.send({ type: 'settings.set', key: 'openrouter.reasoningSummary', value: rs });
-    prevReasoningAddToPrompts = rp;
     prevReasoningEffort = re;
     prevReasoningSummary = rs;
   });
@@ -514,6 +515,7 @@ export function BackendConfigModal(props: { onClose: () => void }) {
         supportsImages: supportsImages(),
         supportsAudio: supportsAudio(),
         supportsVideo: supportsVideo(),
+        transformerChainId: transformerChainId() || null,
       },
     });
   };
@@ -838,6 +840,27 @@ export function BackendConfigModal(props: { onClose: () => void }) {
             rows={6}
             class="font-mono text-sm resize-v"
           />
+        </label>
+        <label class="field-label">
+          {t('transformers.chainLabel')}
+          <select
+            class="select"
+            data-testid="backend-config-transformer-chain"
+            value={transformerChainId()}
+            onChange={(e) => markDirty(setTransformerChainId)(e.currentTarget.value)}
+          >
+            <option class="select-option" value="">
+              {t('transformers.chainNone')}
+            </option>
+            <For each={state.transformerChains}>
+              {(chain) => (
+                <option class="select-option" id={chain.id} value={chain.id}>
+                  {chain.name}
+                </option>
+              )}
+            </For>
+          </select>
+          <span class="hint-text">{t('transformers.chainHint')}</span>
         </label>
         <Show when={generationMode() === 'text'}>
           <label class="field-label">
@@ -1349,22 +1372,6 @@ export function BackendConfigModal(props: { onClose: () => void }) {
           />
         </label>
         <h4 class="text-sm text-muted mb-0 mt-md">{t('backendConfig.optionsSection')}</h4>
-        <label
-          class="checkbox-row"
-          title={state.settings['appendOnlyPromptLayout'] ? t('backendConfig.disabledByAppendOnly') : ''}
-        >
-          <input
-            class="checkbox-input"
-            type="checkbox"
-            checked={reasoningAddToPrompts()}
-            disabled={Boolean(state.settings['appendOnlyPromptLayout'])}
-            onChange={(e) => setReasoningAddToPrompts(e.currentTarget.checked)}
-          />
-          {t('backendConfig.includeReasoning')}
-          <Show when={state.settings['appendOnlyPromptLayout']}>
-            <span class="hint-text">{t('backendConfig.disabledByAppendOnly')}</span>
-          </Show>
-        </label>
 
         <div class="mt-md flex-col-sm">
           <h4 class="text-sm text-muted mb-0">{t('backendConfig.mediaSupport')}</h4>

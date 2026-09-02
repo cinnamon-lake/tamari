@@ -49,6 +49,7 @@ function makeConfig(name: string, provider: string, customBackendId?: string): B
     supportsImages: false,
     supportsAudio: false,
     supportsVideo: false,
+    transformerChainId: null,
     createdAt: 1,
     updatedAt: 1,
   };

@@ -20,9 +20,11 @@ import type { IPersonaRepository } from '../repos/PersonaRepository.js';
 import type { IAttachmentRepository } from '../repos/AttachmentRepository.js';
 import type { IWorldInfoRepository } from '../repos/WorldInfoRepository.js';
 import type { ICharacterAssetRepository } from '../repos/CharacterAssetRepository.js';
-import type { PromptBuilder, AuthorsNoteConfig } from '../pipeline/PromptBuilder.js';
+import type { PromptBuilder, AuthorsNoteConfig, BuildOptions } from '../pipeline/PromptBuilder.js';
 import type { ToolRegistry } from '../services/ToolRegistry.js';
 import type { IToolsetRepository } from '../repos/ToolsetRepository.js';
+import type { ITransformerChainRepository } from '../repos/TransformerChainRepository.js';
+import type { ITransformerScriptRepository } from '../repos/TransformerScriptRepository.js';
 import type { RAGService } from '../services/RAGService.js';
 import type { MemoryService } from '../services/MemoryService.js';
 import type { FileStorage } from '../services/FileStorage.js';
@@ -57,6 +59,10 @@ export interface ChatPromptAssemblyDeps {
   memoryService?: MemoryService;
   toolRegistry?: ToolRegistry;
   toolsetRepo?: IToolsetRepository;
+  /** Request transformer chain/script lookup (backendConfig.transformerChainId
+      resolution). Absent → no chain ever runs (tests, in-memory sessions). */
+  transformerChains?: ITransformerChainRepository;
+  transformerScripts?: ITransformerScriptRepository;
 }
 
 export interface ChatPromptBuildArgs {
@@ -288,10 +294,28 @@ export class ChatPromptAssembly {
     }
 
     const regexRules = this.extractRegexRules(allSettings, character);
-    // Append-only (via the lock resolver): reasoning always re-sent verbatim
-    // (the provider's snapshot includes it); stop strings stay literal.
+    // Append-only (via the lock resolver): stop strings stay literal, and the
+    // transformer module is disabled wholesale — post-render rewriting would
+    // break the byte-prefix invariant, so no chain is resolved at all.
     const appendOnly = eff.appendOnly;
-    const reasoningAddToPrompts = eff.reasoningAddToPrompts;
+
+    // Resolve the backend config's request transformer chain (steps + the
+    // Lua sources its `lua` steps reference).
+    let transformers: BuildOptions['transformers'];
+    if (!appendOnly && backendConfig?.transformerChainId && this.deps.transformerChains) {
+      const chain = await this.deps.transformerChains.getById(backendConfig.transformerChainId);
+      if (chain && chain.steps.length > 0) {
+        const luaSources = new Map<string, string>();
+        if (this.deps.transformerScripts) {
+          for (const step of chain.steps) {
+            if (step.kind !== 'lua') continue;
+            const script = await this.deps.transformerScripts.getById(step.scriptId);
+            if (script) luaSources.set(step.scriptId, script.luaSource);
+          }
+        }
+        transformers = { steps: chain.steps, luaSources };
+      }
+    }
 
     const macroCtx = {
       userName: persona?.name || allSettings.userName || 'User',
@@ -341,9 +365,10 @@ export class ChatPromptAssembly {
       maxResponseTokens,
       userName: macroCtx.userName,
       model: macroCtx.model,
+      backendProvider: backendConfig?.backendProvider,
       stopStrings,
       regexRules,
-      reasoningAddToPrompts,
+      transformers,
       toolDefinitions,
       memorySummary,
       worldInfo: {

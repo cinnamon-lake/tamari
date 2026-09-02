@@ -1,5 +1,6 @@
 import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { setSetting } from '../helpers/settings.js';
+import { setTransformerSteps, resetTransformerChain } from '../helpers/transformers.js';
 import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
 import { uniqueName } from '../helpers/names.js';
 
@@ -15,8 +16,11 @@ function lastUserContent(body: unknown): string {
 }
 
 // Covers the GenerationService finalize post-processing paths (chat mode):
-// applyInputWhitespace / applyOutputWhitespace, trimSentences,
-// autoFixGeneratedMarkdown (autoFixMarkdown), removeXML, singleLine.
+// trimSentences, autoFixGeneratedMarkdown (autoFixMarkdown), removeXML,
+// singleLine — plus the `whitespace` request transformer, which replaced the
+// removed global `whitespaceMode` setting's send-time/settle-time passes
+// (both deleted; the transform is request-time only, stored messages stay
+// verbatim).
 //
 // The text-level think-tag fallback parse is intentionally NOT here: it only
 // runs when `prompt.reasoning` is set, which PromptBuilder only does in
@@ -27,27 +31,32 @@ test.describe('Generation Post-Processing', () => {
   test.afterEach(async ({ page }) => {
     // The server is shared per run — put every touched setting back to its
     // default even when a test fails halfway.
-    await setSetting(page, 'whitespaceMode', 'none');
+    await resetTransformerChain(page);
     await setSetting(page, 'trimSentences', false);
     await setSetting(page, 'autoFixGeneratedMarkdown', false);
     await setSetting(page, 'removeXML', false);
     await setSetting(page, 'singleLine', false);
   });
 
-  test('whitespaceMode full collapses whitespace in the request and the reply', async ({ page, app }) => {
+  test('whitespace transformer full collapses whitespace in the request only', async ({ page, app }) => {
     await app.createCharacterAndChat({ name: uniqueName('PP Whitespace'), firstMes: 'Ready.' });
 
-    await setSetting(page, 'whitespaceMode', 'full');
-    const before = (await getLastLlmRequest()).count;
+    // Control: the fresh-install default (no chain linked) sends the user
+    // turn verbatim — no global whitespace pass exists anymore.
+    let before = (await getLastLlmRequest()).count;
     await app.sendUserMessage('respond:line1\n\n\n\nline2  with   spaces', { expectReply: true });
-    const captured = await waitForNextLlmRequest(before);
-    // applyInputWhitespace collapsed the user turn before it reached the LLM.
-    expect(lastUserContent(captured.body)).toBe('respond:line1\n\nline2 with spaces');
-    // The reply (echoed from the collapsed selector) renders collapsed too.
-    const content = app.lastBubble('assistant').locator('.message-content');
-    await expect(content).toContainText('line1');
-    await expect(content).toContainText('line2 with spaces');
-    expect(await app.lastAssistantText()).not.toMatch(/ {2}/);
+    let captured = await waitForNextLlmRequest(before);
+    expect(lastUserContent(captured.body)).toBe('respond:line1\n\n\n\nline2  with   spaces');
+
+    await setTransformerSteps(page, [{ kind: 'builtin', id: 'whitespace', enabled: true, params: { mode: 'full' } }]);
+    before = (await getLastLlmRequest()).count;
+    await app.sendUserMessage('respond:wide    gaps   here', { expectReply: true });
+    captured = await waitForNextLlmRequest(before);
+    // The chain collapsed the user turn in the outgoing request…
+    expect(lastUserContent(captured.body)).toBe('respond:wide gaps here');
+    // …but the reply is no longer mutated at stream settle (the mock echoes
+    // the collapsed selector, so the reply is collapsed only transitively).
+    expect(await app.lastAssistantText()).toBe('wide gaps here');
   });
 
   test('trimSentences cuts a dangling final fragment', async ({ page, app }) => {

@@ -21,6 +21,8 @@ import type {
   Toolset,
   ToolTemplate,
   CustomBackend,
+  TransformerChain,
+  TransformerScript,
 } from '@tamari/types';
 import { bus } from '../bus/WebSocketBus.js';
 import { addToast } from './toastStore.js';
@@ -70,6 +72,8 @@ export interface ServerState {
   toolsets: Toolset[];
   toolTemplates: ToolTemplate[];
   customBackends: CustomBackend[];
+  transformerChains: TransformerChain[];
+  transformerScripts: TransformerScript[];
   activeChat: Chat | null;
   activeCharacter: Character | null;
   chatCharacter: Character | null;
@@ -105,6 +109,8 @@ const [state, setState] = createStore<ServerState>({
   toolsets: [],
   toolTemplates: [],
   customBackends: [],
+  transformerChains: [],
+  transformerScripts: [],
   generation: {
     activeId: null,
     chatId: null,
@@ -673,6 +679,47 @@ bus.on('custombackend.updated', (msg) => {
 
 bus.on('custombackend.deleted', (msg) => {
   setState('customBackends', (list) => list.filter((b) => b.id !== msg.id));
+});
+
+// Request transformer chains + their Lua scripts. Same convention as
+// custombackend.*: `*.listed` wholesale-replaces the list (reconcile keeps
+// object identity so open editors don't remount on own-save echoes), and the
+// server rebroadcasts the full list after every mutation. `.created`/
+// `.updated`/`.deleted` are guarded — unknown entities are ignored (AGENTS.md
+// §5). There is no active-entity slot: the modals edit straight from the list
+// (CustomBackendsModal precedent).
+bus.on('transformerchain.listed', (msg) => {
+  setState('transformerChains', reconcile(msg.items));
+});
+
+bus.on('transformerchain.created', (msg) => {
+  setState('transformerChains', (list) => (list.some((c) => c.id === msg.item.id) ? list : [...list, msg.item]));
+});
+
+bus.on('transformerchain.updated', (msg) => {
+  if (!state.transformerChains.some((c) => c.id === msg.item.id)) return;
+  setState('transformerChains', (list) => list.map((c) => (c.id === msg.item.id ? msg.item : c)));
+});
+
+bus.on('transformerchain.deleted', (msg) => {
+  setState('transformerChains', (list) => list.filter((c) => c.id !== msg.id));
+});
+
+bus.on('transformerscript.listed', (msg) => {
+  setState('transformerScripts', reconcile(msg.items));
+});
+
+bus.on('transformerscript.created', (msg) => {
+  setState('transformerScripts', (list) => (list.some((s) => s.id === msg.item.id) ? list : [...list, msg.item]));
+});
+
+bus.on('transformerscript.updated', (msg) => {
+  if (!state.transformerScripts.some((s) => s.id === msg.item.id)) return;
+  setState('transformerScripts', (list) => list.map((s) => (s.id === msg.item.id ? msg.item : s)));
+});
+
+bus.on('transformerscript.deleted', (msg) => {
+  setState('transformerScripts', (list) => list.filter((s) => s.id !== msg.id));
 });
 
 bus.on('toolTemplate.listed', (msg) => {

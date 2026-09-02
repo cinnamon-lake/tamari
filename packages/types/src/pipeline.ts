@@ -146,4 +146,10 @@ export interface Prompt {
    * it into generations.meta.
    */
   appendOnlyTrace?: { suppressed: string[]; hoisted: string[] };
+  /**
+   * Request transformer trace: per-step notes from the post-render
+   * `requestTransformers` stage (skipped/disabled/failed steps). Present only
+   * when non-empty; the runner copies it into generations.meta.transformers.
+   */
+  transformerTrace?: string[];
 }

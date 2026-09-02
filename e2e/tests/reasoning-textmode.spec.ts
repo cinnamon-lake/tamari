@@ -1,6 +1,6 @@
 import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
-import { setSetting } from '../helpers/settings.js';
+import { setTransformerSteps, resetTransformerChain } from '../helpers/transformers.js';
 import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
 import { uniqueName } from '../helpers/names.js';
 
@@ -34,7 +34,7 @@ test.describe('Reasoning — Text Completion Mode', () => {
   });
 
   test.afterEach(async ({ page }) => {
-    await setSetting(page, 'reasoningAddToPrompts', false);
+    await resetTransformerChain(page);
     await patchActiveBackendConfig(page, { instructTemplate: '' });
   });
 
@@ -59,7 +59,7 @@ test.describe('Reasoning — Text Completion Mode', () => {
     await expect(bubble.locator('.message-content p')).toHaveText('The answer is 42.');
   });
 
-  test('re-injects prior reasoning into the flat prompt when reasoningAddToPrompts is on', async ({ page, app }) => {
+  test('re-injects prior reasoning by default; a strip-reasoning chain step removes it', async ({ page, app }) => {
     await app.createCharacterAndChat({ name: uniqueName('RT Reconstruct'), firstMes: 'Ready.' });
 
     await app.sendUserMessage(
@@ -70,31 +70,32 @@ test.describe('Reasoning — Text Completion Mode', () => {
       timeout: 10000,
     });
 
-    // Control: with the setting off, the prior assistant turn in the flat
-    // prompt carries only the visible content — no reconstructed think block.
+    // Default (the global reasoningAddToPrompts setting is gone): reasoning
+    // that survives the pipeline is always re-sent — the text adapter inlines
+    // it with the instruct template's delimiters (reconstructWithReasoning:
+    // prefix + reasoning + suffix + separator + content).
     let before = (await getLastLlmRequest()).count;
-    await app.sendUserMessage('Control question.\nrespond:Control reply.\nEnd of control.', {
-      expectReply: true,
-      userText: 'respond:Control reply.',
-    });
-    let captured = await waitForNextLlmRequest(before);
-    let prompt = String((captured.body as Record<string, unknown>).prompt);
-    expect(prompt).toContain('<｜Assistant｜>The answer is 42.');
-    expect(prompt).not.toContain('<｜Assistant｜><think>I pondered deeply</think>The answer is 42.');
-
-    await setSetting(page, 'reasoningAddToPrompts', true);
-
-    before = (await getLastLlmRequest()).count;
     await app.sendUserMessage('Second question.\nrespond:The sequel is 43.\nEnd of second.', {
       expectReply: true,
       userText: 'respond:The sequel is 43.',
     });
-    captured = await waitForNextLlmRequest(before);
-    prompt = String((captured.body as Record<string, unknown>).prompt);
-    // reconstructWithReasoning: prefix + reasoning + suffix + separator +
-    // content, wrapped as an assistant turn by the instruct template.
+    let captured = await waitForNextLlmRequest(before);
+    let prompt = String((captured.body as Record<string, unknown>).prompt);
     expect(prompt).toContain('<｜Assistant｜><think>I pondered deeply</think>The answer is 42.');
 
-    await setSetting(page, 'reasoningAddToPrompts', false);
+    // Opt-out: an enabled strip-reasoning step in the config's transformer
+    // chain strips reasoning from all but the latest assistant message, so
+    // the prior turn carries only the visible content.
+    await setTransformerSteps(page, [{ kind: 'builtin', id: 'strip-reasoning', enabled: true }]);
+
+    before = (await getLastLlmRequest()).count;
+    await app.sendUserMessage('Control question.\nrespond:Control reply.\nEnd of control.', {
+      expectReply: true,
+      userText: 'respond:Control reply.',
+    });
+    captured = await waitForNextLlmRequest(before);
+    prompt = String((captured.body as Record<string, unknown>).prompt);
+    expect(prompt).toContain('<｜Assistant｜>The answer is 42.');
+    expect(prompt).not.toContain('<｜Assistant｜><think>I pondered deeply</think>The answer is 42.');
   });
 });

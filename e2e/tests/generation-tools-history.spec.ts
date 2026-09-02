@@ -33,7 +33,6 @@ test.describe('Generation Tools — history serialization', () => {
 
   test.afterEach(async ({ page }) => {
     // These persist on the shared e2e server — restore defaults unconditionally.
-    await setSetting(page, 'reasoningAddToPrompts', false);
     await setSetting(page, 'mediaVerboseMode', false);
     await patchActiveBackendConfig(page, { supportsImages: true });
     if (toolsetId) {
@@ -43,10 +42,10 @@ test.describe('Generation Tools — history serialization', () => {
   });
 
   test('serializes tool calls and tool results into the follow-up request', async ({ page, app }) => {
-    // ChatCompletionRenderer strips tool_use/tool_result parts from OLD
-    // assistant messages unless reasoningAddToPrompts is on (default: off) —
-    // enable it so the follow-up request carries the full tool history.
-    await setSetting(page, 'reasoningAddToPrompts', true);
+    // Tool_use/tool_result parts are kept in prompt history by default (the
+    // global reasoningAddToPrompts setting is gone; stripping is an opt-in
+    // strip-reasoning transformer step), so the follow-up request carries
+    // the full tool history.
     toolsetId = await enableBuiltinToolset(page, 'lua_dice');
     await app.createCharacterAndChat({ name: uniqueName('ToolHistory Char'), firstMes: 'Ready.' });
 

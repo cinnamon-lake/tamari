@@ -28,7 +28,7 @@ import type { IBackendConfigRepository } from '../repos/BackendConfigRepository.
 import type { IPromptListRepository } from '../repos/PromptListRepository.js';
 import type { IChatMemberRepository } from '../repos/ChatMemberRepository.js';
 import type { IAttachmentRepository } from '../repos/AttachmentRepository.js';
-import type { AppSettings, Message, AttachmentRef, MessageExtra } from '@tamari/types';
+import type { Message, AttachmentRef, MessageExtra } from '@tamari/types';
 import { getMessageText } from '@tamari/types';
 import type { GroupChatService } from './GroupChatService.js';
 import type { ChatBroadcastService } from './ChatBroadcastService.js';
@@ -42,16 +42,6 @@ import type { ChatPromptAssembly } from '../generation/ChatPromptAssembly.js';
 import { AssistantMessageTarget, type AssistantMessageTargetDeps } from '../generation/AssistantMessageTarget.js';
 import { DraftTarget, type DraftTargetDeps } from '../generation/DraftTarget.js';
 import { TranscriptTarget, type TranscriptTargetDeps } from '../generation/TranscriptTarget.js';
-import { resolveEffectiveSettings } from '../generation/appendOnlyLocks.js';
-
-function applyInputWhitespace(content: string, mode: AppSettings['whitespaceMode']): string {
-  if (mode === 'none') return content;
-  let result = content.trim();
-  if (mode === 'full') {
-    result = result.replace(/\s+/g, (match) => (match.includes('\n') ? '\n\n' : ' '));
-  }
-  return result;
-}
 
 export interface GenerationLifecycleCallbacks {
   onBeforeGeneration?(chatId: string, clientId: string | undefined): Promise<void> | void;
@@ -180,10 +170,9 @@ export class GenerationService {
       const appSettings = await this.deps.settings.getTyped();
       let processedContent = content;
 
-      // Apply whitespace trimming to user messages. Read through the append-only
-      // lock resolver: under append-only this is locked to 'none' (any input
-      // mutation would desync persisted text from already-sent prompt bytes).
-      processedContent = applyInputWhitespace(processedContent, resolveEffectiveSettings(appSettings).whitespaceMode);
+      // Whitespace normalization is a request transform now (the `whitespace`
+      // builtin on the backend config's transformer chain) — the user's text
+      // is stored verbatim.
 
       // Resolve model for accurate token counting
       const backendConfig = appSettings.activeBackendConfigId

@@ -344,6 +344,9 @@ export interface GenerationMeta {
   /** Append-only layout: what the mode suppressed/hoisted for this run
       (docs/design/append-only-caching.md). Present only when the mode is on. */
   appendOnly?: { suppressed: string[]; hoisted: string[] };
+  /** Request transformer notes for this run (skipped/failed steps); mirrored
+      from `Prompt.transformerTrace`. Present only when non-empty. */
+  transformers?: string[];
 }
 
 export type GenerationInsert = Omit<Generation, 'createdAt' | 'updatedAt' | 'kind' | 'parentId'> & {
@@ -489,6 +492,8 @@ export interface BackendConfig {
   supportsImages: boolean;
   supportsAudio: boolean;
   supportsVideo: boolean;
+  /** Request transformer chain applied to the rendered prompt; null = none. */
+  transformerChainId: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -517,6 +522,7 @@ export type BackendConfigInsert = Omit<
   | 'supportsImages'
   | 'supportsAudio'
   | 'supportsVideo'
+  | 'transformerChainId'
 > & {
   id?: string;
   temperature?: number | null;
@@ -538,6 +544,7 @@ export type BackendConfigInsert = Omit<
   supportsImages?: boolean;
   supportsAudio?: boolean;
   supportsVideo?: boolean;
+  transformerChainId?: string | null;
 };
 export type BackendConfigUpdate = Partial<Omit<BackendConfig, 'id' | 'createdAt' | 'updatedAt'>>;
 

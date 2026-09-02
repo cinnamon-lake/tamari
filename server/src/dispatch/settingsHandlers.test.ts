@@ -63,10 +63,10 @@ describe('settings.set handler', () => {
   });
 
   it('skips the write but still echoes when the value equals the schema default', async () => {
-    // reasoningAddToPrompts defaults to false — persisting false explicitly
+    // removeXML defaults to false — persisting false explicitly
     // would be a no-op write, but the ack echo must still go out.
     const writeSpy = vi.spyOn(h.deps.settings, 'setValue');
-    await h.send(client, { type: 'settings.set', key: 'reasoningAddToPrompts', value: false });
+    await h.send(client, { type: 'settings.set', key: 'removeXML', value: false });
     expect(writeSpy).not.toHaveBeenCalled();
     expect(changedCount()).toBe(1);
   });

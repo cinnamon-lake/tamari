@@ -1,0 +1,46 @@
+/* TransformerChainsModal — chain list + ordered step editor. */
+
+.transformer-chains-modal {
+  max-width: 640px;
+}
+
+.transformer-chain-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-md);
+  padding-right: var(--space-md);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.transformer-chain-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.transformer-chain-step-name {
+  font-size: var(--text-sm);
+}
+
+.transformer-chain-step-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.transformer-chain-step-params {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.transformer-chain-add-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+}

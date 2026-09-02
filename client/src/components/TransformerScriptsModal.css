@@ -1,0 +1,13 @@
+/* TransformerScriptsModal — list + Lua editor for transformer scripts. */
+
+.transformer-scripts-modal {
+  max-width: 640px;
+}
+
+.transformer-scripts-validation {
+  min-height: var(--text-sm);
+}
+
+.transformer-scripts-validation-ok {
+  color: var(--color-success);
+}

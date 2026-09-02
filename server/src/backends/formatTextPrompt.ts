@@ -18,7 +18,9 @@ import { reconstructWithReasoning } from '../services/ReasoningEngine.js';
 
 export interface FormatTextPromptOptions {
   /** Inline reasoning parts into assistant text using the template's
-      reasoning delimiters (mirrors the pipeline's reasoningAddToPrompts). */
+      reasoning delimiters. Adapters pass true: reasoning that survives to
+      the adapter is always re-sent (stripping is the strip-reasoning
+      request transformer's job, upstream of the adapter). */
   includeReasoning: boolean;
 }
 

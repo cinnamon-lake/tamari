@@ -57,6 +57,7 @@ function makeConfig(overrides: Partial<BackendConfig> = {}): BackendConfig {
     supportsImages: true,
     supportsAudio: true,
     supportsVideo: true,
+    transformerChainId: null,
     createdAt: 1,
     updatedAt: 1,
     ...overrides,

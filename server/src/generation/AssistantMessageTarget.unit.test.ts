@@ -264,12 +264,7 @@ describe('AssistantMessageTarget settleRound post-processing', () => {
     return messages.get(target.messageId!);
   }
 
-  it("whitespaceMode 'full' collapses space runs to ' ' and newline runs to '\\n\\n'", async () => {
-    const message = await finalizeText({ whitespaceMode: 'full' }, 'Hello  world.\nNext   \n \n line');
-    expect(textPartsOf(message)).toEqual(['Hello world.\n\nNext\n\nline']);
-  });
-
-  it('whitespaceMode unset leaves the raw provider bytes untouched', async () => {
+  it('leaves the raw provider bytes untouched by default', async () => {
     const message = await finalizeText({}, 'Hello  world.\nNext');
     expect(textPartsOf(message)).toEqual(['Hello  world.\nNext']);
   });
@@ -419,10 +414,10 @@ describe('AssistantMessageTarget continue', () => {
 
 describe('AssistantMessageTarget round boundaries', () => {
   it('prompt() settles the completed round before the next one streams', async () => {
-    const { target } = await freshTarget({ whitespaceMode: 'full' });
+    const { target } = await freshTarget();
 
     // Round 1: text + a tool call.
-    target.write({ type: 'text', token: 'Round  one.' });
+    target.write({ type: 'text', token: 'Round one.' });
     target.write({ type: 'toolCall', id: 'tc-1', name: 't', arguments: {} });
     await target.writeToolOutcome(
       { id: 'tc-1', name: 't', arguments: {} },
@@ -430,12 +425,12 @@ describe('AssistantMessageTarget round boundaries', () => {
     );
 
     // Round 2 begins: prompt() runs round 1's end-of-stream processing.
-    await target.prompt(makeResolved({ whitespaceMode: 'full' }));
-    target.write({ type: 'text', token: 'Round  two.' });
+    await target.prompt(makeResolved({}));
+    target.write({ type: 'text', token: 'Round two.' });
     await target.finalize(RESULT);
 
-    // Round 1's text was whitespace-collapsed at the round boundary; round 2's
-    // text lives in its own part and was collapsed at finalize.
+    // Round 1's text was settled at the round boundary; round 2's text lives
+    // in its own part and was settled at finalize.
     const texts = target
       .read()
       .filter((p) => p.type === 'text')

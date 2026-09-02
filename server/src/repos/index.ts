@@ -17,3 +17,5 @@ export * from './ToolTemplateRepository.js';
 export * from './ExtensionDataRepository.js';
 export * from './CustomBackendRepository.js';
 export * from './ScriptBlobRepository.js';
+export * from './TransformerChainRepository.js';
+export * from './TransformerScriptRepository.js';

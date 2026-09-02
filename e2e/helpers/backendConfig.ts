@@ -75,6 +75,9 @@ export async function resetBackendConfig(page: Page): Promise<void> {
         apiUrl: null,
         apiKey: null,
         maxTokens: null,
+        // Fresh-install default: no transformer chain linked (specs that
+        // attach one must not leak it into the next spec).
+        transformerChainId: null,
       },
     },
     ['backendConfig.updated', 'backendConfig.snapshot'],

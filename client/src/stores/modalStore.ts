@@ -18,6 +18,8 @@ export type AppModalId =
   | 'backendConfigs'
   | 'secrets'
   | 'customBackends'
+  | 'transformerChains'
+  | 'transformerScripts'
   | 'promptLists'
   | 'instructTemplates'
   | 'regexRules'

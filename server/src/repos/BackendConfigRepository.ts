@@ -54,6 +54,7 @@ function rowToBackendConfig(row: unknown): BackendConfig {
     supportsImages: Boolean(r.supports_images),
     supportsAudio: Boolean(r.supports_audio),
     supportsVideo: Boolean(r.supports_video),
+    transformerChainId: r.transformer_chain_id,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   });
@@ -91,9 +92,9 @@ export class BackendConfigRepository implements IBackendConfigRepository {
         repetition_penalty, frequency_penalty, presence_penalty,
         instruct_template, context_length, prompt_history_limit,
         provider_params_json, stop_strings_json, openrouter_provider, logit_bias_json,
-        supports_images, supports_audio, supports_video,
+        supports_images, supports_audio, supports_video, transformer_chain_id,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       /* eslint-disable @typescript-eslint/no-unnecessary-condition -- defensive fallbacks for unvalidated API input */
       args: [
         id,
@@ -123,6 +124,7 @@ export class BackendConfigRepository implements IBackendConfigRepository {
         data.supportsImages !== false ? 1 : 0,
         data.supportsAudio !== false ? 1 : 0,
         data.supportsVideo !== false ? 1 : 0,
+        data.transformerChainId ?? null,
         now,
         now,
       ],
@@ -172,6 +174,7 @@ export class BackendConfigRepository implements IBackendConfigRepository {
     if (patch.supportsImages !== undefined) add('supports_images', patch.supportsImages ? 1 : 0);
     if (patch.supportsAudio !== undefined) add('supports_audio', patch.supportsAudio ? 1 : 0);
     if (patch.supportsVideo !== undefined) add('supports_video', patch.supportsVideo ? 1 : 0);
+    if (patch.transformerChainId !== undefined) add('transformer_chain_id', patch.transformerChainId);
 
     const now = Math.floor(Date.now() / 1000);
     sets.push('updated_at = ?');

@@ -46,6 +46,7 @@ const EXPECTED_DEFAULT_IDS = [
   'collection',
   'cacheDepth',
   'render',
+  'requestTransformers',
 ];
 
 describe('PromptStages', () => {

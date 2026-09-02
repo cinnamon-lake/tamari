@@ -148,6 +148,7 @@ export const BackendConfigRowSchema = z.object({
   supports_images: z.number().nullable(),
   supports_audio: z.number().nullable(),
   supports_video: z.number().nullable(),
+  transformer_chain_id: z.string().nullable(),
   created_at: z.number(),
   updated_at: z.number(),
 });
@@ -221,6 +222,24 @@ export const CustomBackendRowSchema = z.object({
   name: z.string(),
   description: z.string(),
   lua_source: z.string(),
+  created_at: z.number(),
+  updated_at: z.number(),
+});
+
+export const TransformerScriptRowSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  lua_source: z.string(),
+  created_at: z.number(),
+  updated_at: z.number(),
+});
+
+export const TransformerChainRowSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  steps_json: z.string(),
   created_at: z.number(),
   updated_at: z.number(),
 });
