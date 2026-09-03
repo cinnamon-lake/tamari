@@ -15,6 +15,7 @@
     "@libsql/client": "^0.17.4",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@tamari/types": "^0.1.0",
+    "@tamari/wordid": "^0.1.0",
     "dompurify": "^3.4.14",
     "express": "^5.2.1",
     "fflate": "^0.8.2",

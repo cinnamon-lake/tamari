@@ -7,7 +7,7 @@ Regex rules transform text at two points: **prompt** (what the model sees; ephem
 
 \`\`\`json
 {
-  "id": "uuid",
+  "id": "quiet-otters-reply-gladly",
   "name": "HUD expander",
   "findRegex": "/\\\\[HP:(\\\\d+)\\\\]/g",
   "replaceString": "<span class=\\"hp\\">$1</span>",

@@ -2,7 +2,8 @@
  * `worldinfo.*` messages — book CRUD, entry surgery, activation test.
  */
 
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
+import { newUniqueId } from '../lib/uniqueId.js';
 import { getLogger } from '../lib/logger.js';
 import type { DispatcherDeps, Handlers } from './types.js';
 
@@ -39,8 +40,8 @@ export function buildWorldInfoHandlers(
     },
 
     'worldinfo.create': async (client, msg) => {
-      const id = randomUUID();
-      const entries = (msg.data.entries ?? []).map((e) => ({ ...e, id: randomUUID() }));
+      const id = await newUniqueId(async (candidate) => (await worldInfo.getById(candidate)) !== undefined);
+      const entries = (msg.data.entries ?? []).map((e) => ({ ...e, id: newId() }));
       const book = await worldInfo.create(id, { name: msg.data.name, entries });
       deps.ragService?.indexWorldInfoEntries(id, book.entries).catch((err) => log.warn({ err }, 'rag index failed'));
       bus.broadcast({ type: 'worldinfo.created', book }, client.id);
@@ -50,7 +51,7 @@ export function buildWorldInfoHandlers(
     },
 
     'worldinfo.update': async (client, msg) => {
-      const patchEntries = msg.patch.entries?.map((e) => ({ ...e, id: randomUUID() }));
+      const patchEntries = msg.patch.entries?.map((e) => ({ ...e, id: newId() }));
       const book = await worldInfo.update(msg.bookId, { ...msg.patch, entries: patchEntries });
       deps.ragService
         ?.indexWorldInfoEntries(msg.bookId, book.entries)
@@ -87,7 +88,7 @@ export function buildWorldInfoHandlers(
         bus.sendTo(client.id, { type: 'error', message: 'World Info not found', code: 'NOT_FOUND' });
         return;
       }
-      const entry = { id: randomUUID(), ...msg.data };
+      const entry = { id: newId(), ...msg.data };
       const nextEntries = [...book.entries, entry];
       const updated = await worldInfo.update(msg.bookId, { entries: nextEntries });
       deps.ragService

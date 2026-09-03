@@ -10,6 +10,7 @@ import { confirmPopup, alertPopup } from '../../stores/popupStore.js';
 import { useI18n } from '../../i18n/index.js';
 import { applyDisplayRules, parseRegexString } from '../../lib/regexDisplay.js';
 import type { RegexRule } from '@tamari/types';
+import { newId } from '@tamari/wordid';
 
 export interface CharacterRegexEditorProps {
   rules: RegexRule[];
@@ -18,7 +19,7 @@ export interface CharacterRegexEditorProps {
 
 function newRule(): RegexRule {
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     name: '',
     findRegex: '',
     replaceString: '',

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import { z } from 'zod';
 import type { ToolRegistry } from '../ToolRegistry.js';
 import type { ToolContext, ToolExecuteResult, ToolTemplate } from '../ToolTemplate.js';
@@ -176,7 +176,7 @@ export class SpeakTemplate implements ToolTemplate {
       return { content: `TTS generation failed: ${msg}` };
     }
 
-    const attachmentId = randomUUID();
+    const attachmentId = newId();
     const ext = this.mimeToExt(result.contentType);
     const filePath = this.deps.storage.write('attachments', `${attachmentId}.${ext}`, Buffer.from(result.audio));
 

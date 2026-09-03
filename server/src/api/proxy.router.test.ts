@@ -117,22 +117,19 @@ describe('createProxyRouter', () => {
     expect(res.body.last_id).toBe(`${CONFIG_ID}-Test Config`);
   });
 
-  it('rejects a model id without a config uuid', async () => {
+  it('rejects a model id matching no config', async () => {
     const { app, createResolvedAdapter } = createApp(h, makeAdapter());
 
     const res = await request(app)
       .post('/v1/messages')
       .set('x-api-key', API_KEY)
       .send({ model: 'not-a-proxy-model', messages: [{ role: 'user', content: 'hi' }] })
-      .expect(400);
-    expect(res.body).toEqual({
-      type: 'error',
-      error: { type: 'invalid_request_error', message: 'Model "not-a-proxy-model" is not a proxy model id' },
-    });
+      .expect(404);
+    expect(res.body.error.type).toBe('not_found_error');
     expect(createResolvedAdapter).not.toHaveBeenCalled();
   });
 
-  it('returns 404 for an unknown config uuid', async () => {
+  it('returns 404 for an unknown config id', async () => {
     const { app } = createApp(h, makeAdapter());
 
     const res = await request(app)

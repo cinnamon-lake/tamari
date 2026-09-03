@@ -192,19 +192,19 @@ test.describe('Proxy API (/v1)', () => {
     expect(badBody.status()).toBe(400);
     expect(((await badBody.json()) as AnthropicError).error.type).toBe('invalid_request_error');
 
-    // Model id without a config uuid.
+    // Model id that matches no config — 404 not_found_error (word-id or not).
     const badModel = await postMessage(request, {
       model: 'not-a-proxy-model',
       messages: [{ role: 'user', content: 'hi' }],
     });
-    expect(badModel.status()).toBe(400);
+    expect(badModel.status()).toBe(404);
     const badModelBody = (await badModel.json()) as AnthropicError;
-    expect(badModelBody.error.type).toBe('invalid_request_error');
-    expect(badModelBody.error.message).toContain('is not a proxy model id');
+    expect(badModelBody.error.type).toBe('not_found_error');
+    expect(badModelBody.error.message).toContain('was not found');
 
-    // Well-formed uuid, but no such backend config.
+    // Well-formed word-id-shaped prefix, but no such backend config.
     const ghost = await postMessage(request, {
-      model: '00000000-0000-0000-0000-000000000000-Ghost',
+      model: 'no-such-config-exists-here-Ghost',
       messages: [{ role: 'user', content: 'hi' }],
     });
     expect(ghost.status()).toBe(404);

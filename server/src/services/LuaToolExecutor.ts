@@ -19,7 +19,7 @@
  * See services/toolState.ts for the shared helpers and the ownership split.
  */
 
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import type { LuaRuntime, LuaRuntimeOptions } from '../scripting/LuaRuntime.js';
 import { friendlyLuaError, MAX_EXECUTION_MS, LUA_TOOL_BUDGET, type ExecutionBudget } from '../scripting/LuaRuntime.js';
 import { ScriptContext } from '../scripting/ScriptContext.js';
@@ -377,7 +377,7 @@ export class LuaToolExecutor {
             if (typeof base64Data !== 'string' || typeof mimeType !== 'string' || !mimeType.includes('/')) {
               throw new Error('attachments.create: expected (base64Data: string, mimeType: string)');
             }
-            const id = randomUUID();
+            const id = newId();
             const ext = MIME_TO_EXT[mimeType] ?? 'bin';
             const filePath = storage.write('attachments', `${id}.${ext}`, Buffer.from(base64Data, 'base64'));
             const attachment = await attachments.create({ id, messageId: null, mimeType, filePath });

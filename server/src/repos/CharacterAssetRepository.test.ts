@@ -71,7 +71,7 @@ describe('CharacterAssetRepository', () => {
     expect(reread).toEqual(created);
   });
 
-  it('create generates a UUID id when none is given', async () => {
+  it('create generates a word-id when none is given', async () => {
     const created = await repo.create('char-1', {
       name: 'x',
       type: 'image',
@@ -79,7 +79,7 @@ describe('CharacterAssetRepository', () => {
       filePath: null,
       meta: {},
     });
-    expect(created.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(created.id).toMatch(/^[a-z]+-[a-z]+-[a-z]+-[a-z]+$/);
   });
 
   it('create applies defensive defaults for missing optional input fields', async () => {

@@ -6,6 +6,7 @@ import type { Client } from '@libsql/client';
 import { z } from 'zod';
 import type { CharacterAsset, CharacterAssetInsert } from '@tamari/types';
 import { CharacterAssetRowSchema } from '@tamari/types';
+import { newId } from '@tamari/wordid';
 import { NotFoundError } from '../errors.js';
 import { safeParseJson } from '../lib/safeJson.js';
 import { mapRowsLenient } from './rows.js';
@@ -54,7 +55,7 @@ export class CharacterAssetRepository implements ICharacterAssetRepository {
   }
 
   async create(characterId: string, data: CharacterAssetInsert): Promise<CharacterAsset> {
-    const id = data.id ?? crypto.randomUUID();
+    const id = data.id ?? newId();
     const now = Math.floor(Date.now() / 1000);
     await this.client.execute({
       sql: `INSERT INTO character_assets (

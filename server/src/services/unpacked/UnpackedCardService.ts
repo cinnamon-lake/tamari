@@ -290,7 +290,7 @@ export class UnpackedCardService implements UnpackedCardRegistry {
 
     // Upsert the thin handle row (id + name + tags) via the INNER repo. Collision
     // with a pre-existing row of the same id is accepted — the `unpacked/`
-    // prefix namespaces handle rows away from real (uuid) character ids. Tags
+    // prefix namespaces handle rows away from real (word-id) character ids. Tags
     // must live on the row too: SQL tag filtering (CharacterRepository.list)
     // runs before the read-through overlay.
     const existing = await this.deps.characters.getById(cardId);

@@ -4,6 +4,7 @@
  * the author's note.
  */
 
+import { newId } from '@tamari/wordid';
 import { toChatSummary } from '../../lib/summaries.js';
 import type { StApiContext } from './context.js';
 import type { StApi } from './types.js';
@@ -35,7 +36,7 @@ export function createChatManagement(c: StApiContext): ChatManagementApi {
       checkAbort();
       const chat = await chats.getChatById(chatId);
       if (!chat) throw new Error('new_chat: current chat not found');
-      const id = crypto.randomUUID();
+      const id = newId();
       const newChat = await chats.createChat(id, {
         characterId: chat.characterId,
         personaId: chat.personaId,
@@ -111,7 +112,7 @@ export function createChatManagement(c: StApiContext): ChatManagementApi {
 
     temp_chat: async (name?: string) => {
       checkAbort();
-      const id = crypto.randomUUID();
+      const id = newId();
       const chatName = typeof name === 'string' ? name : 'Temporary Chat';
       const chat = await chats.createChat(id, {
         characterId: null,

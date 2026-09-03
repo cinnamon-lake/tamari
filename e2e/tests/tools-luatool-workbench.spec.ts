@@ -65,7 +65,7 @@ test.describe('Lua Tool Workbench', () => {
     // (innerText is empty for collapsed content — expand the dropdown first).
     await app.expandToolActivity(app.lastBubble('assistant'));
     const createText = await results.first().innerText();
-    const idMatch = createText.match(/"id":\s*"([0-9a-f-]{36})"/);
+    const idMatch = createText.match(/"id":\s*"([^"]+)"/);
     expect(idMatch, 'created template id in tool result').toBeTruthy();
 
     await app.sendUserMessage(

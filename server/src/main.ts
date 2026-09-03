@@ -4,6 +4,7 @@
 
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import express from 'express';
 import helmet from 'helmet';
 import { WebSocketServer } from 'ws';
@@ -594,7 +595,7 @@ app.use(
   createModelsRouter(settings, backendConfigs, secretService, config.secret, createBackendAdapterResolved),
 );
 
-// Anthropic-like proxy API — backend configs exposed as models (`${uuid}-${name}`).
+// Anthropic-like proxy API — backend configs exposed as models (`${configId}-${name}`).
 // The router carries its own feature gate + dedicated API-key auth; the app
 // login token is deliberately NOT accepted here.
 app.use('/v1', createProxyRouter(settings, backendConfigs, createBackendAdapterResolved));
@@ -840,7 +841,7 @@ async function ensureDefaultBackendConfig(
   if (count === 0) {
     const defaults = loadDefaultConfigs();
     for (const { backendConfig } of defaults) {
-      await backendConfigRepo.create(randomUUID(), backendConfig);
+      await backendConfigRepo.create(newId(), backendConfig);
     }
   }
 
@@ -861,7 +862,7 @@ async function ensureDefaultPromptList(
   if (count === 0) {
     const defaults = loadDefaultConfigs();
     for (const { promptList } of defaults) {
-      await promptListRepo.create(randomUUID(), promptList);
+      await promptListRepo.create(newId(), promptList);
     }
   }
 

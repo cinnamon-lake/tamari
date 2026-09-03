@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import { z } from 'zod';
 import { unzipWithCap } from '../../lib/zipGuard.js';
 import type { ToolRegistry } from '../ToolRegistry.js';
@@ -23,18 +23,32 @@ const logger = getLogger('services/templates/NaiImageTemplate');
 const NaiCharacterPrompt = z.object({
   prompt: z
     .string()
-    .describe('Tags describing this character only: appearance, clothing, pose, expression. Keep it focused on the character.'),
+    .describe(
+      'Tags describing this character only: appearance, clothing, pose, expression. Keep it focused on the character.',
+    ),
   negative_prompt: z.string().optional().describe('Things to avoid for this character. Defaults to empty.'),
-  x: z.number().min(0).max(1).optional().describe('Horizontal center of the character (0 = left, 1 = right). Defaults to 0.5.'),
-  y: z.number().min(0).max(1).optional().describe('Vertical center of the character (0 = top, 1 = bottom). Defaults to 0.5.'),
+  x: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe('Horizontal center of the character (0 = left, 1 = right). Defaults to 0.5.'),
+  y: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe('Vertical center of the character (0 = top, 1 = bottom). Defaults to 0.5.'),
 });
 
 const NaiImageArgs = z.object({
-  prompt: z.string().describe(
-    'Detailed description of the image. Comma-separated Danbooru-style tags ' +
-      '(e.g. "1girl, purple hair, bob cut, looking at viewer, smug, cowboy shot"), plain English ' +
-      'sentences, or a mix of both. Start with character counts, then character/series names, then the rest.',
-  ),
+  prompt: z
+    .string()
+    .describe(
+      'Detailed description of the image. Comma-separated Danbooru-style tags ' +
+        '(e.g. "1girl, purple hair, bob cut, looking at viewer, smug, cowboy shot"), plain English ' +
+        'sentences, or a mix of both. Start with character counts, then character/series names, then the rest.',
+    ),
   orientation: z
     .enum(['square', 'portrait', 'landscape'])
     .optional()
@@ -290,7 +304,7 @@ export class NaiImageTemplate implements ToolTemplate {
       return { content: 'NovelAI returned no images.' };
     }
 
-    const attachmentId = randomUUID();
+    const attachmentId = newId();
     const filePath = this.deps.storage.write('attachments', `${attachmentId}.png`, imageBuffer);
 
     let attachment: Attachment;

@@ -32,7 +32,7 @@ export const FinishReasonSchema = z.enum(['stop', 'length', 'content_filter', 'e
 export type FinishReason = z.infer<typeof FinishReasonSchema>;
 
 export const AttachmentRefSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1).max(100),
   mimeType: z.string(),
   meta: z.record(z.string(), z.unknown()).default({}),
   url: z.string(),

@@ -2,7 +2,7 @@
  * `promptList.*` messages — selection and CRUD with fallback broadcast.
  */
 
-import { randomUUID } from 'node:crypto';
+import { newUniqueId } from '../lib/uniqueId.js';
 import { toPromptListSummary } from '../lib/summaries.js';
 import type { DispatcherDeps, Handlers } from './types.js';
 
@@ -27,7 +27,7 @@ export function buildPromptListHandlers(
     },
 
     'promptList.create': async (client, msg) => {
-      const id = randomUUID();
+      const id = await newUniqueId(async (candidate) => (await promptLists.getById(candidate)) !== undefined);
       const promptList = await promptLists.create(id, msg.data);
       bus.broadcast({ type: 'promptList.created', promptList }, client.id);
       bus.broadcast({ type: 'promptList.snapshot', promptList }, client.id);

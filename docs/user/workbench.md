@@ -42,6 +42,10 @@ What `ls` _can_ list:
 
 ## Path Layout
 
+Entity ids are **word-ids** — four lowercase words joined by dashes, e.g.
+`brave-falcons-invent-swift` (entities created before the id migration may
+still have UUID ids; both work in paths).
+
 ```
 /                                          ls / → the seven domain names
 ├── characters/

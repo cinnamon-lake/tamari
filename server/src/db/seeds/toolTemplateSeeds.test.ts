@@ -93,7 +93,7 @@ describe('seedToolTemplates', () => {
     const all = await repo.list();
     expect(all.map((t) => t.name).sort()).toEqual(EXPECTED_NAMES);
     for (const t of all) {
-      expect(t.id).toMatch(/^[0-9a-f-]{36}$/);
+      expect(t.id).toMatch(/^[a-z]+-[a-z]+-[a-z]+-[a-z]+$/);
       expect(t.configSchema).toEqual({});
       expect(t.code.length).toBeGreaterThan(0);
       expect(t.createdAt).toBeGreaterThan(0);

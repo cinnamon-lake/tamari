@@ -8,6 +8,7 @@
  */
 
 import type { Character, CharacterUpdate } from '@tamari/types';
+import { newId } from '@tamari/wordid';
 import type { EventBus } from '../bus/EventBus.js';
 import type { ICharacterRepository } from '../repos/CharacterRepository.js';
 import { toCharacterSummary, withCharacterAvatar } from '../lib/summaries.js';
@@ -61,7 +62,7 @@ export async function createCharacter(deps: CharacterMutationDeps, input: Record
   if (existing) {
     throw new Error(`character "${input.name}" already exists`);
   }
-  const id = crypto.randomUUID();
+  const id = newId();
   const character = await deps.characters.create(id, { name: input.name, ...pickCharacterFields(input) });
   deps.bus.broadcast({ type: 'character.created', character: withCharacterAvatar(character) });
   await broadcastCharacterList(deps);

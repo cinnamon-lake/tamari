@@ -15,7 +15,7 @@
  * All errors are returned as `content` strings, never thrown.
  */
 
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import { z } from 'zod';
 import type { BackendConfig, BackendConfigUpdate, SettingsMap } from '@tamari/types';
 import { BackendConfigCreateInputSchema, BackendConfigUpdateSchema } from '@tamari/types';
@@ -231,7 +231,7 @@ export class BackendWorkbench {
     if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
     const { activate, ...data } = parsed.data;
 
-    const backendConfig = await this.deps.backendConfigs.create(randomUUID(), data);
+    const backendConfig = await this.deps.backendConfigs.create(newId(), data);
 
     // Same broadcast set as the backendConfig.create dispatcher handler.
     this.deps.bus.broadcast({ type: 'backendConfig.created', backendConfig });
@@ -394,7 +394,7 @@ export class BackendWorkbench {
   private async customBackendCreate(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = CustomBackendCreateArgs.safeParse(args);
     if (!parsed.success) return { content: `Error: invalid arguments — ${formatZodIssues(parsed.error)}` };
-    const item = await this.deps.customBackends.create(randomUUID(), {
+    const item = await this.deps.customBackends.create(newId(), {
       name: parsed.data.name,
       description: parsed.data.description ?? '',
       luaSource: parsed.data.luaSource,

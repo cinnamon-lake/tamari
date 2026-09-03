@@ -440,6 +440,12 @@ SQLite columns remain **snake_case** (`character_id`, `first_mes`, `avatar_path`
 - **Client code** — never constructs snake_case property names; consumes camelCase objects from the server.
 - **SQL strings** — always use snake_case column names.
 
+### Entity IDs
+
+LLM-repeatable entity IDs (characters, chats, personas, world_info, backend configs, prompt lists, custom backends, tool templates/toolsets, quick replies, attachments, character assets, generations, transformers, plus lorebook-entry and regex-rule sub-IDs) are **word-ids**: four lowercase words joined by dashes, e.g. `brave-falcons-invent-swift`. Generate them with `newId()` from `@tamari/wordid` (`packages/wordid`) — CSPRNG, ~2^52 space; validate them as plain `z.string()`, never as UUIDs.
+
+Exceptions that keep their existing formats: `messages.id` (integer), auth session tokens and proxy API keys (secrets), `script_blobs` (`name#seq`), unpacked-card ids (`unpacked/<slug>`), avatar/thumbnail **file names** (filesystem-internal, `randomUUID()`), and ephemeral runtime ids (request ids, WS client ids).
+
 ### Example
 
 ```ts

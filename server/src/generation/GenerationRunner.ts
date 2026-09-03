@@ -19,7 +19,7 @@
  * it is iteration 1 of this loop.
  */
 
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import { getLogger } from '../lib/logger.js';
 import { str } from '../lib/coerce.js';
 import type { EventBus } from '../bus/EventBus.js';
@@ -250,7 +250,7 @@ export class GenerationRunner {
     const held: ChatLock = { chatId: target.chatId };
 
     let completed = false;
-    const generationId = randomUUID();
+    const generationId = newId();
     try {
       const resolved = await this.resolveBackend(target);
       if (!resolved) {

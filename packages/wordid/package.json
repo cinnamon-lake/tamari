@@ -1,0 +1,24 @@
+{
+  "name": "@tamari/wordid",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/id.js",
+  "types": "./dist/id.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/id.js",
+      "types": "./dist/id.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepare": "npm run build",
+    "lint": "eslint src",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

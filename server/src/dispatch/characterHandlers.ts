@@ -2,7 +2,7 @@
  * `character.*` messages — selection, CRUD, avatar/asset cleanup.
  */
 
-import { randomUUID } from 'node:crypto';
+import { newUniqueId } from '../lib/uniqueId.js';
 import { toCharacterSummary, withCharacterAvatar, withCharacterAssets } from '../lib/summaries.js';
 import { maybeRebroadcastGreetingSnapshot } from './helpers.js';
 import { broadcastQuickReplyList } from '../services/quickReplyBroadcast.js';
@@ -28,7 +28,7 @@ export function buildCharacterHandlers(
     },
 
     'character.create': async (client, msg) => {
-      const id = randomUUID();
+      const id = await newUniqueId(async (candidate) => (await characters.getById(candidate)) !== undefined);
       const character = await characters.create(id, { ...msg.data, avatarPath: null });
       const withAvatar = withCharacterAvatar(character);
       bus.broadcast({ type: 'character.created', character: withAvatar }, client.id);

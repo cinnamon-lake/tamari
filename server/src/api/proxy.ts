@@ -3,7 +3,7 @@
  *
  * Exposes each BackendConfig as a model whose ID is `${configId}-${name}`.
  * Callers pass that ID in the `model` field of a messages request; the proxy
- * reads the config UUID back out of it, builds the regular adapter for that
+ * reads the config id back out of it, builds the regular adapter for that
  * config (secrets resolved, custom/Lua backends included), and forwards the
  * conversation. Request-level sampling knobs (temperature, max_tokens, …) are
  * deliberately NOT threaded through — the backend config's settings rule.
@@ -34,8 +34,7 @@ import { buildBackendSettings } from '../backends/buildBackendSettings.js';
 
 const log = getLogger('api/proxy');
 
-/** Model IDs are `${uuid}-${name}`; the config id is the leading UUID. */
-const MODEL_ID_RE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:-|$)/i;
+/** Model IDs are `${configId}-${name}`; resolve by prefix-matching known config ids. */
 
 const TextBlockSchema = z.object({ type: z.literal('text'), text: z.string() });
 
@@ -239,12 +238,8 @@ export function createProxyRouter(
     }
     const body = parsed.data;
 
-    const match = MODEL_ID_RE.exec(body.model);
-    if (!match) {
-      anthropicError(res, 400, 'invalid_request_error', `Model "${body.model}" is not a proxy model id`);
-      return;
-    }
-    const config = await backendConfigRepo.getById(match[1]!);
+    const configs = await backendConfigRepo.list();
+    const config = configs.find((c) => body.model === c.id || body.model.startsWith(`${c.id}-`));
     if (!config) {
       anthropicError(res, 404, 'not_found_error', `Model "${body.model}" was not found`);
       return;

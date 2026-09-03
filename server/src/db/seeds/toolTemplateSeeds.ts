@@ -4,7 +4,7 @@
  */
 
 import type { IToolTemplateRepository } from '../../repos/ToolTemplateRepository.js';
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 
 export const memoryTemplate = {
   name: 'lua_memory',
@@ -932,6 +932,6 @@ export async function seedToolTemplates(repo: IToolTemplateRepository): Promise<
   const existingNames = new Set(existing.map((e) => e.name));
   for (const seed of SEEDS) {
     if (existingNames.has(seed.name)) continue;
-    await repo.create(randomUUID(), seed);
+    await repo.create(newId(), seed);
   }
 }

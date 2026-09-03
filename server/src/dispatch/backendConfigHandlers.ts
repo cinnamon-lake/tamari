@@ -2,7 +2,7 @@
  * `backendConfig.*` messages — selection and CRUD with fallback broadcast.
  */
 
-import { randomUUID } from 'node:crypto';
+import { newUniqueId } from '../lib/uniqueId.js';
 import { toBackendConfigSummary } from '../lib/summaries.js';
 import type { DispatcherDeps, Handlers } from './types.js';
 
@@ -33,7 +33,7 @@ export function buildBackendConfigHandlers(
     },
 
     'backendConfig.create': async (client, msg) => {
-      const id = randomUUID();
+      const id = await newUniqueId(async (candidate) => (await backendConfigs.getById(candidate)) !== undefined);
       const backendConfig = await backendConfigs.create(id, msg.data);
       bus.broadcast({ type: 'backendConfig.created', backendConfig }, client.id);
       bus.broadcast({ type: 'backendConfig.snapshot', backendConfig }, client.id);

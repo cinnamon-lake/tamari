@@ -51,7 +51,7 @@ test.describe('Toolset Workbench', () => {
     // innerText is empty for collapsed content — expand the dropdown first.
     await app.expandToolActivity(app.lastBubble('assistant'));
     const createText = await createResult.innerText();
-    const templateId = createText.match(/"id":\s*"([0-9a-f-]{36})"/)?.[1];
+    const templateId = createText.match(/"id":\s*"([^"]+)"/)?.[1];
     expect(templateId, 'created template id in tool result').toBeTruthy();
 
     // 2. Enable it via a toolset. Goes live on the NEXT message.

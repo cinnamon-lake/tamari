@@ -278,7 +278,7 @@ All Quick Reply scripts have access to the global `st` table. Functions are cate
 
 ```lua
 {
-  id = "uuid",
+  id = "brave-falcons-invent-swift",
   name = "Seraphina",
   description = "...",
   personality = "...",

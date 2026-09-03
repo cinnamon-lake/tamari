@@ -13,7 +13,7 @@
  * All errors are returned as `content` strings, never thrown.
  */
 
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import { z } from 'zod';
 import type { Toolset } from '@tamari/types';
 import type { ToolContext, ToolExecuteResult, ToolTemplate, ToolTemplateDefinition } from '../ToolTemplate.js';
@@ -139,7 +139,7 @@ export class ToolsetWorkbench {
       return { content: `Error: template failed to load: ${err instanceof Error ? err.message : String(err)}` };
     }
 
-    const toolset = await this.deps.toolsets.create(randomUUID(), {
+    const toolset = await this.deps.toolsets.create(newId(), {
       templateId,
       name: parsed.data.name ?? template.name,
       config: config ?? {},

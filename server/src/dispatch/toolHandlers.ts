@@ -3,7 +3,7 @@
  * invalidation.
  */
 
-import { randomUUID } from 'node:crypto';
+import { newUniqueId } from '../lib/uniqueId.js';
 import type { DispatcherDeps, Handlers } from './types.js';
 
 export function buildToolHandlers(
@@ -20,7 +20,7 @@ export function buildToolHandlers(
 
   return {
     'toolset.create': async (client, msg) => {
-      const id = randomUUID();
+      const id = await newUniqueId(async (candidate) => (await toolsetRepo.getById(candidate)) !== undefined);
       const toolset = await toolsetRepo.create(id, msg.data);
       bus.broadcast({ type: 'toolset.created', toolset }, client.id);
       const list = await toolsetRepo.list();
@@ -42,7 +42,7 @@ export function buildToolHandlers(
     },
 
     'toolTemplate.create': async (client, msg) => {
-      const id = randomUUID();
+      const id = await newUniqueId(async (candidate) => (await toolTemplateRepo.getById(candidate)) !== undefined);
       const toolTemplate = await toolTemplateRepo.create(id, msg.data);
       bus.broadcast({ type: 'toolTemplate.created', toolTemplate }, client.id);
       const list = await toolTemplateRepo.list();

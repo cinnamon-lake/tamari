@@ -7,6 +7,7 @@ import { useI18n } from '../../i18n/index.js';
 import { Modal } from '../Modal.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../../timing.js';
 import type { Character, RegexRule } from '@tamari/types';
+import { newId } from '@tamari/wordid';
 import { CropModal } from '../CropModal.js';
 import { SafeImage } from '../SafeImage.js';
 import { CharacterRegexEditor } from './CharacterRegexEditor.js';
@@ -28,7 +29,7 @@ function parseScopedRegexRules(extensions: Record<string, unknown> | undefined):
   return raw
     .filter((r): r is RegexRule => !!r && typeof r === 'object' && typeof (r as RegexRule).findRegex === 'string')
     .map((r) => ({
-      id: r.id || crypto.randomUUID(),
+      id: r.id || newId(),
       name: r.name ?? '',
       findRegex: r.findRegex,
       replaceString: r.replaceString ?? '',

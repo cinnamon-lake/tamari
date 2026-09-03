@@ -11,7 +11,7 @@
  * import time.
  */
 
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import type { Character, RegexRule } from '@tamari/types';
 
 export const CHARACTER_REGEX_EXTENSION_KEY = 'regexScripts';
@@ -29,7 +29,7 @@ export function getCharacterRegexRules(character: Character | null | undefined):
     // and patch it. Non-string entries are malformed and dropped.
     if (typeof r['findRegex'] !== 'string') continue;
     rules.push({
-      id: typeof r['id'] === 'string' && r['id'].length > 0 ? r['id'] : randomUUID(),
+      id: typeof r['id'] === 'string' && r['id'].length > 0 ? r['id'] : newId(),
       name: typeof r['name'] === 'string' ? r['name'] : '',
       findRegex: r['findRegex'],
       replaceString: typeof r['replaceString'] === 'string' ? r['replaceString'] : '',
@@ -93,7 +93,7 @@ export function convertLegacyScopedScripts(extensions: Record<string, unknown> |
     const promptOnly = Boolean(s['promptOnly']);
     const universal = !markdownOnly && !promptOnly;
     rules.push({
-      id: randomUUID(),
+      id: newId(),
       name: typeof s['scriptName'] === 'string' ? s['scriptName'] : '',
       findRegex: s['findRegex'],
       replaceString: typeof s['replaceString'] === 'string' ? s['replaceString'] : '',

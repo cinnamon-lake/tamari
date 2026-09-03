@@ -17,6 +17,7 @@ import _extract from 'png-chunks-extract';
 const extract = _extract;
 import PNGtext from 'png-chunk-text';
 import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import { z } from 'zod';
 import { buildCardJson, type BuildCardOptions } from '../repos/CharacterRepository.js';
 import type { ICharacterRepository } from '../repos/CharacterRepository.js';
@@ -612,7 +613,7 @@ async function importPngCard(
   const data = (card.data ?? card) as Record<string, unknown>;
   const parsed = normalizeCharacterFields(data);
 
-  const id = randomUUID();
+  const id = newId();
   const avatarFileName = `${randomUUID()}.png`;
   const avatarPath = storage.write('avatars', avatarFileName, new Uint8Array(buffer));
   let thumbnailPath: string | null = null;
@@ -668,7 +669,7 @@ async function importJsonCard(
   const data = (card.data ?? card) as Record<string, unknown>;
   const parsed = normalizeCharacterFields(data);
 
-  const id = randomUUID();
+  const id = newId();
   const worldInfoId = await importCharacterBook(data.character_book, id, parsed.name, worldInfo, bus);
 
   const character = await characters.create(id, {
@@ -714,7 +715,7 @@ async function importCharXCard(
   const data = (cardRec.data ?? card) as Record<string, unknown>;
   const parsed = normalizeCharacterFields(data);
 
-  const id = randomUUID();
+  const id = newId();
 
   // Preserve the embedded RisuAI module (triggerscripts/regex/native lorebook)
   // as raw JSON for the porting workflow. A corrupt module never bricks the import.
@@ -796,7 +797,7 @@ async function importCharXCard(
       const buf = extracted.get(def.zipPath);
       if (!buf) continue;
 
-      const assetId = randomUUID();
+      const assetId = newId();
       const safeName = sanitizeAssetName(def.name);
       const fileName = `${assetId}.${def.ext}`;
       const relPath = storage.write(`character_assets/${id}`, fileName, new Uint8Array(buf));

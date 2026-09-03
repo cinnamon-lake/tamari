@@ -2,8 +2,8 @@
  * `chat.*` messages — loading, selection, CRUD, forks, resets, materialization.
  */
 
-import { randomUUID } from 'node:crypto';
 import { QuickReplyAutoExecute } from '@tamari/types';
+import { newUniqueId } from '../lib/uniqueId.js';
 import type { RegexRule } from '@tamari/types';
 import { mergeRegexRules } from '../services/characterRegex.js';
 import { renderMessageParts } from '../services/DisplayRenderer.js';
@@ -121,7 +121,7 @@ export function buildChatHandlers(
     },
 
     'chat.create': async (client, msg) => {
-      const id = randomUUID();
+      const id = await newUniqueId(async (candidate) => (await chats.getChatById(candidate)) !== undefined);
       let personaId = msg.data.personaId ?? null;
       if (!personaId) {
         const first = (await personas.listSummaries())[0];

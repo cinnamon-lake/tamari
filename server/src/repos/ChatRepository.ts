@@ -12,6 +12,7 @@
  */
 
 import { safeParseJson } from '../lib/safeJson.js';
+import { newId } from '@tamari/wordid';
 import type { Client, Transaction } from '@libsql/client';
 import type { InValue } from '@libsql/core/api';
 import {
@@ -380,7 +381,7 @@ export class ChatRepository implements IChatRepository {
     const message = await this.getMessageById(messageId);
     if (!message) throw new NotFoundError('Message', String(messageId));
 
-    const id = crypto.randomUUID();
+    const id = newId();
     const now = Math.floor(Date.now() / 1000);
     const isAssistant = message.role === 'assistant';
     const headId = isAssistant ? message.parentId : messageId;
@@ -436,7 +437,7 @@ export class ChatRepository implements IChatRepository {
         tx,
       );
 
-      const id = crypto.randomUUID();
+      const id = newId();
       const now = Math.floor(Date.now() / 1000);
       await tx.execute({
         sql: `INSERT INTO chats (id, character_id, persona_id, name, head_message_id, active_child_id, materialized, created_at, updated_at, metadata, forked_from_chat_id, forked_at_message_id)

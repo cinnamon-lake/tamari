@@ -208,7 +208,7 @@ test.describe('Debug traces', () => {
 
     // innerText is empty for collapsed content — expand the dropdown first.
     await app.expandToolActivity(app.lastBubble('assistant'));
-    const traceId = (await results.last().innerText()).match(/\[trace: ([0-9a-f-]{36})\]/)?.[1];
+    const traceId = (await results.last().innerText()).match(/\[trace: ([a-z0-9-]+)\]/)?.[1];
     expect(traceId).toBeTruthy();
 
     await app.sendUserMessage(`tool:read${JSON.stringify({ path: `/generations/${traceId}/meta.json` })}`, {

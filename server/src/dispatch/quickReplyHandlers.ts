@@ -2,8 +2,8 @@
  * `quickreply.*` messages — scoped CRUD, execution, auto-execute triggers.
  */
 
-import { randomUUID } from 'node:crypto';
 import { QuickReplyAutoExecute } from '@tamari/types';
+import { newUniqueId } from '../lib/uniqueId.js';
 import { broadcastQuickReplyList } from '../services/quickReplyBroadcast.js';
 import type { DispatcherDeps, Handlers } from './types.js';
 
@@ -50,7 +50,7 @@ export function buildQuickReplyHandlers(
     },
 
     'quickreply.create': async (client, msg) => {
-      const id = randomUUID();
+      const id = await newUniqueId(async (candidate) => (await quickReplies.getById(candidate)) !== undefined);
       const item = await quickReplies.create(id, msg.data);
       bus.broadcast({ type: 'quickreply.created', item }, client.id);
       await rebroadcastList(client.id);

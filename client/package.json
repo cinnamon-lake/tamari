@@ -17,6 +17,7 @@
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@solid-primitives/i18n": "^2.2.1",
     "@tamari/types": "^0.1.0",
+    "@tamari/wordid": "^0.1.0",
     "bootstrap-icons": "^1.13.1",
     "cropperjs": "^2.1.1",
     "fuse.js": "^7.5.0",

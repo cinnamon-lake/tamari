@@ -16,6 +16,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import { z } from 'zod';
 import type { Character, CharacterAsset, RegexRule, WorldInfo, WorldInfoEntry } from '@tamari/types';
 import { WorldInfoEntryInsertSchema, WorldInfoEntryUpdateSchema } from '@tamari/types';
@@ -71,7 +72,8 @@ export interface CharacterWorkbenchDeps {
   ragService?: Pick<RAGService, 'indexWorldInfoEntries'>;
 }
 
-const CHARACTER_ID = 'Character id (a UUID — from the chat context, the user, or a previous tool result).';
+const CHARACTER_ID =
+  'Character id (a word-id like brave-falcons-invent-swift — from the chat context, the user, or a previous tool result).';
 
 function invalidArgs(error: z.ZodError): ToolExecuteResult {
   return { content: `Error: invalid arguments — ${formatZodIssues(error)}` };
@@ -535,14 +537,14 @@ export class CharacterWorkbench {
     const clash = await this.deps.characters.getByName(name);
     if (clash) return { content: `Error: character "${name}" already exists — pass a different name` };
 
-    const id = randomUUID();
+    const id = newId();
 
     // Lorebook first: the clone links to its own copy of the book.
     let worldInfoId: string | null = null;
     let lorebookEntries = 0;
     const sourceBook = await this.getCharacterLorebook(source);
     if (sourceBook) {
-      worldInfoId = randomUUID();
+      worldInfoId = newId();
       lorebookEntries = sourceBook.entries.length;
       const book = await this.deps.worldInfo.create(worldInfoId, {
         name: sourceBook.name,
@@ -740,7 +742,7 @@ export class CharacterWorkbench {
   private async requireLorebookForWrite(character: Character): Promise<WorldInfo> {
     const existing = await this.getCharacterLorebook(character);
     if (existing) return existing;
-    const book = await this.deps.worldInfo.create(randomUUID(), { name: character.name, entries: [] });
+    const book = await this.deps.worldInfo.create(newId(), { name: character.name, entries: [] });
     const updated = await this.deps.characters.update(character.id, { worldInfoId: book.id });
     await this.broadcastCharacterMutation(updated);
     await this.broadcastBook('created', book);
@@ -762,7 +764,7 @@ export class CharacterWorkbench {
     const character = await this.deps.characters.getById(parsed.data.characterId);
     if (!character) return { content: `Error: character "${parsed.data.characterId}" not found` };
     const book = await this.requireLorebookForWrite(character);
-    const newEntry: WorldInfoEntry = { id: randomUUID(), ...parsed.data.entry };
+    const newEntry: WorldInfoEntry = { id: newId(), ...parsed.data.entry };
     const updated = await this.deps.worldInfo.update(book.id, { entries: [...book.entries, newEntry] });
     await this.broadcastBook('updated', updated);
     return { content: JSON.stringify(newEntry) };
@@ -864,7 +866,7 @@ export class CharacterWorkbench {
     const character = await this.deps.characters.getById(characterId);
     if (!character) return { content: `Error: character "${characterId}" not found` };
     const newRule: RegexRule = {
-      id: randomUUID(),
+      id: newId(),
       name: rule.name,
       findRegex: rule.findRegex ?? '',
       replaceString: rule.replaceString ?? '',
@@ -1065,7 +1067,7 @@ export class CharacterWorkbench {
       return { content: `Error: attachment file for "${attachmentId}" is missing on disk` };
     }
 
-    const assetId = randomUUID();
+    const assetId = newId();
     const ext = extFromMime(attachment.mimeType);
     const relPath = this.deps.storage.write(
       `character_assets/${characterId}`,
@@ -1128,7 +1130,7 @@ export class CharacterWorkbench {
       log.debug({ err, assetId: source.id, filePath: source.filePath }, 'Asset source file unreadable; skipping copy');
       return null;
     }
-    const assetId = randomUUID();
+    const assetId = newId();
     const relPath = this.deps.storage.write(
       `character_assets/${targetCharacterId}`,
       `${assetId}.${source.ext}`,

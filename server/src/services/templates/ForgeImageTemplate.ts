@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import { z } from 'zod';
 import type { ToolRegistry } from '../ToolRegistry.js';
 import type { ToolContext, ToolExecuteResult, ToolTemplate } from '../ToolTemplate.js';
@@ -165,7 +165,7 @@ export class ForgeImageTemplate implements ToolTemplate {
       return { content: 'Failed to decode base64 image from Forge.' };
     }
 
-    const attachmentId = randomUUID();
+    const attachmentId = newId();
     const filePath = this.deps.storage.write('attachments', `${attachmentId}.png`, imageBuffer);
 
     let attachment: Attachment;

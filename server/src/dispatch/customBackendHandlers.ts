@@ -4,7 +4,7 @@
  * the full list after every mutation so all clients converge (AGENTS.md §5).
  */
 
-import { randomUUID } from 'node:crypto';
+import { newUniqueId } from '../lib/uniqueId.js';
 import type { DispatcherDeps, Handlers } from './types.js';
 import { dryRunBackendScript } from '../backends/customBackendDryRun.js';
 import { getCharacterBackendScript } from '../backends/customBackendFactory.js';
@@ -42,7 +42,7 @@ export function buildCustomBackendHandlers(
     },
 
     'custombackend.create': async (client, msg) => {
-      const id = randomUUID();
+      const id = await newUniqueId(async (candidate) => (await customBackends.getById(candidate)) !== undefined);
       const item = await customBackends.create(id, msg.data);
       bus.broadcast({ type: 'custombackend.created', item }, client.id);
       await rebroadcastList(client.id);

@@ -3,6 +3,7 @@
  * chat's character.
  */
 
+import { newId } from '@tamari/wordid';
 import type { StApiContext } from './context.js';
 import type { StApi } from './types.js';
 
@@ -56,7 +57,7 @@ export function createWorldInfo(c: StApiContext): WorldInfoApi {
       if (keyList.length === 0) throw new Error('wi_add: at least one key required');
 
       const newEntry = {
-        id: crypto.randomUUID(),
+        id: newId(),
         keys: keyList,
         content,
         comment: '',

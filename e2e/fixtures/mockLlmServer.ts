@@ -596,7 +596,7 @@ async function sendCompletion(res: http.ServerResponse, body: unknown, defaultTe
         return typeof c === 'string' ? c : JSON.stringify(c ?? '');
       })
       .join('\n');
-    const attMatch = allText.match(/\{\{attachment::[0-9a-fA-F-]+\}\}/);
+    const attMatch = allText.match(/\{\{attachment::[^}]+\}\}/);
     if (attMatch) text = attMatch[0];
   }
 

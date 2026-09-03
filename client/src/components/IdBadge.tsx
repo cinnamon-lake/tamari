@@ -1,5 +1,5 @@
 /**
- * IdBadge — shows an entity's full UUID in small monospace; click to copy.
+ * IdBadge — shows an entity's full id in small monospace; click to copy.
  * Exists so users can reference entities by id in chat ("fix backend abloob…").
  *
  * `iconOnly` renders just the copy icon (id moves to the tooltip) — for dense

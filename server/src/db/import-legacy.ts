@@ -27,6 +27,7 @@ import {
   copyFileSync,
 } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import { join, basename, extname, dirname } from 'node:path';
 import { convertLegacyScopedScripts } from '../services/characterRegex.js';
 import { insertMessageParts } from './messageParts.js';
@@ -724,7 +725,7 @@ export async function importLegacyData(
       for (const file of avatarFiles) {
         try {
           const oldName = basename(file.name, '.png');
-          const personaId = randomUUID();
+          const personaId = newId();
           personaNameToUuid.set(oldName, personaId);
           const srcPath = join(avatarsDir, file.name);
           const avatarFileName = `${randomUUID()}.png`;
@@ -785,7 +786,7 @@ export async function importLegacyData(
           const raw = readFileSync(join(presetDir.path, file.name), 'utf-8');
           const parsed = JSON.parse(raw);
           const mapped = presetDir.mapper(file.name, parsed);
-          const id = randomUUID();
+          const id = newId();
           const now = Math.floor(Date.now() / 1000);
 
           await client.execute({
@@ -892,7 +893,7 @@ export async function importLegacyData(
           const now = mtimeToUnix(filePath);
 
           const oldCharName = basename(file.name, '.png');
-          const charId = randomUUID();
+          const charId = newId();
           charNameToUuid.set(oldCharName, charId);
 
           const avatarFileName = `${randomUUID()}.png`;
@@ -1022,7 +1023,7 @@ export async function importLegacyData(
             if (lines.length === 0) continue;
 
             const oldChatName = basename(chatFile.name, '.jsonl');
-            const chatId = randomUUID();
+            const chatId = newId();
             const chatKey = `${charDir.name}/${oldChatName}`;
             chatKeyToUuid.set(chatKey, chatId);
             const characterId = charNameToUuid.get(charDir.name);
@@ -1170,7 +1171,7 @@ export async function importLegacyData(
           const raw = readFileSync(filePath, 'utf-8');
           const group = JSON.parse(raw);
           const oldGroupId = group.chatId ?? basename(file.name, '.json');
-          const chatId = randomUUID();
+          const chatId = newId();
           groupNameToUuid.set(oldGroupId, chatId);
           const mtime = mtimeToUnix(filePath);
 
@@ -1305,7 +1306,7 @@ export async function importLegacyData(
           const qrList = legacy.qrList ?? [];
 
           for (const qr of qrList) {
-            const id = randomUUID();
+            const id = newId();
             await client.execute({
               sql: `INSERT INTO quick_replies (id, scope, scope_id, label, icon, color, script, language, auto_execute, order_index, created_at, updated_at)
                     VALUES (?, 'global', ?, ?, ?, ?, ?, 'stscript', ?, ?, ?, ?)`,
@@ -1383,7 +1384,7 @@ export async function importLegacyData(
           }
 
           const oldWorldName = basename(file.name, '.json');
-          const worldId = randomUUID();
+          const worldId = newId();
           worldNameToUuid.set(oldWorldName, worldId);
           stmts.push({
             sql: `INSERT OR REPLACE INTO world_info (id, name, entries, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,

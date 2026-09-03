@@ -9,7 +9,7 @@
  */
 
 import { Router } from 'express';
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import { z } from 'zod';
 import { isAllowedAttachmentMime } from '../lib/mimeAllowlist.js';
 import { apiError } from '../middleware/errorHandler.js';
@@ -93,7 +93,7 @@ export function createAttachmentsRouter(
     if (!isAllowedAttachmentMime(mimeType)) {
       throw apiError('UNSUPPORTED_MIME_TYPE', `Unsupported MIME type: ${mimeType}`, 400);
     }
-    const id = randomUUID();
+    const id = newId();
     const blob = Buffer.from(data, 'base64');
     const filePath = storage.write('attachments', id, new Uint8Array(blob));
     const attachment = await attachments.create({ id, messageId: null, mimeType, filePath, meta: meta ?? {} });

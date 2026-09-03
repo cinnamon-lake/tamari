@@ -36,7 +36,7 @@ describe('applyMigrations', () => {
     const client = makeClient();
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(20);
+    expect(await userVersion(client)).toBe(21);
 
     const tables = await client.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name");
     const names = tables.rows.map((r) => String(r.name));
@@ -78,7 +78,7 @@ describe('applyMigrations', () => {
     await applyMigrations(client);
     // Second run must be a no-op: no errors, version unchanged.
     await applyMigrations(client);
-    expect(await userVersion(client)).toBe(20);
+    expect(await userVersion(client)).toBe(21);
     client.close();
   });
 
@@ -90,7 +90,7 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 1');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(20);
+    expect(await userVersion(client)).toBe(21);
     // 002's ALTER was tolerated as duplicate and its UPDATE re-ran cleanly.
     const rs = await client.execute("SELECT name FROM pragma_table_info('chats')");
     expect(rs.rows.map((r) => String(r.name))).toContain('materialized');
@@ -115,7 +115,7 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 9');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(20);
+    expect(await userVersion(client)).toBe(21);
 
     const migrated = await client.execute("SELECT content, extra FROM messages WHERE role = 'user'");
     expect(String(migrated.rows[0]?.content)).toBe('');
@@ -161,7 +161,7 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 14');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(20);
+    expect(await userVersion(client)).toBe(21);
 
     const rows = await client.execute('SELECT idx, type, data FROM message_parts ORDER BY idx');
     expect(rows.rows.map((r) => [Number(r.idx), String(r.type)])).toEqual([
@@ -213,7 +213,7 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 15');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(20);
+    expect(await userVersion(client)).toBe(21);
 
     // Both lists gained both utility prompts with the legacy customizations.
     for (const id of ['list-a', 'list-b']) {
@@ -299,7 +299,7 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 18');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(20);
+    expect(await userVersion(client)).toBe(21);
 
     // The Default chain carries whitespace(full) + an enabled strip-reasoning
     // (the old reasoningAddToPrompts === false meant "strip").
@@ -395,7 +395,7 @@ describe('applyMigrations', () => {
     await client.execute('PRAGMA user_version = 16');
     await applyMigrations(client);
 
-    expect(await userVersion(client)).toBe(20);
+    expect(await userVersion(client)).toBe(21);
 
     const claude = await repo.getById('cfg-claude');
     expect(claude?.providerParams).toEqual({ cacheMode: 'manual', cacheDepth: 2, cacheTTL: '1h' });

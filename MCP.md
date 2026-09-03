@@ -5,6 +5,10 @@ tamari exposes a **read/test-only MCP tool surface** for external LLM agents
 `server/src/api/mcp.ts`. Agents WRITE card files with their own filesystem
 tools; no MCP tool writes card or config data.
 
+Entity ids (`characterId`, `sessionId`, `generationId`, …) are human-readable
+**word-ids** like `brave-falcons-invent-swift` — repeat them verbatim in tool
+args. (Legacy UUID ids still work.)
+
 ## Connecting
 
 - **Default host is ::1, default port is 8000** — the server binds `::` (all

@@ -7,7 +7,7 @@
  * decides update vs create (the id is assigned server-side on create).
  */
 
-import { randomUUID } from 'node:crypto';
+import { newUniqueId } from '../lib/uniqueId.js';
 import type { DispatcherDeps, Handlers } from './types.js';
 import { validateTransformerLuaSource } from '../transformers/luaRunner.js';
 
@@ -60,7 +60,10 @@ export function buildTransformerHandlers(
         const item = await transformerChains.update(msg.id, msg.data);
         bus.broadcast({ type: 'transformerchain.updated', item }, client.id);
       } else {
-        const item = await transformerChains.create(randomUUID(), msg.data);
+        const item = await transformerChains.create(
+          await newUniqueId(async (candidate) => (await transformerChains.getById(candidate)) !== undefined),
+          msg.data,
+        );
         bus.broadcast({ type: 'transformerchain.created', item }, client.id);
       }
       await rebroadcastChains(client.id);
@@ -95,7 +98,10 @@ export function buildTransformerHandlers(
         const item = await transformerScripts.update(msg.id, msg.data);
         bus.broadcast({ type: 'transformerscript.updated', item }, client.id);
       } else {
-        const item = await transformerScripts.create(randomUUID(), msg.data);
+        const item = await transformerScripts.create(
+          await newUniqueId(async (candidate) => (await transformerScripts.getById(candidate)) !== undefined),
+          msg.data,
+        );
         bus.broadcast({ type: 'transformerscript.created', item }, client.id);
       }
       await rebroadcastScripts(client.id);

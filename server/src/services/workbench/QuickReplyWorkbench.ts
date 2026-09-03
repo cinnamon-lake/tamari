@@ -8,7 +8,7 @@
  * All errors are returned as `content` strings, never thrown.
  */
 
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import { z } from 'zod';
 import { QuickReplyInsertSchema, QuickReplyUpdateSchema } from '@tamari/types';
 import type { ToolContext, ToolExecuteResult } from '../ToolTemplate.js';
@@ -66,7 +66,7 @@ export class QuickReplyWorkbench {
   private async createQuickReply(args: Record<string, unknown>): Promise<ToolExecuteResult> {
     const parsed = QuickReplyCreateArgs.safeParse(args);
     if (!parsed.success) return { content: 'Error: invalid arguments' };
-    const item = await this.deps.quickReplies.create(randomUUID(), parsed.data);
+    const item = await this.deps.quickReplies.create(newId(), parsed.data);
     // Same broadcasts as the quickreply.create dispatcher handler (no exclusion):
     // `.created` for snapshots, `.listed` so every client's list converges (§5).
     this.deps.bus.broadcast({ type: 'quickreply.created', item });

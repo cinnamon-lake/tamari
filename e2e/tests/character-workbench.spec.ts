@@ -78,11 +78,11 @@ async function createCharacterViaWs(page: Page, charName: string, firstMes?: str
   );
 }
 
-/** Extract the first `"id": "<uuid>"` from a tool result block's pretty JSON. */
-async function resultUuid(block: Locator): Promise<string> {
+/** Extract the first `"id": "<id>"` from a tool result block's pretty JSON. */
+async function resultId(block: Locator): Promise<string> {
   const text = await block.innerText();
-  const match = text.match(/"id": "([0-9a-f-]{36})"/);
-  if (!match) throw new Error(`no uuid in tool result block: ${text.slice(0, 300)}`);
+  const match = text.match(/"id": "([^"]+)"/);
+  if (!match) throw new Error(`no id in tool result block: ${text.slice(0, 300)}`);
   return match[1]!;
 }
 
@@ -185,8 +185,8 @@ test.describe('Character Workbench (verbs & vfs)', () => {
     await expect(seedResults).toHaveCount(2, { timeout: 20000 });
     // innerText is empty for collapsed content — expand the dropdown first.
     await app.expandToolActivity(app.lastBubble('assistant'));
-    const entryA = await resultUuid(seedResults.first());
-    const entryB = await resultUuid(seedResults.nth(1));
+    const entryA = await resultId(seedResults.first());
+    const entryB = await resultId(seedResults.nth(1));
 
     // Whole-file write patches the entry; read-back proves the update landed.
     const edited = `Edited content ${Date.now()}`;
@@ -258,7 +258,7 @@ test.describe('Character Workbench (verbs & vfs)', () => {
     await expect(addResult).toContainText(ruleName, { timeout: 20000 });
     // innerText is empty for collapsed content — expand the dropdown first.
     await app.expandToolActivity(app.lastBubble('assistant'));
-    const ruleId = await resultUuid(addResult);
+    const ruleId = await resultId(addResult);
 
     // Disable the rule via a whole-file write; read-back shows the patch.
     await app.sendUserMessage(

@@ -2,7 +2,7 @@
  * `persona.*` messages — selection, CRUD, greeting rebroadcast side effects.
  */
 
-import { randomUUID } from 'node:crypto';
+import { newUniqueId } from '../lib/uniqueId.js';
 import { toPersonaSummary, withPersonaAvatar } from '../lib/summaries.js';
 import { maybeRebroadcastGreetingSnapshot } from './helpers.js';
 import type { DispatcherDeps, Handlers } from './types.js';
@@ -28,7 +28,7 @@ export function buildPersonaHandlers(
     },
 
     'persona.create': async (client, msg) => {
-      const id = randomUUID();
+      const id = await newUniqueId(async (candidate) => (await personas.getById(candidate)) !== undefined);
       const persona = await personas.create(id, msg.data);
       bus.broadcast({ type: 'persona.created', persona: withPersonaAvatar(persona) }, client.id);
       bus.broadcast({ type: 'persona.snapshot', persona: withPersonaAvatar(persona) }, client.id);

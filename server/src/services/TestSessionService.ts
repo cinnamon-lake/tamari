@@ -23,7 +23,7 @@
  */
 
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import { z } from 'zod';
 import { getMessageText } from '@tamari/types';
 import type { Generation } from '@tamari/types';
@@ -227,7 +227,7 @@ export class TestSessionService {
       personaId = first?.id ?? null;
     }
 
-    const sessionId = randomUUID();
+    const sessionId = newId();
     const chatId = `test-session-${sessionId}`;
     const greetingIndex = args.greetingIndex ?? 0;
     await this.chats.createChat(chatId, {

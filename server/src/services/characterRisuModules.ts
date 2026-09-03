@@ -24,7 +24,7 @@
  * leaves them behind (they are the card's assets by then, not the module's).
  */
 
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import type { Character } from '@tamari/types';
 import type { FileStorage } from './FileStorage.js';
 import type { ICharacterAssetRepository } from '../repos/CharacterAssetRepository.js';
@@ -98,7 +98,7 @@ export function storeRisuModule(
   module: RisuModuleData,
   source: RisuModuleMeta['source'],
 ): RisuModuleMeta {
-  const id = randomUUID();
+  const id = newId();
   const filePath = storage.write(
     `character_modules/${characterId}`,
     `${id}.json`,
@@ -128,7 +128,7 @@ export async function storeRisuModuleAssets(
     const triplet = triplets[payload.index];
     const rawName = typeof triplet?.[0] === 'string' && triplet[0].length > 0 ? triplet[0] : `asset-${payload.index}`;
     const ext = typeof triplet?.[2] === 'string' && triplet[2].length > 0 ? triplet[2] : 'bin';
-    const assetId = randomUUID();
+    const assetId = newId();
     const filePath = storage.write(
       `character_assets/${characterId}`,
       `${assetId}.${ext}`,

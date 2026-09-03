@@ -11,7 +11,7 @@
  * All errors are returned as `content` strings, never thrown.
  */
 
-import { randomUUID } from 'node:crypto';
+import { newId } from '@tamari/wordid';
 import { z } from 'zod';
 import { LuaSandboxFlagsSchema } from '@tamari/types';
 import type { ToolTemplate as StoredToolTemplate } from '@tamari/types';
@@ -121,7 +121,7 @@ export class LuaToolWorkbench {
     const def = await this.deps.luaExecutor.getDefinition(code, sandbox);
     if ('error' in def) return { content: `Error: template validation failed: ${def.error}` };
 
-    const template = await this.deps.toolTemplates.create(randomUUID(), {
+    const template = await this.deps.toolTemplates.create(newId(), {
       name,
       code,
       sandbox: sandbox ?? {},

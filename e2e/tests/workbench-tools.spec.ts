@@ -237,7 +237,7 @@ test.describe('Workbench VFS Tools', () => {
     // innerText is empty for collapsed content — expand the dropdown first.
     await app.expandToolActivity(app.lastBubble('assistant'));
     const createText = await createResult.innerText();
-    const idMatch = createText.match(/"path": "\/backends\/([0-9a-f-]{36})\.json"/);
+    const idMatch = createText.match(/"path": "\/backends\/([^"]+)\.json"/);
     expect(idMatch, 'created backend config path in tool result').toBeTruthy();
     const configId = idMatch![1];
 
@@ -295,7 +295,7 @@ test.describe('Workbench VFS Tools', () => {
     // innerText is empty for collapsed content — expand the dropdown first.
     await app.expandToolActivity(app.lastBubble('assistant'));
     const createText = await createResult.innerText();
-    const idMatch = createText.match(/"id":\s*"([0-9a-f-]{36})"/);
+    const idMatch = createText.match(/"id":\s*"([^"]+)"/);
     expect(idMatch, 'created template id in tool result').toBeTruthy();
     const templateId = idMatch![1];
 
@@ -376,7 +376,7 @@ test.describe('Workbench VFS Tools', () => {
     // innerText is empty for collapsed content — expand the dropdown first.
     await app.expandToolActivity(app.lastBubble('assistant'));
     const createText = await createResult.innerText();
-    const idMatch = createText.match(/"path": "\/custom-backends\/([0-9a-f-]{36})\/"/);
+    const idMatch = createText.match(/"path": "\/custom-backends\/([^"]+)\/"/);
     expect(idMatch, 'created custom backend path in tool result').toBeTruthy();
     const customId = idMatch![1];
 
