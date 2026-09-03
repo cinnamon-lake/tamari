@@ -121,8 +121,8 @@ Config options:
 
 Generates anime-style images with the NovelAI Diffusion API. Requires a NovelAI API key (the `pst-...` token from your NovelAI account settings).
 
-| Tool             | Description                                                                                                                                                                                                                         |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tool             | Description                                                                                                                                                                                                                                                                                                                                         |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `generate_image` | Generate an image from a text prompt (`orientation`: `square`/`portrait`/`landscape`; optional `negative_prompt`, optional `seed`, optional `character_prompts` — per-character tag sets with `x`/`y` position centers for multi-character scenes). The result includes an `{{attachment::ID}}` reference the model can embed to display the image. |
 
 Config options:

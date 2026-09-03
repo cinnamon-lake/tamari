@@ -162,7 +162,7 @@ describe('renderMessageParts', () => {
     expect(html.toLowerCase()).toContain('z-index:5');
   });
 
-  it('resolves {{attachment::ID}} from this message\'s tool_result extras', async () => {
+  it("resolves {{attachment::ID}} from this message's tool_result extras", async () => {
     const html = await renderMessageParts(
       makeCtx([
         {

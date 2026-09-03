@@ -307,9 +307,7 @@ describe('MessagePartsView attachment token rewrite', () => {
 
   it('tokens attachment media when renderedHtml arrives later (streaming)', () => {
     setAuthToken('abc123');
-    const [msg, setMsg] = createSignal<Message>(
-      makeMessage([{ type: 'text', text: 'look' }], ['<p>look</p>']),
-    );
+    const [msg, setMsg] = createSignal<Message>(makeMessage([{ type: 'text', text: 'look' }], ['<p>look</p>']));
     render(() => <MessagePartsView message={msg()} />);
     setMsg(
       makeMessage(

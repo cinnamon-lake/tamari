@@ -100,9 +100,7 @@ export function MessagePartsView(props: MessagePartsViewProps) {
         return (
           <Show
             when={props.editingPartIndex === index() && props.renderEditArea !== undefined}
-            fallback={
-              <div class="message-part-text" innerHTML={tokenedHtml()[index()] ?? ''} />
-            }
+            fallback={<div class="message-part-text" innerHTML={tokenedHtml()[index()] ?? ''} />}
           >
             {props.renderEditArea!(index(), part.text)}
           </Show>
