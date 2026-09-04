@@ -33,6 +33,8 @@
  *   POST /tts                        -> raw WAV (fishaudio / gptsovits)
  *   POST /voice/vits                 -> raw WAV (vits)
  *   POST /tts/generate               -> raw WAV (silero)
+ *   POST /api/v1/services/aigc/multimodal-generation/generation
+ *                                      -> JSON envelope, audio via GET /audio/* (qwen)
  *   POST /sdapi/v1/txt2img           -> JSON {images:[<base64 1x1 PNG>]}
  *
  * Prompt selectors (prefix of the last user message, or — for flat-prompt
@@ -1077,6 +1079,13 @@ export function startMockLlmServer(options: MockLlmServerOptions = {}): Promise<
           return;
         }
 
+        // Qwen TTS: the generation response carries an audio URL the client
+        // then fetches with a GET.
+        if (req.method === 'GET' && path.startsWith('/audio/')) {
+          sendSpeech(res);
+          return;
+        }
+
         // Test isolation: reset the captured request state between specs.
         if (req.method === 'POST' && path === '/__reset-requests') {
           completionCount = 0;
@@ -1181,6 +1190,25 @@ export function startMockLlmServer(options: MockLlmServerOptions = {}): Promise<
           }
           if (path === '/tts/generate') {
             sendSpeech(res);
+            return;
+          }
+          if (path === '/api/v1/services/aigc/multimodal-generation/generation') {
+            // Qwen (DashScope dialect): JSON envelope; the clip itself is
+            // fetched from output.audio.url (relative — resolved by the
+            // adapter against baseUrl, served by the GET /audio/ route).
+            sendJson(res, 200, {
+              status_code: 200,
+              request_id: 'mock-qwen-req',
+              code: '',
+              message: '',
+              output: {
+                text: null,
+                choices: null,
+                finish_reason: 'stop',
+                audio: { data: '', url: '/audio/mock-qwen.wav', id: 'audio_mock', expires_at: 0 },
+              },
+              usage: { input_tokens: 0, output_tokens: 0, characters: 0 },
+            });
             return;
           }
 

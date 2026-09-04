@@ -56,7 +56,13 @@ export interface ToolTemplate {
   id: string;
   name: string;
   source: 'builtin' | 'lua';
-  getDefinition(): Promise<ToolTemplateDefinition> | ToolTemplateDefinition;
+  /**
+   * Tool/config-schema definition. `config` is the owning toolset's config when
+   * the definition is resolved for a concrete toolset (model-facing tool list,
+   * execution); it is omitted for config-less UI previews. Templates may use it
+   * to hide tools that don't apply to the configured options.
+   */
+  getDefinition(config?: Record<string, unknown>): Promise<ToolTemplateDefinition> | ToolTemplateDefinition;
   execute(toolName: string, args: Record<string, unknown>, context?: ToolContext): Promise<ToolExecuteResult>;
   serialize(): string;
   deserialize(raw: string): void;

@@ -171,23 +171,25 @@ No config options.
 
 Text-to-speech. The result includes an `{{attachment::ID}}` audio reference the model can embed so you can play it.
 
-| Tool    | Description                                                                            |
-| ------- | -------------------------------------------------------------------------------------- |
-| `speak` | Convert text to speech, including natural-language prosody tags the provider supports. |
+| Tool           | Description                                                                                                                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `speak`        | Convert text to speech, including natural-language prosody tags the provider supports. Optional `voiceId` / `language` args override the configured values for one call (`language` is only advertised for providers that support it — currently Qwen). |
+| `design_voice` | Design a custom voice from a text description and return a preview clip (Qwen provider only — see [Text-to-Speech](./tts.md#designing-voices-qwen)).                                                                                                    |
 
 Config options:
 
-| Option           | Description                                                                                                                                     |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `provider`       | **Required.** One of `fishaudio`, `kokoro`, `elevenlabs`, `openai`, `azure`, `minimax`, `volcengine`, `alltalk`, `vits`, `silero`, `gptsovits`. |
-| `voiceId`        | Voice ID (optional; provider default if empty). For Azure, the voice ShortName (e.g. `en-US-JennyNeural`).                                      |
-| `baseUrl`        | API base URL (optional). For Azure, the regional host.                                                                                          |
-| `apiKey`         | API key or a vault reference (`secret:<key>`). Stored as a secret field.                                                                        |
-| `model`          | Model ID for OpenAI / ElevenLabs / MiniMax (optional).                                                                                          |
-| `appId`          | App ID for VolcEngine (optional).                                                                                                               |
-| `referenceAudio` | Reference audio file for voice cloning (optional).                                                                                              |
-| `referenceText`  | Transcript of the reference audio — required when `referenceAudio` is set.                                                                      |
-| `requestScript`  | Lua script that mutates the outgoing HTTP request — see [Request Scripts](./request-scripts.md).                                                |
+| Option           | Description                                                                                                                                                     |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provider`       | **Required.** One of `fishaudio`, `kokoro`, `elevenlabs`, `openai`, `azure`, `minimax`, `volcengine`, `alltalk`, `vits`, `silero`, `gptsovits`, `qwen`.         |
+| `voiceId`        | Voice ID (optional; provider default if empty). For Azure, the voice ShortName (e.g. `en-US-JennyNeural`); for Qwen voice design, the generated voice name.     |
+| `baseUrl`        | API base URL (optional). For Azure, the regional host.                                                                                                          |
+| `apiKey`         | API key or a vault reference (`secret:<key>`). Stored as a secret field.                                                                                        |
+| `model`          | Model ID for OpenAI / ElevenLabs / MiniMax / Qwen (optional). For Qwen, the synthesis model; designed voices are re-created onto this model if they go missing. |
+| `language`       | Language of the synthesized audio — Qwen `language_type` (e.g. `English`). Optional; required by local Qwen VoiceDesign servers.                                |
+| `appId`          | App ID for VolcEngine (optional).                                                                                                                               |
+| `referenceAudio` | Reference audio file for voice cloning (optional).                                                                                                              |
+| `referenceText`  | Transcript of the reference audio — required when `referenceAudio` is set.                                                                                      |
+| `requestScript`  | Lua script that mutates the outgoing HTTP request — see [Request Scripts](./request-scripts.md).                                                                |
 
 ### Workbench (`workbench`)
 

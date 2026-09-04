@@ -206,6 +206,24 @@ const PROVIDERS: ProviderCase[] = [
       expect(body.media_type).toBe('wav');
     },
   },
+  {
+    id: 'qwen',
+    extraConfig: {
+      voiceId: 'qwen-tts-vd-announcer-voice-1-a1b2',
+      model: 'qwen3-tts-vd-2026-01-26',
+      language: 'English',
+    },
+    routePrefix: '/api/v1/services/aigc/multimodal-generation/generation',
+    assert: (req, text) => {
+      expect(header(req, 'authorization')).toBe('Bearer mock-api-key');
+      const body = req.body as Record<string, unknown>;
+      const input = body.input as Record<string, unknown>;
+      expect(body.model).toBe('qwen3-tts-vd-2026-01-26');
+      expect(input.text).toBe(text);
+      expect(input.voice).toBe('qwen-tts-vd-announcer-voice-1-a1b2');
+      expect(input.language_type).toBe('English');
+    },
+  },
 ];
 
 // Serial: the mock's request capture is shared global state, and several

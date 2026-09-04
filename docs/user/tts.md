@@ -1,6 +1,6 @@
 # Text-to-Speech
 
-tamari can speak text aloud using one of eleven TTS providers — local servers like Fish Audio S2 Pro, Kokoro, or GPT-SoVITS, and cloud services like OpenAI, ElevenLabs, or Azure Speech. There is no global "read every message aloud" switch: TTS is a **tool the AI calls**, and you configure it per toolset.
+tamari can speak text aloud using one of twelve TTS providers — local servers like Fish Audio S2 Pro, Kokoro, or GPT-SoVITS, and cloud services like OpenAI, ElevenLabs, Azure Speech, or Qwen. There is no global "read every message aloud" switch: TTS is a **tool the AI calls**, and you configure it per toolset.
 
 ## How TTS Works in tamari
 
@@ -24,17 +24,18 @@ The `speak` tool reaches the model on the next generation. If `provider` is empt
 
 ### Configuration Fields
 
-| Field            | Description                                                                                                                                                      |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `provider`       | **Required.** One of `fishaudio`, `kokoro`, `elevenlabs`, `openai`, `azure`, `minimax`, `volcengine`, `alltalk`, `vits`, `silero`, `gptsovits`.                  |
-| `voiceId`        | Voice ID (optional; provider default if empty). For Azure, the voice ShortName (e.g. `en-US-JennyNeural`); for GPT-SoVITS, the server-side reference-audio path. |
-| `baseUrl`        | API base URL (optional; provider default if empty). For Azure, the regional host (e.g. `https://eastus.tts.speech.microsoft.com`).                               |
-| `apiKey`         | API key or access token, or a vault reference (`secret:<key>`). Rendered as a password field with a vault picker.                                                |
-| `model`          | Model ID for OpenAI / ElevenLabs / MiniMax (optional).                                                                                                           |
-| `appId`          | App ID for VolcEngine (optional for other providers).                                                                                                            |
-| `referenceAudio` | Reference audio file for voice cloning (optional). Uploaded in the form and stored as base64.                                                                    |
-| `referenceText`  | Transcript of the reference audio — required when `referenceAudio` is set.                                                                                       |
-| `requestScript`  | Lua script that mutates the outgoing HTTP request — see [Request Scripts](./request-scripts.md).                                                                 |
+| Field            | Description                                                                                                                                                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `provider`       | **Required.** One of `fishaudio`, `kokoro`, `elevenlabs`, `openai`, `azure`, `minimax`, `volcengine`, `alltalk`, `vits`, `silero`, `gptsovits`, `qwen`.                                                                  |
+| `voiceId`        | Voice ID (optional; provider default if empty). For Azure, the voice ShortName (e.g. `en-US-JennyNeural`); for GPT-SoVITS, the server-side reference-audio path; for Qwen voice design, the generated voice name.        |
+| `baseUrl`        | API base URL (optional; provider default if empty). For Azure, the regional host (e.g. `https://eastus.tts.speech.microsoft.com`).                                                                                       |
+| `apiKey`         | API key or access token, or a vault reference (`secret:<key>`). Rendered as a password field with a vault picker.                                                                                                        |
+| `model`          | Model ID for OpenAI / ElevenLabs / MiniMax / Qwen (optional). For Qwen, the synthesis model (e.g. `qwen3-tts-vd-2026-01-26` for voice-design voices); designed voices are re-created onto this model if they go missing. |
+| `language`       | Language of the synthesized audio — Qwen `language_type` (e.g. `English`, `Chinese`). Optional; Qwen Cloud defaults to `Auto`, local Qwen VoiceDesign servers require an explicit value.                                 |
+| `appId`          | App ID for VolcEngine (optional for other providers).                                                                                                                                                                    |
+| `referenceAudio` | Reference audio file for voice cloning (optional). Uploaded in the form and stored as base64.                                                                                                                            |
+| `referenceText`  | Transcript of the reference audio — required when `referenceAudio` is set.                                                                                                                                               |
+| `requestScript`  | Lua script that mutates the outgoing HTTP request — see [Request Scripts](./request-scripts.md).                                                                                                                         |
 
 > **Note:** Which fields matter depends on the provider — check the table below. Fields you leave empty fall back to the provider's built-in defaults.
 
@@ -42,19 +43,20 @@ The `speak` tool reaches the model on the next generation. If `provider` is empt
 
 "Needs" lists what you must supply beyond picking the provider. Every provider also accepts `baseUrl` (to point at a self-hosted or proxied endpoint) and `requestScript`.
 
-| Provider (`provider` value)     | Kind  | Needs                                              | Defaults                                                                                                         |
-| ------------------------------- | ----- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `fishaudio` — Fish Audio S2 Pro | Local | Nothing for a default local server                 | `baseUrl` `http://127.0.0.1:8080/v1`; `voiceId` is a reference ID from your server's voice list                  |
-| `kokoro` — Kokoro (FastAPI)     | Local | Nothing for a default local server                 | `baseUrl` `http://127.0.0.1:8880/v1`; voice `af_heart`                                                           |
-| `elevenlabs` — ElevenLabs       | Cloud | `apiKey`                                           | `baseUrl` `https://api.elevenlabs.io`; voice `21m00Tcm4TlvDq8ikWAM` ("Rachel"); `model` `eleven_multilingual_v2` |
-| `openai` — OpenAI               | Cloud | `apiKey`                                           | `baseUrl` `https://api.openai.com`; voice `alloy`; `model` `gpt-4o-mini-tts`                                     |
-| `azure` — Azure Speech          | Cloud | `apiKey` (subscription key)                        | `baseUrl` `https://eastus.tts.speech.microsoft.com`; voice `en-US-JennyNeural`                                   |
-| `minimax` — MiniMax             | Cloud | `apiKey`                                           | `baseUrl` `https://api.minimax.io`; voice `English_expressive_narrator`; `model` `speech-02-hd`                  |
-| `volcengine` — VolcEngine       | Cloud | `apiKey` (OpenSpeech Access Token) **and** `appId` | `baseUrl` `https://openspeech.bytedance.com`; voice `zh_female_wanwanxiaohe`                                     |
-| `alltalk` — AllTalk             | Local | Nothing for a default local server                 | `baseUrl` `http://127.0.0.1:7851`; voice `alloy`                                                                 |
-| `vits` — VITS (simple-api)      | Local | Nothing for a default local server                 | `baseUrl` `http://127.0.0.1:23456`; voice is a numeric speaker ID (`0` if empty)                                 |
-| `silero` — Silero               | Local | Nothing for a default local server                 | `baseUrl` `http://127.0.0.1:8001`; voice `en_0`                                                                  |
-| `gptsovits` — GPT-SoVITS        | Local | Nothing for a default local server                 | `baseUrl` `http://127.0.0.1:9880`; set `voiceId` to the server-side reference-audio path                         |
+| Provider (`provider` value)     | Kind  | Needs                                                      | Defaults                                                                                                         |
+| ------------------------------- | ----- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `fishaudio` — Fish Audio S2 Pro | Local | Nothing for a default local server                         | `baseUrl` `http://127.0.0.1:8080/v1`; `voiceId` is a reference ID from your server's voice list                  |
+| `kokoro` — Kokoro (FastAPI)     | Local | Nothing for a default local server                         | `baseUrl` `http://127.0.0.1:8880/v1`; voice `af_heart`                                                           |
+| `elevenlabs` — ElevenLabs       | Cloud | `apiKey`                                                   | `baseUrl` `https://api.elevenlabs.io`; voice `21m00Tcm4TlvDq8ikWAM` ("Rachel"); `model` `eleven_multilingual_v2` |
+| `openai` — OpenAI               | Cloud | `apiKey`                                                   | `baseUrl` `https://api.openai.com`; voice `alloy`; `model` `gpt-4o-mini-tts`                                     |
+| `azure` — Azure Speech          | Cloud | `apiKey` (subscription key)                                | `baseUrl` `https://eastus.tts.speech.microsoft.com`; voice `en-US-JennyNeural`                                   |
+| `minimax` — MiniMax             | Cloud | `apiKey`                                                   | `baseUrl` `https://api.minimax.io`; voice `English_expressive_narrator`; `model` `speech-02-hd`                  |
+| `volcengine` — VolcEngine       | Cloud | `apiKey` (OpenSpeech Access Token) **and** `appId`         | `baseUrl` `https://openspeech.bytedance.com`; voice `zh_female_wanwanxiaohe`                                     |
+| `alltalk` — AllTalk             | Local | Nothing for a default local server                         | `baseUrl` `http://127.0.0.1:7851`; voice `alloy`                                                                 |
+| `vits` — VITS (simple-api)      | Local | Nothing for a default local server                         | `baseUrl` `http://127.0.0.1:23456`; voice is a numeric speaker ID (`0` if empty)                                 |
+| `silero` — Silero               | Local | Nothing for a default local server                         | `baseUrl` `http://127.0.0.1:8001`; voice `en_0`                                                                  |
+| `gptsovits` — GPT-SoVITS        | Local | Nothing for a default local server                         | `baseUrl` `http://127.0.0.1:9880`; set `voiceId` to the server-side reference-audio path                         |
+| `qwen` — Qwen (DashScope)       | Both  | `apiKey`; for voice-design voices also `model` + `voiceId` | `baseUrl` `https://dashscope-intl.aliyuncs.com`; voice `Cherry`; `model` `qwen3-tts-flash`                       |
 
 Provider-specific notes:
 
@@ -67,8 +69,23 @@ Provider-specific notes:
 - **VITS (simple-api)** targets `Artrajz/vits-simple-api`, the common wrapper for VITS / Bert-VITS2 / GPT-SoVITS. `voiceId` is the numeric speaker ID; `apiKey` is only needed if the server has API-key auth enabled.
 - **Silero** ships no official HTTP server; the adapter targets the `ouoertheo/silero-api-server` wrapper.
 - **GPT-SoVITS** targets `api_v2.py` from `RVC-Boss/GPT-SoVITS`. A "voice" is a reference-audio file on the server — put its path in `voiceId`.
+- **Qwen** speaks the DashScope dialect (`POST /api/v1/services/aigc/multimodal-generation/generation`): the response is a JSON envelope and tamari fetches the clip from its `output.audio.url` (with the same Bearer token, which local servers require on `/audio/*`). Point `baseUrl` at a local Qwen3-TTS VoiceDesign server to run it for free — those servers reject `language_type: "Auto"`, so set `language` (e.g. `English`); the model can also override it per call with the `speak` tool's `language` argument. Voice-design voices are bound to their `target_model`: set `model` to the same value (e.g. `qwen3-tts-vd-2026-01-26`) or synthesis fails, exactly like the cloud API. See [Designing Voices (Qwen)](#designing-voices-qwen).
 
 > **Warning:** `referenceText` is required whenever `referenceAudio` is set — the tool call fails with an error otherwise. Also note that with a reference audio configured, the `voiceId` field is ignored for that call.
+
+## Designing Voices (Qwen)
+
+With `provider: qwen`, the Speak toolset exposes a second tool, `design_voice`, which creates a custom voice from a text description using the [Qwen voice-design API](https://docs.qwencloud.com/api-reference/speech-synthesis/voice-design/qwen/create-voice) — no reference audio needed. The model (or you, via a `tool:design_voice` message) supplies:
+
+- `voicePrompt` — the voice description (Chinese or English, e.g. "A composed middle-aged male announcer with a deep, magnetic voice"),
+- `previewText` — what the preview clip says,
+- optional `preferredName` (a keyword embedded in the voice name) and `language` (`zh`, `en`, `de`, `it`, `pt`, `es`, `ja`, `ko`, `fr`, `ru`).
+
+The result is the generated voice name plus the preview clip as an `{{attachment::ID}}` you can play inline. To speak with the new voice, the model can pass its name as the `voiceId` argument of `speak` right away, or you can set it as the toolset's `voiceId`. Designed voices persist on the server (locally, in `data/voices.json`), so you only design once per voice.
+
+Voices are **self-healing**: tamari stores every designed voice's original definition (`files/tts/qwen-voices.json` in the data directory). If a `speak` call fails because the voice was deleted server-side or is bound to a different model than the configured one, tamari transparently re-runs the design — bound to the currently configured `model` — and retries with the new voice name, telling the model the new name to use.
+
+For non-`qwen` providers the `design_voice` tool is not advertised to the model at all — the Speak template hides it unless the toolset's configured provider is `qwen`.
 
 ## Prosody Tags
 
@@ -97,7 +114,7 @@ Attachments and the `{{attachment::ID}}` macro are covered in [Assets](./assets.
 
 ## Tips & Gotchas
 
-- **Cloud providers charge per character.** OpenAI, ElevenLabs, Azure, MiniMax, and VolcEngine bill per synthesized character, and an expressive model that speaks every other message adds up fast. Local providers — `fishaudio`, `kokoro`, `alltalk`, `vits`, `silero`, `gptsovits` — are free once the server is running.
+- **Cloud providers charge per character.** OpenAI, ElevenLabs, Azure, MiniMax, and VolcEngine bill per synthesized character, and an expressive model that speaks every other message adds up fast. Local providers — `fishaudio`, `kokoro`, `alltalk`, `vits`, `silero`, `gptsovits`, and `qwen` pointed at a local VoiceDesign server — are free once the server is running.
 - **Kokoro is the easiest local start.** One local server gives you an OpenAI-compatible endpoint on `http://127.0.0.1:8880/v1` with no API key needed. Fish Audio S2 Pro is the heavier but more expressive option (and the one that understands prosody tags).
 - **Tune behavior with overrides, not code.** If the model speaks too often, too rarely, or forgets the audio reference, edit the `speak` tool's `description` override in the toolset before assuming anything is broken.
 - **One voice per toolset.** Voice is toolset config, so different characters speaking with different voices means multiple Speak toolsets — but only enabled toolsets advertise tools, and two enabled Speak toolsets expose the same `speak` name (first match wins). Rename one with a `name` override if you want both active.

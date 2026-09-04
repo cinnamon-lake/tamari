@@ -11,6 +11,7 @@ import { AllTalkAdapter } from './AllTalkAdapter.js';
 import { VitsSimpleApiAdapter } from './VitsSimpleApiAdapter.js';
 import { SileroAdapter } from './SileroAdapter.js';
 import { GptSoVitsAdapter } from './GptSoVitsAdapter.js';
+import { QwenTtsAdapter } from './QwenTtsAdapter.js';
 import type { TtsAdapter } from './TtsAdapter.js';
 
 describe('createTtsAdapter', () => {
@@ -45,6 +46,7 @@ describe('createTtsAdapter', () => {
     ['vits', VitsSimpleApiAdapter],
     ['silero', SileroAdapter],
     ['gptsovits', GptSoVitsAdapter],
+    ['qwen', QwenTtsAdapter],
   ])('creates the %s adapter and wires its id', (provider, Klass) => {
     const adapter = createTtsAdapter({ 'tts.provider': provider });
     expect(adapter).toBeInstanceOf(Klass);
@@ -58,5 +60,17 @@ describe('createTtsAdapter', () => {
       'tts.volcengine.cluster': 'volcano_tts',
     });
     expect(adapter).toBeInstanceOf(VolcEngineAdapter);
+  });
+
+  it('reads per-provider settings (qwen model/language)', () => {
+    const adapter = createTtsAdapter({
+      'tts.provider': 'qwen',
+      'tts.qwen.baseUrl': 'http://127.0.0.1:8765',
+      'tts.qwen.apiKey': 'key',
+      'tts.qwen.model': 'qwen3-tts-vd-2026-01-26',
+      'tts.qwen.language': 'English',
+    });
+    expect(adapter).toBeInstanceOf(QwenTtsAdapter);
+    expect(adapter!.id).toBe('qwen');
   });
 });

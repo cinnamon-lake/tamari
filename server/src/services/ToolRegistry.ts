@@ -157,6 +157,7 @@ export class ToolRegistry {
   async getDefinitionsByToolsets(
     toolsets: Array<{
       templateId: string;
+      config?: Record<string, unknown>;
       toolOverrides: Record<
         string,
         { name?: string; description?: string; parameterDescriptions?: Record<string, string> }
@@ -169,7 +170,7 @@ export class ToolRegistry {
       if (!template) continue;
       let def: ToolTemplateDefinition;
       try {
-        def = await template.getDefinition();
+        def = await template.getDefinition(ts.config);
       } catch (err) {
         logger.warn({ err, templateId: template.id }, 'ToolRegistry: getDefinition failed');
         continue;
@@ -208,7 +209,7 @@ export class ToolRegistry {
       if (!template) continue;
       let def: ToolTemplateDefinition;
       try {
-        def = await template.getDefinition();
+        def = await template.getDefinition(ts.config);
       } catch (err) {
         logger.warn({ err, templateId: template.id }, 'ToolRegistry: getDefinition failed');
         continue;
@@ -237,7 +238,7 @@ export class ToolRegistry {
     // Deserialize state from message history
     let def: ToolTemplateDefinition;
     try {
-      def = await template.getDefinition();
+      def = await template.getDefinition(owningToolset.config);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return { id: call.id, name: call.name, content: `Template error: ${msg}`, isError: true };

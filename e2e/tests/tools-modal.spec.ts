@@ -209,8 +209,8 @@ test.describe('Tools Modal', () => {
     await expect(card.locator('.section-label', { hasText: 'Tools Available' })).toBeVisible();
     const row = card.locator('.instance-row', { hasText: 'speak' });
     await expect(row.locator('code.tool-code')).toHaveText('speak');
-    // The row exposes the parameter from the tool's JSON schema.
-    await expect(row.locator('.instance-param .instance-param-key')).toHaveText('text');
+    // The row exposes parameters from the tool's JSON schema.
+    await expect(row.locator('.instance-param .instance-param-key').first()).toHaveText('text');
 
     await editToolsetAndSave(card, () => row.getByTestId('tool-override-name').fill('speak_e2e'));
     await editToolsetAndSave(card, () => row.getByTestId('tool-override-description').fill('Custom speak description'));

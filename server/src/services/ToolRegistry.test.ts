@@ -79,6 +79,22 @@ describe('ToolRegistry', () => {
     expect(params['properties']).toEqual({ name: { type: 'string' } });
   });
 
+  it('passes the toolset config to getDefinition', async () => {
+    const registry = new ToolRegistry();
+    const tmpl = makeMockTemplate('cfg', ['always']);
+    const getDefinition = vi.fn(tmpl.getDefinition);
+    tmpl.getDefinition = getDefinition;
+    registry.registerTemplate(tmpl);
+
+    await registry.getDefinitionsByToolsets([
+      { templateId: 'cfg', config: { provider: 'qwen' }, toolOverrides: {} },
+      { templateId: 'cfg', toolOverrides: {} },
+    ]);
+
+    expect(getDefinition).toHaveBeenNthCalledWith(1, { provider: 'qwen' });
+    expect(getDefinition).toHaveBeenNthCalledWith(2, undefined);
+  });
+
   it('executes a tool via toolset', async () => {
     const registry = new ToolRegistry();
     const toolsetRepo = {

@@ -17,6 +17,7 @@ import { AllTalkAdapter } from './AllTalkAdapter.js';
 import { VitsSimpleApiAdapter } from './VitsSimpleApiAdapter.js';
 import { SileroAdapter } from './SileroAdapter.js';
 import { GptSoVitsAdapter } from './GptSoVitsAdapter.js';
+import { QwenTtsAdapter } from './QwenTtsAdapter.js';
 import type { TtsAdapter } from './TtsAdapter.js';
 import { str } from '../lib/coerce.js';
 
@@ -112,6 +113,16 @@ export function createTtsAdapter(settings: Record<string, unknown>): TtsAdapter 
     return new GptSoVitsAdapter({
       baseUrl: str(settings['tts.gptsovits.baseUrl'], 'http://127.0.0.1:9880'),
       requestScript: str(settings['tts.gptsovits.requestScript']),
+    });
+  }
+
+  if (provider === 'qwen') {
+    return new QwenTtsAdapter({
+      baseUrl: str(settings['tts.qwen.baseUrl'], 'https://dashscope-intl.aliyuncs.com'),
+      apiKey: str(settings['tts.qwen.apiKey']),
+      requestScript: str(settings['tts.qwen.requestScript']),
+      model: str(settings['tts.qwen.model']),
+      language: str(settings['tts.qwen.language']),
     });
   }
 

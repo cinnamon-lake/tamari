@@ -11,4 +11,5 @@ export * from './AllTalkAdapter.js';
 export * from './VitsSimpleApiAdapter.js';
 export * from './SileroAdapter.js';
 export * from './GptSoVitsAdapter.js';
+export * from './QwenTtsAdapter.js';
 export * from './factory.js';
