@@ -21,8 +21,9 @@ step() {
 step "Audit dependencies"
 npm audit --audit-level=moderate
 
-step "Build packages/types (client/server import its dist/*.d.ts)"
+step "Build packages/types + packages/wordid (client/server import their dist/*.d.ts)"
 npm run build --workspace=packages/types
+npm run build --workspace=packages/wordid
 
 step "Lint client"
 npm run lint --workspace=client

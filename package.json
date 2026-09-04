@@ -29,7 +29,7 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace=server & npm run dev --workspace=client",
-    "build": "npm run build --workspace=packages/types && npm run build --workspace=server && npm run build --workspace=client",
+    "build": "npm run build --workspace=packages/types && npm run build --workspace=packages/wordid && npm run build --workspace=server && npm run build --workspace=client",
     "start": "npm run build && node server/dist/main.js",
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "npm run build && npm run test --workspace=e2e",

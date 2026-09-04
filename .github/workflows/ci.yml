@@ -25,10 +25,11 @@ jobs:
       - name: Audit dependencies
         run: npm audit --audit-level=moderate
 
-      - name: Build packages/types
-        # Client/server import @tamari/types via its dist/*.d.ts — type-aware
-        # lint and vitest fail with unresolvable error-types on a fresh checkout.
-        run: npm run build --workspace=packages/types
+      - name: Build packages/types + packages/wordid
+        # Client/server import @tamari/types and @tamari/wordid via their
+        # dist/*.d.ts — type-aware lint and vitest fail with unresolvable
+        # error-types on a fresh checkout (dist/ is gitignored).
+        run: npm run build --workspace=packages/types && npm run build --workspace=packages/wordid
 
       - name: Lint client
         run: npm run lint --workspace=client
