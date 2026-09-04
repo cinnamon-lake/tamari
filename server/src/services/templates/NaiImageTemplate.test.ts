@@ -242,6 +242,23 @@ describe('NaiImageTemplate', () => {
     expect(headers['Authorization']).toBe('Bearer vault-value-for-nai');
   });
 
+  it('prepends promptPrefix to the prompt before requestScript runs', async () => {
+    global.fetch = vi.fn(async () => makeZipResponse({ 'image_0.png': new Uint8Array([1]) }));
+
+    const script = 'request.body.parameters.tag_from_script = request.body.input';
+    await template.execute(
+      'generate_image',
+      { prompt: '1girl, purple hair' },
+      { config: { apiKey: 'k', promptPrefix: 'artist:foo', requestScript: script } },
+    );
+
+    const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const body = JSON.parse(init.body as string);
+    expect(body.input).toBe('artist:foo, 1girl, purple hair');
+    expect(body.parameters.v4_prompt.caption.base_caption).toBe('artist:foo, 1girl, purple hair');
+    expect(body.parameters.tag_from_script).toBe('artist:foo, 1girl, purple hair');
+  });
+
   it('mutates body via requestScript', async () => {
     global.fetch = vi.fn(async () => makeZipResponse({ 'image_0.png': new Uint8Array([1]) }));
 

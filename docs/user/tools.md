@@ -132,6 +132,7 @@ Config options:
 | `apiKey`        | NovelAI API key, or a vault reference (`secret:<key>`). Required.                                                                                  |
 | `model`         | Diffusion model id (default `nai-diffusion-5-full`; e.g. `nai-diffusion-4-5-full`, `nai-diffusion-3`).                                             |
 | `baseUrl`       | API base URL (default `https://image.novelai.net`) — override only for proxies.                                                                    |
+| `promptPrefix`  | Tags prepended to every prompt (comma-separated), e.g. an artist style. Applied before `requestScript` runs.                                       |
 | `requestScript` | Lua script that mutates the outgoing HTTP request — see [Request Scripts](./request-scripts.md). Use it to tweak `steps`, `scale`, `sampler`, etc. |
 
 Generation consumes Anlas from your NovelAI account per call, at the account's standard rates.

@@ -131,6 +131,13 @@ export class NaiImageTemplate implements ToolTemplate {
               'API base URL. Optional — override only for proxies; defaults to the official NovelAI image API.',
             default: 'https://image.novelai.net',
           },
+          promptPrefix: {
+            type: 'string',
+            format: 'textarea',
+            description:
+              'Tags prepended to every prompt (comma-separated), e.g. an artist style. Applied before requestScript runs.',
+            default: '',
+          },
           requestScript: {
             type: 'string',
             format: 'textarea',
@@ -182,6 +189,8 @@ export class NaiImageTemplate implements ToolTemplate {
     const model = str(config['model']) || 'nai-diffusion-5-full';
     const baseUrl = (str(config['baseUrl']) || 'https://image.novelai.net').replace(/\/$/, '');
     const requestScript = str(config['requestScript']);
+    const promptPrefix = str(config['promptPrefix']).trim();
+    const fullPrompt = [promptPrefix, prompt].filter((s) => s).join(', ');
 
     const orientation = parsed.data.orientation ?? 'square';
     const size = ORIENTATION_SIZES[orientation] ?? { width: 1024, height: 1024 };
@@ -198,7 +207,7 @@ export class NaiImageTemplate implements ToolTemplate {
     // Mirrors the payload the NovelAI web UI sends for nai-diffusion-5
     // (params_version 4, v4_prompt caption structure, karras schedule).
     const body: Record<string, unknown> = {
-      input: prompt,
+      input: fullPrompt,
       model,
       action: 'generate',
       parameters: {
@@ -229,7 +238,7 @@ export class NaiImageTemplate implements ToolTemplate {
         tag_hint_uc_preset: 2,
         v4_prompt: {
           caption: {
-            base_caption: prompt,
+            base_caption: fullPrompt,
             char_captions: characters.map((c) => ({ char_caption: c.prompt, centers: [c.center] })),
           },
           use_coords: false,
