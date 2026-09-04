@@ -11,7 +11,13 @@
  */
 
 import { z } from 'zod';
-import type { ToolContext, ToolExecuteResult, ToolTemplate, ToolTemplateDefinition } from '../ToolTemplate.js';
+import type {
+  ToolContext,
+  ToolExecuteResult,
+  ToolParameters,
+  ToolTemplate,
+  ToolTemplateDefinition,
+} from '../ToolTemplate.js';
 import { DOCS_CONTENT, DOCS_TOPICS } from './docs/index.js';
 
 const DocsArgs = z.object({
@@ -35,7 +41,8 @@ export class DocsTemplate implements ToolTemplate {
         {
           name: 'docs',
           description: `Fetch the detailed markdown reference for a tamari feature. Call this BEFORE using a workbench or writing Lua when you are unsure of field names, tool semantics, or scripting contracts. Topics: ${DOCS_TOPICS.join(', ')}.`,
-          parameters: z.toJSONSchema(DocsArgs),
+          // zod-generated JSON Schema: object descriptors by construction, so it satisfies ToolParameters.
+          parameters: z.toJSONSchema(DocsArgs) as ToolParameters,
         },
       ],
     };

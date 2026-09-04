@@ -1,6 +1,9 @@
 import type { InlineContentPart } from '../backends/BackendAdapter.js';
-import type { MessageExtra, MessageRole } from '@tamari/types';
+import type { MessageExtra, MessageRole, ToolParameters } from '@tamari/types';
 import type { ChatLock } from '../generation/AsyncMutex.js';
+
+// Re-exported so template authors can import it alongside ToolTemplateDefinition.
+export type { ToolParameters };
 
 export interface ToolExecuteResult {
   content: string | InlineContentPart[];
@@ -33,7 +36,7 @@ export interface ToolContext {
 export interface ToolTemplateToolDef {
   name: string;
   description: string;
-  parameters?: Record<string, unknown>;
+  parameters?: ToolParameters;
   /**
    * When true, the generation turn ends after this tool executes successfully —
    * no follow-up generation round runs. The tool result is still persisted and

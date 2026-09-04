@@ -53,8 +53,7 @@ export function SettingsModal(props: { onClose: () => void }) {
   const [values, setValues] = createSignal<Record<string, unknown>>(initial);
 
   const [memoryValues, setMemoryValues] = createSignal<Record<string, unknown>>(
-    // The `?? {}` guards the brief window before `settings.loaded` arrives.
-    initialValues(memoryFields(t, []), { ...(s['memory'] ?? {}) }),
+    initialValues(memoryFields(t, []), { ...s['memory'] }),
   );
 
   // The custom-stopping-strings list editor has no SchemaForm control type.
@@ -62,7 +61,7 @@ export function SettingsModal(props: { onClose: () => void }) {
     Array.isArray(s['customStoppingStrings']) ? s['customStoppingStrings'] : [],
   );
 
-  const [proxyApiKey, setProxyApiKey] = createSignal(String(s['proxyApi.apiKey'] ?? ''));
+  const [proxyApiKey, setProxyApiKey] = createSignal(String(s['proxyApi.apiKey']));
 
   const sendSetting = (key: string, value: unknown) => {
     bus.send({ type: 'settings.set', key, value });

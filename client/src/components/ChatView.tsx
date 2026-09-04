@@ -46,10 +46,10 @@ export function getVisibleMessages(
 ): Message[] {
   if (!activeChat) return [];
   let msgs = state.messages[activeChat.id] ?? [];
-  if (!showHidden) msgs = msgs.filter((m) => !m.extra?.hidden);
+  if (!showHidden) msgs = msgs.filter((m) => !m.extra.hidden);
   const q = searchQuery.trim().toLowerCase();
   if (q) {
-    msgs = msgs.filter((m) => getMessageText(m.extra?.parts).toLowerCase().includes(q));
+    msgs = msgs.filter((m) => getMessageText(m.extra.parts).toLowerCase().includes(q));
   }
   return msgs;
 }
@@ -117,9 +117,9 @@ export function ChatView() {
     const char = activeCharacter();
     if (!char) return [];
     const list: string[] = [];
-    if (char.firstMes?.trim()) list.push(char.firstMes.trim());
-    for (const alt of char.alternateGreetings ?? []) {
-      if (alt?.trim()) list.push(alt.trim());
+    if (char.firstMes.trim()) list.push(char.firstMes.trim());
+    for (const alt of char.alternateGreetings) {
+      if (alt.trim()) list.push(alt.trim());
     }
     return list;
   });
@@ -135,7 +135,7 @@ export function ChatView() {
 
   const selectedGreetingIndex = createMemo(() => {
     const chat = activeChat();
-    return Number(chat?.metadata?.selectedGreetingIndex ?? 0);
+    return Number(chat?.metadata.selectedGreetingIndex ?? 0);
   });
 
   const cycleGreeting = (direction: 'left' | 'right') => {
@@ -163,7 +163,7 @@ export function ChatView() {
     // Reached the root of the message tree; nothing older exists.
     if (!oldest || oldest.parentId === null) return;
 
-    const limit = Number(state.settings['chatMessageLoadLimit'] ?? 30);
+    const limit = Number(state.settings['chatMessageLoadLimit']);
 
     setLoadingOlderChatId(chatId);
     bus.send({
@@ -305,11 +305,9 @@ export function ChatView() {
         <div
           class="virtual-list messages"
           ref={(el) => {
-            if (el) {
-              messagesRef = el;
-              el.addEventListener('scroll', handleMessagesScroll, { passive: true });
-              onCleanup(() => el.removeEventListener('scroll', handleMessagesScroll));
-            }
+            messagesRef = el;
+            el.addEventListener('scroll', handleMessagesScroll, { passive: true });
+            onCleanup(() => el.removeEventListener('scroll', handleMessagesScroll));
           }}
         >
           <Show when={!showVirtualGreetings() && canLoadMore()}>
@@ -545,7 +543,7 @@ function MessageBubble(props: {
   const [editText, setEditText] = createSignal('');
   const { t } = useI18n();
 
-  const parts = createMemo(() => message().extra?.parts ?? []);
+  const parts = createMemo(() => message().extra.parts ?? []);
   const editing = () => editingPartIndex() !== null;
 
   const isUser = () => message().role === 'user';
@@ -553,7 +551,7 @@ function MessageBubble(props: {
   const isGroupChat = () => state.activeChat?.characterId === null;
 
   const isEdited = () => {
-    return typeof message().extra?.editedAt === 'number';
+    return typeof message().extra.editedAt === 'number';
   };
 
   const isStreamingTarget = createMemo(
@@ -574,7 +572,7 @@ function MessageBubble(props: {
   const hasRenderedHtml = createMemo(() => (message().renderedHtml ?? []).some((h) => h != null && h !== ''));
 
   const attachments = createMemo(() => {
-    return message().extra?.attachments ?? [];
+    return message().extra.attachments ?? [];
   });
 
   const avatarUrl = createMemo(() => {
@@ -584,7 +582,7 @@ function MessageBubble(props: {
         return state.chatCharacter.thumbnailUrl ?? state.chatCharacter.avatarUrl ?? null;
       }
       // Group chats: server enriches messages with characterAvatarUrl.
-      const enrichedUrl = message().extra?.characterAvatarUrl;
+      const enrichedUrl = message().extra.characterAvatarUrl;
       if (typeof enrichedUrl === 'string') {
         return enrichedUrl;
       }
@@ -593,7 +591,7 @@ function MessageBubble(props: {
     if (isUser()) {
       // Server enriches messages with personaAvatarUrl; fall back to current active persona
       // for messages that haven't been enriched yet (e.g. newly created before next snapshot).
-      const enrichedUrl = message().extra?.personaAvatarUrl;
+      const enrichedUrl = message().extra.personaAvatarUrl;
       if (typeof enrichedUrl === 'string') {
         return enrichedUrl;
       }
@@ -803,17 +801,17 @@ function MessageBubble(props: {
 
   const messageName = createMemo(() => {
     if (message().role === 'assistant') {
-      const enrichedName = message().extra?.characterName;
+      const enrichedName = message().extra.characterName;
       if (typeof enrichedName === 'string') return enrichedName;
       return state.chatCharacter?.name ?? t('chat.role.character');
     }
     if (message().role === 'user') {
-      const enrichedName = message().extra?.personaName;
+      const enrichedName = message().extra.personaName;
       if (typeof enrichedName === 'string') return enrichedName;
       return state.chatPersona?.name ?? t('chat.role.user');
     }
     if (message().role === 'tool') {
-      const toolName = message().extra?.toolName;
+      const toolName = message().extra.toolName;
       if (typeof toolName === 'string') return t('chat.role.toolWithName', { name: toolName });
       return t('chat.role.tool');
     }
@@ -900,11 +898,11 @@ function MessageBubble(props: {
       streamFadeIn={streamFadeInEnabled()}
       hideAvatar={hideAvatar()}
       hideName={hideName()}
-      hidden={Boolean(message().extra?.hidden)}
+      hidden={Boolean(message().extra.hidden)}
       headerMeta={
         <Show when={!props.readOnly}>
           <span class="message-timestamp">
-            {new Date((message().createdAt ?? 0) * 1000).toLocaleTimeString([], {
+            {new Date(message().createdAt * 1000).toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
             })}
@@ -915,23 +913,23 @@ function MessageBubble(props: {
             </span>
           </Show>
           <Show when={state.settings['messageTokenCountEnabled']}>
-            <Show when={typeof message().extra?.tokenCount === 'number'}>
+            <Show when={typeof message().extra.tokenCount === 'number'}>
               <span class="message-token-count" title={t('chat.meta.tokenCount')}>
-                {message().extra?.tokenCount}tk
+                {message().extra.tokenCount}tk
               </span>
             </Show>
           </Show>
           <Show when={state.settings['timerEnabled']}>
-            <Show when={typeof message().extra?.generationTime === 'number'}>
+            <Show when={typeof message().extra.generationTime === 'number'}>
               <span class="message-timer" title={t('chat.meta.generationTime')}>
-                {Number(message().extra?.generationTime).toFixed(1)}s
+                {Number(message().extra.generationTime).toFixed(1)}s
               </span>
             </Show>
           </Show>
           <Show when={state.settings['timestampModelIcon']}>
-            <Show when={typeof message().extra?.model === 'string'}>
+            <Show when={typeof message().extra.model === 'string'}>
               <span class="message-model" title={t('chat.meta.model')}>
-                {String(message().extra?.model)}
+                {String(message().extra.model)}
               </span>
             </Show>
           </Show>
@@ -1008,7 +1006,7 @@ function MessageBubble(props: {
               <section class="settings-section">
                 <For each={state.swipes[activeChatId() ?? ''] ?? []}>
                   {(swipe, i) => {
-                    const text = getMessageText(swipe.extra?.parts);
+                    const text = getMessageText(swipe.extra.parts);
                     const preview = text.length > 120 ? text.slice(0, 120) + '…' : text;
                     const isActive = swipe.id === message().id;
                     return (
@@ -1070,7 +1068,7 @@ function MessageBubble(props: {
           >
             <i class="bi bi-pencil" />
           </button>
-          <Show when={message().extra?.hidden}>
+          <Show when={message().extra.hidden}>
             <button
               class="action-btn"
               onClick={unhideMessage}
@@ -1081,7 +1079,7 @@ function MessageBubble(props: {
               <i class="bi bi-eye" />
             </button>
           </Show>
-          <Show when={!message().extra?.hidden}>
+          <Show when={!message().extra.hidden}>
             <button
               class="action-btn"
               onClick={hideMessage}
@@ -1141,11 +1139,11 @@ function MessageBubble(props: {
         <>
           <Show when={!props.readOnly && message().role === 'tool'}>
             {(() => {
-              const Renderer = getToolRenderer(message().extra?.renderType);
+              const Renderer = getToolRenderer(message().extra.renderType);
               return (
                 <Renderer
-                  content={getMessageText(message().extra?.parts)}
-                  isError={Boolean(message().extra?.isError)}
+                  content={getMessageText(message().extra.parts)}
+                  isError={Boolean(message().extra.isError)}
                   extra={message().extra}
                 />
               );
@@ -1201,7 +1199,7 @@ function MessageBubble(props: {
         </>
       }
       isEditing={!props.readOnly && editing()}
-      rawText={getMessageText(message().extra?.parts)}
+      rawText={getMessageText(message().extra.parts)}
       onSwipeLeft={isSwipeable() ? () => handleSwipe('left') : undefined}
       onSwipeRight={isSwipeable() ? () => handleSwipe('right') : undefined}
     />

@@ -6,7 +6,13 @@
  */
 
 import { z } from 'zod';
-import type { ToolContext, ToolExecuteResult, ToolTemplate, ToolTemplateDefinition } from '../ToolTemplate.js';
+import type {
+  ToolContext,
+  ToolExecuteResult,
+  ToolParameters,
+  ToolTemplate,
+  ToolTemplateDefinition,
+} from '../ToolTemplate.js';
 import type { MemoryService } from '../MemoryService.js';
 
 export interface MemoryToolTemplateDeps {
@@ -51,12 +57,13 @@ class MemoryToolTemplate implements ToolTemplate {
           name: 'memory_get_raw',
           description:
             'Retrieve the raw text of specific past messages by their IDs. Use when the rolling summary references an event you need exact details on.',
-          parameters: z.toJSONSchema(MemoryGetRawArgs),
+          // zod-generated JSON Schema: object descriptors by construction, so it satisfies ToolParameters.
+          parameters: z.toJSONSchema(MemoryGetRawArgs) as ToolParameters,
         },
         {
           name: 'memory_summarize_range',
           description: 'Get a focused summary of a contiguous range of past messages.',
-          parameters: z.toJSONSchema(MemorySummarizeRangeArgs),
+          parameters: z.toJSONSchema(MemorySummarizeRangeArgs) as ToolParameters,
         },
       ],
     };

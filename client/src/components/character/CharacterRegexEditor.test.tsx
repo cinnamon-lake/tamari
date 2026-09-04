@@ -96,7 +96,7 @@ describe('CharacterRegexEditor', () => {
     expect(luaArea).toBeTruthy();
     expect(luaArea.value).toContain('function replace');
     const preview = document.querySelector('textarea.bg-secondary') as HTMLTextAreaElement;
-    expect(preview?.value).toContain('Preview is unavailable for Lua');
+    expect(preview.value).toContain('Preview is unavailable for Lua');
 
     // Saving keeps the replaceLua source.
     fireEvent.input(luaArea, { target: { value: 'function replace(m, c) return "y" end' } });
@@ -115,7 +115,7 @@ describe('CharacterRegexEditor', () => {
     // Switch to Lua: skeleton source is seeded.
     screen.getByText('Lua').click();
     const luaArea = document.querySelector('textarea.font-mono') as HTMLTextAreaElement;
-    expect(luaArea?.value).toContain('function replace(match, captures)');
+    expect(luaArea.value).toContain('function replace(match, captures)');
 
     // Switch back to Text: replaceLua is cleared, badge would disappear.
     screen.getByText('Text').click();

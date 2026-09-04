@@ -42,9 +42,10 @@ const loaders = import.meta.glob<{ dict?: RawDictionary }>('./locales/*.ts');
  */
 export async function fetchDictionary(locale: Locale): Promise<Dictionary> {
   const enFlat = i18n.flatten(enDict);
-  if (locale === 'en') return enFlat;
-  // Non-en locales lazy-load; cast widens past the (currently single-value)
-  // Locale union so the lookup compiles before a second locale ships.
+  // Both casts widen past the (currently single-value) Locale union so this
+  // compiles before a second locale ships — once the union grows, the `en`
+  // short-circuit and the lazy-load lookup both start doing real work.
+  if ((locale as string) === 'en') return enFlat;
   const loader = loaders[`./locales/${locale as string}.ts`];
   if (!loader) return enFlat;
   const mod = await loader();
@@ -103,7 +104,6 @@ export function useI18n(): I18nApi {
   if (api) return api;
   if (!warnedMissingProvider) {
     warnedMissingProvider = true;
-    // eslint-disable-next-line no-console
     console.warn('useI18n() called outside <I18nProvider>; falling back to English.');
   }
   return fallbackApi;

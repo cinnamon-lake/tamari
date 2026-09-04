@@ -138,7 +138,7 @@ describe('ChatView', () => {
 
   describe('component', () => {
     it('shows empty state when no chat is active', () => {
-      setState('characters', [{ id: 'char-1', name: 'Alice' } as any]);
+      setState('characters', [{ id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any]);
       render(() => <ChatView />);
       expect(screen.getByText('Select a chat to start')).toBeInTheDocument();
     });
@@ -162,7 +162,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'First message'), makeMsg(2, 'Second message')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
       expect(screen.getByText('First message')).toBeInTheDocument();
       expect(screen.getByText('Second message')).toBeInTheDocument();
@@ -236,7 +236,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'Find me'), makeMsg(2, 'Ignore me')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
       setChatSearchQuery('find');
       expect(screen.getByText('Find me')).toBeInTheDocument();
@@ -248,7 +248,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'Visible'), makeMsg(2, 'Hidden', { hidden: true })],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
       expect(screen.getByText('Visible')).toBeInTheDocument();
       expect(screen.queryByText('Hidden')).not.toBeInTheDocument();
@@ -260,7 +260,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'Visible'), makeMsg(2, 'Hidden', { hidden: true })],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
       expect(screen.getByText('Visible')).toBeInTheDocument();
       expect(screen.getByText('Hidden')).toBeInTheDocument();
@@ -273,7 +273,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'First'), makeMsg(2, 'Streaming')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       setState('generation', {
         activeId: 'gen-1',
         chatId: 'chat-1',
@@ -297,7 +297,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'Streaming')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       setState('generation', {
         activeId: 'gen-1',
         chatId: 'chat-1',
@@ -320,7 +320,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'Streaming')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       setState('generation', {
         activeId: 'gen-1',
         chatId: 'chat-1',
@@ -342,7 +342,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'Hello')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       expect(document.querySelector('.message-bubble')).toHaveClass('hide-avatar');
@@ -355,7 +355,13 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'Hello')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice', avatarUrl: '/avatar.png' } as any);
+      setState('chatCharacter', {
+        id: 'char-1',
+        name: 'Alice',
+        avatarUrl: '/avatar.png',
+        firstMes: '',
+        alternateGreetings: [],
+      } as any);
       render(() => <ChatView />);
 
       expect(document.querySelector('.message-bubble')).not.toHaveClass('hide-avatar');
@@ -368,7 +374,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'Hello')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       expect(document.querySelector('.message-bubble')).toHaveClass('hide-name');
@@ -381,7 +387,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'Hello')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       expect(document.querySelector('.message-bubble')).not.toHaveClass('hide-name');
@@ -397,7 +403,7 @@ describe('ChatView', () => {
       setState('swipes', {
         'chat-1': [makeMsg(1, 'First'), makeMsg(3, 'Swipe')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       const counters = document.querySelectorAll('.swipe-counter');
@@ -414,7 +420,7 @@ describe('ChatView', () => {
       setState('swipes', {
         'chat-1': [makeMsg(1, 'First'), makeMsg(3, 'Swipe')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       const firstBubble = document.querySelectorAll('.message-bubble')[0];
@@ -427,7 +433,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'Hello')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       expect(screen.getByTitle('Message ID')).toHaveTextContent('#1');
@@ -439,7 +445,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'Hello')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       expect(screen.queryByTitle('Message ID')).not.toBeInTheDocument();
@@ -456,7 +462,7 @@ describe('ChatView', () => {
       setState('swipes', {
         'chat-1': [makeMsg(2, 'Swipe')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       const bubble = document.querySelector('.message-bubble.swipeable') as HTMLElement;
@@ -484,7 +490,7 @@ describe('ChatView', () => {
       setState('swipes', {
         'chat-1': [makeMsg(2, 'Swipe')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       const bubble = document.querySelector('.message-bubble.swipeable') as HTMLElement;
@@ -500,7 +506,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, '<script>alert("x")</script>')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       const encoded = document.querySelector('.encoded-tags code');
@@ -516,7 +522,7 @@ describe('ChatView', () => {
       setState('messages', {
         'chat-1': [makeMsg(1, 'Hello')],
       });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       expect(document.querySelector('.encoded-tags')).not.toBeInTheDocument();
@@ -534,7 +540,7 @@ describe('ChatView', () => {
           '<button data-post-response="flee">Run away</button></div>',
       ];
       setState('messages', { 'chat-1': [msg] });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       const button = document.querySelector('button[data-post-response="attack"]') as HTMLElement;
@@ -557,7 +563,7 @@ describe('ChatView', () => {
       const msg = makeMsg(1, 'plain text');
       msg.renderedHtml = ['<div class="hud"><span>just text</span></div>'];
       setState('messages', { 'chat-1': [msg] });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       const span = document.querySelector('.hud span') as HTMLElement;
@@ -582,7 +588,7 @@ describe('ChatView', () => {
           '<button type="submit">Attack</button></form>',
       ];
       setState('messages', { 'chat-1': [msg] });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       const form = document.querySelector('form[data-post-response]') as HTMLFormElement;
@@ -614,7 +620,7 @@ describe('ChatView', () => {
       const msg = makeMsg(1, 'plain form');
       msg.renderedHtml = ['<form><input name="a" type="text" value="v"><button type="submit">go</button></form>'];
       setState('messages', { 'chat-1': [msg] });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       const form = document.querySelector('form') as HTMLFormElement;
@@ -636,7 +642,7 @@ describe('ChatView', () => {
           '<button type="submit">go</button></form>',
       ];
       setState('messages', { 'chat-1': [msg] });
-      setState('chatCharacter', { id: 'char-1', name: 'Alice' } as any);
+      setState('chatCharacter', { id: 'char-1', name: 'Alice', firstMes: '', alternateGreetings: [] } as any);
       render(() => <ChatView />);
 
       fireEvent.submit(document.querySelector('form[data-post-response]') as HTMLFormElement);

@@ -68,7 +68,7 @@ export function GroupChatPanel(props: GroupChatPanelProps) {
   const updateStrategy = (strategy: ActivationStrategy) => {
     const chat = activeChat();
     if (!chat) return;
-    const meta = chat.metadata ?? {};
+    const meta = chat.metadata;
     const settings = (meta.groupChatSettings ?? {}) as Record<string, unknown>;
     bus.send({
       type: 'chat.update',

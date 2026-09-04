@@ -237,7 +237,7 @@ export function executeSlashCommand(parsed: ParsedCommand, chatId: string, deps:
     case 'listvar': {
       const globalVars = (state.settings['globalVars'] as Record<string, string> | undefined) ?? {};
       const chat = state.activeChat;
-      const chatVars = (chat?.metadata?.macroVars as Record<string, string> | undefined) ?? {};
+      const chatVars = (chat?.metadata.macroVars as Record<string, string> | undefined) ?? {};
       const entries = [
         ...Object.entries(globalVars).map(([k, v]) => `{{$${k}}} = ${v}`),
         ...Object.entries(chatVars).map(([k, v]) => `{{.${k}}} = ${v}`),

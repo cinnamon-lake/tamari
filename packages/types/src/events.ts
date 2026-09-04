@@ -21,7 +21,7 @@ import type {
   Toolset,
 } from './db.js';
 import type { SettingsMap } from './api.js';
-import type { ClientMessageSchema, ServerMessageSchema } from './schemas.js';
+import type { ClientMessageSchema, ServerMessageSchema, ToolInfoSchema } from './schemas.js';
 
 // ---------- Server -> Client ----------
 
@@ -33,14 +33,8 @@ export interface GenerationSnapshot {
   reasoning?: string;
 }
 
-export interface ToolInfo {
-  id: string;
-  name: string;
-  description: string;
-  parameters?: Record<string, unknown>;
-  configSchema?: Record<string, unknown>;
-  tools?: Array<{ name: string; description: string; parameters?: Record<string, unknown> }>;
-}
+/** Derived from `ToolInfoSchema` — the Lua-tool-definition summary in the snapshot. */
+export type ToolInfo = z.infer<typeof ToolInfoSchema>;
 
 export interface FullState {
   characters: CharacterSummary[];

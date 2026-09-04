@@ -4,14 +4,6 @@ import { BackendDryRunPanel } from './BackendDryRunPanel.js';
 import { bus } from '../bus/WebSocketBus.js';
 import type { CustomBackendTestOutcome } from '@tamari/types';
 
-// jsdom may lack crypto.randomUUID (used for request ids).
-if (typeof globalThis.crypto?.randomUUID !== 'function') {
-  let n = 0;
-  Object.assign(globalThis, {
-    crypto: { ...(globalThis.crypto ?? {}), randomUUID: () => `test-uuid-${++n}` },
-  });
-}
-
 const LUA = 'function generate(prompt, ctx) return prompt end';
 
 type TestResultMessage = {

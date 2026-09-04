@@ -5,7 +5,7 @@ const THEME_STYLE_ID = 'user-theme-css';
 
 export function ThemeInjector() {
   createEffect(() => {
-    const css = String(state.settings['themeCustomCss'] ?? '');
+    const css = String(state.settings['themeCustomCss']);
     let styleEl = document.getElementById(THEME_STYLE_ID) as HTMLStyleElement | null;
 
     if (!css) {

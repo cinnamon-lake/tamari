@@ -29,7 +29,9 @@ describe('locale registry', () => {
   });
 
   it('ships at least English', () => {
-    expect(REGISTRY.some((e) => e.code === 'en')).toBe(true);
+    // Widen past the single-value Locale union so the assertion keeps
+    // guarding the registry once a second locale ships.
+    expect(REGISTRY.some((e) => (e.code as string) === 'en')).toBe(true);
   });
 });
 

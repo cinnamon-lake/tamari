@@ -7,7 +7,7 @@ import { confirmPopup } from '../stores/popupStore.js';
 import { useI18n } from '../i18n/index.js';
 import { Modal } from './Modal.js';
 import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
-import type { Toolset, ToolTemplate } from '@tamari/types';
+import type { ToolParameters, Toolset, ToolTemplate } from '@tamari/types';
 import './ToolsModal.css';
 
 export function ToolsModal(props: { onClose: () => void }) {
@@ -357,7 +357,7 @@ function ToolOverrideRow(props: {
   id?: string;
   toolName: string;
   description: string;
-  parameters?: Record<string, unknown>;
+  parameters?: ToolParameters;
   overrides: { name?: string; description?: string; parameterDescriptions?: Record<string, string> };
   onChange: (overrides: {
     name?: string;
@@ -416,11 +416,11 @@ function ToolOverrideRow(props: {
   });
 
   const paramEntries = () => {
-    const propsMap = (props.parameters as Record<string, Record<string, unknown>> | undefined)?.properties;
+    const propsMap = props.parameters?.properties;
     if (!propsMap) return [];
     return Object.entries(propsMap).map(([key, prop]) => ({
       key,
-      desc: ((prop as Record<string, unknown>).description as string) ?? '',
+      desc: prop.description ?? '',
     }));
   };
 

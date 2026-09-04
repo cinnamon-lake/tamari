@@ -205,7 +205,7 @@ export function PromptListModal(props: { onClose: () => void }) {
   onMount(() => {
     // Fall back to the first list when no active list was persisted — mirrors
     // BackendConfigModal and keeps the selector in sync with the edit section.
-    const listId = state.settings['activePromptListId'] ?? state.promptLists[0]?.id;
+    const listId = state.settings['activePromptListId'] || state.promptLists[0]?.id;
     if (listId) {
       const id = String(listId);
       setActivePromptListId(id);
@@ -225,12 +225,12 @@ export function PromptListModal(props: { onClose: () => void }) {
   const loadListData = (list: NonNullable<typeof state.activePromptList>) => {
     setListName(list.name);
     setPrompts(
-      list.prompts?.length
+      list.prompts.length
         ? withUtilityPrompts(list.prompts.map((p) => ({ ...p })))
         : DEFAULT_PROMPTS.map((p) => ({ ...p })),
     );
     setPromptOrder(
-      list.promptOrder?.length ? list.promptOrder.map((o) => ({ ...o })) : DEFAULT_ORDER.map((o) => ({ ...o })),
+      list.promptOrder.length ? list.promptOrder.map((o) => ({ ...o })) : DEFAULT_ORDER.map((o) => ({ ...o })),
     );
   };
 

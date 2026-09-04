@@ -50,7 +50,7 @@ describe('SecretsModal', () => {
     fireEvent.input(screen.getByPlaceholderText('sk-...'), { target: { value: 'sk-new' } });
     fireEvent.click(screen.getByText('Save'));
     await vi.waitFor(() => {
-      const post = fetchSpy.mock.calls.find((c) => (c[1] as RequestInit)?.method === 'POST');
+      const post = fetchSpy.mock.calls.find((c) => (c[1] as RequestInit).method === 'POST');
       expect(post).toBeDefined();
       const body = JSON.parse((post![1] as RequestInit).body as string);
       expect(body).toEqual({ key: 'new-key', value: 'sk-new', label: 'My Key' });

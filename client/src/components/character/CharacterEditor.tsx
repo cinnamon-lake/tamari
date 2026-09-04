@@ -26,8 +26,10 @@ import './CharacterEditor.css';
 function parseScopedRegexRules(extensions: Record<string, unknown> | undefined): RegexRule[] {
   const raw = extensions?.['regexScripts'];
   if (!Array.isArray(raw)) return [];
+  // Imported cards carry partially-filled rules: only findRegex is guaranteed.
+  type RawRule = Partial<RegexRule> & Pick<RegexRule, 'findRegex'>;
   return raw
-    .filter((r): r is RegexRule => !!r && typeof r === 'object' && typeof (r as RegexRule).findRegex === 'string')
+    .filter((r): r is RawRule => !!r && typeof r === 'object' && typeof (r as RegexRule).findRegex === 'string')
     .map((r) => ({
       id: r.id || newId(),
       name: r.name ?? '',
@@ -71,34 +73,34 @@ export function CharacterEditor(props: CharacterEditorProps) {
   const close = () => props.onClose();
 
   // Basic fields
-  const [name, setName] = createSignal(char.name ?? '');
-  const [description, setDescription] = createSignal(char.description ?? '');
-  const [personality, setPersonality] = createSignal(char.personality ?? '');
-  const [scenario, setScenario] = createSignal(char.scenario ?? '');
-  const [firstMes, setFirstMes] = createSignal(char.firstMes ?? '');
-  const [mesExample, setMesExample] = createSignal(char.mesExample ?? '');
-  const [creator, setCreator] = createSignal(char.creator ?? '');
-  const [version, setVersion] = createSignal(char.characterVersion ?? '');
+  const [name, setName] = createSignal(char.name);
+  const [description, setDescription] = createSignal(char.description);
+  const [personality, setPersonality] = createSignal(char.personality);
+  const [scenario, setScenario] = createSignal(char.scenario);
+  const [firstMes, setFirstMes] = createSignal(char.firstMes);
+  const [mesExample, setMesExample] = createSignal(char.mesExample);
+  const [creator, setCreator] = createSignal(char.creator);
+  const [version, setVersion] = createSignal(char.characterVersion);
 
   // Tags
-  const [tags, setTags] = createSignal<string[]>([...(char.tags ?? [])]);
+  const [tags, setTags] = createSignal<string[]>([...char.tags]);
   const [tagInput, setTagInput] = createSignal('');
   const [showTagSuggestions, setShowTagSuggestions] = createSignal(false);
 
   // Advanced V2/V3 fields
-  const [creatorNotes, setCreatorNotes] = createSignal(char.creatorNotes ?? '');
-  const [systemPrompt, setSystemPrompt] = createSignal(char.systemPrompt ?? '');
-  const [postHistoryInstructions, setPostHistoryInstructions] = createSignal(char.postHistoryInstructions ?? '');
-  const [alternateGreetings, setAlternateGreetings] = createSignal<string[]>([...(char.alternateGreetings ?? [])]);
+  const [creatorNotes, setCreatorNotes] = createSignal(char.creatorNotes);
+  const [systemPrompt, setSystemPrompt] = createSignal(char.systemPrompt);
+  const [postHistoryInstructions, setPostHistoryInstructions] = createSignal(char.postHistoryInstructions);
+  const [alternateGreetings, setAlternateGreetings] = createSignal<string[]>([...char.alternateGreetings]);
   const [worldInfoId, setWorldInfoId] = createSignal(char.worldInfoId ?? null);
 
   // V3 fields
-  const [nickname, setNickname] = createSignal(char.nickname ?? '');
-  const [groupOnlyGreetings, setGroupOnlyGreetings] = createSignal<string[]>([...(char.groupOnlyGreetings ?? [])]);
+  const [nickname, setNickname] = createSignal(char.nickname);
+  const [groupOnlyGreetings, setGroupOnlyGreetings] = createSignal<string[]>([...char.groupOnlyGreetings]);
   const [creatorNotesMultilingual, setCreatorNotesMultilingual] = createSignal<Record<string, string>>(
-    char.creatorNotesMultilingual ?? {},
+    char.creatorNotesMultilingual,
   );
-  const [source, setSource] = createSignal<string[]>([...(char.source ?? [])]);
+  const [source, setSource] = createSignal<string[]>([...char.source]);
   const [regexRules, setRegexRules] = createSignal<RegexRule[]>(parseScopedRegexRules(char.extensions));
   const [backendLogic, setBackendLogic] = createSignal<CharacterBackendLogic>(
     parseCharacterBackendLogic(char.extensions),
@@ -122,24 +124,24 @@ export function CharacterEditor(props: CharacterEditorProps) {
   createEffect(() => {
     const c = props.character;
     if (c.id === loadedCharId()) return;
-    setName(c.name ?? '');
-    setDescription(c.description ?? '');
-    setPersonality(c.personality ?? '');
-    setScenario(c.scenario ?? '');
-    setFirstMes(c.firstMes ?? '');
-    setMesExample(c.mesExample ?? '');
-    setCreator(c.creator ?? '');
-    setVersion(c.characterVersion ?? '');
-    setTags([...(c.tags ?? [])]);
-    setCreatorNotes(c.creatorNotes ?? '');
-    setSystemPrompt(c.systemPrompt ?? '');
-    setPostHistoryInstructions(c.postHistoryInstructions ?? '');
-    setAlternateGreetings([...(c.alternateGreetings ?? [])]);
+    setName(c.name);
+    setDescription(c.description);
+    setPersonality(c.personality);
+    setScenario(c.scenario);
+    setFirstMes(c.firstMes);
+    setMesExample(c.mesExample);
+    setCreator(c.creator);
+    setVersion(c.characterVersion);
+    setTags([...c.tags]);
+    setCreatorNotes(c.creatorNotes);
+    setSystemPrompt(c.systemPrompt);
+    setPostHistoryInstructions(c.postHistoryInstructions);
+    setAlternateGreetings([...c.alternateGreetings]);
     setWorldInfoId(c.worldInfoId ?? null);
-    setNickname(c.nickname ?? '');
-    setGroupOnlyGreetings([...(c.groupOnlyGreetings ?? [])]);
-    setCreatorNotesMultilingual(c.creatorNotesMultilingual ?? {});
-    setSource([...(c.source ?? [])]);
+    setNickname(c.nickname);
+    setGroupOnlyGreetings([...c.groupOnlyGreetings]);
+    setCreatorNotesMultilingual(c.creatorNotesMultilingual);
+    setSource([...c.source]);
     setRegexRules(parseScopedRegexRules(c.extensions));
     setBackendLogic(parseCharacterBackendLogic(c.extensions));
     setLoadedCharId(c.id);
@@ -148,7 +150,7 @@ export function CharacterEditor(props: CharacterEditorProps) {
   const allTags = () => {
     const set = new Set<string>();
     for (const c of state.characters) {
-      for (const t of c.tags ?? []) {
+      for (const t of c.tags) {
         if (t) set.add(t);
       }
     }

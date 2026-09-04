@@ -607,7 +607,7 @@ describe('serverStore', () => {
       });
       expect(state.activeChat?.name).toBe('New');
       // Full replace, not merge: the stale metadata key is gone.
-      expect(state.activeChat?.metadata?.stale).toBeUndefined();
+      expect(state.activeChat?.metadata.stale).toBeUndefined();
     });
 
     it('chat.updated ignores unknown chat', () => {

@@ -52,15 +52,15 @@ export function BackendConfigModal(props: { onClose: () => void }) {
   const [instructTemplate, setInstructTemplate] = createSignal(activeBackendConfig()?.instructTemplate ?? '');
   const [stopStrings, setStopStrings] = createSignal((activeBackendConfig()?.stopStrings ?? []).join('\n'));
   const [openrouterReasoningEffort, setOpenrouterReasoningEffort] = createSignal(
-    state.settings['openrouter.reasoningEffort'] ?? '',
+    state.settings['openrouter.reasoningEffort'],
   );
   const [openrouterReasoningSummary, setOpenrouterReasoningSummary] = createSignal(
-    state.settings['openrouter.reasoningSummary'] ?? '',
+    state.settings['openrouter.reasoningSummary'],
   );
   const [requestScript, setRequestScript] = createSignal(
     str(
-      activeBackendConfig()?.providerParams?.['requestScript'] ??
-        activeBackendConfig()?.providerParams?.['custom.requestScript'],
+      activeBackendConfig()?.providerParams['requestScript'] ??
+        activeBackendConfig()?.providerParams['custom.requestScript'],
     ),
   );
   // `custom` provider (Lua-driven adapters): which registry script runs and
@@ -68,13 +68,13 @@ export function BackendConfigModal(props: { onClose: () => void }) {
   // providerParams; '' means unset (delegate falls back to the active backend
   // at generation time).
   const [customBackendId, setCustomBackendId] = createSignal(
-    str(activeBackendConfig()?.providerParams?.['customBackendId']),
+    str(activeBackendConfig()?.providerParams['customBackendId']),
   );
   const [delegateConfigId, setDelegateConfigId] = createSignal(
-    str(activeBackendConfig()?.providerParams?.['delegateConfigId']),
+    str(activeBackendConfig()?.providerParams['delegateConfigId']),
   );
   // `mock` provider: the inline canned-response script (providerParams.mockScript).
-  const [mockScript, setMockScript] = createSignal(str(activeBackendConfig()?.providerParams?.['mockScript']));
+  const [mockScript, setMockScript] = createSignal(str(activeBackendConfig()?.providerParams['mockScript']));
   // Top-level config field (not a providerParam): the request transformer
   // chain applied to the rendered prompt. '' means none.
   const [transformerChainId, setTransformerChainId] = createSignal(activeBackendConfig()?.transformerChainId ?? '');
@@ -82,12 +82,12 @@ export function BackendConfigModal(props: { onClose: () => void }) {
   // ('off' | 'auto' | 'manual'), cacheDepth (manual mode only) and cacheTTL —
   // consumed server-side by ChatPromptAssembly and the adapters, never sent as
   // sampler params (cacheMode/cacheDepth are structural providerParams keys).
-  const initialCacheMode = activeBackendConfig()?.providerParams?.['cacheMode'];
+  const initialCacheMode = activeBackendConfig()?.providerParams['cacheMode'];
   const [cacheMode, setCacheMode] = createSignal<'off' | 'auto' | 'manual'>(
     initialCacheMode === 'auto' || initialCacheMode === 'manual' ? initialCacheMode : 'off',
   );
-  const [cacheDepth, setCacheDepth] = createSignal(Number(activeBackendConfig()?.providerParams?.['cacheDepth'] ?? 0));
-  const [cacheTTL, setCacheTTL] = createSignal(str(activeBackendConfig()?.providerParams?.['cacheTTL']));
+  const [cacheDepth, setCacheDepth] = createSignal(Number(activeBackendConfig()?.providerParams['cacheDepth'] ?? 0));
+  const [cacheTTL, setCacheTTL] = createSignal(str(activeBackendConfig()?.providerParams['cacheTTL']));
   const [logitBias, setLogitBias] = createSignal(formatLogitBias(activeBackendConfig()?.logitBias));
   const [openrouterProvider, setOpenrouterProvider] = createSignal(activeBackendConfig()?.openrouterProvider ?? '');
   const [apiUrl, setApiUrl] = createSignal(activeBackendConfig()?.apiUrl ?? '');
@@ -219,7 +219,7 @@ export function BackendConfigModal(props: { onClose: () => void }) {
   // (or first available) config so the form always has a real target.
   createEffect(() => {
     if (loadedConfigId()) return;
-    const configId = state.settings['activeBackendConfigId'] ?? state.backendConfigs[0]?.id;
+    const configId = state.settings['activeBackendConfigId'] || state.backendConfigs[0]?.id;
     if (!configId) return;
     const id = String(configId);
     setActiveBackendConfigId(id);
@@ -292,24 +292,24 @@ export function BackendConfigModal(props: { onClose: () => void }) {
     setPresencePenalty(config.presencePenalty ?? null);
     setContextLength(config.contextLength ?? 4096);
     setPromptHistoryLimit(config.promptHistoryLimit ?? 50);
-    setInstructTemplate(config.instructTemplate ?? '');
-    setStopStrings((config.stopStrings ?? []).join('\n'));
-    setRequestScript(str(config.providerParams?.['requestScript'] ?? config.providerParams?.['custom.requestScript']));
-    setCustomBackendId(str(config.providerParams?.['customBackendId']));
-    setDelegateConfigId(str(config.providerParams?.['delegateConfigId']));
-    setMockScript(str(config.providerParams?.['mockScript']));
+    setInstructTemplate(config.instructTemplate);
+    setStopStrings(config.stopStrings.join('\n'));
+    setRequestScript(str(config.providerParams['requestScript'] ?? config.providerParams['custom.requestScript']));
+    setCustomBackendId(str(config.providerParams['customBackendId']));
+    setDelegateConfigId(str(config.providerParams['delegateConfigId']));
+    setMockScript(str(config.providerParams['mockScript']));
     setTransformerChainId(config.transformerChainId ?? '');
-    const configCacheMode = config.providerParams?.['cacheMode'];
+    const configCacheMode = config.providerParams['cacheMode'];
     setCacheMode(configCacheMode === 'auto' || configCacheMode === 'manual' ? configCacheMode : 'off');
-    setCacheDepth(Number(config.providerParams?.['cacheDepth'] ?? 0));
-    setCacheTTL(str(config.providerParams?.['cacheTTL']));
+    setCacheDepth(Number(config.providerParams['cacheDepth'] ?? 0));
+    setCacheTTL(str(config.providerParams['cacheTTL']));
     setLogitBias(formatLogitBias(config.logitBias));
     setOpenrouterProvider(config.openrouterProvider ?? '');
     setApiUrl(config.apiUrl ?? '');
     setApiKey(config.apiKey ?? '');
-    setSupportsImages(config.supportsImages ?? true);
-    setSupportsAudio(config.supportsAudio ?? true);
-    setSupportsVideo(config.supportsVideo ?? true);
+    setSupportsImages(config.supportsImages);
+    setSupportsAudio(config.supportsAudio);
+    setSupportsVideo(config.supportsVideo);
     // Seed advanced knobs: knobs the user explicitly set (in providerParams) keep
     // their value + enabled state. Knobs NOT in providerParams get a real default
     // value (for display) and are disabled (not sent) until the user enables them.

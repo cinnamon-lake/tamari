@@ -15,7 +15,7 @@ const TOAST_ICON: Record<Toast['type'], string> = {
 
 export function ToastContainer() {
   const { t } = useI18n();
-  const position = createMemo(() => state.settings['toastPosition'] ?? 'top-right');
+  const position = createMemo(() => state.settings['toastPosition']);
 
   const typeLabel = (type: Toast['type']): string =>
     type === 'success'

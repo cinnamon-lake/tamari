@@ -3,8 +3,8 @@ import { state } from '../stores/serverStore.js';
 
 export function BackgroundInjector() {
   createEffect(() => {
-    const url = String(state.settings['backgroundImageUrl'] ?? '');
-    const blur = Number(state.settings['backgroundBlur'] ?? 0);
+    const url = String(state.settings['backgroundImageUrl']);
+    const blur = Number(state.settings['backgroundBlur']);
 
     const el = document.querySelector<HTMLElement>('.app-shell');
     if (!el) return;

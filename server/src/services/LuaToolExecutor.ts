@@ -20,6 +20,7 @@
  */
 
 import { newId } from '@tamari/wordid';
+import { ToolParametersSchema } from '@tamari/types';
 import type { LuaRuntime, LuaRuntimeOptions } from '../scripting/LuaRuntime.js';
 import { friendlyLuaError, MAX_EXECUTION_MS, LUA_TOOL_BUDGET, type ExecutionBudget } from '../scripting/LuaRuntime.js';
 import { ScriptContext } from '../scripting/ScriptContext.js';
@@ -29,6 +30,7 @@ import { getLogger } from '../lib/logger.js';
 import type { FileStorage } from './FileStorage.js';
 import type { IAttachmentRepository } from '../repos/AttachmentRepository.js';
 import type { ToolContext, ToolTemplateDefinition, ToolExecuteResult } from './ToolTemplate.js';
+import { formatZodIssues } from './ToolTemplate.js';
 import { findLatestStateSnapshot, TOOL_STATE_KEY } from './toolState.js';
 
 const log = getLogger('services/LuaToolExecutor');
@@ -405,12 +407,26 @@ export class LuaToolExecutor {
       const d = defResult as Record<string, unknown>;
 
       const tools = (d.tools as Array<Record<string, unknown>> | undefined) ?? [];
-      const parsedTools = tools.map((t) => ({
-        name: str(t.name),
-        description: str(t.description),
-        parameters: (t.parameters as Record<string, unknown> | undefined) ?? { type: 'object', properties: {} },
-        endsTurn: t.endsTurn === true,
-      }));
+      // `parameters` is Lua-authored and flows to the client snapshot and the
+      // model's tool definitions, so its shape is validated here — a template
+      // that returns garbage fails at load/save with a pointed error instead
+      // of poisoning the client's snapshot parse.
+      const parsedTools: ToolTemplateDefinition['tools'] = [];
+      for (const t of tools) {
+        const parsedParameters = ToolParametersSchema.safeParse(t.parameters ?? { type: 'object', properties: {} });
+        if (!parsedParameters.success) {
+          cleanup();
+          return {
+            error: `tool '${str(t.name)}': invalid parameters — ${formatZodIssues(parsedParameters.error)}`,
+          };
+        }
+        parsedTools.push({
+          name: str(t.name),
+          description: str(t.description),
+          parameters: parsedParameters.data,
+          endsTurn: t.endsTurn === true,
+        });
+      }
 
       return {
         def: {

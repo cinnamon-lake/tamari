@@ -721,18 +721,43 @@ export const CustomBackendTestOutcomeSchema = z.object({
 });
 export type CustomBackendTestOutcome = z.infer<typeof CustomBackendTestOutcomeSchema>;
 
+/**
+ * One entry of a tool's JSON-schema `properties` map. Authored by Lua tool
+ * templates (getDefinition()), so only the keys the UI and prompt assembly
+ * read are validated — anything else passes through.
+ */
+export const ToolParameterPropertySchema = z.looseObject({
+  type: z.string().optional(),
+  description: z.string().optional(),
+});
+export type ToolParameterProperty = z.infer<typeof ToolParameterPropertySchema>;
+
+/**
+ * The JSON-schema-ish `parameters` blob a tool template's getDefinition()
+ * returns for one tool. Validated at the Lua boundary (LuaToolExecutor —
+ * malformed templates fail at save/load with a pointed error) and again in
+ * the client snapshot parse, so a template that lies about its tool schema
+ * never reaches the UI or the model as `unknown`.
+ */
+export const ToolParametersSchema = z.looseObject({
+  type: z.string().optional(),
+  properties: z.record(z.string(), ToolParameterPropertySchema).optional(),
+  required: z.array(z.string()).optional(),
+});
+export type ToolParameters = z.infer<typeof ToolParametersSchema>;
+
 export const ToolInfoSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
-  parameters: z.record(z.string(), z.unknown()).optional(),
+  parameters: ToolParametersSchema.optional(),
   configSchema: z.record(z.string(), z.unknown()).optional(),
   tools: z
     .array(
       z.object({
         name: z.string(),
         description: z.string(),
-        parameters: z.record(z.string(), z.unknown()).optional(),
+        parameters: ToolParametersSchema.optional(),
       }),
     )
     .optional(),

@@ -29,7 +29,7 @@ function isMobileDevice(): boolean {
 }
 
 function shouldSendOnEnter(): boolean {
-  const mode = state.settings['sendOnEnter'] ?? 'auto';
+  const mode = state.settings['sendOnEnter'];
   if (mode === 'enabled') return true;
   if (mode === 'disabled') return false;
   // auto
@@ -74,8 +74,8 @@ export function MessageInput() {
 
     if (currentChatId && state.settings['autoSelectInput'] && textareaRef) {
       queueMicrotask(() => {
-        textareaRef?.focus();
-        textareaRef?.select();
+        textareaRef.focus();
+        textareaRef.select();
       });
     }
 
@@ -147,8 +147,8 @@ export function MessageInput() {
   function wrapSelection(before: string, after: string) {
     const el = textareaRef;
     if (!el) return;
-    const start = el.selectionStart ?? 0;
-    const end = el.selectionEnd ?? 0;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
     const value = el.value;
     const selected = value.slice(start, end);
     const replacement = before + selected + after;
@@ -264,7 +264,6 @@ export function MessageInput() {
     currentTextValue = newText;
     setShowMacroAutocomplete(false);
     queueMicrotask(() => {
-      if (!textareaRef) return;
       const cursorPos = start + insertion.length - (args ? 1 : 0);
       textareaRef.focus();
       textareaRef.setSelectionRange(cursorPos, cursorPos);
@@ -366,7 +365,7 @@ export function MessageInput() {
                           class={`bi bi-${att.mimeType.startsWith('audio/') ? 'music-note-beamed' : att.mimeType.startsWith('video/') ? 'film' : 'file-earmark'}`}
                         />
                         <span class="attachment-preview-name">
-                          {(att.meta as Record<string, string>)?.name ?? att.id}
+                          {(att.meta as Record<string, string>).name ?? att.id}
                         </span>
                       </div>
                     }

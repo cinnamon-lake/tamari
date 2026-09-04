@@ -77,7 +77,7 @@ export function AuthorsNotePanel(props: AuthorsNotePanelProps) {
   const doSave = () => {
     const chat = activeChat();
     if (!chat) return;
-    const meta = { ...(chat.metadata ?? {}) };
+    const meta = { ...chat.metadata };
     meta['authorsNote'] = {
       content: content(),
       position: position(),

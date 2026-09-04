@@ -56,7 +56,8 @@ export function Sidebar() {
 
   // Mobile edge-swipe to open/close the sidebar
   onMount(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
+    // jsdom (test env) lacks matchMedia; every real browser has it.
+    if (!(window as { matchMedia?: unknown }).matchMedia) return;
     const mql = window.matchMedia('(max-width: 768px)');
     let startX = 0;
     let startY = 0;
@@ -143,8 +144,8 @@ export function Sidebar() {
     const sort = charSort();
     list = [...list].sort((a, b) => {
       if (sort === 'name') return a.name.localeCompare(b.name);
-      if (sort === 'updated') return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
-      return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+      if (sort === 'updated') return b.updatedAt - a.updatedAt;
+      return b.createdAt - a.createdAt;
     });
 
     return list;
@@ -171,7 +172,7 @@ export function Sidebar() {
       chats = chats.filter((c) => c.name.toLowerCase().includes(q));
     }
 
-    chats = [...chats].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+    chats = [...chats].sort((a, b) => b.updatedAt - a.updatedAt);
 
     if (!sel) {
       // Default view: only show the 5 most recent across all characters
@@ -216,7 +217,7 @@ export function Sidebar() {
   const selectChat = (chatId: string) => {
     setActiveChatId(chatId);
     setPendingChatId(null);
-    const limit = Number(state.settings['chatMessageLoadLimit'] ?? 30);
+    const limit = Number(state.settings['chatMessageLoadLimit']);
     bus.send({ type: 'chat.select', chatId, limit });
     setMobileOpen(false);
   };
@@ -655,10 +656,7 @@ export function Sidebar() {
                   }}
                 >
                   <div class="chat-main" role="button" tabindex={0} onKeyDown={onEnterActivate}>
-                    <Show
-                      when={renamingChatId() === chat.id}
-                      fallback={<span class="chat-name">{chat?.name ?? t('sidebar.untitled')}</span>}
-                    >
+                    <Show when={renamingChatId() === chat.id} fallback={<span class="chat-name">{chat.name}</span>}>
                       <input
                         class="chat-rename-input"
                         value={renameValue()}

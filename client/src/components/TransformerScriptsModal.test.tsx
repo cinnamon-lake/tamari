@@ -11,14 +11,6 @@ vi.mock('../stores/popupStore.js', () => ({
 }));
 import { confirmPopup } from '../stores/popupStore.js';
 
-// jsdom may lack crypto.randomUUID (used for validate request ids).
-if (typeof globalThis.crypto?.randomUUID !== 'function') {
-  let n = 0;
-  Object.assign(globalThis, {
-    crypto: { ...(globalThis.crypto ?? {}), randomUUID: () => `test-uuid-${++n}` },
-  });
-}
-
 type ValidatedMessage = {
   type: 'transformerscript.validated';
   requestId?: string;

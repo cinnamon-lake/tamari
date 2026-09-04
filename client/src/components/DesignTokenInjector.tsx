@@ -9,7 +9,7 @@ export function DesignTokenInjector() {
     const appShell = document.querySelector('.app-shell');
 
     // Font scale
-    const fontScale = Number(state.settings['fontScale'] ?? 1);
+    const fontScale = Number(state.settings['fontScale']);
     if (!Number.isNaN(fontScale) && fontScale > 0) {
       root.style.fontSize = `${fontScale * 100}%`;
     } else {
@@ -17,7 +17,7 @@ export function DesignTokenInjector() {
     }
 
     // Chat max width
-    const chatWidth = Number(state.settings['chatWidth'] ?? 50);
+    const chatWidth = Number(state.settings['chatWidth']);
     if (!Number.isNaN(chatWidth) && chatWidth > 0) {
       root.style.setProperty('--chat-max-width', `${chatWidth}rem`);
     } else {
@@ -25,7 +25,7 @@ export function DesignTokenInjector() {
     }
 
     // Avatar border radius ('circle' is a legacy value, same shape as 'round')
-    const avatarStyle = state.settings['avatarStyle'] ?? 'round';
+    const avatarStyle = state.settings['avatarStyle'];
     const avatarRadiusMap: Record<AppSettings['avatarStyle'], string> = {
       round: '50%',
       circle: '50%',
@@ -37,7 +37,7 @@ export function DesignTokenInjector() {
 
     // Shadow intensity
     const noShadows = Boolean(state.settings['noShadows']);
-    const shadowWidth = Number(state.settings['shadowWidth'] ?? 1);
+    const shadowWidth = Number(state.settings['shadowWidth']);
     const shadowOpacity = noShadows ? 0 : Math.max(0, Math.min(2, shadowWidth));
     root.style.setProperty('--shadow-opacity', String(shadowOpacity));
 
@@ -52,7 +52,7 @@ export function DesignTokenInjector() {
     }
 
     // Chat display style
-    const chatStyle = state.settings['chatStyle'] ?? 'default';
+    const chatStyle = state.settings['chatStyle'];
     const messagesEl = document.querySelector('.messages');
     if (messagesEl) {
       messagesEl.classList.remove('chat-style-default', 'chat-style-bubbles', 'chat-style-document');
@@ -60,7 +60,7 @@ export function DesignTokenInjector() {
     }
 
     // Backdrop blur strength
-    const blurStrength = Number(state.settings['blurStrength'] ?? 1);
+    const blurStrength = Number(state.settings['blurStrength']);
     if (!Number.isNaN(blurStrength) && blurStrength >= 0) {
       root.style.setProperty('--backdrop-blur', String(blurStrength));
     } else {
