@@ -32,7 +32,10 @@ import type { RAGService } from '../RAGService.js';
 import { createCharacter, updateCharacter } from '../characterMutations.js';
 import { setCharacterAvatarFromBuffer } from '../characterAvatar.js';
 import { validateVfsPath } from '../../scripting/LuaVfs.js';
-import { validateLuaSource as validateLuaSourceInSandbox } from '../../scripting/validateLuaSource.js';
+import {
+  validateLuaSource as validateLuaSourceInSandbox,
+  GENERATE_FUNCTION,
+} from '../../scripting/validateLuaSource.js';
 import { gameLibFiles } from './gameLib.js';
 import {
   getCharacterRegexRules,
@@ -1257,7 +1260,7 @@ export class CharacterWorkbench {
     files: Record<string, string>,
     needsGenerate: boolean,
   ): Promise<string | null> {
-    return validateLuaSourceInSandbox(this.deps.luaRuntime, source, files, needsGenerate);
+    return validateLuaSourceInSandbox(this.deps.luaRuntime, source, files, needsGenerate ? GENERATE_FUNCTION : null);
   }
 
   /** Load-check a backend script: must load and define generate(). */

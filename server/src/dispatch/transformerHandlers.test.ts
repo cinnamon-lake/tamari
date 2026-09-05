@@ -7,8 +7,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TestHarness, type TestClient } from '../testing/TestHarness.js';
 
-const VALID_LUA = 'return messages';
+const VALID_LUA = 'function handle(messages, ctx) return messages end';
 const INVALID_LUA = 'this is not lua (((';
+// Loads cleanly but defines no handle() entry point.
+const NO_HANDLE_LUA = 'local x = 1';
 
 describe('transformerchain handlers', () => {
   let h: TestHarness;
@@ -211,5 +213,13 @@ describe('transformerscript handlers', () => {
     expect(result!.requestId).toBe('req-2');
     expect(result!.ok).toBe(false);
     expect(result!.error).toBeTruthy();
+  });
+
+  it('transformerscript.validate rejects source without a handle() entry point', async () => {
+    await h.send(client, { type: 'transformerscript.validate', luaSource: NO_HANDLE_LUA, requestId: 'req-3' } as never);
+    const result = lastValidated();
+    expect(result).toBeDefined();
+    expect(result!.ok).toBe(false);
+    expect(result!.error).toContain('handle(messages, ctx)');
   });
 });

@@ -8,16 +8,28 @@
 
 import type { LuaRuntime } from './LuaRuntime.js';
 
+/** A global function a Lua chunk must define to be considered valid. */
+export interface RequiredLuaFunction {
+  /** Global name looked up after loading the chunk, e.g. 'generate'. */
+  name: string;
+  /** Human-facing signature for the error message, e.g. 'generate(prompt, ctx)'. */
+  signature: string;
+}
+
+/** Backend scripts (backend_logic main.lua) must define generate(). */
+export const GENERATE_FUNCTION: RequiredLuaFunction = { name: 'generate', signature: 'generate(prompt, ctx)' };
+
 /** Load-check Lua in a fresh sandbox WITH the card's module map: the chunk
     must parse, requires against EXISTING modules must resolve and load, and
-    (for main.lua) generate() must be defined. A "module not found" error is
-    tolerated — main-before-modules is a legal authoring order; the dry-run
-    (test_backend_logic) validates the full set. Returns error string | null. */
+    (when requiredFunction is set) the entry function must be defined. A
+    "module not found" error is tolerated — main-before-modules is a legal
+    authoring order; the dry-run (test_backend_logic) validates the full set.
+    Returns error string | null. */
 export async function validateLuaSource(
   luaRuntime: LuaRuntime,
   source: string,
   files: Record<string, string>,
-  needsGenerate: boolean,
+  requiredFunction: RequiredLuaFunction | null,
 ): Promise<string | null> {
   const attempt = async (withMap: boolean, stubRequire: boolean): Promise<string | null> => {
     try {
@@ -25,8 +37,8 @@ export async function validateLuaSource(
       try {
         if (stubRequire) lua.global.set('require', () => ({}));
         await lua.doString(source);
-        if (needsGenerate && typeof lua.global.get('generate') !== 'function') {
-          return 'script must define generate(prompt, ctx)';
+        if (requiredFunction && typeof lua.global.get(requiredFunction.name) !== 'function') {
+          return `script must define ${requiredFunction.signature}`;
         }
         return null;
       } finally {
@@ -47,5 +59,5 @@ export function validateBackendLuaSource(
   source: string,
   files: Record<string, string>,
 ): Promise<string | null> {
-  return validateLuaSource(luaRuntime, source, files, true);
+  return validateLuaSource(luaRuntime, source, files, GENERATE_FUNCTION);
 }

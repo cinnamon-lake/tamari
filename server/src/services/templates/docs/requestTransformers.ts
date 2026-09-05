@@ -30,31 +30,31 @@ Builtin params are validated per step; invalid params skip that step with a trac
 
 ## Lua steps
 
-The chunk gets two globals and either mutates in place or returns a new array:
+The chunk must define a global \`handle\` function. Messages and context are passed as ARGUMENTS and the result comes back as the RETURN value — nothing is injected as a global, and mutating the argument in place does nothing unless it is also returned:
 
-| Global | Description |
+| Argument | Description |
 |---|---|
-| \`messages\` | The rendered prompt as a plain array of \`{ role = 'system'\\|'user'\\|'assistant'\\|'tool', content = string \\| array of content parts, reasoningFormatted = string? }\`. Mutable in place. |
+| \`messages\` | The rendered prompt as a plain array of \`{ role = 'system'\\|'user'\\|'assistant'\\|'tool', content = string \\| array of content parts, reasoningFormatted = string? }\`. |
 | \`ctx\` | \`{ userName, charName, generationType, model, backendProvider }\` — names are final (post-macro). |
 
 \`\`\`lua
--- mutate in place: drop every message whose text matches a pattern
-for i = #messages, 1, -1 do
-  local m = messages[i]
-  local text = type(m.content) == 'string' and m.content or ''
-  if text:match('^%[OOC%]') then table.remove(messages, i) end
+function handle(messages, ctx)
+  -- drop every message whose text matches a pattern
+  local out = {}
+  for i, m in ipairs(messages) do
+    local text = type(m.content) == 'string' and m.content or ''
+    if not text:match('^%[OOC%]') then out[#out + 1] = m end
+  end
+  return out  -- MUST return the (possibly new) message array
 end
-
--- ...or return a new array from the chunk (a non-nil return wins):
--- return { { role = 'system', content = 'Override' } }
 \`\`\`
 
 Sandbox and failure contract:
 
 - No \`st\` API, no network, no \`fetch\`. Stripped: \`io\`, \`os\`, \`debug\`, \`package\`, \`require\`, \`load\`, \`loadstring\`, \`loadfile\`, \`dofile\`.
 - 5-second execution deadline; 64 MB Lua heap cap. A runaway script fails the step, never the server.
-- \`messages\` is deep-cloned before injection, so a failing script cannot corrupt the pre-step array.
-- Any error, timeout, or malformed result keeps the PRE-STEP messages and records a trace note; the chain continues with the next step. There is no required entry function — the chunk just mutates or returns \`messages\`.
+- \`messages\` is deep-cloned before the call, so a failing script cannot corrupt the pre-step array.
+- A missing \`handle()\`, any error, timeout, or malformed/nil return keeps the PRE-STEP messages and records a trace note; the chain continues with the next step.
 
 ## Ordering
 
@@ -70,5 +70,5 @@ Steps compose, so order matters:
 
 ## Trace
 
-Skipped/failed steps never fail the request — they surface as notes on \`Prompt.transformerTrace\`, copied into the generation record at \`generations.meta.transformers\` (alongside \`meta.appendOnly\`). Check that field when a chain seems to do nothing — e.g. \`builtin step 'history-squash': invalid params (...) — skipped\`, \`lua step '<id>': script not found — skipped\`, or \`lua step '<id>': script failed: <err> — kept pre-step messages\`.
+Skipped/failed steps never fail the request — they surface as notes on \`Prompt.transformerTrace\`, copied into the generation record at \`generations.meta.transformers\` (alongside \`meta.appendOnly\`). Check that field when a chain seems to do nothing — e.g. \`builtin step 'history-squash': invalid params (...) — skipped\`, \`lua step '<id>': script not found — skipped\`, \`lua step '<id>': script must define handle(messages, ctx) — kept pre-step messages\`, or \`lua step '<id>': script failed: <err> — kept pre-step messages\`.
 `;

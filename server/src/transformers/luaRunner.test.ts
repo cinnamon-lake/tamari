@@ -11,9 +11,13 @@ const base: PipelineMessage[] = [
 ];
 
 describe('runLuaTransformer', () => {
-  it('applies in-place mutation of the messages table', async () => {
+  it('returns a rebuilt array from handle()', async () => {
     const { messages, note } = await runLuaTransformer(
-      `table.remove(messages, 1)  -- Lua arrays are 1-based`,
+      `function handle(messages, ctx)
+        local out = {}
+        for i = 2, #messages do out[#out + 1] = messages[i] end  -- Lua arrays are 1-based
+        return out
+      end`,
       base,
       ctx,
     );
@@ -21,9 +25,12 @@ describe('runLuaTransformer', () => {
     expect(messages).toEqual([{ role: 'user', content: 'hello' }]);
   });
 
-  it('mutates message content in place', async () => {
+  it('may mutate the argument in place and return it', async () => {
     const { messages, note } = await runLuaTransformer(
-      `messages[2].content = messages[2].content .. ' world'`,
+      `function handle(messages, ctx)
+        messages[2].content = messages[2].content .. ' world'
+        return messages
+      end`,
       base,
       ctx,
     );
@@ -31,9 +38,11 @@ describe('runLuaTransformer', () => {
     expect(messages[1]!.content).toBe('hello world');
   });
 
-  it('accepts a returned new array', async () => {
+  it('accepts a freshly built array literal', async () => {
     const { messages, note } = await runLuaTransformer(
-      `return { { role = 'user', content = 'replacement' } }`,
+      `function handle(messages, ctx)
+        return { { role = 'user', content = 'replacement' } }
+      end`,
       base,
       ctx,
     );
@@ -41,9 +50,12 @@ describe('runLuaTransformer', () => {
     expect(messages).toEqual([{ role: 'user', content: 'replacement' }]);
   });
 
-  it('exposes ctx to the script', async () => {
+  it('passes ctx to handle()', async () => {
     const { messages, note } = await runLuaTransformer(
-      `messages[2].content = ctx.userName .. '/' .. ctx.charName .. '/' .. ctx.model .. '/' .. ctx.backendProvider`,
+      `function handle(messages, ctx)
+        messages[2].content = ctx.userName .. '/' .. ctx.charName .. '/' .. ctx.model .. '/' .. ctx.backendProvider
+        return messages
+      end`,
       base,
       ctx,
     );
@@ -51,21 +63,46 @@ describe('runLuaTransformer', () => {
     expect(messages[1]!.content).toBe('Alice/Bob/m1/openai');
   });
 
-  it('keeps pre-step messages when the script errors', async () => {
+  it('keeps pre-step messages when handle() is missing', async () => {
+    const { messages, note } = await runLuaTransformer(`local x = 1`, base, ctx);
+    expect(messages).toEqual(base);
+    expect(note).toContain('must define handle(messages, ctx)');
+  });
+
+  it('keeps pre-step messages when the script errors during load', async () => {
     const { messages, note } = await runLuaTransformer(`error('boom')`, base, ctx);
     expect(messages).toEqual(base);
     expect(note).toContain('boom');
   });
 
+  it('keeps pre-step messages when handle() throws', async () => {
+    const { messages, note } = await runLuaTransformer(`function handle(messages, ctx) error('boom') end`, base, ctx);
+    expect(messages).toEqual(base);
+    expect(note).toContain('boom');
+  });
+
   it('keeps pre-step messages when the result is malformed', async () => {
-    const { messages, note } = await runLuaTransformer(`return { { role = 'nope', content = 'x' } }`, base, ctx);
+    const { messages, note } = await runLuaTransformer(
+      `function handle(messages, ctx) return { { role = 'nope', content = 'x' } } end`,
+      base,
+      ctx,
+    );
+    expect(messages).toEqual(base);
+    expect(note).toContain('malformed');
+  });
+
+  it('keeps pre-step messages when handle() returns nothing', async () => {
+    const { messages, note } = await runLuaTransformer(`function handle(messages, ctx) end`, base, ctx);
     expect(messages).toEqual(base);
     expect(note).toContain('malformed');
   });
 
   it('denies io/os/debug/package/require/load', async () => {
     const { note } = await runLuaTransformer(
-      `assert(io == nil and os == nil and debug == nil and package == nil and require == nil and load == nil)`,
+      `function handle(messages, ctx)
+        assert(io == nil and os == nil and debug == nil and package == nil and require == nil and load == nil)
+        return messages
+      end`,
       base,
       ctx,
     );
@@ -74,7 +111,12 @@ describe('runLuaTransformer', () => {
 
   it('kills a runaway script at the deadline and keeps pre-step messages', async () => {
     const start = Date.now();
-    const { messages, note } = await runLuaTransformer('while true do end', base, ctx, { timeoutMs: 250 });
+    const { messages, note } = await runLuaTransformer(
+      'function handle(messages, ctx) while true do end end',
+      base,
+      ctx,
+      { timeoutMs: 250 },
+    );
     expect(Date.now() - start).toBeLessThan(5000);
     expect(messages).toEqual(base);
     expect(note).toBeDefined();
@@ -83,11 +125,14 @@ describe('runLuaTransformer', () => {
   it('rejects a memory bomb at the heap cap', async () => {
     const { messages, note } = await runLuaTransformer(
       `
-      local chunks = {}
-      local i = 0
-      while true do
-        i = i + 1
-        chunks[i] = string.rep('x', 65536)
+      function handle(messages, ctx)
+        local chunks = {}
+        local i = 0
+        while true do
+          i = i + 1
+          chunks[i] = string.rep('x', 65536)
+        end
+        return messages
       end
       `,
       base,
@@ -102,8 +147,10 @@ describe('runLuaTransformer', () => {
     const input: PipelineMessage[] = [{ role: 'user', content: 'original' }];
     const { messages, note } = await runLuaTransformer(
       `
-      messages[1].content = 'mutated'
-      error('late failure')
+      function handle(messages, ctx)
+        messages[1].content = 'mutated'
+        error('late failure')
+      end
       `,
       input,
       ctx,

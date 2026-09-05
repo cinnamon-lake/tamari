@@ -5,13 +5,19 @@
  * Sandbox cloned from the request-script surface (backends/RequestScript.ts):
  * no io/os/debug/package/require/load, no network, 5s execution deadline,
  * 64 MB Lua heap cap. Unlike request scripts there is no `request` table and
- * no fetch — the script gets:
- *   - `messages`: the rendered prompt as a plain array (mutable in place);
- *   - `ctx`: `{ userName, charName, generationType, model, backendProvider }`.
- * The script either mutates `messages` in place or returns a new array from
- * the chunk. The result is validated back into `PipelineMessage[]`; any
- * error, timeout, or malformed result keeps the pre-step messages and yields
- * a trace note instead of aborting the generation.
+ * no fetch — the script must define a global entry function:
+ *
+ *   function handle(messages, ctx) ... return messages end
+ *
+ * `messages` is the rendered prompt as a plain array of
+ * `{ role, content, reasoningFormatted? }`, `ctx` is
+ * `{ userName, charName, generationType, model, backendProvider }` (names are
+ * final, post-macro). handle() RETURNS the (possibly new) message array —
+ * unlike request scripts, which mutate the `request` object in place, the
+ * array is threaded by return value. The result is validated back into
+ * `PipelineMessage[]`; any error, timeout, missing handle, or malformed
+ * result keeps the pre-step messages and yields a trace note instead of
+ * aborting the generation.
  */
 
 import { LuaFactory } from 'wasmoon';
@@ -61,7 +67,8 @@ export async function runLuaTransformer(
   const lua = await luaFactory.createEngine({ enableProxy: false, injectObjects: true, traceAllocations: true });
   try {
     lua.global.setMemoryMax(opts?.maxMemoryBytes ?? 64 * 1024 * 1024);
-    // setTimeout takes an ABSOLUTE epoch-ms deadline, not a duration.
+    // setTimeout takes an ABSOLUTE epoch-ms deadline, not a duration. It covers
+    // the chunk load AND the handle() call below (one deadline per engine).
     lua.global.setTimeout(Date.now() + (opts?.timeoutMs ?? 5000));
 
     // Strip dangerous libraries and functions (same sandbox as RequestScript).
@@ -75,14 +82,23 @@ export async function runLuaTransformer(
     lua.global.set('load', undefined);
     lua.global.set('loadstring', undefined);
 
-    lua.global.set('messages', injected);
-    lua.global.set('ctx', { ...ctx });
+    // Load the chunk, then invoke its entry point THROUGH doString rather
+    // than a JS-side proxy call: wasmoon's instruction-hook deadline never
+    // reaches function-proxy calls (they run on a child thread whose timeout
+    // is unset), so a busy loop inside a proxy-called handle() would hang the
+    // event loop forever. A doString wrapper keeps the deadline enforceable.
+    // The runner globals are an implementation detail — the script contract
+    // is handle(messages, ctx) arguments in, array returned.
+    lua.global.set('__tamari_messages', injected);
+    lua.global.set('__tamari_ctx', { ...ctx });
+    await lua.doString(script);
+    const handle: unknown = lua.global.get('handle');
+    if (typeof handle !== 'function') {
+      return { messages, note: 'script must define handle(messages, ctx) — kept pre-step messages' };
+    }
+    const returned: unknown = await lua.doString('return handle(__tamari_messages, __tamari_ctx)');
 
-    const returned: unknown = await lua.doString(script);
-
-    // The script either returned a new array or mutated `messages` in place.
-    const candidate: unknown = returned ?? lua.global.get('messages');
-    const parsed = MessagesResultSchema.safeParse(candidate);
+    const parsed = MessagesResultSchema.safeParse(returned);
     if (!parsed.success) {
       return {
         messages,
@@ -100,10 +116,10 @@ export async function runLuaTransformer(
 
 /**
  * Load-check a transformer script's Lua source (for the dispatch `validate`
- * handler): the chunk must parse and load in a fresh sandbox. Transformer
- * scripts define no required entry function (they mutate/return `messages`),
- * so unlike backend scripts there is no generate() requirement.
+ * handler): the chunk must parse and load in a fresh sandbox and define the
+ * handle(messages, ctx) entry point (the generate() requirement's analogue
+ * for backend scripts).
  */
 export function validateTransformerLuaSource(luaRuntime: LuaRuntime, source: string): Promise<string | null> {
-  return validateLuaSource(luaRuntime, source, {}, false);
+  return validateLuaSource(luaRuntime, source, {}, { name: 'handle', signature: 'handle(messages, ctx)' });
 }

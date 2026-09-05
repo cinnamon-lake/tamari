@@ -64,8 +64,8 @@ async function openBackendConfig(page: Page): Promise<Locator> {
 }
 
 async function closeModal(modal: Locator): Promise<void> {
-  // Backend Config's Close saves a dirty form first; the transformer modals
-  // have no dirty state — Close just closes.
+  // Backend Config and both transformer modals auto-save with a dirty flag —
+  // Close flushes any pending debounced save first, then closes.
   await modal.locator('.modal-actions button:has-text("Close")').click();
   await expect(modal).not.toBeVisible();
 }
@@ -155,14 +155,17 @@ test.describe('Transformers UI', () => {
 
   test('chains modal: create with builtin steps; reorder, disable and params persist', async ({ page }) => {
     const chainName = uniqueName('E2E Chain');
-    createdChainNames.push(chainName);
+    // Add Chain creates a 'New Chain' entity up front, then auto-save renames
+    // it — track both names so cleanup survives a mid-test failure.
+    createdChainNames.push(chainName, 'New Chain');
 
     let modal = await openChainsModal(page);
 
     // The seeded Default chain (migration 020) is listed.
     await expect(modal.locator('.flex-between', { hasText: 'Default' })).toBeVisible();
 
-    // Add a chain: whitespace (mode -> full) + ensure-thinking (placeholder).
+    // Add a chain (created on click, edit form opens on the created echo):
+    // whitespace (mode -> full) + ensure-thinking (placeholder).
     await modal.locator('button:has-text("Add Chain")').click();
     await modal.locator('input[placeholder="my-chain"]').fill(chainName);
     await modal.locator('label.field-label:has-text("Description") input').fill('e2e description');
@@ -204,8 +207,7 @@ test.describe('Transformers UI', () => {
     await expect(firstEnabled).toBeChecked();
     await firstEnabled.uncheck();
 
-    await modal.locator('button.primary-btn:has-text("Save")').click();
-    await expect(modal.locator('.flex-between', { hasText: chainName })).toBeVisible();
+    // No Save button — Close flushes the pending debounced auto-save.
     await closeModal(modal);
 
     // Reopen and edit: order, disabled state and params survived the round-trip.
@@ -226,13 +228,15 @@ test.describe('Transformers UI', () => {
 
   test('scripts modal: validate ok/error, edit round-trip, delete with confirm', async ({ page }) => {
     const scriptName = uniqueName('E2E Script');
-    createdScriptNames.push(scriptName);
-    // Validate executes the chunk with an empty env (no `messages` global), so
-    // the valid case must be nil-safe — same guard real scripts need.
-    const validSource = 'if messages then\n  return messages\nend';
+    // Add Script creates a 'New Script' entity up front, then auto-save
+    // renames it — track both names so cleanup survives a mid-test failure.
+    createdScriptNames.push(scriptName, 'New Script');
+    // Validate load-checks the chunk and requires the handle() entry point.
+    const validSource = 'function handle(messages, ctx)\n  return messages\nend';
 
     let modal = await openScriptsModal(page);
     await modal.locator('button:has-text("Add Script")').click();
+    // The created echo opens the edit form (pre-filled with the template).
     await modal.locator('input[placeholder="strip-ooc"]').fill(scriptName);
     await modal.locator('label.field-label:has-text("Description") input').fill('e2e script');
     const sourceArea = modal.locator('label.field-label:has-text("Lua Source") textarea');
@@ -249,9 +253,9 @@ test.describe('Transformers UI', () => {
     await modal.locator('button:has-text("Validate")').click();
     await expect(statusLine.locator('.text-danger')).not.toBeEmpty();
 
-    // Fix and save; the script is listed.
+    // Fix the source; Done flushes the pending auto-save, row shows the rename.
     await sourceArea.fill(validSource);
-    await modal.locator('button.primary-btn:has-text("Save")').click();
+    await modal.locator('button:has-text("Done")').click();
     await expect(modal.locator('.flex-between', { hasText: scriptName })).toBeVisible();
     await closeModal(modal);
 
@@ -262,7 +266,7 @@ test.describe('Transformers UI', () => {
     await expect(modal.locator('input[placeholder="strip-ooc"]')).toHaveValue(scriptName);
     await expect(modal.locator('label.field-label:has-text("Description") input')).toHaveValue('e2e script');
     await expect(sourceArea).toHaveValue(validSource);
-    await modal.locator('button:has-text("Cancel")').click();
+    await modal.locator('button:has-text("Done")').click();
 
     // Delete through the UI: confirm popup names the script, then the row is gone.
     await row.locator('button:has-text("Delete")').click();
@@ -281,15 +285,18 @@ test.describe('Transformers UI', () => {
   test('chains modal: Lua script step lists scripts and resolves to its name', async ({ page }) => {
     const scriptName = uniqueName('E2E Lua Step');
     const chainName = uniqueName('E2E Chain');
-    createdScriptNames.push(scriptName);
-    createdChainNames.push(chainName);
+    createdScriptNames.push(scriptName, 'New Script');
+    createdChainNames.push(chainName, 'New Chain');
 
-    // Create the script through its own modal first.
+    // Create the script through its own modal first (created on Add Script,
+    // renamed/sourced via auto-save, Done flushes).
     const scriptsModal = await openScriptsModal(page);
     await scriptsModal.locator('button:has-text("Add Script")').click();
     await scriptsModal.locator('input[placeholder="strip-ooc"]').fill(scriptName);
-    await scriptsModal.locator('label.field-label:has-text("Lua Source") textarea').fill('return messages');
-    await scriptsModal.locator('button.primary-btn:has-text("Save")').click();
+    await scriptsModal
+      .locator('label.field-label:has-text("Lua Source") textarea')
+      .fill('function handle(messages, ctx)\n  return messages\nend');
+    await scriptsModal.locator('button:has-text("Done")').click();
     await expect(scriptsModal.locator('.flex-between', { hasText: scriptName })).toBeVisible();
     await closeModal(scriptsModal);
 
@@ -309,7 +316,7 @@ test.describe('Transformers UI', () => {
     // The step label resolves the scriptId to the script's name.
     await expect(modal.locator('.transformer-chain-step-name')).toHaveText([scriptName]);
 
-    await modal.locator('button.primary-btn:has-text("Save")').click();
+    // No Save button — Close flushes the pending debounced auto-save.
     await closeModal(modal);
 
     // Persists across reopen.

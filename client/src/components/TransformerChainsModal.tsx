@@ -9,9 +9,15 @@
  * stays fresh via `transformerchain.listed` rebroadcasts after every mutation
  * (CustomBackendsModal precedent — no active-entity snapshot for this entity).
  * The modal requests fresh chain + script lists on open.
+ *
+ * There is no Save button: edits auto-save debounced with a dirty flag
+ * (BackendConfigModal / PromptListModal precedent). "Add Chain" creates the
+ * entity immediately; the clientId-filtered `transformerchain.created` echo
+ * opens the edit form on it. Pending edits flush on form close / modal close
+ * / switching the edit target, and are cancelled when the target is deleted.
  */
 
-import { createSignal, Show, For, onMount } from 'solid-js';
+import { createSignal, createEffect, Show, For, onMount, onCleanup } from 'solid-js';
 import type { BuiltinTransformerId, TransformerChain, TransformerStep } from '@tamari/types';
 import { useI18n } from '../i18n/index.js';
 import { Modal } from './Modal.js';
@@ -19,6 +25,7 @@ import { confirmPopup } from '../stores/popupStore.js';
 import { state } from '../stores/serverStore.js';
 import { bus } from '../bus/WebSocketBus.js';
 import { str } from '../lib/coerce.js';
+import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import './TransformerChainsModal.css';
 
 const BUILTIN_IDS: BuiltinTransformerId[] = [
@@ -41,11 +48,11 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
   // dynamically-built key paths (@solid-primitives/i18n); coerce the
   // per-builtin lookups.
   const td = (key: string): string => t(key) as string;
-  const [formMode, setFormMode] = createSignal<'closed' | 'add' | 'edit'>('closed');
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [formName, setFormName] = createSignal('');
   const [formDescription, setFormDescription] = createSignal('');
   const [steps, setSteps] = createSignal<TransformerStep[]>([]);
+  const [dirty, setDirty] = createSignal(false);
   const [builtinToAdd, setBuiltinToAdd] = createSignal<BuiltinTransformerId>('whitespace');
   const [scriptToAdd, setScriptToAdd] = createSignal('');
 
@@ -54,48 +61,89 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
     bus.send({ type: 'transformerscript.list' });
   });
 
-  const close = () => props.onClose();
+  // Add Chain creates server-side immediately; our own created echo opens
+  // the edit form. Self-filtered so another tab's creation doesn't hijack
+  // the form (AGENTS.md §Active Entity).
+  const unsubCreated = bus.on('transformerchain.created', (msg) => {
+    if (msg.clientId !== state.clientId) return;
+    openEdit(msg.item);
+  });
+  onCleanup(unsubCreated);
 
-  const openAdd = () => {
-    setFormMode('add');
-    setEditingId(null);
-    setFormName('');
-    setFormDescription('');
-    setSteps([]);
+  const close = () => {
+    flushPending();
+    props.onClose();
   };
 
+  /** Send the current form as an update. Skipped while invalid (blank name)
+      so a half-typed edit never clobbers the stored entity. */
+  const saveForm = () => {
+    const id = editingId();
+    const name = formName().trim();
+    if (!id || !name) return;
+    bus.send({
+      type: 'transformerchain.save',
+      id,
+      data: { name, description: formDescription().trim(), steps: steps() },
+    });
+  };
+
+  /** Flush a pending debounced save NOW — clearing dirty first would cancel
+      the timer and silently drop the edits (BackendConfigModal precedent). */
+  const flushPending = () => {
+    if (!dirty()) return;
+    saveForm();
+    setDirty(false);
+  };
+
+  // Auto-save the open chain (debounced).
+  createEffect(() => {
+    if (!dirty()) return;
+    formName();
+    formDescription();
+    steps();
+
+    const timer = setTimeout(() => {
+      saveForm();
+      setDirty(false);
+    }, AUTOSAVE_DEBOUNCE_MS);
+    onCleanup(() => clearTimeout(timer));
+  });
+
   const openEdit = (chain: TransformerChain) => {
-    setFormMode('edit');
+    // Flush edits against the PREVIOUS target before switching — its save
+    // goes out with that target's id.
+    flushPending();
     setEditingId(chain.id);
     setFormName(chain.name);
     setFormDescription(chain.description);
     setSteps(chain.steps.map((step) => ({ ...step })));
+    setDirty(false);
+  };
+
+  const addChain = () => {
+    flushPending();
+    // Upsert without id = create; the created echo opens the edit form.
+    bus.send({
+      type: 'transformerchain.save',
+      data: { name: t('transformers.newChainName'), description: '', steps: [] },
+    });
   };
 
   const closeForm = () => {
-    setFormMode('closed');
+    flushPending();
     setEditingId(null);
-  };
-
-  const save = () => {
-    const name = formName().trim();
-    if (!name) return;
-    const data = { name, description: formDescription().trim(), steps: steps() };
-    const id = editingId();
-    // Upsert — presence of `id` decides update vs create server-side.
-    if (formMode() === 'edit' && id) {
-      bus.send({ type: 'transformerchain.save', id, data });
-    } else {
-      bus.send({ type: 'transformerchain.save', data });
-    }
-    closeForm();
   };
 
   const remove = async (chain: TransformerChain) => {
     if (!(await confirmPopup(t('transformers.deleteChainConfirm', { name: chain.name })))) return;
-    // Close the edit form if it's open on this chain — otherwise a later
-    // Save sends an update for a dead id and the form contents error out.
-    if (editingId() === chain.id) closeForm();
+    // Cancel any pending debounced save when the edit form is open on this
+    // chain — its target is about to disappear (BackendConfigModal
+    // delete-after-save hazard).
+    if (editingId() === chain.id) {
+      setDirty(false);
+      closeForm();
+    }
     bus.send({ type: 'transformerchain.delete', id: chain.id });
   };
 
@@ -107,6 +155,7 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
 
   const updateStepAt = (index: number, updater: (step: TransformerStep) => TransformerStep) => {
     setSteps((list) => list.map((step, i) => (i === index ? updater(step) : step)));
+    setDirty(true);
   };
 
   const moveStep = (index: number, direction: -1 | 1) => {
@@ -121,6 +170,7 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
       next[target] = a;
       return next;
     });
+    setDirty(true);
   };
 
   const toggleStep = (index: number, enabled: boolean) => {
@@ -129,6 +179,7 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
 
   const removeStep = (index: number) => {
     setSteps((list) => list.filter((_, i) => i !== index));
+    setDirty(true);
   };
 
   /** Set one param key on a builtin step; an empty string clears the key so
@@ -150,17 +201,24 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
     const id = builtinToAdd();
     const params = defaultBuiltinParams(id);
     setSteps((list) => [...list, { kind: 'builtin', id, enabled: true, ...(params ? { params } : {}) }]);
+    setDirty(true);
   };
 
   const addLua = () => {
     const scriptId = scriptToAdd() || state.transformerScripts[0]?.id || '';
     if (!scriptId) return;
     setSteps((list) => [...list, { kind: 'lua', scriptId, enabled: true }]);
+    setDirty(true);
   };
 
   const paramValue = (step: TransformerStep, key: string): string => {
     if (step.kind !== 'builtin') return '';
     return str(step.params?.[key]);
+  };
+
+  const markDirty = (setter: (value: string) => void) => (value: string) => {
+    setter(value);
+    setDirty(true);
   };
 
   return (
@@ -204,24 +262,26 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
         </Show>
       </section>
 
-      {/* Add / edit form */}
-      <Show when={formMode() !== 'closed'}>
+      {/* Edit form — auto-saves; opened by Edit or by the Add Chain echo. */}
+      <Show when={editingId() !== null}>
         <section class="settings-section">
-          <h3 class="section-heading">
-            {formMode() === 'add' ? t('transformers.addChain') : t('transformers.editChain')}
-          </h3>
+          <h3 class="section-heading">{t('transformers.editChain')}</h3>
           <label class="field-label">
             {t('transformers.chainName')}
             <input
               class="input"
               value={formName()}
-              onInput={(e) => setFormName(e.currentTarget.value)}
+              onInput={(e) => markDirty(setFormName)(e.currentTarget.value)}
               placeholder="my-chain"
             />
           </label>
           <label class="field-label">
             {t('transformers.chainDescriptionLabel')}
-            <input class="input" value={formDescription()} onInput={(e) => setFormDescription(e.currentTarget.value)} />
+            <input
+              class="input"
+              value={formDescription()}
+              onInput={(e) => markDirty(setFormDescription)(e.currentTarget.value)}
+            />
           </label>
 
           <h4 class="text-sm text-muted mb-0 mt-md">{t('transformers.steps')}</h4>
@@ -417,18 +477,15 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
           </Show>
 
           <div class="flex-row-sm mt-sm">
-            <button class="btn btn-primary primary-btn" type="button" onClick={save}>
-              {t('transformers.saveChain')}
-            </button>
             <button class="text-btn" type="button" onClick={closeForm}>
-              {t('transformers.cancelEdit')}
+              {t('transformers.doneEditing')}
             </button>
           </div>
         </section>
       </Show>
 
-      <Show when={formMode() === 'closed'}>
-        <button class="text-btn" type="button" onClick={openAdd}>
+      <Show when={editingId() === null}>
+        <button class="text-btn" type="button" onClick={addChain}>
           <i class="bi bi-plus-lg" /> {t('transformers.addChain')}
         </button>
       </Show>

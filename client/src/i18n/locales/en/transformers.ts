@@ -36,8 +36,8 @@ export const transformers = {
   addLua: 'Add Lua Script',
   addLuaButton: 'Add script',
   noScriptsAvailable: 'No transformer scripts yet. Create one in the Transformer Scripts menu.',
-  saveChain: 'Save',
-  cancelEdit: 'Cancel',
+  newChainName: 'New Chain',
+  doneEditing: 'Done',
 
   // Builtin step labels + params
   builtin: {
@@ -65,17 +65,18 @@ export const transformers = {
 
   // TransformerScriptsModal
   scriptsDescription:
-    'Lua scripts that rewrite the rendered message array. Use them as steps in a transformer chain. The chunk gets a mutable `messages` array and a `ctx` table; mutate in place or return a new array.',
+    'Lua scripts that rewrite the rendered message array. Use them as steps in a transformer chain. A script defines handle(messages, ctx) and returns the message array to send.',
   scriptsEmpty: 'No transformer scripts yet.',
   addScript: 'Add Script',
   editScript: 'Edit',
   deleteScript: 'Delete',
   deleteScriptConfirm: 'Delete transformer script "{{name}}"?',
+  newScriptName: 'New Script',
   scriptName: 'Name',
   scriptDescriptionLabel: 'Description',
   luaSource: 'Lua Source',
-  luaSourceHint: 'The chunk receives `messages` and `ctx` globals; mutate `messages` in place or return a new array.',
-  saveScript: 'Save',
+  luaSourceHint:
+    'Define handle(messages, ctx) and return the (possibly new) message array. Changes save automatically.',
   validate: 'Validate',
   validating: 'Validating…',
   validateOk: 'Script loads cleanly.',

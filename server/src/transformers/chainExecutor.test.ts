@@ -58,7 +58,12 @@ describe('executeChain', () => {
 
   it('runs a lua step against its source', async () => {
     const steps: TransformerStep[] = [{ kind: 'lua', scriptId: 's1', enabled: true }];
-    const luaSources = new Map([['s1', 'messages[#messages + 1] = { role = "user", content = "from lua" }']]);
+    const luaSources = new Map([
+      [
+        's1',
+        'function handle(messages, ctx) messages[#messages + 1] = { role = "user", content = "from lua" } return messages end',
+      ],
+    ]);
     const { messages, trace } = await executeChain([user('hi')], steps, ctx, luaSources);
     expect(messages.map((m) => m.content)).toEqual(['hi', 'from lua']);
     expect(trace).toEqual([]);

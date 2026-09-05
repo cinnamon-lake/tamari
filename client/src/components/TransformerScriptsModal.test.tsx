@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@solidjs/testing-library';
+import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { TransformerScriptsModal } from './TransformerScriptsModal.js';
 import { setState } from '../stores/serverStore.js';
 import { bus } from '../bus/WebSocketBus.js';
@@ -18,21 +18,47 @@ type ValidatedMessage = {
   error?: string;
 };
 
+type CreatedMessage = {
+  type: 'transformerscript.created';
+  item: TransformerScript;
+  clientId?: string;
+};
+
 function makeScript(overrides: Partial<TransformerScript> = {}): TransformerScript {
   return {
     id: 'ts-1',
     name: 'Strip OOC',
     description: 'Drops OOC lines',
-    luaSource: 'return messages',
+    luaSource: 'function handle(messages, ctx) return messages end',
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
   };
 }
 
+function sentSaves(sendSpy: { mock: { calls: unknown[][] } }): unknown[] {
+  return sendSpy.mock.calls
+    .map((c) => c[0])
+    .filter((m): m is { type: string } => {
+      return typeof m === 'object' && m !== null && (m as { type?: unknown }).type === 'transformerscript.save';
+    });
+}
+
+/** Capture the modal's transformerscript.created subscription so tests can
+    play the server's echo (the mocked bus sends nowhere). */
+function captureCreated(): { handler: ((msg: CreatedMessage) => void) | undefined } {
+  const captured: { handler: ((msg: CreatedMessage) => void) | undefined } = { handler: undefined };
+  vi.spyOn(bus, 'on').mockImplementation((type: string, handler: (msg: CreatedMessage) => void) => {
+    if (type === 'transformerscript.created') captured.handler = handler;
+    return () => {};
+  });
+  return captured;
+}
+
 describe('TransformerScriptsModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setState('clientId', 'test-client');
     setState('transformerScripts', []);
   });
 
@@ -61,42 +87,110 @@ describe('TransformerScriptsModal', () => {
     expect(screen.getByText('Drops OOC lines')).toBeInTheDocument();
   });
 
-  it('creates a script via transformerscript.save without an id', () => {
+  it('Add Script creates immediately via transformerscript.save without an id', () => {
     const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
     render(() => <TransformerScriptsModal onClose={() => {}} />);
 
     fireEvent.click(screen.getByText('Add Script'));
-    fireEvent.input(screen.getByPlaceholderText('strip-ooc'), { target: { value: 'My Script' } });
-    fireEvent.input(screen.getByPlaceholderText(/for i = #messages/), {
-      target: { value: 'table.remove(messages, 1)' },
-    });
-    fireEvent.click(screen.getByText('Save'));
 
-    const save = sendSpy.mock.calls.map((c) => c[0]).find((m) => m.type === 'transformerscript.save');
-    expect(save).toBeDefined();
-    expect((save as { id?: string }).id).toBeUndefined();
-    expect((save as { data: unknown }).data).toEqual({
-      name: 'My Script',
-      description: '',
-      luaSource: 'table.remove(messages, 1)',
-    });
+    const saves = sentSaves(sendSpy);
+    expect(saves).toHaveLength(1);
+    const save = saves[0] as { id?: string; data: { name: string; description: string; luaSource: string } };
+    expect(save.id).toBeUndefined();
+    expect(save.data.name).toBe('New Script');
+    expect(save.data.luaSource).toContain('function handle(messages, ctx)');
   });
 
-  it('edits a script via transformerscript.save with the id', () => {
+  it('opens the edit form on our own created echo and ignores other clients', () => {
+    vi.spyOn(bus, 'send').mockImplementation(() => {});
+    const created = captureCreated();
+    render(() => <TransformerScriptsModal onClose={() => {}} />);
+    fireEvent.click(screen.getByText('Add Script'));
+
+    // Another tab's creation must not hijack the form.
+    created.handler?.({ type: 'transformerscript.created', item: makeScript({ id: 'other' }), clientId: 'other-tab' });
+    expect(screen.queryByPlaceholderText('strip-ooc')).not.toBeInTheDocument();
+
+    created.handler?.({ type: 'transformerscript.created', item: makeScript(), clientId: 'test-client' });
+    expect(screen.getByDisplayValue('Strip OOC')).toBeInTheDocument();
+  });
+
+  it('auto-saves edits debounced with the id — no Save button', async () => {
     const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
     setState('transformerScripts', [makeScript()]);
     render(() => <TransformerScriptsModal onClose={() => {}} />);
 
     fireEvent.click(screen.getByText('Edit'));
+    expect(screen.queryByText('Save')).not.toBeInTheDocument();
     fireEvent.input(screen.getByDisplayValue('Strip OOC'), { target: { value: 'Renamed' } });
-    fireEvent.click(screen.getByText('Save'));
 
-    const save = sendSpy.mock.calls.map((c) => c[0]).find((m) => m.type === 'transformerscript.save');
-    expect(save).toBeDefined();
-    expect(save).toMatchObject({
-      id: 'ts-1',
-      data: { name: 'Renamed', description: 'Drops OOC lines' },
+    await waitFor(() => {
+      const saves = sentSaves(sendSpy);
+      expect(saves).toHaveLength(1);
+      expect(saves[0]).toMatchObject({
+        id: 'ts-1',
+        data: { name: 'Renamed', description: 'Drops OOC lines' },
+      });
     });
+  });
+
+  it('never auto-saves with a blank name', async () => {
+    vi.useFakeTimers();
+    try {
+      const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
+      setState('transformerScripts', [makeScript()]);
+      render(() => <TransformerScriptsModal onClose={() => {}} />);
+
+      fireEvent.click(screen.getByText('Edit'));
+      fireEvent.input(screen.getByDisplayValue('Strip OOC'), { target: { value: '' } });
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(sentSaves(sendSpy)).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('flushes a pending save when the edit form closes', async () => {
+    vi.useFakeTimers();
+    try {
+      const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
+      setState('transformerScripts', [makeScript()]);
+      render(() => <TransformerScriptsModal onClose={() => {}} />);
+
+      fireEvent.click(screen.getByText('Edit'));
+      fireEvent.input(screen.getByDisplayValue('Strip OOC'), { target: { value: 'Flushed' } });
+      // Done before the debounce fires — the edit must still go out.
+      fireEvent.click(screen.getByText('Done'));
+
+      const saves = sentSaves(sendSpy);
+      expect(saves).toHaveLength(1);
+      expect(saves[0]).toMatchObject({ id: 'ts-1', data: { name: 'Flushed' } });
+      // The pending timer was cancelled — no second save.
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(sentSaves(sendSpy)).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels a pending save when the edited script is deleted', async () => {
+    vi.useFakeTimers();
+    try {
+      const sendSpy = vi.spyOn(bus, 'send').mockImplementation(() => {});
+      setState('transformerScripts', [makeScript()]);
+      render(() => <TransformerScriptsModal onClose={() => {}} />);
+
+      fireEvent.click(screen.getByText('Edit'));
+      fireEvent.input(screen.getByDisplayValue('Strip OOC'), { target: { value: 'Doomed' } });
+      fireEvent.click(screen.getByText('Delete'));
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(sendSpy).toHaveBeenCalledWith({ type: 'transformerscript.delete', id: 'ts-1' });
+      expect(sentSaves(sendSpy)).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('deletes a script after confirmation', async () => {
@@ -127,16 +221,19 @@ describe('TransformerScriptsModal', () => {
       if (type === 'transformerscript.validated') validatedHandler = handler;
       return () => {};
     });
+    setState('transformerScripts', [makeScript()]);
     render(() => <TransformerScriptsModal onClose={() => {}} />);
 
-    fireEvent.click(screen.getByText('Add Script'));
-    fireEvent.input(screen.getByPlaceholderText(/for i = #messages/), {
-      target: { value: 'return messages' },
-    });
+    fireEvent.click(screen.getByText('Edit'));
+    const sourceArea = screen.getByDisplayValue('function handle(messages, ctx) return messages end');
+    fireEvent.input(sourceArea, { target: { value: 'function handle(m, c) return m end' } });
     fireEvent.click(screen.getByText('Validate'));
 
     const validate = sendSpy.mock.calls.map((c) => c[0]).find((m) => m.type === 'transformerscript.validate');
-    expect(validate).toMatchObject({ type: 'transformerscript.validate', luaSource: 'return messages' });
+    expect(validate).toMatchObject({
+      type: 'transformerscript.validate',
+      luaSource: 'function handle(m, c) return m end',
+    });
     const requestId = (validate as { requestId?: string }).requestId;
     expect(typeof requestId).toBe('string');
 
@@ -155,10 +252,12 @@ describe('TransformerScriptsModal', () => {
       if (type === 'transformerscript.validated') validatedHandler = handler;
       return () => {};
     });
+    setState('transformerScripts', [makeScript()]);
     render(() => <TransformerScriptsModal onClose={() => {}} />);
 
-    fireEvent.click(screen.getByText('Add Script'));
-    fireEvent.input(screen.getByPlaceholderText(/for i = #messages/), { target: { value: 'not lua' } });
+    fireEvent.click(screen.getByText('Edit'));
+    const sourceArea = screen.getByDisplayValue('function handle(messages, ctx) return messages end');
+    fireEvent.input(sourceArea, { target: { value: 'not lua' } });
     fireEvent.click(screen.getByText('Validate'));
 
     const validate = sendSpy.mock.calls.map((c) => c[0]).find((m) => m.type === 'transformerscript.validate');

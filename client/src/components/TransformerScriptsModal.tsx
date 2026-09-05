@@ -7,24 +7,41 @@
  * rebroadcasts `transformerscript.listed` after every mutation. The modal
  * requests a fresh list on open (CustomBackendsModal precedent — there is no
  * active-entity snapshot for this entity).
+ *
+ * There is no Save button: edits auto-save debounced with a dirty flag
+ * (BackendConfigModal / PromptListModal precedent). "Add Script" creates the
+ * entity immediately with a handle() template; the clientId-filtered
+ * `transformerscript.created` echo opens the edit form on it (PromptListModal
+ * duplicate-flow precedent). Pending edits flush on form close / modal close
+ * / switching the edit target, and are cancelled when the target is deleted.
  */
 
-import { createSignal, Show, For, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, Show, For, onMount, onCleanup } from 'solid-js';
 import type { TransformerScript } from '@tamari/types';
 import { useI18n } from '../i18n/index.js';
 import { Modal } from './Modal.js';
 import { confirmPopup } from '../stores/popupStore.js';
 import { state } from '../stores/serverStore.js';
 import { bus } from '../bus/WebSocketBus.js';
+import { AUTOSAVE_DEBOUNCE_MS } from '../timing.js';
 import './TransformerScriptsModal.css';
+
+/** Starter source for a freshly created script — doubles as the contract doc. */
+const NEW_SCRIPT_SOURCE = `-- handle(messages, ctx) receives the rendered message array and the
+-- context table (userName, charName, generationType, model,
+-- backendProvider); return the (possibly new) message array to send.
+function handle(messages, ctx)
+  return messages
+end
+`;
 
 export function TransformerScriptsModal(props: { onClose: () => void }) {
   const { t } = useI18n();
-  const [formMode, setFormMode] = createSignal<'closed' | 'add' | 'edit'>('closed');
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [formName, setFormName] = createSignal('');
   const [formDescription, setFormDescription] = createSignal('');
   const [formLuaSource, setFormLuaSource] = createSignal('');
+  const [dirty, setDirty] = createSignal(false);
 
   // Validate-on-demand: request/response pair keyed by requestId — results
   // with any other requestId are ignored so a racing client can't clobber
@@ -46,7 +63,19 @@ export function TransformerScriptsModal(props: { onClose: () => void }) {
     bus.send({ type: 'transformerscript.list' });
   });
 
-  const close = () => props.onClose();
+  // Add Script creates server-side immediately; our own created echo opens
+  // the edit form. Self-filtered so another tab's creation doesn't hijack
+  // the form (AGENTS.md §Active Entity).
+  const unsubCreated = bus.on('transformerscript.created', (msg) => {
+    if (msg.clientId !== state.clientId) return;
+    openEdit(msg.item);
+  });
+  onCleanup(unsubCreated);
+
+  const close = () => {
+    flushPending();
+    props.onClose();
+  };
 
   const resetValidation = () => {
     setValidating(false);
@@ -54,42 +83,71 @@ export function TransformerScriptsModal(props: { onClose: () => void }) {
     setValidationResult(null);
   };
 
-  const openAdd = () => {
-    setFormMode('add');
-    setEditingId(null);
-    setFormName('');
-    setFormDescription('');
-    setFormLuaSource('');
-    resetValidation();
+  /** Send the current form as an update. Skipped while invalid (blank name)
+      so a half-typed edit never clobbers the stored entity. */
+  const saveForm = () => {
+    const id = editingId();
+    const name = formName().trim();
+    if (!id || !name) return;
+    bus.send({
+      type: 'transformerscript.save',
+      id,
+      data: { name, description: formDescription().trim(), luaSource: formLuaSource() },
+    });
   };
 
+  /** Flush a pending debounced save NOW — clearing dirty first would cancel
+      the timer and silently drop the edits (BackendConfigModal precedent). */
+  const flushPending = () => {
+    if (!dirty()) return;
+    saveForm();
+    setDirty(false);
+  };
+
+  // Auto-save the open script (debounced).
+  createEffect(() => {
+    if (!dirty()) return;
+    formName();
+    formDescription();
+    formLuaSource();
+
+    const timer = setTimeout(() => {
+      saveForm();
+      setDirty(false);
+    }, AUTOSAVE_DEBOUNCE_MS);
+    onCleanup(() => clearTimeout(timer));
+  });
+
   const openEdit = (s: TransformerScript) => {
-    setFormMode('edit');
+    // Flush edits against the PREVIOUS target before switching — its save
+    // goes out with that target's id.
+    flushPending();
     setEditingId(s.id);
     setFormName(s.name);
     setFormDescription(s.description);
     setFormLuaSource(s.luaSource);
+    setDirty(false);
     resetValidation();
   };
 
+  const addScript = () => {
+    flushPending();
+    // Upsert without id = create; the created echo opens the edit form.
+    bus.send({
+      type: 'transformerscript.save',
+      data: { name: t('transformers.newScriptName'), description: '', luaSource: NEW_SCRIPT_SOURCE },
+    });
+  };
+
   const closeForm = () => {
-    setFormMode('closed');
+    flushPending();
     setEditingId(null);
     resetValidation();
   };
 
-  const save = () => {
-    const name = formName().trim();
-    if (!name || !formLuaSource().trim()) return;
-    const data = { name, description: formDescription().trim(), luaSource: formLuaSource() };
-    const id = editingId();
-    // Upsert — presence of `id` decides update vs create server-side.
-    if (formMode() === 'edit' && id) {
-      bus.send({ type: 'transformerscript.save', id, data });
-    } else {
-      bus.send({ type: 'transformerscript.save', data });
-    }
-    closeForm();
+  const markDirty = (setter: (value: string) => void) => (value: string) => {
+    setter(value);
+    setDirty(true);
   };
 
   const validate = () => {
@@ -104,9 +162,13 @@ export function TransformerScriptsModal(props: { onClose: () => void }) {
 
   const remove = async (s: TransformerScript) => {
     if (!(await confirmPopup(t('transformers.deleteScriptConfirm', { name: s.name })))) return;
-    // Close the edit form if it's open on this script — otherwise a later
-    // Save sends an update for a dead id and the form contents error out.
-    if (editingId() === s.id) closeForm();
+    // Cancel any pending debounced save when the edit form is open on this
+    // script — its target is about to disappear (BackendConfigModal
+    // delete-after-save hazard).
+    if (editingId() === s.id) {
+      setDirty(false);
+      closeForm();
+    }
     bus.send({ type: 'transformerscript.delete', id: s.id });
   };
 
@@ -151,24 +213,26 @@ export function TransformerScriptsModal(props: { onClose: () => void }) {
         </Show>
       </section>
 
-      {/* Add / edit form */}
-      <Show when={formMode() !== 'closed'}>
+      {/* Edit form — auto-saves; opened by Edit or by the Add Script echo. */}
+      <Show when={editingId() !== null}>
         <section class="settings-section">
-          <h3 class="section-heading">
-            {formMode() === 'add' ? t('transformers.addScript') : t('transformers.editScript')}
-          </h3>
+          <h3 class="section-heading">{t('transformers.editScript')}</h3>
           <label class="field-label">
             {t('transformers.scriptName')}
             <input
               class="input"
               value={formName()}
-              onInput={(e) => setFormName(e.currentTarget.value)}
+              onInput={(e) => markDirty(setFormName)(e.currentTarget.value)}
               placeholder="strip-ooc"
             />
           </label>
           <label class="field-label">
             {t('transformers.scriptDescriptionLabel')}
-            <input class="input" value={formDescription()} onInput={(e) => setFormDescription(e.currentTarget.value)} />
+            <input
+              class="input"
+              value={formDescription()}
+              onInput={(e) => markDirty(setFormDescription)(e.currentTarget.value)}
+            />
           </label>
           <label class="field-label">
             {t('transformers.luaSource')}
@@ -177,17 +241,14 @@ export function TransformerScriptsModal(props: { onClose: () => void }) {
               rows={12}
               value={formLuaSource()}
               onInput={(e) => {
-                setFormLuaSource(e.currentTarget.value);
+                markDirty(setFormLuaSource)(e.currentTarget.value);
                 resetValidation();
               }}
-              placeholder="for i = #messages, 1, -1 do&#10;  ...&#10;end"
+              placeholder="function handle(messages, ctx)&#10;  return messages&#10;end"
             />
             <span class="hint-text">{t('transformers.luaSourceHint')}</span>
           </label>
           <div class="flex-row-sm mt-sm">
-            <button class="btn btn-primary primary-btn" type="button" onClick={save}>
-              {t('transformers.saveScript')}
-            </button>
             <button
               class="text-btn"
               type="button"
@@ -197,7 +258,7 @@ export function TransformerScriptsModal(props: { onClose: () => void }) {
               {validating() ? t('transformers.validating') : t('transformers.validate')}
             </button>
             <button class="text-btn" type="button" onClick={closeForm}>
-              {t('transformers.cancelEdit')}
+              {t('transformers.doneEditing')}
             </button>
           </div>
           {/* role=status announces the async load-check result (aria-live).
@@ -214,8 +275,8 @@ export function TransformerScriptsModal(props: { onClose: () => void }) {
         </section>
       </Show>
 
-      <Show when={formMode() === 'closed'}>
-        <button class="text-btn" type="button" onClick={openAdd}>
+      <Show when={editingId() === null}>
+        <button class="text-btn" type="button" onClick={addScript}>
           <i class="bi bi-plus-lg" /> {t('transformers.addScript')}
         </button>
       </Show>
