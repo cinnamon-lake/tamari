@@ -160,7 +160,7 @@ export class NaiImageTemplate implements ToolTemplate {
             '- Always lock in the framing explicitly: "portrait", "upper body", "cowboy shot", "full body", "close-up", etc. If omitted, the model picks one at random.\n' +
             '- Always lock in eye direction ("looking at viewer", "looking to the side", "looking away") and hand positions ("hands on own hips", "hand in own hair", "arms at sides") — eyes and hands drift when left unspecified.\n' +
             '- To render legible text in the image (V5 handles English, Japanese, Chinese), put the exact wording in quotes in a natural-language sentence, e.g. A speech bubble saying "Hello world!". Avoid the "no text" tag when you want text.\n' +
-            '- Useful V5 tags: "high complexity" for normal detailed images ("low"/"ultra complexity" for more stylized looks), "transparent background" for a true alpha-channel background, "depthness" for deeper shading, "year XXXX" to bias the art style toward a given year.\n' +
+            '- Useful V5 tags: "high complexity" for normal detailed images ("low"/"ultra complexity" for more stylized looks), "transparent background" for a true alpha-channel background, "depthness" for deeper shading.\n' +
             '- For scenes with multiple characters, pass character_prompts and describe each character separately there.\n' +
             'When an image is successfully generated, the result will include a reference in the format {{attachment::ID}}. To display the image in your response, include this exact reference.',
           parameters: z.toJSONSchema(NaiImageArgs) as Record<string, unknown>,
