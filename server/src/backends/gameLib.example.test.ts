@@ -5,6 +5,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { getMessageText, textToParts } from '@tamari/types';
 import { LuaRuntime } from '../scripting/LuaRuntime.js';
 import { LuaBackendAdapter, type CustomBackendDelegate, type DelegatedGenerateResult } from './LuaBackendAdapter.js';
 import { consumeStream, type BackendStreamItem, type Prompt } from './BackendAdapter.js';
@@ -22,11 +23,10 @@ const USAGE = { promptTokens: 1, completionTokens: 1 };
 // is a mechanical line, "end" gists the log and serves it as a plain line.
 const CARD_LUA = `
 local summarize = require("lib/summarize")
-
+local chrome = require("lib/chrome")
 function generate(prompt, ctx)
   if type(state) ~= "table" then state = {} end
-  local last = prompt.messages[#prompt.messages]
-  local cmd = last.content
+  local cmd = chrome.text(prompt.messages[#prompt.messages].content)
   if cmd == "start" then
     state.log = { { role = "assistant", content = "The goblin blocks the way." } }
     return "The goblin blocks the way."
@@ -53,7 +53,7 @@ function list_models() return { { id = "spar", name = "Spar" } } end
 const PROBE_LUA = `
 local registry = require("lib/registry")
 local toolset = require("lib/toolset")
-
+local chrome = require("lib/chrome")
 local enemies = registry.new({
   tool = "register_enemy",
   key = "enemies",
@@ -66,7 +66,7 @@ local enemies = registry.new({
 
 function generate(prompt, ctx)
   if type(state) ~= "table" then state = {} end
-  local cmd = prompt.messages[#prompt.messages].content
+  local cmd = chrome.text(prompt.messages[#prompt.messages].content)
   if cmd == "missing" then
     return enemies.exec("register_enemy", { name = "Imp" })
   end
@@ -121,9 +121,9 @@ async function runTurn(
 ): Promise<string> {
   const prompt: Prompt = {
     messages: [
-      { role: 'system', content: 'Base system prompt.' },
-      ...history.map((h) => ({ role: h.role as 'user' | 'assistant', content: h.content })),
-      { role: 'user', content: userText },
+      { role: 'system', content: textToParts('Base system prompt.') },
+      ...history.map((h) => ({ role: h.role as 'user' | 'assistant', content: textToParts(h.content) })),
+      { role: 'user', content: textToParts(userText) },
     ],
     tokenUsage: { prompt: 0, completion: 0 },
   };
@@ -269,8 +269,8 @@ describe('lib/loop round cap', () => {
     const adapter = makeAdapter(wedged, LOOP_LUA);
     const prompt: Prompt = {
       messages: [
-        { role: 'system', content: 'Base system prompt.' },
-        { role: 'user', content: 'go' },
+        { role: 'system', content: textToParts('Base system prompt.') },
+        { role: 'user', content: textToParts('go') },
       ],
       tokenUsage: { prompt: 0, completion: 0 },
     };
@@ -361,12 +361,12 @@ describe('lib/loop thinking round-trip', () => {
 // A rolling-summary probe card: push/briefing/inspect over state.story.
 const ROLLING_LUA = `
 local rolling = require("lib/rolling")
-
+local chrome = require("lib/chrome")
 function generate(prompt, ctx)
   if type(state) ~= "table" then state = {} end
   state.story = state.story or rolling.channel()
   rolling.bind(prompt)
-  local cmd = prompt.messages[#prompt.messages].content
+  local cmd = chrome.text(prompt.messages[#prompt.messages].content)
   local label, gist = cmd:match("^push:([^|]+)|(.+)$")
   if label then
     return rolling.push(state.story, { label = label, gist = gist,
@@ -409,8 +409,8 @@ async function roll(
 }> {
   const prompt: Prompt = {
     messages: [
-      { role: 'system', content: 'Base system prompt.' },
-      { role: 'user', content: cmd },
+      { role: 'system', content: textToParts('Base system prompt.') },
+      { role: 'user', content: textToParts(cmd) },
     ],
     tokenUsage: { prompt: 0, completion: 0 },
   };
@@ -437,7 +437,9 @@ const digestDelegate = (digest = 'A folded digest of the early episodes.'): Cust
 });
 
 function sysOf(p: Prompt): string {
-  return typeof p.messages[0]?.content === 'string' ? (p.messages[0].content as string) : '';
+  // The game-lib sub-gens still build their prompt messages with bare-string
+  // content (tolerated over the Lua bridge); getMessageText handles both.
+  return getMessageText(p.messages[0]?.content);
 }
 
 describe('lib/rolling', () => {
@@ -531,12 +533,12 @@ describe('lib/rolling', () => {
 const KV_LUA = `
 local rolling = require("lib/rolling")
 local toolset = require("lib/toolset")
-
+local chrome = require("lib/chrome")
 function generate(prompt, ctx)
   if type(state) ~= "table" then state = {} end
   state.story = state.story or rolling.channel()
   rolling.bind(prompt)
-  local cmd = prompt.messages[#prompt.messages].content
+  local cmd = chrome.text(prompt.messages[#prompt.messages].content)
   if cmd == "set" then rolling.set(state.story, "guild_name", "The Sunken Guildhall") return "set" end
   if cmd == "overwrite" then rolling.set(state.story, "guild_name", "The REBUILT Guildhall") return "ok" end
   if cmd == "get" then return rolling.get(state.story, "guild_name") or "nil" end
@@ -599,7 +601,7 @@ describe('lib/rolling kv (the non-compacting half)', () => {
 // A partitioned-registry probe: rooms routed by floor into packs.
 const PACK_LUA = `
 local registry = require("lib/registry")
-
+local chrome = require("lib/chrome")
 local rooms = registry.new({
   tool = "add_room",
   key = "rooms",
@@ -630,7 +632,7 @@ local rooms = registry.new({
 
 function generate(prompt, ctx)
   if type(state) ~= "table" then state = {} end
-  local cmd = prompt.messages[#prompt.messages].content
+  local cmd = chrome.text(prompt.messages[#prompt.messages].content)
   local f, name = cmd:match("^create:([^:]+):(.+)$")
   if f then
     local id, status = rooms.create({ name = name, floor = f, hp = 30, tags = { "dark" } }) -- hp 30 clamps to 20
@@ -785,12 +787,12 @@ describe('lib/registry mutable fields and queries', () => {
 // A ledger probe: set semantics for promises.
 const LEDGER_LUA = `
 local ledger = require("lib/ledger")
-
+local chrome = require("lib/chrome")
 function generate(prompt, ctx)
   if type(state) ~= "table" then state = {} end
   state.turn = state.turn or 0
   ledger.bind(function() return state.turn end)
-  local cmd = prompt.messages[#prompt.messages].content
+  local cmd = chrome.text(prompt.messages[#prompt.messages].content)
   if cmd == "file" then return ledger.exec("promise", { id = "bro", what = "design the brother", due = state.turn + 5 }) end
   if cmd == "refile" then return ledger.exec("promise", { id = "bro", what = "REDESIGN the brother", due = state.turn + 8 }) end
   if cmd == "resolve" then return ledger.exec("resolve_promise", { id = "bro", outcome = "kept" }) end

@@ -140,17 +140,17 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const messages = announced.prompt.messages as Array<{ role: string; content: string }>;
+    const messages = announced.prompt.messages as Array<{ role: string; content: unknown }>;
 
     // Verify {{char}} was resolved to 'Seraphina' in character description marker
-    const systemContents = messages.filter((m) => m.role === 'system').map((m) => m.content);
+    const systemContents = messages.filter((m) => m.role === 'system').map((m) => getMessageText(m.content));
     expect(systemContents.some((c) => c.includes('Seraphina'))).toBe(true);
 
     // Verify {{user}} was resolved to 'Tester' in persona description marker
     expect(systemContents.some((c) => c.includes('Tester'))).toBe(true);
 
     // Verify greeting macro was resolved in chat history
-    const assistantContents = messages.filter((m) => m.role === 'assistant').map((m) => m.content);
+    const assistantContents = messages.filter((m) => m.role === 'assistant').map((m) => getMessageText(m.content));
     expect(assistantContents.some((c) => c.includes('Greetings Tester!'))).toBe(true);
   });
 
@@ -208,8 +208,8 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const messages = announced.prompt.messages as Array<{ role: string; content: string }>;
-    const systemContents = messages.filter((m) => m.role === 'system').map((m) => m.content);
+    const messages = announced.prompt.messages as Array<{ role: string; content: unknown }>;
+    const systemContents = messages.filter((m) => m.role === 'system').map((m) => getMessageText(m.content));
 
     expect(systemContents.some((c) => c.includes('Magic is powered by mana crystals.'))).toBe(true);
   });
@@ -310,8 +310,8 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const messages = announced.prompt.messages as Array<{ role: string; content: string }>;
-    const systemContents = messages.filter((m) => m.role === 'system').map((m) => m.content);
+    const messages = announced.prompt.messages as Array<{ role: string; content: unknown }>;
+    const systemContents = messages.filter((m) => m.role === 'system').map((m) => getMessageText(m.content));
 
     expect(systemContents.some((c) => c.includes('You are a helpful assistant.'))).toBe(true);
     expect(systemContents.some((c) => c.includes('Always be polite and concise.'))).toBe(true);
@@ -400,9 +400,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     expect(systemContents.some((c) => c.includes('The character loves pineapple pizza.'))).toBe(true);
   });
@@ -431,9 +431,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     // The override should replace the main prompt content
     expect(systemContents.some((c) => c.includes('You are an expert quantum physicist.'))).toBe(true);
@@ -464,9 +464,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     expect(systemContents.some((c) => c.includes('Always end with a poetic flourish.'))).toBe(true);
   });
@@ -576,8 +576,11 @@ describe('e2e prompt integration', () => {
     const announced = h.expectBroadcast('prompt.announced');
     const assistantMessages = announced.prompt.messages.filter((m: any) => m.role === 'assistant');
 
-    // Find an assistant message whose content is an array (has parts)
-    const withParts = assistantMessages.find((m: any) => Array.isArray(m.content));
+    // Find an assistant history message whose parts carry a reasoning block
+    // (all message contents are parts arrays now, so match on part type)
+    const withParts = assistantMessages.find(
+      (m: any) => Array.isArray(m.content) && m.content.some((p: any) => p.type === 'reasoning'),
+    );
     expect(withParts).toBeDefined();
 
     const parts = withParts!.content as Array<{ type: string; text: string }>;
@@ -647,9 +650,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     // The character description should appear in the system prompt
     expect(systemContents.some((c) => c.includes('A helpful AI.'))).toBe(true);
@@ -719,9 +722,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     expect(systemContents.some((c) => c.includes('She is wise.'))).toBe(true);
     expect(systemContents.some((c) => c.includes('She is kind.'))).toBe(true);
@@ -754,9 +757,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     expect(systemContents.some((c) => c.includes('Current mood: happy.'))).toBe(true);
   });
@@ -846,9 +849,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     expect(systemContents.some((c) => c.includes('Desc: A helpful AI.'))).toBe(true);
     expect(systemContents.some((c) => c.includes('Personality: Friendly.'))).toBe(true);
@@ -939,9 +942,9 @@ describe('e2e prompt integration', () => {
     h.expectBroadcast('message.snapshot');
     h.expectBroadcast('generation.done');
 
-    const firstSystemContents = (firstAnnounced.prompt.messages as Array<{ role: string; content: string }>)
+    const firstSystemContents = (firstAnnounced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     // On first generation, lastMessage = empty assistant placeholder, lastUserMessage = user text
     expect(firstSystemContents.some((c) => c.includes('User: Greetings!'))).toBe(true);
@@ -956,9 +959,9 @@ describe('e2e prompt integration', () => {
     h.expectBroadcast('message.snapshot');
     h.expectBroadcast('generation.done');
 
-    const continueSystemContents = (continueAnnounced.prompt.messages as Array<{ role: string; content: string }>)
+    const continueSystemContents = (continueAnnounced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     // On continue, the target message already has "Response!", so lastMessage/lastCharMessage resolve
     expect(continueSystemContents.some((c) => c.includes('Last: Response!'))).toBe(true);
@@ -1047,9 +1050,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     expect(systemContents.some((c) => c.includes('eq-true:true'))).toBe(true);
     expect(systemContents.some((c) => c.includes('eq-false:'))).toBe(true);
@@ -1138,9 +1141,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     expect(systemContents.some((c) => c.includes('Model:test-model-42'))).toBe(true);
     expect(systemContents.some((c) => c.includes('Ctx:8192'))).toBe(true);
@@ -1227,9 +1230,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     const content = systemContents.join(' ');
 
@@ -1327,9 +1330,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     const content = systemContents.join(' ');
 
@@ -1429,9 +1432,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     const content = systemContents.join(' ');
     expect(content).toContain('Trim:spaced');
@@ -1540,9 +1543,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     const content = systemContents.join(' ');
     expect(content).toContain('Shorthand:happy');
@@ -1640,9 +1643,9 @@ describe('e2e prompt integration', () => {
     } as ClientMessage);
 
     const announced = h.expectBroadcast('prompt.announced');
-    const systemContents = (announced.prompt.messages as Array<{ role: string; content: string }>)
+    const systemContents = (announced.prompt.messages as Array<{ role: string; content: unknown }>)
       .filter((m) => m.role === 'system')
-      .map((m) => m.content);
+      .map((m) => getMessageText(m.content));
 
     const content = systemContents.join(' ');
 

@@ -11,7 +11,7 @@
 
 import { LuaBackendAdapter, type CustomBackendDelegate, type DelegatedGenerateResult } from './LuaBackendAdapter.js';
 import { consumeStream, type BackendStreamItem, type Prompt } from './BackendAdapter.js';
-import type { MessageRole } from '@tamari/types';
+import { getMessageText, type MessageRole } from '@tamari/types';
 import type { LuaRuntime } from '../scripting/LuaRuntime.js';
 
 export interface DryRunCharacterContext {
@@ -75,9 +75,7 @@ export interface DryRunOutcome {
 const PREVIEW_LIMIT = 4000;
 
 function promptPreview(prompt: Prompt): string {
-  const raw = prompt.messages
-    .map((m) => `${m.role}: ${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`)
-    .join('\n');
+  const raw = prompt.messages.map((m) => `${m.role}: ${getMessageText(m.content)}`).join('\n');
   return raw.length > PREVIEW_LIMIT ? raw.slice(0, PREVIEW_LIMIT) + '…[truncated]' : raw;
 }
 
@@ -120,9 +118,11 @@ export async function dryRunBackendScript(runtime: LuaRuntime, opts: DryRunOptio
   });
 
   const messages: Prompt['messages'] = [];
-  if (opts.character?.description) messages.push({ role: 'system', content: opts.character.description });
-  if (opts.character?.firstMes) messages.push({ role: 'assistant', content: opts.character.firstMes });
-  messages.push({ role: 'user', content: opts.input });
+  if (opts.character?.description)
+    messages.push({ role: 'system', content: [{ type: 'text', text: opts.character.description }] });
+  if (opts.character?.firstMes)
+    messages.push({ role: 'assistant', content: [{ type: 'text', text: opts.character.firstMes }] });
+  messages.push({ role: 'user', content: [{ type: 'text', text: opts.input }] });
   const prompt: Prompt = { messages, tokenUsage: { prompt: 0, completion: 0 } };
 
   const { items, result } = await consumeStream(

@@ -221,7 +221,12 @@ describe('e2e group chat', () => {
       supportsTools: false,
       callIndex: 0,
       async *stream(prompt: any, _signal: any) {
-        const system = prompt.messages.find((m: any) => m.role === 'system')?.content ?? '';
+        // System components are never squished: each is its own message with
+        // parts-array content, so scan them all.
+        const system = prompt.messages
+          .filter((m: any) => m.role === 'system')
+          .map((m: any) => getMessageText(m.content))
+          .join('\n');
         const isAlpha = system.includes(charAName);
         const content = isAlpha
           ? `Hello from ${charAName}!\n${charBName}: I should not appear.\nMore from ${charAName}.`

@@ -20,6 +20,7 @@ import type {
   ToolUsePart,
 } from './BackendAdapter.js';
 import { logger } from '../lib/logger.js';
+import { getMessageText } from '@tamari/types';
 import { logDelta } from './RequestLogger.js';
 import { executeRequest, type BaseAdapterConfig } from './executeRequest.js';
 import {
@@ -286,14 +287,15 @@ export class OpenAIBackendAdapter implements BackendAdapter {
   }
 
   protected convertMessages(messages: PipelineMessage[]): OpenAIChatMessage[] {
-    // Strip trailing empty assistant message (created as a stream target).
-    // It is the adapter's responsibility to drop it before sending to the API.
+    // Strip a trailing empty assistant message (created as a stream target).
+    // "Empty" means text-only parts with blank joined text — a message carrying
+    // tool_use/tool_result/reasoning parts is real history and must be kept.
     const lastMsg = messages[messages.length - 1];
     if (
       lastMsg &&
       lastMsg.role === 'assistant' &&
-      typeof lastMsg.content === 'string' &&
-      !lastMsg.content.trim() &&
+      lastMsg.content.every((p) => p.type === 'text') &&
+      !getMessageText(lastMsg.content).trim() &&
       !lastMsg.reasoningFormatted
     ) {
       messages = messages.slice(0, -1);
@@ -334,9 +336,7 @@ export class OpenAIBackendAdapter implements BackendAdapter {
 
     for (const m of messages) {
       // Use pre-formatted reasoning+content when available
-      const effectiveContent = m.reasoningFormatted ? m.reasoningFormatted : m.content;
-      const parts: ContentPart[] =
-        typeof effectiveContent === 'string' ? [{ type: 'text', text: effectiveContent }] : effectiveContent;
+      const parts: ContentPart[] = m.reasoningFormatted ? [{ type: 'text', text: m.reasoningFormatted }] : m.content;
 
       // Assistant messages may contain multiple tool-call cycles.
       // We flush an assistant message whenever we hit a tool_result part.
@@ -372,7 +372,7 @@ export class OpenAIBackendAdapter implements BackendAdapter {
           msg.tool_call_id = firstToolResult.toolUseId;
           msg.content = textParts.map((p) => p.text).join('') || firstToolResult.content || '';
         } else {
-          msg.content = typeof m.content === 'string' ? m.content : this.convertParts(parts);
+          msg.content = this.convertParts(parts);
         }
         out.push(msg);
         continue;
@@ -381,7 +381,7 @@ export class OpenAIBackendAdapter implements BackendAdapter {
       // User / system messages
       out.push({
         role: m.role,
-        content: typeof m.content === 'string' ? m.content : this.convertParts(parts),
+        content: this.convertParts(parts),
       });
     }
 

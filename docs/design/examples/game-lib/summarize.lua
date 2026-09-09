@@ -10,13 +10,16 @@
 -- (lib/rolling). No tags, no display rules — the memoir is just text.
 --
 -- The span is the caller's, passed via opts.span (message-shaped entries,
--- usually tracked mechanically in state). gist() returns nil only when there
+-- usually tracked mechanically in state; content may be a parts array or a
+-- bare string — chrome.text reads both). gist() returns nil only when there
 -- is nothing to summarize (no span, empty span, empty delegate answer) — the
 -- caller picks the fallback. A delegate ERROR propagates to the CALLER, who
 -- decides what it means — main.lua's endFight pcalls gist() and degrades to
 -- a canned line rather than failing the turn. One
 -- honest bound: the gist is only as good as what the span shows — anything
 -- kept out of the delegate's view can't make it into the summary.
+
+local chrome = require("lib/chrome")
 
 local M = {}
 
@@ -31,9 +34,12 @@ function M.gist(prompt, opts)
   local lines = {}
   local budget = opts.maxSpanChars or 6000
   for i = #span, 1, -1 do -- newest-first until the budget is spent
-    -- Tool-call-shaped entries carry no content; skip them, never crash.
-    if type(span[i].content) == "string" then
-      local line = span[i].role .. ": " .. span[i].content
+    -- Entries with no readable text (tool-call-shaped parts, no content)
+    -- extract to "" and skip — never crash. Content may be a parts array
+    -- (entries filed straight from the prompt) or a bare string.
+    local text = chrome.text(span[i].content)
+    if text ~= "" then
+      local line = span[i].role .. ": " .. text
       if #line > budget then break end
       table.insert(lines, 1, line)
       budget = budget - #line

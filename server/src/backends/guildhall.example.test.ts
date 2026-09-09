@@ -14,6 +14,7 @@ import { LuaBackendAdapter, type CustomBackendDelegate, type DelegatedGenerateRe
 import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
 import type { GenerationType } from './BackendAdapter.js';
 import type { MessageRole } from '@tamari/types';
+import { getMessageText } from '@tamari/types';
 import { consumeStream, type BackendStreamItem, type Prompt } from './BackendAdapter.js';
 
 const luaSource = readFileSync(new URL('../../../docs/design/examples/guildhall/main.lua', import.meta.url), 'utf8');
@@ -139,10 +140,10 @@ async function runTurnRaw(
 ) {
   const prompt: Prompt = {
     messages: [
-      { role: 'system', content: 'Base system prompt.' },
-      ...(extraMessages ?? []),
-      ...(history ?? []).map((h) => ({ role: h.role, content: h.content })),
-      { role: 'user', content: userText },
+      { role: 'system', content: [{ type: 'text', text: 'Base system prompt.' }] },
+      ...(extraMessages ?? []).map((m) => ({ role: m.role, content: [{ type: 'text' as const, text: m.content }] })),
+      ...(history ?? []).map((h) => ({ role: h.role, content: [{ type: 'text' as const, text: h.content }] })),
+      { role: 'user', content: [{ type: 'text' as const, text: userText }] },
     ],
     tokenUsage: { prompt: 0, completion: 0 },
   };
@@ -176,8 +177,9 @@ async function runTurn(
   return { text, state: JSON.parse(result.scriptState!) as MergeState, scriptState: result.scriptState! };
 }
 
-const sysOf = (p: Prompt): string =>
-  typeof p.messages[0]?.content === 'string' ? (p.messages[0].content as string) : '';
+// The card composes delegate prompts with bare-string content; normalizeLuaPrompt
+// converts them to parts on the way in, so the delegate always sees parts arrays.
+const sysOf = (p: Prompt): string => getMessageText(p.messages[0]?.content);
 const clone = (p: Prompt): Prompt => JSON.parse(JSON.stringify(p)) as Prompt;
 
 /** A floor pack blob in the registry shape: one section per partitioned registry. */

@@ -1,18 +1,17 @@
 import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { setSetting } from '../helpers/settings.js';
 import { setTransformerSteps, resetTransformerChain } from '../helpers/transformers.js';
-import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
+import { getLastLlmRequest, waitForNextLlmRequest, wireContentText } from '../helpers/llm.js';
 import { uniqueName } from '../helpers/names.js';
 
-/** Last user-message string content in a captured mock-LLM request body. */
+/** Last user-message text in a captured mock-LLM request body (content is a parts array on the wire). */
 function lastUserContent(body: unknown): string {
   const messages = (body as { messages?: Array<{ role?: string; content?: unknown }> })?.messages ?? [];
   const lastUser = messages
     .slice()
     .reverse()
     .find((m) => m.role === 'user');
-  const content = lastUser?.content;
-  return typeof content === 'string' ? content : JSON.stringify(content ?? '');
+  return wireContentText(lastUser?.content);
 }
 
 // Covers the GenerationService finalize post-processing paths (chat mode):

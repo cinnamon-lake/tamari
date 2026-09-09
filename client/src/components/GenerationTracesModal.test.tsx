@@ -123,7 +123,7 @@ describe('GenerationTracesModal', () => {
           id: 'gen-with-prompt',
           meta: {
             prompt: {
-              messages: [{ role: 'user', content: 'PROMPT-MARKER' }],
+              messages: [{ role: 'user', content: [{ type: 'text', text: 'PROMPT-MARKER' }] }],
               tokenUsage: { prompt: 1, completion: 1 },
             },
           },

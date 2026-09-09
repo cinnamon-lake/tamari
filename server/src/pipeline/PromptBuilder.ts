@@ -25,7 +25,6 @@ import { MacroResolver, type MacroContext } from './MacroResolver.js';
 import { applyRules, filterRulesByRole } from '../services/RegexEngine.js';
 import { PromptManager, type PromptDef, type PromptOrderEntry } from './PromptManager.js';
 import { ChatCompletionRenderer } from './renderers/ChatCompletionRenderer.js';
-import { PROMPT_SEPARATOR } from './renderers/Renderer.js';
 import type { RegexRule } from '@tamari/types';
 import type { ITokenCounter } from '../tokenizers/TokenCounter.js';
 import type { BackendToolDefinition } from '../services/ToolRegistry.js';
@@ -132,8 +131,10 @@ export interface BuildOptions {
 
 /** Result of the World Info scan stage. */
 export interface WorldInfoScanResult {
-  before: string;
-  after: string;
+  /** Contents of activated before-char (+ top) entries, one element each. */
+  before: string[];
+  /** Contents of activated after-char (+ bottom) entries, one element each. */
+  after: string[];
   atDepthEntries: WorldInfoEntry[];
   activatedEntryIds: string[] | undefined;
   /** Append-only mode: at least one non-constant entry was excluded (trace). */
@@ -200,8 +201,8 @@ export class PromptBuilder {
     tokenCounter: ITokenCounter,
   ): WorldInfoScanResult {
     const result: WorldInfoScanResult = {
-      before: '',
-      after: '',
+      before: [],
+      after: [],
       atDepthEntries: [],
       activatedEntryIds: undefined,
     };
@@ -254,13 +255,11 @@ export class PromptBuilder {
     } else {
       result.activatedEntryIds = wiResult.activatedEntryIds;
     }
-    result.before = wiResult.before.map((i) => i.entry.content).join(PROMPT_SEPARATOR);
-    result.after = wiResult.after.map((i) => i.entry.content).join(PROMPT_SEPARATOR);
+    result.before = wiResult.before.map((i) => i.entry.content);
+    result.after = wiResult.after.map((i) => i.entry.content);
     // Include top/bottom entries alongside before/after (they were previously dropped).
-    const topContent = wiResult.top.map((i) => i.entry.content).join(PROMPT_SEPARATOR);
-    const bottomContent = wiResult.bottom.map((i) => i.entry.content).join(PROMPT_SEPARATOR);
-    if (topContent) result.before = (result.before ? result.before + PROMPT_SEPARATOR : '') + topContent;
-    if (bottomContent) result.after = (result.after ? result.after + PROMPT_SEPARATOR : '') + bottomContent;
+    result.before.push(...wiResult.top.map((i) => i.entry.content));
+    result.after.push(...wiResult.bottom.map((i) => i.entry.content));
     result.atDepthEntries = wiResult.atDepth.map((i) => i.entry);
     return result;
   }

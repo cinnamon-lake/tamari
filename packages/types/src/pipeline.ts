@@ -71,7 +71,13 @@ export type ContentPart =
 
 export interface PipelineMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | ContentPart[];
+  /**
+   * Always a parts array — never a bare string. Prompt components are never
+   * string-joined ("squished") before the backend adapter; each component is
+   * its own message/part and adapters own any wire-format flattening. Use
+   * `getMessageText(content)` for plain-text extraction.
+   */
+  content: ContentPart[];
   reasoningFormatted?: string;
 }
 
@@ -128,7 +134,6 @@ export type ResponseFormat =
 export interface Prompt {
   messages: PipelineMessage[];
   tokenUsage: { prompt: number; completion: number };
-  systemPrompt?: string;
   tools?: ToolDefinition[];
   /** Sampler knobs + provider-native overrides, merged into the request body by the adapter. */
   params?: GenerationParams;

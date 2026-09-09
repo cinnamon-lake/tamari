@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ChatCompletionRenderer } from './ChatCompletionRenderer.js';
 import { PromptManager } from '../PromptManager.js';
 import { MacroResolver } from '../MacroResolver.js';
-import type { Message } from '@tamari/types';
+import { getMessageText, type Message } from '@tamari/types';
 import type { PromptCollection } from './Renderer.js';
 
 const tokenCounter = {
@@ -35,12 +35,12 @@ describe('ChatCompletionRenderer', () => {
     return {
       prompts: pm.getOrderedPrompts(),
       markers: {
-        charDescription: opts?.charDescription ?? '',
-        charPersonality: opts?.charPersonality ?? '',
-        scenario: opts?.scenario ?? '',
-        personaDescription: '',
-        worldInfoBefore: '',
-        worldInfoAfter: '',
+        charDescription: [opts?.charDescription ?? ''],
+        charPersonality: [opts?.charPersonality ?? ''],
+        scenario: [opts?.scenario ?? ''],
+        personaDescription: [''],
+        worldInfoBefore: [''],
+        worldInfoAfter: [''],
       },
     };
   }
@@ -62,7 +62,11 @@ describe('ChatCompletionRenderer', () => {
     expect(result.type).toBe('chat');
     expect(result.messages.length).toBeGreaterThanOrEqual(3);
     expect(result.messages[0]!.role).toBe('system');
-    expect(result.messages[0]!.content).toContain('A friendly bot.');
+    const systemText = result.messages
+      .filter((m) => m.role === 'system')
+      .map((m) => getMessageText(m.content))
+      .join('\n');
+    expect(systemText).toContain('A friendly bot.');
     expect(result.messages[result.messages.length - 2]!.role).toBe('user');
     expect(result.messages[result.messages.length - 1]!.role).toBe('assistant');
   });
@@ -103,12 +107,12 @@ describe('ChatCompletionRenderer', () => {
 
     const systemText = result.messages
       .filter((m) => m.role === 'system')
-      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .map((m) => getMessageText(m.content))
       .join('');
     expect(systemText).toContain(huge);
   });
 
-  it('squashes consecutive system messages', () => {
+  it('keeps each system prompt as its own message (no squashing)', () => {
     const macroResolver = MacroResolver.createPromptResolver();
     const result = renderer.render(
       makeCollection({ charDescription: 'Desc', charPersonality: 'Personality', scenario: 'Scenario' }),
@@ -122,11 +126,16 @@ describe('ChatCompletionRenderer', () => {
       },
     );
 
+    // main + charDescription + charPersonality + scenario — one message each.
     const systemMessages = result.messages.filter((m) => m.role === 'system');
-    expect(systemMessages.length).toBe(1);
-    expect(systemMessages[0]!.content).toContain('Desc');
-    expect(systemMessages[0]!.content).toContain('Personality');
-    expect(systemMessages[0]!.content).toContain('Scenario');
+    expect(systemMessages.length).toBe(4);
+    const texts = systemMessages.map((m) => getMessageText(m.content));
+    expect(texts.filter((t) => t.includes('Desc')).length).toBe(1);
+    expect(texts.filter((t) => t.includes('Personality')).length).toBe(1);
+    expect(texts.filter((t) => t.includes('Scenario')).length).toBe(1);
+    // Nothing is joined: the Desc message carries none of the other entries.
+    expect(texts.find((t) => t.includes('Desc'))).not.toContain('Personality');
+    expect(texts.find((t) => t.includes('Desc'))).not.toContain('Scenario');
   });
 
   it('resolves macros in prompt content', () => {
@@ -142,8 +151,8 @@ describe('ChatCompletionRenderer', () => {
 
     const systemMsg = result.messages.find((m) => m.role === 'system');
     expect(systemMsg).toBeDefined();
-    expect(systemMsg!.content).toContain('Bob');
-    expect(systemMsg!.content).toContain('Alice');
+    expect(getMessageText(systemMsg!.content)).toContain('Bob');
+    expect(getMessageText(systemMsg!.content)).toContain('Alice');
   });
 
   it('skips empty prompts', () => {
@@ -178,7 +187,9 @@ describe('ChatCompletionRenderer', () => {
       maxResponseTokens: 512,
     });
 
-    const exampleMessages = result.messages.filter((m) => m.content === 'Hello Bob' || m.content === 'Hi Alice');
+    const exampleMessages = result.messages.filter(
+      (m) => getMessageText(m.content) === 'Hello Bob' || getMessageText(m.content) === 'Hi Alice',
+    );
     expect(exampleMessages.length).toBe(2);
     expect(exampleMessages[0]!.role).toBe('user');
     expect(exampleMessages[1]!.role).toBe('assistant');
@@ -203,10 +214,10 @@ describe('ChatCompletionRenderer', () => {
 
     const systemMsg = result.messages.find((m) => m.role === 'system');
     expect(systemMsg).toBeDefined();
-    // The empty <START> system message should be skipped, and the remaining
-    // system prompts squashed into one.
+    // The empty <START> system message should be skipped; only the main prompt
+    // remains as a system message.
     expect(result.messages.filter((m) => m.role === 'system').length).toBe(1);
-    expect(result.messages.some((m) => m.content === 'Hello' && m.role === 'user')).toBe(true);
+    expect(result.messages.some((m) => getMessageText(m.content) === 'Hello' && m.role === 'user')).toBe(true);
   });
 
   it('injects absolute prompts into chat history at the specified depth', () => {
@@ -240,15 +251,15 @@ describe('ChatCompletionRenderer', () => {
     });
 
     // Messages should be: system, user(1), assistant(2), [injected], user(3), assistant(4)
-    const injected = result.messages.find((m) => m.content === 'Injected at depth 2');
+    const injected = result.messages.find((m) => getMessageText(m.content) === 'Injected at depth 2');
     expect(injected).toBeDefined();
     expect(injected!.role).toBe('system');
     // Depth 2 = 2 messages back from the newest (assistant(4) = 0, user(3) = 1, injected = 2)
-    const injectedIndex = result.messages.findIndex((m) => m.content === 'Injected at depth 2');
+    const injectedIndex = result.messages.findIndex((m) => getMessageText(m.content) === 'Injected at depth 2');
     expect(result.messages[injectedIndex - 1]!.role).toBe('assistant');
-    expect(result.messages[injectedIndex - 1]!.content).toBe('Hi');
+    expect(getMessageText(result.messages[injectedIndex - 1]!.content)).toBe('Hi');
     expect(result.messages[injectedIndex + 1]!.role).toBe('user');
-    expect(result.messages[injectedIndex + 1]!.content).toBe('How are you?');
+    expect(getMessageText(result.messages[injectedIndex + 1]!.content)).toBe('How are you?');
   });
 
   it('orders multiple absolute prompts at the same depth by injectionOrder', () => {
@@ -289,9 +300,9 @@ describe('ChatCompletionRenderer', () => {
 
     // Both at depth 0: inserted after the last message (user 'Hello')
     // Chronological order should be: system, user(1), First, Second
-    const userIndex = result.messages.findIndex((m) => m.content === 'Hello');
-    expect(result.messages[userIndex + 1]!.content).toBe('First');
-    expect(result.messages[userIndex + 2]!.content).toBe('Second');
+    const userIndex = result.messages.findIndex((m) => getMessageText(m.content) === 'Hello');
+    expect(getMessageText(result.messages[userIndex + 1]!.content)).toBe('First');
+    expect(getMessageText(result.messages[userIndex + 2]!.content)).toBe('Second');
   });
 
   it('inserts absolute prompts at depth 0 after the newest message', () => {
@@ -320,7 +331,7 @@ describe('ChatCompletionRenderer', () => {
     });
 
     const lastMsg = result.messages[result.messages.length - 1]!;
-    expect(lastMsg.content).toBe('After latest');
+    expect(getMessageText(lastMsg.content)).toBe('After latest');
     expect(lastMsg.role).toBe('system');
   });
 
@@ -351,9 +362,9 @@ describe('ChatCompletionRenderer', () => {
 
     // Way back should be inserted before the only history message
     const systemMessages = result.messages.filter((m) => m.role === 'system');
-    expect(systemMessages.some((m) => m.content === 'Way back')).toBe(true);
-    const historyIndex = result.messages.findIndex((m) => m.content === 'Hello');
-    expect(result.messages[historyIndex - 1]!.content).toBe('Way back');
+    expect(systemMessages.some((m) => getMessageText(m.content) === 'Way back')).toBe(true);
+    const historyIndex = result.messages.findIndex((m) => getMessageText(m.content) === 'Hello');
+    expect(getMessageText(result.messages[historyIndex - 1]!.content)).toBe('Way back');
   });
 
   it('includes the trailing empty assistant message (adapter strips it)', () => {
@@ -373,9 +384,9 @@ describe('ChatCompletionRenderer', () => {
 
     const historyMessages = result.messages.filter((m) => m.role !== 'system');
     expect(historyMessages.length).toBe(3);
-    expect(historyMessages[0]!.content).toBe('Hello');
-    expect(historyMessages[1]!.content).toBe('Hi');
-    expect(historyMessages[2]!.content).toBe('');
+    expect(getMessageText(historyMessages[0]!.content)).toBe('Hello');
+    expect(getMessageText(historyMessages[1]!.content)).toBe('Hi');
+    expect(getMessageText(historyMessages[2]!.content)).toBe('');
   });
 
   it('keeps a non-empty trailing assistant message', () => {
@@ -391,8 +402,8 @@ describe('ChatCompletionRenderer', () => {
 
     const historyMessages = result.messages.filter((m) => m.role !== 'system');
     expect(historyMessages.length).toBe(2);
-    expect(historyMessages[0]!.content).toBe('Hello');
-    expect(historyMessages[1]!.content).toBe('Hi');
+    expect(getMessageText(historyMessages[0]!.content)).toBe('Hello');
+    expect(getMessageText(historyMessages[1]!.content)).toBe('Hi');
   });
 
   it('keeps reasoning in all assistant messages (the renderer never strips)', () => {
@@ -444,7 +455,7 @@ describe('ChatCompletionRenderer', () => {
     expect(parts4.some((p) => p.type === 'reasoning')).toBe(true);
 
     // empty stream target
-    expect(assistantMsgs[2]!.content).toBe('');
+    expect(getMessageText(assistantMsgs[2]!.content)).toBe('');
   });
 
   // Stripping reasoning/tool blocks from old assistant messages moved to the
@@ -481,10 +492,9 @@ describe('ChatCompletionRenderer', () => {
     const oldParts = assistantMsgs[0]!.content as Array<{ type: string }>;
     expect(oldParts.some((p) => p.type === 'tool_use')).toBe(true);
 
-    // Latest message: plain text (no parts)
+    // Latest message: a single plain-text part
     const latestMsg = assistantMsgs[1]!;
-    expect(typeof latestMsg.content).toBe('string');
-    expect(latestMsg.content).toBe('You are welcome');
+    expect(getMessageText(latestMsg.content)).toBe('You are welcome');
   });
 
   it('preserves tool_call_id in tool messages via tool_result parts', () => {
@@ -618,8 +628,7 @@ describe('ChatCompletionRenderer', () => {
 
     const userMsg = result.messages.find((m) => m.role === 'user');
     expect(userMsg).toBeDefined();
-    expect(typeof userMsg!.content).toBe('string');
-    expect(userMsg!.content).toBe('Look at this');
+    expect(getMessageText(userMsg!.content)).toBe('Look at this');
   });
 
   it('replaces unsupported audio with text placeholder when verbose mode is on', () => {
@@ -808,12 +817,12 @@ describe('chatHistory marker position', () => {
     return {
       prompts: pm.getOrderedPrompts(),
       markers: {
-        charDescription: '',
-        charPersonality: '',
-        scenario: '',
-        personaDescription: '',
-        worldInfoBefore: '',
-        worldInfoAfter: '',
+        charDescription: [''],
+        charPersonality: [''],
+        scenario: [''],
+        personaDescription: [''],
+        worldInfoBefore: [''],
+        worldInfoAfter: [''],
       },
       dialogueExamples: extras?.dialogueExamples,
     };
@@ -830,9 +839,9 @@ describe('chatHistory marker position', () => {
     maxResponseTokens: 512,
   });
 
-  /** Index of the first message whose string content contains `needle`. */
+  /** Index of the first message whose text content contains `needle`. */
   function indexOfText(result: ReturnType<ChatCompletionRenderer['render']>, needle: string): number {
-    return result.messages.findIndex((m) => typeof m.content === 'string' && m.content.includes(needle));
+    return result.messages.findIndex((m) => getMessageText(m.content).includes(needle));
   }
 
   it('renders prompts ordered after the marker after the history (jailbreak case)', () => {
@@ -848,10 +857,10 @@ describe('chatHistory marker position', () => {
     expect(histIdx).toBeGreaterThan(mainIdx);
     expect(jbIdx).toBeGreaterThan(histIdx);
 
-    // Squash stays group-local: the after-marker system prompt must NOT merge
-    // into the before-marker one.
+    // No squashing anywhere: the after-marker system prompt renders as its own
+    // message, never merged into the before-marker one.
     const mainMsg = result.messages[mainIdx]!;
-    expect(typeof mainMsg.content === 'string' && mainMsg.content.includes('CONTENT:jailbreak')).toBe(false);
+    expect(getMessageText(mainMsg.content)).not.toContain('CONTENT:jailbreak');
   });
 
   it('renders prompts ordered before the marker before the history', () => {

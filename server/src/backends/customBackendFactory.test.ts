@@ -17,7 +17,10 @@ import type { ISettingsRepository } from '../repos/SettingsRepository.js';
 import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
 
 function makePrompt(): Prompt {
-  return { messages: [{ role: 'user', content: 'hi' }], tokenUsage: { prompt: 1, completion: 1 } };
+  return {
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],
+    tokenUsage: { prompt: 1, completion: 1 },
+  };
 }
 
 function makeConfig(name: string, provider: string, customBackendId?: string): BackendConfig {

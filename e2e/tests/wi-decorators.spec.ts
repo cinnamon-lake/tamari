@@ -1,6 +1,6 @@
 import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import type { Page } from '@playwright/test';
-import { getLastLlmRequest, resetLlmRequests, waitForNextLlmRequest } from '../helpers/llm.js';
+import { getLastLlmRequest, resetLlmRequests, waitForNextLlmRequest, wireContentText } from '../helpers/llm.js';
 import { App } from '../helpers/app.js';
 import { uniqueName } from '../helpers/names.js';
 
@@ -79,7 +79,7 @@ test.describe('WI V3 Decorators', () => {
     const captured = await getLastLlmRequest();
     const body = captured.body as Record<string, unknown>;
     const messages = Array.isArray(body.messages) ? body.messages : [];
-    const allText = messages.map((m: Record<string, unknown>) => String(m.content ?? '')).join('\n');
+    const allText = messages.map((m: Record<string, unknown>) => wireContentText(m.content)).join('\n');
     expect(allText).toContain('DECO_ACTIVATE');
     // The @@ decorator prefix must NOT leak into the prompt
     expect(allText).not.toContain('@@activate');
@@ -108,7 +108,7 @@ test.describe('WI V3 Decorators', () => {
     const captured = await getLastLlmRequest();
     const body = captured.body as Record<string, unknown>;
     const messages = Array.isArray(body.messages) ? body.messages : [];
-    const allText = messages.map((m: Record<string, unknown>) => String(m.content ?? '')).join('\n');
+    const allText = messages.map((m: Record<string, unknown>) => wireContentText(m.content)).join('\n');
     expect(allText).not.toContain('DECO_SUPPRESSED');
     expect(allText).not.toContain('@@dont_activate');
   });
@@ -135,7 +135,7 @@ test.describe('WI V3 Decorators', () => {
     const captured = await getLastLlmRequest();
     const body = captured.body as Record<string, unknown>;
     const messages = Array.isArray(body.messages) ? body.messages : [];
-    const allText = messages.map((m: Record<string, unknown>) => String(m.content ?? '')).join('\n');
+    const allText = messages.map((m: Record<string, unknown>) => wireContentText(m.content)).join('\n');
     expect(allText).toContain('DECO_DEPTH');
     // No @@ leak
     expect(allText).not.toContain('@@depth');
@@ -164,7 +164,7 @@ test.describe('WI V3 Decorators', () => {
     const captured = await getLastLlmRequest();
     const body = captured.body as Record<string, unknown>;
     const messages = Array.isArray(body.messages) ? body.messages : [];
-    const allText = messages.map((m: Record<string, unknown>) => String(m.content ?? '')).join('\n');
+    const allText = messages.map((m: Record<string, unknown>) => wireContentText(m.content)).join('\n');
     // The [WI] content should be injected (keyword matched)
     expect(allText).toContain('DECO_UNKNOWN');
     // The unknown @@ line must NOT leak
@@ -269,7 +269,7 @@ function messagesOf(body: unknown): ChatMessage[] {
 /** All message contents of the captured request joined for substring assertions. */
 function allPromptText(body: unknown): string {
   return messagesOf(body)
-    .map((m) => String(m.content ?? ''))
+    .map((m) => wireContentText(m.content))
     .join('\n');
 }
 
@@ -537,7 +537,7 @@ test.describe('WI V3 Decorators — activation semantics', () => {
     // request afterwards), so depth 2 lands immediately BEFORE the final user
     // message in the captured request.
     const messages = messagesOf(body);
-    const tokenIdx = messages.findIndex((m) => String(m.content ?? '').includes('[WI] FB_APPLY'));
+    const tokenIdx = messages.findIndex((m) => wireContentText(m.content).includes('[WI] FB_APPLY'));
     const lastUserIdx = messages.map((m) => m.role).lastIndexOf('user');
     expect(tokenIdx).toBeGreaterThanOrEqual(0);
     expect(lastUserIdx).toBeGreaterThanOrEqual(0);
@@ -567,7 +567,7 @@ test.describe('WI V3 Decorators — activation semantics', () => {
     // AFTER the final user message — the injection is the last message of the
     // request (@@depth 1 won, the @@@depth 2 fallback was skipped).
     const messages = messagesOf(body);
-    const tokenIdx = messages.findIndex((m) => String(m.content ?? '').includes('[WI] FB_SKIP'));
+    const tokenIdx = messages.findIndex((m) => wireContentText(m.content).includes('[WI] FB_SKIP'));
     const lastUserIdx = messages.map((m) => m.role).lastIndexOf('user');
     expect(tokenIdx).toBeGreaterThanOrEqual(0);
     expect(lastUserIdx).toBeGreaterThanOrEqual(0);

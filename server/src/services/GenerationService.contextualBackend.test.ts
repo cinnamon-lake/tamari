@@ -100,7 +100,12 @@ function generate(prompt, ctx)
   local input = ""
   for i = #prompt.messages, 1, -1 do
     local m = prompt.messages[i]
-    if m.role == "user" and type(m.content) == "string" then input = m.content break end
+    if m.role == "user" and type(m.content) == "table" then
+      for _, p in ipairs(m.content) do
+        if p.type == "text" then input = input .. p.text end
+      end
+      break
+    end
   end
   input = input:gsub("^%s+", ""):gsub("%s+$", ""):lower()
 

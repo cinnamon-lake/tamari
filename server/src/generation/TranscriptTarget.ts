@@ -126,9 +126,9 @@ export class TranscriptTarget implements GenerationTarget {
       // seed message, byte-identical to the legacy genraw prompt.
       const messages: Prompt['messages'] = [];
       if (this.systemPrompt) {
-        messages.push({ role: 'system', content: this.systemPrompt });
+        messages.push({ role: 'system', content: [{ type: 'text', text: this.systemPrompt }] });
       }
-      messages.push({ role: 'user', content: this.seed });
+      messages.push({ role: 'user', content: [{ type: 'text', text: this.seed }] });
       if (this.parts.length > 0) {
         messages.push({ role: 'assistant', content: [...this.parts] });
       }

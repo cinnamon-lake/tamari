@@ -5,7 +5,7 @@ import type { TransformerContext } from '../types.js';
 
 const ctx: TransformerContext = { userName: 'User' };
 
-const user = (content: PipelineMessage['content']): PipelineMessage => ({ role: 'user', content });
+const user = (text: string): PipelineMessage => ({ role: 'user', content: [{ type: 'text', text }] });
 
 describe('whitespace builtin', () => {
   it("mode 'none' leaves messages untouched", () => {
@@ -15,12 +15,12 @@ describe('whitespace builtin', () => {
 
   it("mode 'trim' strips leading/trailing whitespace only", () => {
     const out = whitespace.apply([user('  hello  world\n\n')], { mode: 'trim' }, ctx);
-    expect(out[0]!.content).toBe('hello  world');
+    expect(out[0]!.content).toEqual([{ type: 'text', text: 'hello  world' }]);
   });
 
   it("mode 'full' collapses space runs to ' ' and newline runs to '\\n\\n'", () => {
     const out = whitespace.apply([user('Hello  world.\nNext   \n \n line')], { mode: 'full' }, ctx);
-    expect(out[0]!.content).toBe('Hello world.\n\nNext\n\nline');
+    expect(out[0]!.content).toEqual([{ type: 'text', text: 'Hello world.\n\nNext\n\nline' }]);
   });
 
   it('applies to text parts of parts-content messages, leaving other parts alone', () => {

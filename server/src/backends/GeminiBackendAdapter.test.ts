@@ -44,7 +44,10 @@ describe('GeminiBackendAdapter', () => {
 
     const { result } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Hello' }], tokenUsage: { prompt: 10, completion: 100 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
         new AbortController().signal,
       ),
     );
@@ -77,7 +80,10 @@ describe('GeminiBackendAdapter', () => {
 
     await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Hello' }], tokenUsage: { prompt: 10, completion: 0 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+          tokenUsage: { prompt: 10, completion: 0 },
+        },
         new AbortController().signal,
       ),
     );
@@ -124,8 +130,8 @@ describe('GeminiBackendAdapter', () => {
       adapter.stream(
         {
           messages: [
-            { role: 'system', content: 'Be helpful.' },
-            { role: 'user', content: 'Hello' },
+            { role: 'system', content: [{ type: 'text', text: 'Be helpful.' }] },
+            { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
           ],
           tokenUsage: { prompt: 10, completion: 100 },
         },
@@ -292,6 +298,49 @@ describe('GeminiBackendAdapter', () => {
     expect(body.contents[0].parts).toEqual([{ functionCall: { name: 'get_weather', args: { city: 'Paris' } } }]);
     expect(body.contents[1].parts).toEqual([
       { functionResponse: { name: 'get_weather', response: { result: 'Sunny' } } },
+    ]);
+  });
+
+  it('keeps a trailing assistant message that carries only tool parts (continuation round)', async () => {
+    const adapter = new GeminiBackendAdapter({
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+      apiKey: 'gemini-key',
+      model: 'gemini-2.0-flash',
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: createMockStream([]),
+    } as Response);
+
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            { role: 'user', content: [{ type: 'text', text: 'Roll for me.' }] },
+            {
+              role: 'assistant',
+              content: [
+                { type: 'tool_use', id: 'tu_1', name: 'roll_dice', input: { sides: 6 } },
+                { type: 'tool_result', toolUseId: 'tu_1', name: 'roll_dice', content: 'Rolled 1d6: 4', isError: false },
+              ],
+            },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
+        new AbortController().signal,
+      ),
+    );
+    expect(result.finishReason).toBe('stop');
+
+    // The tool exchange must reach the API — dropping it as an "empty stream
+    // target" makes the provider re-request the same tool forever.
+    const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.contents).toHaveLength(3);
+    expect(body.contents[1].parts).toEqual([{ functionCall: { name: 'roll_dice', args: { sides: 6 } } }]);
+    expect(body.contents[2].parts).toEqual([
+      { functionResponse: { name: 'roll_dice', response: { result: 'Rolled 1d6: 4' } } },
     ]);
   });
 

@@ -13,7 +13,9 @@ import type { MacroContext, MacroResolver } from '../MacroResolver.js';
 import type { PipelineMessage } from '../../backends/BackendAdapter.js';
 import type { ITokenCounter } from '../../tokenizers/TokenCounter.js';
 
-/** Separator used when joining adjacent prompt chunks. */
+/** Separator used when joining adjacent prompt chunks — adapter-side only
+    (formatTextPrompt, the opt-in squash-system transformer). The pipeline
+    itself never joins components: each is its own message/part. */
 export const PROMPT_SEPARATOR = '\n\n';
 
 export interface RenderOptions {
@@ -35,7 +37,7 @@ export interface RenderOptions {
    * verbatim, absolute-depth prompts hoist into the pinned volatile block
    * instead of splicing mid-history, and `volatileBlock` (author's note,
    * constant atDepth WI — raw text, deterministic order) is emitted as one
-   * synthetic system message right after the prompt-list head.
+   * synthetic system message per item right after the prompt-list head.
    */
   appendOnly?: boolean;
   volatileBlock?: string[];
@@ -48,8 +50,9 @@ export interface ExampleMessage {
 
 export interface PromptCollection {
   prompts: PromptDef[];
-  /** Runtime data for marker prompts */
-  markers: Record<string, string>;
+  /** Runtime data for marker prompts — one entry per component; the renderer
+      emits one message per entry (no joining). */
+  markers: Record<string, string[]>;
   /** Parsed dialogue examples from character card mesExample */
   dialogueExamples?: ExampleMessage[];
 }

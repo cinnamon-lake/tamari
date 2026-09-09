@@ -1,7 +1,7 @@
 import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
 import { enableBuiltinToolset, deleteToolset } from '../helpers/tools.js';
-import { getLastLlmRequest, resetLlmRequests } from '../helpers/llm.js';
+import { getLastLlmRequest, resetLlmRequests, wireContentText } from '../helpers/llm.js';
 import { setSetting } from '../helpers/settings.js';
 import { uniqueName } from '../helpers/names.js';
 
@@ -81,7 +81,7 @@ test.describe('Generation Tools — history serialization', () => {
     const toolMessages = messages.filter((m) => m.role === 'tool');
     expect(toolMessages.length).toBeGreaterThan(0);
     expect(toolMessages[0]!.tool_call_id).toBe(call.id);
-    expect(String(toolMessages[0]!.content ?? '')).toContain('Rolled 1d6');
+    expect(wireContentText(toolMessages[0]!.content)).toContain('Rolled 1d6');
   });
 
   test('image attachment degrades to a text placeholder when the backend lacks image support', async ({
@@ -102,9 +102,9 @@ test.describe('Generation Tools — history serialization', () => {
     });
     await expect(page.locator('.attachment-previews .attachment-preview')).toBeVisible({ timeout: 5000 });
 
-    // The user message serializes as a content-part ARRAY (text + placeholder),
-    // and the mock's `respond:` selector only reads string content — so this
-    // turn gets the mock's default reply. The wire assertions below are the point.
+    // The user message serializes as a content-part ARRAY (text + placeholder).
+    // 'image noted' carries no mock selector, so this turn gets the mock's
+    // default reply — the wire assertions below are the point.
     await app.sendUserMessage('image noted', { expectReply: true });
     await expect(app.lastBubble('assistant').locator('.message-content')).toContainText('deterministic mock response');
 

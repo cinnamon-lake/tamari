@@ -13,7 +13,7 @@
  */
 import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import type { Locator, Page } from '@playwright/test';
-import { getLastLlmRequest, waitForNextLlmRequest } from '../helpers/llm.js';
+import { getLastLlmRequest, waitForNextLlmRequest, wireContentText } from '../helpers/llm.js';
 import { uniqueName } from '../helpers/names.js';
 
 async function openPromptListModal(page: Page): Promise<Locator> {
@@ -158,7 +158,7 @@ test.describe('Prompt List CRUD', () => {
 
     const body = cap.body as { messages?: Array<{ role?: string; content?: unknown }> };
     const messages = Array.isArray(body.messages) ? body.messages : [];
-    const hit = messages.find((m) => typeof m.content === 'string' && (m.content as string).includes(token));
+    const hit = messages.find((m) => wireContentText(m.content).includes(token));
     expect(hit, 'custom prompt entry should be in the outgoing request').toBeTruthy();
     expect(hit!.role).toBe('system');
   });

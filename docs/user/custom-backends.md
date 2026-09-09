@@ -53,7 +53,7 @@ function list_models()   -- optional; feeds the config's model dropdown
 end
 ```
 
-- `prompt` — the fully-built prompt, as a **mutable copy**: `prompt.messages` (the current branch's history as assembled for the model), `prompt.tools`, and the other prompt fields. Changes you make affect what you delegate, never the stored chat.
+- `prompt` — the fully-built prompt, as a **mutable copy**: `prompt.messages` (the current branch's history as assembled for the model), `prompt.tools`, and the other prompt fields. Changes you make affect what you delegate, never the stored chat. Message `content` is **always an array of content parts** — `{ { type = "text", text = "..." }, ... }` — never a bare string, so your script has one uniform shape to read. (Prompt tables you hand _back_ — to `backends.generate` or in a `__passthrough` override — may still use bare-string content; it's normalized to parts automatically.)
 - `ctx` — `{ chatId, characterId, generationType }`, where `generationType` is one of `'send'`, `'regenerate'`, `'continue'`, `'impersonate'`, `'quiet'`, `'genraw'`, `'subagent'`.
 
 Available globals: `backends` (delegation, below), `json`, `base64`, and `fetch` (the same SSRF-guarded async fetch Lua tool templates get — see [Lua Scripting](./lua-scripting.md)). The `st` API is **not** injected.
@@ -132,6 +132,16 @@ A middleware backend that intercepts `/command` messages, answers them locally, 
 ```lua
 local DIFFICULTIES = { easy = "Easy", hard = "Hard", nightmare = "Nightmare" }
 
+-- Incoming message content is ALWAYS an array of parts:
+-- { { type = "text", text = "..." }, ... }
+local function messageText(m)
+  local out = {}
+  for _, p in ipairs(m.content) do
+    if p.type == "text" then out[#out + 1] = p.text end
+  end
+  return table.concat(out)
+end
+
 local function ensureState()
   if type(state) ~= "table" then state = {} end
   state.difficulty = state.difficulty or "Normal"
@@ -149,7 +159,7 @@ function generate(prompt, ctx)
   local input = ""
   for i = #prompt.messages, 1, -1 do
     local m = prompt.messages[i]
-    if m.role == "user" and type(m.content) == "string" then input = m.content break end
+    if m.role == "user" then input = messageText(m) break end
   end
 
   local cmd = parseCommand(input)
@@ -168,13 +178,15 @@ function generate(prompt, ctx)
   sub.tools = nil
   sub.messages = {}
   for _, m in ipairs(prompt.messages) do
-    if not (m.role == "user" and parseCommand(m.content)) then
+    if not (m.role == "user" and parseCommand(messageText(m))) then
       sub.messages[#sub.messages + 1] = m
     end
   end
   for _, m in ipairs(sub.messages) do
-    if m.role == "system" and type(m.content) == "string" then
-      m.content = m.content .. "\n\nDifficulty: " .. state.difficulty .. "."
+    if m.role == "system" then
+      -- Bare-string content is fine here: sub is handed BACK to
+      -- backends.generate, which normalizes strings to parts.
+      m.content = messageText(m) .. "\n\nDifficulty: " .. state.difficulty .. "."
       break
     end
   end
@@ -194,7 +206,7 @@ Copy the incoming prompt table and swap in your own `messages` (as above) rather
 - **Static, positioned text** (at a depth, keyword-triggered): **World Info entries** — `atDepth` entries splice into history at their depth; the `worldInfoBefore`/`worldInfoAfter` markers place book content relative to the card definitions. No Lua.
 - **Dynamic or computed text** (depends on state, dice, the last message, another backend's answer): a `backend_logic` script, as below.
 
-Injecting with `backend_logic` is just `prompt.messages` editing before you delegate — `messages` is an ordinary array of `{ role, content }`:
+Injecting with `backend_logic` is just `prompt.messages` editing before you delegate — `messages` is an ordinary array of `{ role, content }`. Messages you _read_ always carry `content` as a parts array (`{ { type = "text", text = "..." }, ... }`); messages you _insert_ may use a bare string, since the prompt you hand back is normalized to parts automatically:
 
 ```lua
 -- Post-history instruction (after the last real message, before the

@@ -1,5 +1,5 @@
 import { smokeTest as test, expect } from '../fixtures/smoke.js';
-import { getLastLlmRequest, resetLlmRequests } from '../helpers/llm.js';
+import { getLastLlmRequest, resetLlmRequests, wireContentText } from '../helpers/llm.js';
 import { getActiveBackendConfigId, setSetting } from '../helpers/settings.js';
 import { uniqueName } from '../helpers/names.js';
 
@@ -35,7 +35,7 @@ test.describe('Rolling Memory', () => {
           // The mock's default text is what the summarization call returned —
           // a system-role memory summary carrying it proves the full round trip.
           return messages.some(
-            (m) => m.role === 'system' && String(m.content ?? '').includes('deterministic mock response'),
+            (m) => m.role === 'system' && wireContentText(m.content).includes('deterministic mock response'),
           );
         },
         { timeout: 15000, message: 'memory summary injected into prompt' },

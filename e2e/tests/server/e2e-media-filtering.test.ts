@@ -142,7 +142,13 @@ describe('e2e media filtering of tool results', () => {
   /** The tool_result part carried in the round-2 prompt's assistant message. */
   function roundTwoToolResult() {
     expect(backend.prompts.length).toBe(2);
-    const assistant = backend.prompts[1]!.messages.find((m) => m.role === 'assistant' && Array.isArray(m.content));
+    // Content is always a parts array now, so match the assistant message
+    // that actually carries a tool_result part (not e.g. the firstMes).
+    const isToolResultPart = (p: unknown) =>
+      typeof p === 'object' && p !== null && (p as { type?: string }).type === 'tool_result';
+    const assistant = backend.prompts[1]!.messages.find(
+      (m) => m.role === 'assistant' && Array.isArray(m.content) && m.content.some(isToolResultPart),
+    );
     expect(assistant).toBeDefined();
     const parts = assistant!.content as Array<{ type: string; content?: unknown }>;
     const toolResult = parts.find((p) => p.type === 'tool_result');

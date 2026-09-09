@@ -288,8 +288,8 @@ export class MemoryService {
 
     return {
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
+        { role: 'system', content: [{ type: 'text', text: systemPrompt }] },
+        { role: 'user', content: [{ type: 'text', text: userContent }] },
       ],
       tokenUsage: { prompt: 0, completion: settings.maxSummaryTokens },
       params: {
@@ -317,8 +317,8 @@ export class MemoryService {
 
     return {
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
+        { role: 'system', content: [{ type: 'text', text: systemPrompt }] },
+        { role: 'user', content: [{ type: 'text', text: userContent }] },
       ],
       tokenUsage: { prompt: 0, completion: settings.maxSummaryTokens },
       params: {

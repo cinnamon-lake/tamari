@@ -47,7 +47,10 @@ describe('ClaudeBackendAdapter', () => {
 
     const { result } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Hello' }], tokenUsage: { prompt: 10, completion: 100 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
         new AbortController().signal,
       ),
     );
@@ -64,7 +67,7 @@ describe('ClaudeBackendAdapter', () => {
     expect(body.model).toBe('claude-sonnet-4-20250514');
     expect(body.stream).toBe(true);
     expect(body.max_tokens).toBe(100);
-    expect(body.messages).toEqual([{ role: 'user', content: 'Hello' }]);
+    expect(body.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }]);
   });
 
   it('omits max_tokens when no completion budget is configured (0 = unset)', async () => {
@@ -81,7 +84,10 @@ describe('ClaudeBackendAdapter', () => {
 
     await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Hello' }], tokenUsage: { prompt: 10, completion: 0 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+          tokenUsage: { prompt: 10, completion: 0 },
+        },
         new AbortController().signal,
       ),
     );
@@ -112,8 +118,8 @@ describe('ClaudeBackendAdapter', () => {
       adapter.stream(
         {
           messages: [
-            { role: 'system', content: 'Be helpful.' },
-            { role: 'user', content: 'Hello' },
+            { role: 'system', content: [{ type: 'text', text: 'Be helpful.' }] },
+            { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
           ],
           tokenUsage: { prompt: 10, completion: 100 },
         },
@@ -124,11 +130,11 @@ describe('ClaudeBackendAdapter', () => {
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(init.body as string);
-    expect(body.system).toBe('Be helpful.');
-    expect(body.messages).toEqual([{ role: 'user', content: 'Hello' }]);
+    expect(body.system).toEqual([{ type: 'text', text: 'Be helpful.' }]);
+    expect(body.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }]);
   });
 
-  it('includes prompt.systemPrompt in system param', async () => {
+  it('renders each system message as its own system block (never joined)', async () => {
     const adapter = new ClaudeBackendAdapter({
       baseUrl: 'https://api.anthropic.com/v1',
       apiKey: 'sk-ant-test',
@@ -148,9 +154,12 @@ describe('ClaudeBackendAdapter', () => {
     const { result } = await consumeStream(
       adapter.stream(
         {
-          messages: [{ role: 'user', content: 'Hello' }],
+          messages: [
+            { role: 'system', content: [{ type: 'text', text: 'You are a wizard.' }] },
+            { role: 'system', content: [{ type: 'text', text: 'Speak in riddles.' }] },
+            { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+          ],
           tokenUsage: { prompt: 10, completion: 100 },
-          systemPrompt: 'You are a wizard.',
         },
         new AbortController().signal,
       ),
@@ -159,7 +168,10 @@ describe('ClaudeBackendAdapter', () => {
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(init.body as string);
-    expect(body.system).toBe('You are a wizard.');
+    expect(body.system).toEqual([
+      { type: 'text', text: 'You are a wizard.' },
+      { type: 'text', text: 'Speak in riddles.' },
+    ]);
   });
 
   it('streams text tokens and captures usage', async () => {
@@ -384,6 +396,54 @@ describe('ClaudeBackendAdapter', () => {
     expect(body.messages[1].content).toEqual([{ type: 'tool_result', tool_use_id: 'tu_1', content: 'Sunny' }]);
   });
 
+  it('keeps a trailing assistant message that carries only tool parts (continuation round)', async () => {
+    const adapter = new ClaudeBackendAdapter({
+      baseUrl: 'https://api.anthropic.com/v1',
+      apiKey: 'sk-ant-test',
+      model: 'claude-sonnet-4-20250514',
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: createMockStream([
+        'event: message_start',
+        'data: {"type":"message_start","message":{"usage":{"input_tokens":10}}}',
+        'event: message_stop',
+        'data: {"type":"message_stop"}',
+      ]),
+    } as Response);
+
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            { role: 'user', content: [{ type: 'text', text: 'Roll for me.' }] },
+            {
+              role: 'assistant',
+              content: [
+                { type: 'tool_use', id: 'tu_1', name: 'roll_dice', input: { sides: 6 } },
+                { type: 'tool_result', toolUseId: 'tu_1', name: 'roll_dice', content: 'Rolled 1d6: 4', isError: false },
+              ],
+            },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
+        new AbortController().signal,
+      ),
+    );
+    expect(result.finishReason).toBe('stop');
+
+    // The tool exchange must reach the API — dropping it as an "empty stream
+    // target" makes the provider re-request the same tool forever.
+    const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.messages).toHaveLength(3);
+    expect(body.messages[1].content).toEqual([
+      { type: 'tool_use', id: 'tu_1', name: 'roll_dice', input: { sides: 6 } },
+    ]);
+    expect(body.messages[2].content).toEqual([{ type: 'tool_result', tool_use_id: 'tu_1', content: 'Rolled 1d6: 4' }]);
+  });
+
   it('merges params from config and prompt', async () => {
     const adapter = new ClaudeBackendAdapter({
       baseUrl: 'https://api.anthropic.com/v1',
@@ -573,9 +633,9 @@ describe('ClaudeBackendAdapter', () => {
       adapter.stream(
         {
           messages: [
-            { role: 'user', content: 'Hello' },
-            { role: 'assistant', content: 'Hi there' },
-            { role: 'user', content: 'How are you?' },
+            { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+            { role: 'assistant', content: [{ type: 'text', text: 'Hi there' }] },
+            { role: 'user', content: [{ type: 'text', text: 'How are you?' }] },
           ],
           tokenUsage: { prompt: 10, completion: 100 },
           cacheDepth: 0,
@@ -617,9 +677,11 @@ describe('ClaudeBackendAdapter', () => {
     const { result } = await consumeStream(
       adapter.stream(
         {
-          messages: [{ role: 'user', content: 'Hello' }],
+          messages: [
+            { role: 'system', content: [{ type: 'text', text: 'You are a wizard.' }] },
+            { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+          ],
           tokenUsage: { prompt: 10, completion: 100 },
-          systemPrompt: 'You are a wizard.',
           cacheDepth: 0,
           tools: [
             {
@@ -669,9 +731,11 @@ describe('ClaudeBackendAdapter', () => {
     const { result } = await consumeStream(
       adapter.stream(
         {
-          messages: [{ role: 'user', content: 'Hello' }],
+          messages: [
+            { role: 'system', content: [{ type: 'text', text: 'You are a wizard.' }] },
+            { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+          ],
           tokenUsage: { prompt: 10, completion: 100 },
-          systemPrompt: 'You are a wizard.',
           cacheDepth: 0,
           tools: [
             {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PromptBuilder } from './PromptBuilder.js';
+import { getMessageText } from '@tamari/types';
 import type { Message } from '@tamari/types';
 
 const makeMsg = (role: Message['role'], content: string, extra?: Record<string, unknown>): Message => ({
@@ -83,7 +84,7 @@ describe('PromptBuilder reasoning reconstruction', () => {
     });
 
     const userMsg = prompt.messages.find((m) => m.role === 'user');
-    expect(userMsg?.content).toBe('Hello');
+    expect(userMsg?.content).toEqual([{ type: 'text', text: 'Hello' }]);
   });
 
   it('skips assistant messages without reasoning', async () => {
@@ -97,7 +98,7 @@ describe('PromptBuilder reasoning reconstruction', () => {
     });
 
     const assistantMsg = prompt.messages.find((m) => m.role === 'assistant');
-    expect(assistantMsg?.content).toBe('No reasoning here');
+    expect(assistantMsg?.content).toEqual([{ type: 'text', text: 'No reasoning here' }]);
   });
 
   it('computes auto cache depth from authors note depth + safety margin', async () => {
@@ -325,8 +326,10 @@ describe('PromptBuilder reasoning reconstruction', () => {
       macro: { vars: { mood: 'cheerful' } },
     });
 
-    const systemMsg = prompt.messages.find((m) => m.role === 'system');
-    expect(systemMsg?.content).toContain('cheerful');
+    // System messages render un-squashed (one message per prompt) — the
+    // macro-resolved description is its own system message, not the first.
+    const systemTexts = prompt.messages.filter((m) => m.role === 'system').map((m) => getMessageText(m.content));
+    expect(systemTexts.some((t) => t.includes('cheerful'))).toBe(true);
   });
 });
 
@@ -399,10 +402,10 @@ describe('PromptBuilder memory summary injection', () => {
       },
     });
 
-    const userIndex = prompt.messages.findIndex((m) => m.role === 'user' && m.content === 'Hello');
+    const userIndex = prompt.messages.findIndex((m) => m.role === 'user' && getMessageText(m.content) === 'Hello');
     expect(userIndex).toBeGreaterThan(0);
     const memoryIndex = prompt.messages.findIndex(
-      (m) => m.role === 'system' && m.content === 'Alice greeted Bob [msg:1].',
+      (m) => m.role === 'system' && getMessageText(m.content) === 'Alice greeted Bob [msg:1].',
     );
     expect(memoryIndex).toBeGreaterThanOrEqual(0);
     expect(memoryIndex).toBeLessThan(userIndex);
@@ -423,6 +426,6 @@ describe('PromptBuilder memory summary injection', () => {
       },
     });
 
-    expect(prompt.messages.some((m) => m.role === 'system' && m.content === '')).toBe(false);
+    expect(prompt.messages.some((m) => m.role === 'system' && getMessageText(m.content) === '')).toBe(false);
   });
 });

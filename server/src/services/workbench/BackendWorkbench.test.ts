@@ -306,7 +306,8 @@ describe('BackendWorkbench', () => {
   });
 
   describe('custom_backend tools', () => {
-    const ECHO_LUA = 'function generate(prompt, ctx) return "echo:" .. prompt.messages[#prompt.messages].content end';
+    const ECHO_LUA =
+      'function generate(prompt, ctx) return "echo:" .. prompt.messages[#prompt.messages].content[1].text end';
 
     it('create → get round-trips a script and broadcasts', async () => {
       const { template, bus } = makeTemplate([], stubAdapter());

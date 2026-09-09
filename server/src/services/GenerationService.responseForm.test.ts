@@ -50,9 +50,21 @@ const SECOND_PAYLOAD =
 // ---------------------------------------------------------------------------
 // The card's Lua: an arena that only understands action-form submissions.
 // parse_fields is the documented recipe from scriptable-layers.md §4,
-// verbatim — if the doc and reality drift, this test fails.
+// verbatim — if the doc and reality drift, this test fails. messageText is
+// the documented parts-array extractor from docs/user/custom-backends.md
+// ("Incoming message content is ALWAYS an array of parts"), also verbatim.
 // ---------------------------------------------------------------------------
 const ARENA_LUA = `
+-- Incoming message content is ALWAYS an array of parts:
+-- { { type = "text", text = "..." }, ... }
+local function messageText(m)
+  local out = {}
+  for _, p in ipairs(m.content) do
+    if p.type == "text" then out[#out + 1] = p.text end
+  end
+  return table.concat(out)
+end
+
 local function parse_fields(xml)
   local t = {}
   -- strip the single root wrapper first — otherwise gmatch's lazy body
@@ -75,7 +87,7 @@ function generate(prompt, ctx)
   local input = ""
   for i = #prompt.messages, 1, -1 do
     local m = prompt.messages[i]
-    if m.role == "user" and type(m.content) == "string" then input = m.content break end
+    if m.role == "user" then input = messageText(m) break end
   end
 
   local block = input:match(FENCE .. "xml\\n(.-)\\n" .. FENCE)

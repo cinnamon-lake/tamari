@@ -18,7 +18,7 @@ import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
 
 function makePrompt(): Prompt {
   return {
-    messages: [{ role: 'user', content: 'Hello' }],
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
     tokenUsage: { prompt: 10, completion: 5 },
   };
 }
@@ -227,7 +227,7 @@ describe('LuaBackendAdapter', () => {
     const adapter = makeAdapter(`
       function generate(prompt, ctx)
         local first = prompt.messages[1]
-        return ctx.chatId .. "|" .. ctx.generationType .. "|" .. first.role .. "|" .. first.content
+        return ctx.chatId .. "|" .. ctx.generationType .. "|" .. first.role .. "|" .. first.content[1].text
       end
     `);
     const { items } = await run(adapter);
@@ -626,7 +626,7 @@ describe('the store global', () => {
 describe('store JSON + recursive-array primitives', () => {
   const PRIM_LUA = `
     function generate(prompt, ctx)
-      local cmd = prompt.messages[#prompt.messages].content
+      local cmd = prompt.messages[#prompt.messages].content[1].text
       if cmd == "json" then
         local id = store.putJson("doc", { name = "x", n = 3, list = { "a", "b" }, nested = { ok = true } }):await()
         local back = json.decode(store.getJson(id):await())
@@ -670,7 +670,10 @@ describe('store JSON + recursive-array primitives', () => {
     const adapter = makeAdapter(PRIM_LUA);
     const { items } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'json' }], tokenUsage: { prompt: 0, completion: 0 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'json' }] }],
+          tokenUsage: { prompt: 0, completion: 0 },
+        },
         new AbortController().signal,
         { chatId: 'c', generationType: 'send' },
       ),
@@ -682,7 +685,10 @@ describe('store JSON + recursive-array primitives', () => {
     const adapter = makeAdapter(PRIM_LUA);
     const { items } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'chain' }], tokenUsage: { prompt: 0, completion: 0 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'chain' }] }],
+          tokenUsage: { prompt: 0, completion: 0 },
+        },
         new AbortController().signal,
         { chatId: 'c', generationType: 'send' },
       ),
@@ -694,14 +700,20 @@ describe('store JSON + recursive-array primitives', () => {
     const adapter = makeAdapter(PRIM_LUA);
     const first = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'oldhead' }], tokenUsage: { prompt: 0, completion: 0 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'oldhead' }] }],
+          tokenUsage: { prompt: 0, completion: 0 },
+        },
         new AbortController().signal,
         { chatId: 'c', generationType: 'send' },
       ),
     );
     const second = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'oldhead' }], tokenUsage: { prompt: 0, completion: 0 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'oldhead' }] }],
+          tokenUsage: { prompt: 0, completion: 0 },
+        },
         new AbortController().signal,
         { chatId: 'c', generationType: 'send', scriptState: first.result.scriptState },
       ),
@@ -713,7 +725,10 @@ describe('store JSON + recursive-array primitives', () => {
     const adapter = makeAdapter(PRIM_LUA);
     const bad = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'badprev' }], tokenUsage: { prompt: 0, completion: 0 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'badprev' }] }],
+          tokenUsage: { prompt: 0, completion: 0 },
+        },
         new AbortController().signal,
         { chatId: 'c', generationType: 'send' },
       ),
@@ -722,7 +737,10 @@ describe('store JSON + recursive-array primitives', () => {
     expect(bad.result.error).toContain('missing prev blob');
     const ok = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'nilread' }], tokenUsage: { prompt: 0, completion: 0 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'nilread' }] }],
+          tokenUsage: { prompt: 0, completion: 0 },
+        },
         new AbortController().signal,
         { chatId: 'c', generationType: 'send' },
       ),

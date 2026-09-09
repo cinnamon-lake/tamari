@@ -104,18 +104,22 @@ export class OpenRouterBackendAdapter extends OpenAIBackendAdapter {
   private injectOpenRouterCacheControls(messages: OpenAIChatMessage[], cachingAtDepth: number, ttl?: string): void {
     const cacheControl = { type: 'ephemeral', ...(ttl ? { ttl } : {}) };
 
-    // 1. System prompt caching
-    const systemMsg = messages.find((m) => m.role === 'system');
-    if (systemMsg) {
-      if (typeof systemMsg.content === 'string') {
-        systemMsg.content = [{ type: 'text', text: systemMsg.content, cache_control: cacheControl }];
-      } else if (Array.isArray(systemMsg.content)) {
-        for (let i = systemMsg.content.length - 1; i >= 0; i--) {
-          const part = systemMsg.content[i];
-          if (isObjectRecord(part) && part.type === 'text') {
-            part.cache_control = cacheControl;
-            break;
-          }
+    // 1. System prompt caching (convertMessages always emits parts for system
+    // messages). Breakpoint on the last message of the LEADING system run so
+    // the whole static preamble is cached — system messages are no longer
+    // squashed into one. Mid-history system messages get no breakpoint here
+    // (the depth-based pass below handles those positions).
+    let systemMsg: OpenAIChatMessage | undefined;
+    for (const m of messages) {
+      if (m.role !== 'system') break;
+      systemMsg = m;
+    }
+    if (systemMsg && Array.isArray(systemMsg.content)) {
+      for (let i = systemMsg.content.length - 1; i >= 0; i--) {
+        const part = systemMsg.content[i];
+        if (isObjectRecord(part) && part.type === 'text') {
+          part.cache_control = cacheControl;
+          break;
         }
       }
     }

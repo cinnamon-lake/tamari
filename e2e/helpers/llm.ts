@@ -44,3 +44,22 @@ export async function waitForNextLlmRequest(beforeCount: number, timeout = 10000
 export async function resetLlmRequests(): Promise<void> {
   await fetch(`${MOCK_URL}/__reset-requests`, { method: 'POST' });
 }
+
+/**
+ * Flatten a captured wire message's `content` to plain text. The server sends
+ * content as an array of parts ({type:'text',text:…}) — bare strings only show
+ * up in older shapes — so substring assertions must go through this instead of
+ * `String(content)` (which yields "[object Object]" for parts).
+ */
+export function wireContentText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return String(content ?? '');
+  return content
+    .map((part) => {
+      if (part !== null && typeof part === 'object' && typeof (part as { text?: unknown }).text === 'string') {
+        return (part as { text: string }).text;
+      }
+      return '';
+    })
+    .join('');
+}

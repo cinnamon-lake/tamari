@@ -82,15 +82,15 @@ describe('MockBackendAdapter', () => {
     // One tool result visible → the second directive fires.
     const withOneResult = prompt([
       { role: 'assistant', content: [{ type: 'tool_use', id: 'mock-call-1', name: 'first', input: { a: 1 } }] },
-      { role: 'tool', content: 'result of first' },
+      { role: 'tool', content: [{ type: 'text', text: 'result of first' }] },
     ]);
     const round2 = await stream(backend, withOneResult);
     expect(round2.result.toolCalls).toEqual([{ id: 'mock-call-2', name: 'second', arguments: { b: 2 } }]);
 
     // Sequence exhausted → falls through to respond:.
     const withTwoResults = prompt([
-      { role: 'tool', content: 'result of first' },
-      { role: 'tool', content: 'result of second' },
+      { role: 'tool', content: [{ type: 'text', text: 'result of first' }] },
+      { role: 'tool', content: [{ type: 'text', text: 'result of second' }] },
     ]);
     const round3 = await stream(backend, withTwoResults);
     expect(round3.result.toolCalls).toBeUndefined();
@@ -112,10 +112,10 @@ describe('MockBackendAdapter', () => {
 
   it('captures every prompt on requests', async () => {
     const backend = new MockBackendAdapter('respond:hi');
-    await stream(backend, prompt([{ role: 'user', content: 'one' }]));
-    await stream(backend, prompt([{ role: 'user', content: 'two' }]));
+    await stream(backend, prompt([{ role: 'user', content: [{ type: 'text', text: 'one' }] }]));
+    await stream(backend, prompt([{ role: 'user', content: [{ type: 'text', text: 'two' }] }]));
     expect(backend.requests).toHaveLength(2);
-    expect(backend.requests[1]?.messages[0]?.content).toBe('two');
+    expect(backend.requests[1]?.messages[0]?.content).toEqual([{ type: 'text', text: 'two' }]);
   });
 });
 

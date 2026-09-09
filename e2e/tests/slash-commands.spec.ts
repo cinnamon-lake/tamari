@@ -198,10 +198,11 @@ test.describe('Slash commands', () => {
     await runCommand(page, '/genraw respond: raw out');
     const rawCap = await waitForNextLlmRequest(before);
     await expect(lastSystemBubble(page)).toContainText('raw out', { timeout: 10000 });
-    const rawBody = rawCap.body as { messages?: Array<{ role: string; content: string }> };
+    const rawBody = rawCap.body as { messages?: Array<{ role: string; content: unknown }> };
     expect(Array.isArray(rawBody.messages)).toBe(true);
     expect(rawBody.messages).toHaveLength(1);
-    expect(rawBody.messages![0]).toEqual({ role: 'user', content: 'respond: raw out' });
+    // Message content is a content-part array on the wire.
+    expect(rawBody.messages![0]).toEqual({ role: 'user', content: [{ type: 'text', text: 'respond: raw out' }] });
     expect(JSON.stringify(rawCap.body)).not.toContain(descMarker);
 
     // /sysgen — same path as /gen, result appended as a system message.

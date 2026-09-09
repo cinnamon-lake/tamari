@@ -42,7 +42,10 @@ describe('TextCompletionBackendAdapter', () => {
 
     const { result } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Once upon a time' }], tokenUsage: { prompt: 10, completion: 100 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Once upon a time' }] }],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
         new AbortController().signal,
       ),
     );
@@ -80,7 +83,10 @@ describe('TextCompletionBackendAdapter', () => {
 
     const { items, result } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Say hello' }], tokenUsage: { prompt: 5, completion: 50 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Say hello' }] }],
+          tokenUsage: { prompt: 5, completion: 50 },
+        },
         new AbortController().signal,
       ),
     );
@@ -109,7 +115,10 @@ describe('TextCompletionBackendAdapter', () => {
 
     const { items, result } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Greet me' }], tokenUsage: { prompt: 5, completion: 50 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Greet me' }] }],
+          tokenUsage: { prompt: 5, completion: 50 },
+        },
         new AbortController().signal,
       ),
     );
@@ -134,7 +143,10 @@ describe('TextCompletionBackendAdapter', () => {
 
     const { result } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }],
+          tokenUsage: { prompt: 1, completion: 10 },
+        },
         new AbortController().signal,
       ),
     );
@@ -187,7 +199,10 @@ describe('TextCompletionBackendAdapter', () => {
 
     const { result } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }],
+          tokenUsage: { prompt: 1, completion: 10 },
+        },
         new AbortController().signal,
       ),
     );
@@ -208,7 +223,10 @@ describe('TextCompletionBackendAdapter', () => {
 
     const { result } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }],
+          tokenUsage: { prompt: 1, completion: 10 },
+        },
         new AbortController().signal,
       ),
     );
@@ -239,7 +257,10 @@ describe('TextCompletionBackendAdapter', () => {
 
     const { result } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }],
+          tokenUsage: { prompt: 1, completion: 10 },
+        },
         controller.signal,
       ),
     );
@@ -266,7 +287,10 @@ describe('TextCompletionBackendAdapter', () => {
 
     const { items, result } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }],
+          tokenUsage: { prompt: 1, completion: 10 },
+        },
         new AbortController().signal,
       ),
     );
@@ -293,7 +317,10 @@ describe('TextCompletionBackendAdapter', () => {
 
       const { result } = await consumeStream(
         adapter.stream(
-          { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+          {
+            messages: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }],
+            tokenUsage: { prompt: 1, completion: 10 },
+          },
           new AbortController().signal,
         ),
       );
@@ -316,7 +343,10 @@ describe('TextCompletionBackendAdapter', () => {
 
     const { result } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Test' }], tokenUsage: { prompt: 1, completion: 10 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }],
+          tokenUsage: { prompt: 1, completion: 10 },
+        },
         new AbortController().signal,
       ),
     );

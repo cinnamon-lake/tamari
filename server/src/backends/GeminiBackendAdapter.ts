@@ -21,6 +21,7 @@ import type {
   ToolDefinition,
 } from './BackendAdapter.js';
 import { logger } from '../lib/logger.js';
+import { getMessageText } from '@tamari/types';
 import { logDelta } from './RequestLogger.js';
 import { executeRequest, type BaseAdapterConfig } from './executeRequest.js';
 import {
@@ -156,10 +157,10 @@ export class GeminiBackendAdapter implements BackendAdapter {
     const contents = this.convertMessages(prompt.messages);
     const body: GeminiGenerateContentRequest = { contents };
 
-    // System instruction
-    const systemPrompt = this.extractSystemPrompt(prompt);
-    if (systemPrompt) {
-      body.systemInstruction = { parts: [{ text: systemPrompt }] };
+    // System instruction — one part per system message, never joined.
+    const systemParts = this.extractSystemParts(prompt);
+    if (systemParts.length > 0) {
+      body.systemInstruction = { parts: systemParts };
     }
 
     // Tools
@@ -202,34 +203,27 @@ export class GeminiBackendAdapter implements BackendAdapter {
     return body;
   }
 
-  private extractSystemPrompt(prompt: Prompt): string | undefined {
-    const systemMessages = prompt.messages.filter((m) => m.role === 'system');
-    const texts: string[] = [];
-
-    if (prompt.systemPrompt) {
-      texts.push(prompt.systemPrompt);
+  /** One text part per system message — no joining. */
+  private extractSystemParts(prompt: Prompt): Array<{ text: string }> {
+    const parts: Array<{ text: string }> = [];
+    for (const m of prompt.messages) {
+      if (m.role !== 'system') continue;
+      const text = getMessageText(m.content);
+      if (text) parts.push({ text });
     }
-
-    for (const m of systemMessages) {
-      if (typeof m.content === 'string') {
-        texts.push(m.content);
-      } else {
-        const textParts = m.content.filter((p): p is TextPart => p.type === 'text');
-        texts.push(textParts.map((p) => p.text).join(''));
-      }
-    }
-
-    return texts.join('\n\n') || undefined;
+    return parts;
   }
 
   private convertMessages(messages: PipelineMessage[]): GeminiContent[] {
-    // Strip trailing empty assistant message (created as a stream target).
+    // Strip a trailing empty assistant message (created as a stream target).
+    // "Empty" means text-only parts with blank joined text — a message carrying
+    // tool_use/tool_result/reasoning parts is real history and must be kept.
     const lastMsg = messages[messages.length - 1];
     if (
       lastMsg &&
       lastMsg.role === 'assistant' &&
-      typeof lastMsg.content === 'string' &&
-      !lastMsg.content.trim() &&
+      lastMsg.content.every((p) => p.type === 'text') &&
+      !getMessageText(lastMsg.content).trim() &&
       !lastMsg.reasoningFormatted
     ) {
       messages = messages.slice(0, -1);
@@ -240,11 +234,18 @@ export class GeminiBackendAdapter implements BackendAdapter {
     for (const m of messages) {
       if (m.role === 'system') continue;
 
-      const effectiveContent = m.reasoningFormatted ? m.reasoningFormatted : m.content;
+      // reasoningFormatted (a pre-rendered string) takes precedence when present.
+      if (m.reasoningFormatted !== undefined) {
+        out.push({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.reasoningFormatted }],
+        });
+        continue;
+      }
 
-      if (m.role === 'assistant' && Array.isArray(effectiveContent)) {
+      if (m.role === 'assistant') {
         let modelBuffer: ContentPart[] = [];
-        for (const part of effectiveContent) {
+        for (const part of m.content) {
           if (part.type === 'tool_result') {
             if (modelBuffer.length > 0) {
               out.push({
@@ -300,10 +301,12 @@ export class GeminiBackendAdapter implements BackendAdapter {
         continue;
       }
 
+      // Only user/tool messages reach this point (system skipped above,
+      // assistant handled by the parts/model branch and the reasoningFormatted
+      // early-out) — Gemini has no tool role, so both render as user.
       out.push({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts:
-          typeof effectiveContent === 'string' ? [{ text: effectiveContent }] : this.convertParts(effectiveContent),
+        role: 'user',
+        parts: this.convertParts(m.content),
       });
     }
 

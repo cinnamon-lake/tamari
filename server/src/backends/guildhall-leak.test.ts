@@ -16,7 +16,7 @@ import { LuaRuntime } from '../scripting/LuaRuntime.js';
 import { LuaBackendAdapter, type CustomBackendDelegate, type DelegatedGenerateResult } from './LuaBackendAdapter.js';
 import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
 import type { GenerationType } from './BackendAdapter.js';
-import type { MessageRole } from '@tamari/types';
+import { getMessageText, type MessageRole, type PipelineMessage } from '@tamari/types';
 import { consumeStream, type BackendStreamItem, type Prompt } from './BackendAdapter.js';
 
 const luaSource = readFileSync(new URL('../../../docs/design/examples/guildhall/main.lua', import.meta.url), 'utf8');
@@ -67,8 +67,7 @@ function adapter(delegate: CustomBackendDelegate): LuaBackendAdapter {
   });
 }
 
-const sysOf = (p: Prompt): string =>
-  typeof p.messages[0]?.content === 'string' ? (p.messages[0].content as string) : '';
+const sysOf = (p: Prompt): string => getMessageText(p.messages[0]?.content);
 // loop.lua rebuilds rounds as assistant messages with typed tool_use/tool_result blocks.
 const hasToolResult = (p: Prompt): boolean =>
   p.messages.some(
@@ -220,11 +219,15 @@ async function runTurnRaw(
   history: Array<{ role: MessageRole; content: string }>,
   generationType: GenerationType = 'send',
 ) {
+  const msg = (role: MessageRole, content: string): PipelineMessage => ({
+    role,
+    content: [{ type: 'text', text: content }],
+  });
   const prompt: Prompt = {
     messages: [
-      { role: 'system', content: 'Base system prompt.' },
-      ...history.map((h) => ({ role: h.role, content: h.content })),
-      { role: 'user', content: userText },
+      msg('system', 'Base system prompt.'),
+      ...history.map((h) => msg(h.role, h.content)),
+      msg('user', userText),
     ],
     tokenUsage: { prompt: 0, completion: 0 },
   };
@@ -869,7 +872,7 @@ describe('Guildhall card — extended coverage (leaks, verbs, economy)', () => {
       for (let mi = 0; mi < pp.messages.length; mi++) {
         const m = pp.messages[mi]!;
         if (m.role === 'system') continue; // the briefing channel itself
-        const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+        const content = JSON.stringify(m.content);
         for (const mk of MARKERS) {
           if (content.includes(mk)) {
             hits.push(`prompt[${i}] msg[${mi}] role=${m.role} marker="${mk}"`);

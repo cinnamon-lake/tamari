@@ -196,7 +196,13 @@ function getLastUserContent(body: unknown): string {
     .reverse()
     .find((m) => typeof m === 'object' && m !== null && (m as Record<string, unknown>).role === 'user');
   if (!lastUser || typeof lastUser !== 'object') return '';
-  return String((lastUser as Record<string, unknown>).content ?? '');
+  // Content may be a plain string or an array of content parts — the server
+  // sends parts unconditionally now, so collect the text out of either shape.
+  const raw = (lastUser as Record<string, unknown>).content;
+  if (typeof raw === 'string') return raw;
+  const texts: string[] = [];
+  collectText(raw, texts);
+  return texts.join('');
 }
 
 /** Collect every human-readable string out of a nested content structure. */

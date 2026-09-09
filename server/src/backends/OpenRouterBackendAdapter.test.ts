@@ -217,10 +217,10 @@ describe('OpenRouterBackendAdapter', () => {
       adapter.stream(
         {
           messages: [
-            { role: 'system', content: 'Be helpful.' },
-            { role: 'user', content: 'Hello' },
-            { role: 'assistant', content: 'Hi' },
-            { role: 'user', content: 'How are you?' },
+            { role: 'system', content: [{ type: 'text', text: 'Be helpful.' }] },
+            { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+            { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] },
+            { role: 'user', content: [{ type: 'text', text: 'How are you?' }] },
           ],
           tokenUsage: { prompt: 10, completion: 100 },
           cacheDepth: 0,
@@ -262,10 +262,10 @@ describe('OpenRouterBackendAdapter', () => {
       adapter.stream(
         {
           messages: [
-            { role: 'system', content: 'Be helpful.' },
-            { role: 'user', content: 'Hello' },
-            { role: 'assistant', content: 'Hi' },
-            { role: 'user', content: 'How are you?' },
+            { role: 'system', content: [{ type: 'text', text: 'Be helpful.' }] },
+            { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+            { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] },
+            { role: 'user', content: [{ type: 'text', text: 'How are you?' }] },
           ],
           tokenUsage: { prompt: 10, completion: 100 },
           cacheDepth: 0,
@@ -307,7 +307,7 @@ describe('OpenRouterBackendAdapter', () => {
     const { result } = await consumeStream(
       adapter.stream(
         {
-          messages: [{ role: 'user', content: 'Weather in Paris?' }],
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Weather in Paris?' }] }],
           tokenUsage: { prompt: 10, completion: 100 },
           tools: [
             {
@@ -350,8 +350,8 @@ describe('OpenRouterBackendAdapter', () => {
       adapter.stream(
         {
           messages: [
-            { role: 'system', content: 'Be helpful.' },
-            { role: 'user', content: 'Hello' },
+            { role: 'system', content: [{ type: 'text', text: 'Be helpful.' }] },
+            { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
           ],
           tokenUsage: { prompt: 10, completion: 100 },
           cacheDepth: 0,
@@ -363,7 +363,7 @@ describe('OpenRouterBackendAdapter', () => {
 
     const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(init.body as string);
-    expect(body.messages[0].content).toBe('Be helpful.');
-    expect(body.messages[1].content).toBe('Hello');
+    expect(body.messages[0].content).toEqual([{ type: 'text', text: 'Be helpful.' }]);
+    expect(body.messages[1].content).toEqual([{ type: 'text', text: 'Hello' }]);
   });
 });

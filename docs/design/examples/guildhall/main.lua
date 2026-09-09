@@ -291,10 +291,26 @@ local function isTerminalFloor(fid)
   return true
 end
 
+-- Incoming message content is ALWAYS a parts array
+-- ({ { type = "text", text = "..." } }) — the pipeline never sends bare
+-- strings. Extract the text parts; a string slips through only as a courtesy.
+local function contentText(content)
+  if type(content) == "string" then return content end
+  if type(content) ~= "table" then return "" end
+  local out = {}
+  for _, b in ipairs(content) do
+    if b.type == "text" and type(b.text) == "string" then out[#out + 1] = b.text end
+  end
+  return table.concat(out, "\n")
+end
+
 local function lastUserText(prompt)
   for i = #prompt.messages, 1, -1 do
     local m = prompt.messages[i]
-    if m.role == "user" and type(m.content) == "string" then return m.content end
+    if m.role == "user" then
+      local t = contentText(m.content)
+      if t ~= "" then return t end
+    end
   end
   return ""
 end

@@ -6,7 +6,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TestHarness, type TestClient } from '../testing/TestHarness.js';
 
-const ECHO_LUA = 'function generate(prompt, ctx) return "echo:" .. prompt.messages[#prompt.messages].content end';
+const ECHO_LUA =
+  'function generate(prompt, ctx) return "echo:" .. prompt.messages[#prompt.messages].content[1].text end';
 
 describe('custombackend.test handler', () => {
   let h: TestHarness;
@@ -79,7 +80,7 @@ describe('custombackend.test handler', () => {
           enabled: true,
           luaSource: `function generate(prompt, ctx)
             local sys = prompt.messages[1]
-            return "sys:" .. (sys and sys.content or "?") .. " char:" .. (ctx.characterId or "?")
+            return "sys:" .. (sys and sys.content[1].text or "?") .. " char:" .. (ctx.characterId or "?")
           end`,
         },
       },

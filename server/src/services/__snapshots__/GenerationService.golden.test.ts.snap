@@ -5,33 +5,84 @@ exports[`generation golden prompts > continue: prompt carries the partial assist
   "cacheDepth": undefined,
   "messages": [
     {
-      "content": "Write Goldie's next reply in a fictional chat between Goldie and User.
-
-Goldie is a golden retriever scholar.
-
-Erudite, warm
-
-A library by the sea.",
+      "content": [
+        {
+          "text": "Write Goldie's next reply in a fictional chat between Goldie and User.",
+          "type": "text",
+        },
+      ],
       "role": "system",
     },
     {
-      "content": "Hi",
+      "content": [
+        {
+          "text": "Goldie is a golden retriever scholar.",
+          "type": "text",
+        },
+      ],
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "Erudite, warm",
+          "type": "text",
+        },
+      ],
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "A library by the sea.",
+          "type": "text",
+        },
+      ],
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "Hi",
+          "type": "text",
+        },
+      ],
       "role": "user",
     },
     {
-      "content": "Woof, hello.",
+      "content": [
+        {
+          "text": "Woof, hello.",
+          "type": "text",
+        },
+      ],
       "role": "assistant",
     },
     {
-      "content": "Woof. Shall we begin?",
+      "content": [
+        {
+          "text": "Woof. Shall we begin?",
+          "type": "text",
+        },
+      ],
       "role": "assistant",
     },
     {
-      "content": "Tell me about tides.",
+      "content": [
+        {
+          "text": "Tell me about tides.",
+          "type": "text",
+        },
+      ],
       "role": "user",
     },
     {
-      "content": "Reply one.",
+      "content": [
+        {
+          "text": "Reply one.",
+          "type": "text",
+        },
+      ],
       "role": "assistant",
     },
   ],
@@ -44,7 +95,12 @@ exports[`generation golden prompts > genraw: raw prompt reaches the backend with
   "cacheDepth": undefined,
   "messages": [
     {
-      "content": "UNIQUE_RAW_PROMPT",
+      "content": [
+        {
+          "text": "UNIQUE_RAW_PROMPT",
+          "type": "text",
+        },
+      ],
       "role": "user",
     },
   ],
@@ -57,29 +113,75 @@ exports[`generation golden prompts > impersonate: prompt includes the impersonat
   "cacheDepth": undefined,
   "messages": [
     {
-      "content": "Write Goldie's next reply in a fictional chat between Goldie and User.
-
-Goldie is a golden retriever scholar.
-
-Erudite, warm
-
-A library by the sea.",
+      "content": [
+        {
+          "text": "Write Goldie's next reply in a fictional chat between Goldie and User.",
+          "type": "text",
+        },
+      ],
       "role": "system",
     },
     {
-      "content": "Hi",
+      "content": [
+        {
+          "text": "Goldie is a golden retriever scholar.",
+          "type": "text",
+        },
+      ],
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "Erudite, warm",
+          "type": "text",
+        },
+      ],
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "A library by the sea.",
+          "type": "text",
+        },
+      ],
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "Hi",
+          "type": "text",
+        },
+      ],
       "role": "user",
     },
     {
-      "content": "Woof, hello.",
+      "content": [
+        {
+          "text": "Woof, hello.",
+          "type": "text",
+        },
+      ],
       "role": "assistant",
     },
     {
-      "content": "Woof. Shall we begin?",
+      "content": [
+        {
+          "text": "Woof. Shall we begin?",
+          "type": "text",
+        },
+      ],
       "role": "assistant",
     },
     {
-      "content": "[Write your next reply from the point of view of User, using the chat history so far as a guideline for the writing style of User. Don't write as Goldie or system. Don't describe actions of Goldie.]",
+      "content": [
+        {
+          "text": "[Write your next reply from the point of view of User, using the chat history so far as a guideline for the writing style of User. Don't write as Goldie or system. Don't describe actions of Goldie.]",
+          "type": "text",
+        },
+      ],
       "role": "system",
     },
   ],
@@ -92,33 +194,84 @@ exports[`generation golden prompts > regenerate: prompt is rebuilt from the same
   "cacheDepth": undefined,
   "messages": [
     {
-      "content": "Write Goldie's next reply in a fictional chat between Goldie and User.
-
-Goldie is a golden retriever scholar.
-
-Erudite, warm
-
-A library by the sea.",
+      "content": [
+        {
+          "text": "Write Goldie's next reply in a fictional chat between Goldie and User.",
+          "type": "text",
+        },
+      ],
       "role": "system",
     },
     {
-      "content": "Hi",
+      "content": [
+        {
+          "text": "Goldie is a golden retriever scholar.",
+          "type": "text",
+        },
+      ],
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "Erudite, warm",
+          "type": "text",
+        },
+      ],
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "A library by the sea.",
+          "type": "text",
+        },
+      ],
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "Hi",
+          "type": "text",
+        },
+      ],
       "role": "user",
     },
     {
-      "content": "Woof, hello.",
+      "content": [
+        {
+          "text": "Woof, hello.",
+          "type": "text",
+        },
+      ],
       "role": "assistant",
     },
     {
-      "content": "Woof. Shall we begin?",
+      "content": [
+        {
+          "text": "Woof. Shall we begin?",
+          "type": "text",
+        },
+      ],
       "role": "assistant",
     },
     {
-      "content": "Tell me about tides.",
+      "content": [
+        {
+          "text": "Tell me about tides.",
+          "type": "text",
+        },
+      ],
       "role": "user",
     },
     {
-      "content": "",
+      "content": [
+        {
+          "text": "",
+          "type": "text",
+        },
+      ],
       "role": "assistant",
     },
   ],
@@ -131,33 +284,84 @@ exports[`generation golden prompts > send: full prompt assembly for a character 
   "cacheDepth": undefined,
   "messages": [
     {
-      "content": "Write Goldie's next reply in a fictional chat between Goldie and User.
-
-Goldie is a golden retriever scholar.
-
-Erudite, warm
-
-A library by the sea.",
+      "content": [
+        {
+          "text": "Write Goldie's next reply in a fictional chat between Goldie and User.",
+          "type": "text",
+        },
+      ],
       "role": "system",
     },
     {
-      "content": "Hi",
+      "content": [
+        {
+          "text": "Goldie is a golden retriever scholar.",
+          "type": "text",
+        },
+      ],
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "Erudite, warm",
+          "type": "text",
+        },
+      ],
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "A library by the sea.",
+          "type": "text",
+        },
+      ],
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "Hi",
+          "type": "text",
+        },
+      ],
       "role": "user",
     },
     {
-      "content": "Woof, hello.",
+      "content": [
+        {
+          "text": "Woof, hello.",
+          "type": "text",
+        },
+      ],
       "role": "assistant",
     },
     {
-      "content": "Woof. Shall we begin?",
+      "content": [
+        {
+          "text": "Woof. Shall we begin?",
+          "type": "text",
+        },
+      ],
       "role": "assistant",
     },
     {
-      "content": "Tell me about tides.",
+      "content": [
+        {
+          "text": "Tell me about tides.",
+          "type": "text",
+        },
+      ],
       "role": "user",
     },
     {
-      "content": "",
+      "content": [
+        {
+          "text": "",
+          "type": "text",
+        },
+      ],
       "role": "assistant",
     },
   ],

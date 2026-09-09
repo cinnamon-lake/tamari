@@ -6,8 +6,8 @@ import type { TransformerContext } from './types.js';
 const ctx: TransformerContext = { userName: 'Alice', charName: 'Bob', model: 'm1', backendProvider: 'openai' };
 
 const base: PipelineMessage[] = [
-  { role: 'system', content: 'sys' },
-  { role: 'user', content: 'hello' },
+  { role: 'system', content: [{ type: 'text', text: 'sys' }] },
+  { role: 'user', content: [{ type: 'text', text: 'hello' }] },
 ];
 
 describe('runLuaTransformer', () => {
@@ -22,23 +22,23 @@ describe('runLuaTransformer', () => {
       ctx,
     );
     expect(note).toBeUndefined();
-    expect(messages).toEqual([{ role: 'user', content: 'hello' }]);
+    expect(messages).toEqual([{ role: 'user', content: [{ type: 'text', text: 'hello' }] }]);
   });
 
   it('may mutate the argument in place and return it', async () => {
     const { messages, note } = await runLuaTransformer(
       `function handle(messages, ctx)
-        messages[2].content = messages[2].content .. ' world'
+        messages[2].content[1].text = messages[2].content[1].text .. ' world'
         return messages
       end`,
       base,
       ctx,
     );
     expect(note).toBeUndefined();
-    expect(messages[1]!.content).toBe('hello world');
+    expect(messages[1]!.content).toEqual([{ type: 'text', text: 'hello world' }]);
   });
 
-  it('accepts a freshly built array literal', async () => {
+  it('accepts a freshly built array literal and normalizes bare-string content', async () => {
     const { messages, note } = await runLuaTransformer(
       `function handle(messages, ctx)
         return { { role = 'user', content = 'replacement' } }
@@ -47,7 +47,7 @@ describe('runLuaTransformer', () => {
       ctx,
     );
     expect(note).toBeUndefined();
-    expect(messages).toEqual([{ role: 'user', content: 'replacement' }]);
+    expect(messages).toEqual([{ role: 'user', content: [{ type: 'text', text: 'replacement' }] }]);
   });
 
   it('passes ctx to handle()', async () => {
@@ -60,7 +60,7 @@ describe('runLuaTransformer', () => {
       ctx,
     );
     expect(note).toBeUndefined();
-    expect(messages[1]!.content).toBe('Alice/Bob/m1/openai');
+    expect(messages[1]!.content).toEqual([{ type: 'text', text: 'Alice/Bob/m1/openai' }]);
   });
 
   it('keeps pre-step messages when handle() is missing', async () => {
@@ -144,7 +144,7 @@ describe('runLuaTransformer', () => {
   });
 
   it('does not alias the input array on failure after partial mutation', async () => {
-    const input: PipelineMessage[] = [{ role: 'user', content: 'original' }];
+    const input: PipelineMessage[] = [{ role: 'user', content: [{ type: 'text', text: 'original' }] }];
     const { messages, note } = await runLuaTransformer(
       `
       function handle(messages, ctx)
@@ -156,7 +156,7 @@ describe('runLuaTransformer', () => {
       ctx,
     );
     expect(note).toBeDefined();
-    expect(messages[0]!.content).toBe('original');
-    expect(input[0]!.content).toBe('original');
+    expect(messages[0]!.content).toEqual([{ type: 'text', text: 'original' }]);
+    expect(input[0]!.content).toEqual([{ type: 'text', text: 'original' }]);
   });
 });

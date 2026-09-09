@@ -57,7 +57,7 @@ export const historySquash: BuiltinTransformer = {
 
     if (firstIndex === -1) return messages;
 
-    const collapsed: PipelineMessage = { role: p.role, content: turns.join(p.separator) };
+    const collapsed: PipelineMessage = { role: p.role, content: [{ type: 'text', text: turns.join(p.separator) }] };
     const result: PipelineMessage[] = [];
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i];

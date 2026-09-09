@@ -1,5 +1,6 @@
 import { Show, For, createSignal, createEffect } from 'solid-js';
 import type { Generation, GenerationMeta, TraceError } from '@tamari/types';
+import { getMessageText } from '@tamari/types';
 import { state } from '../stores/serverStore.js';
 import { apiFetch } from '../lib/apiFetch.js';
 import { useI18n } from '../i18n/index.js';
@@ -282,7 +283,8 @@ function TraceLine(props: {
                 <li class="generation-trace-prompt-message">
                   <span class="generation-trace-prompt-role">{msg.role}</span>
                   <pre class="generation-trace-pre">
-                    {typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}
+                    {/* Content is always a parts array; show the text, or the raw JSON for non-text content. */}
+                    {getMessageText(msg.content) || JSON.stringify(msg.content)}
                   </pre>
                 </li>
               )}

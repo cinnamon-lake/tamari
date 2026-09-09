@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { formatTextPrompt } from './formatTextPrompt.js';
 import { getInstructTemplate } from './InstructTemplate.js';
 import { extractReasoning } from '../services/ReasoningEngine.js';
-import type { PipelineMessage } from './BackendAdapter.js';
+import type { PipelineMessage, ContentPart } from './BackendAdapter.js';
 
-const msg = (role: PipelineMessage['role'], content: PipelineMessage['content']): PipelineMessage => ({
+const msg = (role: PipelineMessage['role'], content: string | ContentPart[]): PipelineMessage => ({
   role,
-  content,
+  content: typeof content === 'string' ? [{ type: 'text', text: content }] : content,
 });
 
 const noReasoning = { includeReasoning: false };
@@ -23,6 +23,18 @@ describe('formatTextPrompt', () => {
     expect(text).toContain('A friendly bot.');
     expect(text).toContain('Hello');
     expect(text).toContain('Hi there');
+  });
+
+  it('merges a run of consecutive system messages into one wrapped block', () => {
+    const text = formatTextPrompt(
+      [msg('system', 'First.'), msg('system', 'Second.'), msg('user', 'Hello')],
+      getInstructTemplate('alpaca'),
+      noReasoning,
+    );
+
+    // Adapter-side squashing: the two system messages join with '\n\n' inside
+    // a single system wrapper.
+    expect(text).toContain('First.\n\nSecond.');
   });
 
   it('wraps content with the alpaca template', () => {

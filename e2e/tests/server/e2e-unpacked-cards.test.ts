@@ -17,6 +17,7 @@ import { promises as fs } from 'node:fs';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ClientMessage, Prompt } from '@tamari/types';
+import { getMessageText } from '@tamari/types';
 import { TestHarness } from '../../../server/src/testing/TestHarness.js';
 import { TrivialBackendAdapter } from '../../../server/src/backends/TrivialBackendAdapter.js';
 import { UnpackedCardService } from '../../../server/src/services/unpacked/UnpackedCardService.js';
@@ -40,12 +41,9 @@ class RecordingBackend extends TrivialBackendAdapter {
   }
 }
 
-/** Flatten a prompt (system prompt + message contents) to searchable text. */
+/** Flatten a prompt's message contents to searchable text. */
 function promptText(prompt: Prompt): string {
-  const parts = prompt.messages.map((m) =>
-    typeof m.content === 'string' ? m.content : m.content.map((p) => (p.type === 'text' ? p.text : '')).join(''),
-  );
-  return [prompt.systemPrompt ?? '', ...parts].join('\n');
+  return prompt.messages.map((m) => getMessageText(m.content)).join('\n');
 }
 
 /**

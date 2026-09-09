@@ -28,8 +28,7 @@ function applyMode(content: string, mode: 'none' | 'trim' | 'full'): string {
   return result;
 }
 
-function mapTextParts(content: string | ContentPart[], mode: 'none' | 'trim' | 'full'): string | ContentPart[] {
-  if (typeof content === 'string') return applyMode(content, mode);
+function mapTextParts(content: ContentPart[], mode: 'none' | 'trim' | 'full'): ContentPart[] {
   return content.map((p) => (p.type === 'text' ? { ...p, text: applyMode(p.text, mode) } : p));
 }
 

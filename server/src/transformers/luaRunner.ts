@@ -10,20 +10,23 @@
  *   function handle(messages, ctx) ... return messages end
  *
  * `messages` is the rendered prompt as a plain array of
- * `{ role, content, reasoningFormatted? }`, `ctx` is
- * `{ userName, charName, generationType, model, backendProvider }` (names are
- * final, post-macro). handle() RETURNS the (possibly new) message array —
- * unlike request scripts, which mutate the `request` object in place, the
- * array is threaded by return value. The result is validated back into
- * `PipelineMessage[]`; any error, timeout, missing handle, or malformed
- * result keeps the pre-step messages and yields a trace note instead of
- * aborting the generation.
+ * `{ role, content, reasoningFormatted? }` where `content` is ALWAYS an array
+ * of content parts (e.g. `{ { type = "text", text = "..." } }` — the pipeline
+ * never passes bare strings, so scripts have one uniform shape to work with).
+ * `ctx` is `{ userName, charName, generationType, model, backendProvider }`
+ * (names are final, post-macro). handle() RETURNS the (possibly new) message
+ * array — unlike request scripts, which mutate the `request` object in
+ * place, the array is threaded by return value. The result is validated back
+ * into `PipelineMessage[]` (a bare-string `content` in the RETURN value is
+ * tolerated and normalized to a single text part); any error, timeout,
+ * missing handle, or malformed result keeps the pre-step messages and yields
+ * a trace note instead of aborting the generation.
  */
 
 import { LuaFactory } from 'wasmoon';
 import { z } from 'zod';
 import { ContentPartSchema } from '@tamari/types';
-import type { PipelineMessage } from '@tamari/types';
+import type { ContentPart, PipelineMessage } from '@tamari/types';
 import type { TransformerContext } from './types.js';
 import type { LuaRuntime } from '../scripting/LuaRuntime.js';
 import { validateLuaSource } from '../scripting/validateLuaSource.js';
@@ -105,7 +108,17 @@ export async function runLuaTransformer(
         note: `script returned malformed messages (${parsed.error.issues[0]?.message ?? 'invalid'}) — kept pre-step messages`,
       };
     }
-    return { messages: parsed.data };
+    // Normalize: scripts may return a bare-string content (tolerated); the
+    // post-chain invariant is always a parts array.
+    const normalized: PipelineMessage[] = parsed.data.map((m) => {
+      const content: ContentPart[] = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content;
+      return {
+        role: m.role,
+        content,
+        ...(m.reasoningFormatted !== undefined ? { reasoningFormatted: m.reasoningFormatted } : {}),
+      };
+    });
+    return { messages: normalized };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { messages, note: `script failed: ${message} — kept pre-step messages` };

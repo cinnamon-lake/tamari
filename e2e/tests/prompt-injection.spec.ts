@@ -1,5 +1,5 @@
 import { smokeTest as test, expect } from '../fixtures/smoke.js';
-import { getLastLlmRequest, resetLlmRequests, waitForNextLlmRequest } from '../helpers/llm.js';
+import { getLastLlmRequest, resetLlmRequests, waitForNextLlmRequest, wireContentText } from '../helpers/llm.js';
 import { expectNoAxeViolations } from '../helpers/a11y.js';
 import type { App } from '../helpers/app.js';
 import { uniqueName } from '../helpers/names.js';
@@ -8,7 +8,7 @@ import { uniqueName } from '../helpers/names.js';
 function promptText(captured: { body: unknown }): string {
   const body = captured.body as Record<string, unknown>;
   const messages = Array.isArray(body.messages) ? body.messages : [];
-  return messages.map((m: Record<string, unknown>) => String(m.content ?? '')).join('\n');
+  return messages.map((m: Record<string, unknown>) => wireContentText(m.content)).join('\n');
 }
 
 interface EntrySpec {

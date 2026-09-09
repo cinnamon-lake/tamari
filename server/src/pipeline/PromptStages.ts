@@ -283,10 +283,10 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
         ctx.collection = {
           prompts: ctx.promptManager.getOrderedPrompts(),
           markers: {
-            charDescription: opts.character?.description ?? '',
-            charPersonality: opts.character?.personality ?? '',
-            scenario: opts.character?.scenario ?? '',
-            personaDescription: opts.personaDescription ?? '',
+            charDescription: [opts.character?.description ?? ''],
+            charPersonality: [opts.character?.personality ?? ''],
+            scenario: [opts.character?.scenario ?? ''],
+            personaDescription: [opts.personaDescription ?? ''],
             worldInfoBefore: ctx.wi.before,
             worldInfoAfter: ctx.wi.after,
           },

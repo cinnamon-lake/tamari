@@ -3,7 +3,12 @@
  *
  * The script defines `generate(prompt, ctx)` and optionally `list_models()`.
  * `prompt` is the fully-built Prompt (mutable copy) — the script may inspect,
- * rewrite, or rebuild it arbitrarily. Two output modes:
+ * rewrite, or rebuild it arbitrarily. Message `content` is ALWAYS an array of
+ * content parts (e.g. `{ { type = "text", text = "..." } }`) — the pipeline
+ * never emits bare strings, so scripts have one uniform shape. Prompt tables
+ * the script hands BACK (delegate sub-prompts, passthrough overrides) may use
+ * bare-string content for ergonomics; it is normalized to parts on the way in
+ * (normalizeLuaPrompt). Two output modes:
  *
  *   1. Blocking (full control, no token streaming):
  *        local res = backends.generate(prompt):await()   -- default delegate
@@ -225,6 +230,23 @@ function normalizeResponseFormat(prompt: Prompt): Prompt {
   return prompt;
 }
 
+/**
+ * Script-built prompt tables (delegate sub-prompts, passthrough overrides)
+ * may use bare-string message content — the ergonomic form inside Lua. The
+ * internal contract is always ContentPart[], so normalize on the way in.
+ * Scripts RECEIVE prompts with parts-array content (the pipeline never emits
+ * bare strings); this covers what they hand back.
+ */
+function normalizeLuaPrompt(prompt: Prompt): Prompt {
+  const p = normalizeResponseFormat(prompt);
+  if (!Array.isArray(p.messages)) return p;
+  const messages = p.messages.map((m) => {
+    const content = (m as unknown as Record<string, unknown>)['content'];
+    return typeof content === 'string' ? { ...m, content: [{ type: 'text' as const, text: content }] } : m;
+  });
+  return { ...p, messages };
+}
+
 export class LuaBackendAdapter implements BackendAdapter {
   readonly id: string;
   readonly name: string;
@@ -315,7 +337,7 @@ export class LuaBackendAdapter implements BackendAdapter {
           // Two call shapes: generate(prompt) — default delegate; or
           // generate("<configId>", prompt) — explicit target by config id.
           const configId = typeof arg1 === 'string' ? arg1 : null;
-          const promptArg = normalizeResponseFormat((typeof arg1 === 'string' ? arg2 : arg1) as Prompt);
+          const promptArg = normalizeLuaPrompt((typeof arg1 === 'string' ? arg2 : arg1) as Prompt);
           const result = await this.delegate.generate(configId, promptArg, signal, ctx);
           delegatedUsage = {
             promptTokens: delegatedUsage.promptTokens + result.usage.promptTokens,
@@ -511,9 +533,7 @@ export class LuaBackendAdapter implements BackendAdapter {
       ) {
         const pt = (raw as Record<string, unknown>)['__passthrough'];
         const configId = pt === true ? null : String(pt);
-        const passthroughPrompt = normalizeResponseFormat(
-          ((raw as Record<string, unknown>)['prompt'] ?? prompt) as Prompt,
-        );
+        const passthroughPrompt = normalizeLuaPrompt(((raw as Record<string, unknown>)['prompt'] ?? prompt) as Prompt);
         let adapter: BackendAdapter;
         try {
           adapter = await this.delegate.resolveAdapter(configId);

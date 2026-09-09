@@ -14,6 +14,7 @@
 
 import type { PipelineMessage, ContentPart, MessageRole } from './BackendAdapter.js';
 import type { InstructTemplate } from './InstructTemplate.js';
+import { PROMPT_SEPARATOR } from '../pipeline/renderers/Renderer.js';
 import { reconstructWithReasoning } from '../services/ReasoningEngine.js';
 
 export interface FormatTextPromptOptions {
@@ -24,9 +25,8 @@ export interface FormatTextPromptOptions {
   includeReasoning: boolean;
 }
 
-/** Text content of a message: plain string, or the joined text parts. */
-function textOf(content: string | ContentPart[]): string {
-  if (typeof content === 'string') return content;
+/** Text content of a message: the joined text parts. */
+function textOf(content: ContentPart[]): string {
   return content
     .filter((p): p is Extract<ContentPart, { type: 'text' }> => p.type === 'text')
     .map((p) => p.text)
@@ -34,8 +34,7 @@ function textOf(content: string | ContentPart[]): string {
 }
 
 /** Joined reasoning-part text, if any (never part of `textOf`). */
-function reasoningOf(content: string | ContentPart[]): string {
-  if (typeof content === 'string') return '';
+function reasoningOf(content: ContentPart[]): string {
   return content
     .filter((p): p is Extract<ContentPart, { type: 'reasoning' }> => p.type === 'reasoning')
     .map((p) => p.text)
@@ -77,7 +76,23 @@ export function formatTextPrompt(
     }
   }
 
-  for (const msg of history) {
+  for (let i = 0; i < history.length; i++) {
+    const msg = history[i];
+    if (!msg) continue;
+
+    // Adapter-side squashing: a run of consecutive system messages merges
+    // into ONE wrapped block (the pipeline no longer squashes components —
+    // wire shaping is the adapter's job).
+    if (msg.role === 'system') {
+      const texts = [textOf(msg.content)];
+      while (history[i + 1]?.role === 'system') {
+        i++;
+        texts.push(textOf(history[i]?.content ?? []));
+      }
+      parts.push(wrap(texts.join(PROMPT_SEPARATOR), 'system', template));
+      continue;
+    }
+
     let text = textOf(msg.content);
     if (msg.role === 'assistant' && opts.includeReasoning && template.reasoning) {
       const reasoning = reasoningOf(msg.content);

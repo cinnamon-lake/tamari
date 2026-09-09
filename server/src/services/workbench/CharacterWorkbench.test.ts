@@ -1614,7 +1614,7 @@ describe('CharacterWorkbench', () => {
             if type(state) ~= "table" then state = { turns = 0 } end
             state.turns = state.turns + 1
             local last = prompt.messages[#prompt.messages]
-            return "echo:" .. last.content .. " (turn " .. state.turns .. ")"
+            return "echo:" .. last.content[1].text .. " (turn " .. state.turns .. ")"
           end
         `,
       });

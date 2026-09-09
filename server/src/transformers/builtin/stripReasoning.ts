@@ -31,7 +31,6 @@ export const stripReasoning: BuiltinTransformer = {
     const latest = latestAssistantIndex(messages);
     return messages.map((msg, i) => {
       if (msg.role !== 'assistant' || i === latest) return msg;
-      if (typeof msg.content === 'string') return msg;
 
       const stripped = msg.content.filter(
         (p) => p.type !== 'reasoning' && p.type !== 'tool_use' && p.type !== 'tool_result',
@@ -42,9 +41,9 @@ export const stripReasoning: BuiltinTransformer = {
       // (mirrors the renderer's resolvedText fallback).
       const lastStripped = stripped[stripped.length - 1];
       if (lastStripped?.type === 'text') {
-        return { ...msg, content: lastStripped.text };
+        return { ...msg, content: [lastStripped] };
       }
-      return { ...msg, content: getMessageText(msg.content) };
+      return { ...msg, content: [{ type: 'text', text: getMessageText(msg.content) }] };
     });
   },
 };

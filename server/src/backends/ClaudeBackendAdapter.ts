@@ -14,10 +14,10 @@ import type {
   PipelineMessage,
   Prompt,
   BackendStreamItem,
-  TextPart,
   ToolCall,
   ToolDefinition,
 } from './BackendAdapter.js';
+import { getMessageText } from '@tamari/types';
 import { logger } from '../lib/logger.js';
 import { logDelta } from './RequestLogger.js';
 import { executeRequest, type BaseAdapterConfig } from './executeRequest.js';
@@ -173,7 +173,7 @@ export class ClaudeBackendAdapter implements BackendAdapter {
     const url = `${this.config.baseUrl.replace(/\/$/, '')}/messages`;
 
     // Extract system messages into top-level system param
-    const systemPrompt = this.extractSystemPrompt(prompt);
+    const systemBlocks = this.extractSystemBlocks(prompt);
     const messages = this.convertMessages(prompt.messages);
 
     const cachingEnabled = typeof prompt.cacheDepth === 'number' && prompt.cacheDepth >= 0;
@@ -197,18 +197,16 @@ export class ClaudeBackendAdapter implements BackendAdapter {
       body.max_tokens = prompt.tokenUsage.completion;
     }
 
-    if (systemPrompt) {
+    if (systemBlocks.length > 0) {
       if (cachingEnabled) {
-        body.system = [
-          {
-            type: 'text',
-            text: systemPrompt,
-            cache_control: { type: 'ephemeral', ...(cacheTTL ? { ttl: cacheTTL } : {}) },
-          },
-        ];
-      } else {
-        body.system = systemPrompt;
+        // One breakpoint on the LAST system block: the whole static system
+        // prefix is cached, component boundaries stay intact.
+        const last = systemBlocks[systemBlocks.length - 1];
+        if (last) {
+          last.cache_control = { type: 'ephemeral', ...(cacheTTL ? { ttl: cacheTTL } : {}) };
+        }
       }
+      body.system = systemBlocks;
     }
 
     if (prompt.tools && prompt.tools.length > 0) {
@@ -266,34 +264,33 @@ export class ClaudeBackendAdapter implements BackendAdapter {
     return { url, init };
   }
 
-  private extractSystemPrompt(prompt: Prompt): string | undefined {
-    const systemMessages = prompt.messages.filter((m) => m.role === 'system');
-    const texts: string[] = [];
-
-    if (prompt.systemPrompt) {
-      texts.push(prompt.systemPrompt);
+  /**
+   * Extract system messages into top-level system blocks — one block per
+   * system message, never joined. De-squishing is the whole point: each
+   * prompt component keeps its own block boundary on the wire.
+   */
+  private extractSystemBlocks(
+    prompt: Prompt,
+  ): Array<{ type: 'text'; text: string; cache_control?: { type: string; ttl?: string } }> {
+    const blocks: Array<{ type: 'text'; text: string; cache_control?: { type: string; ttl?: string } }> = [];
+    for (const m of prompt.messages) {
+      if (m.role !== 'system') continue;
+      const text = getMessageText(m.content);
+      if (text) blocks.push({ type: 'text', text });
     }
-
-    for (const m of systemMessages) {
-      if (typeof m.content === 'string') {
-        texts.push(m.content);
-      } else {
-        const textParts = m.content.filter((p): p is TextPart => p.type === 'text');
-        texts.push(textParts.map((p) => p.text).join(''));
-      }
-    }
-
-    return texts.join('\n\n') || undefined;
+    return blocks;
   }
 
   private convertMessages(messages: PipelineMessage[]): ClaudeMessage[] {
-    // Strip trailing empty assistant message (created as a stream target).
+    // Strip a trailing empty assistant message (created as a stream target).
+    // "Empty" means text-only parts with blank joined text — a message carrying
+    // tool_use/tool_result/reasoning parts is real history and must be kept.
     const lastMsg = messages[messages.length - 1];
     if (
       lastMsg &&
       lastMsg.role === 'assistant' &&
-      typeof lastMsg.content === 'string' &&
-      !lastMsg.content.trim() &&
+      lastMsg.content.every((p) => p.type === 'text') &&
+      !getMessageText(lastMsg.content).trim() &&
       !lastMsg.reasoningFormatted
     ) {
       messages = messages.slice(0, -1);
@@ -304,10 +301,10 @@ export class ClaudeBackendAdapter implements BackendAdapter {
     for (const m of messages) {
       if (m.role === 'system') continue;
 
-      // If the message has an array of parts, translate them directly to Claude content blocks.
+      // Translate the parts directly to Claude content blocks.
       // A single internal message may contain multiple tool-call cycles;
       // we emit interleaved assistant / user turns.
-      if (m.role === 'assistant' && Array.isArray(m.content)) {
+      if (m.role === 'assistant') {
         let assistantBuffer: ContentPart[] = [];
         for (const part of m.content) {
           if (part.type === 'tool_result') {
@@ -338,11 +335,7 @@ export class ClaudeBackendAdapter implements BackendAdapter {
       // Fallback: use pre-formatted reasoning + content for adapters without native block support.
       // Claude only accepts user/assistant roles — legacy 'tool'-role messages
       // render as user text (tool results otherwise travel as tool_result blocks above).
-      const textContent = m.reasoningFormatted
-        ? m.reasoningFormatted
-        : typeof m.content === 'string'
-          ? m.content
-          : this.convertParts(m.content);
+      const textContent = m.reasoningFormatted ? m.reasoningFormatted : this.convertParts(m.content);
 
       out.push({
         role: m.role === 'tool' ? 'user' : m.role,

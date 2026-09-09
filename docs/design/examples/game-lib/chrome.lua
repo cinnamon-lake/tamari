@@ -36,6 +36,21 @@ function M.clean(text)
     :gsub("^%s*(.-)%s*$", "%1"))
 end
 
+-- The plain text of a message's content. Incoming prompt/branch messages
+-- carry content as a PARTS array (never a bare string), so reading their text
+-- means collecting the text parts; script-BUILT content may still be a bare
+-- string. Both shapes read the same — anything else (no content, only
+-- tool/reasoning parts) reads as "".
+function M.text(content)
+  if type(content) == "string" then return content end
+  if type(content) ~= "table" then return "" end
+  local out = {}
+  for _, p in ipairs(content) do
+    if type(p) == "table" and p.type == "text" then out[#out + 1] = p.text or "" end
+  end
+  return table.concat(out)
+end
+
 -- One safe line: double quotes become single (so the result can ride a
 -- summary="…" attribute), whitespace collapses, ends trim. The text itself is
 -- never cut — max is opt-in and used for previews/excerpts only (the zoom

@@ -52,7 +52,10 @@ describe('OpenAIBackendAdapter', () => {
 
     const { result } = await consumeStream(
       adapter.stream(
-        { messages: [{ role: 'user', content: 'Hello' }], tokenUsage: { prompt: 10, completion: 100 } },
+        {
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
         new AbortController().signal,
       ),
     );
@@ -67,7 +70,7 @@ describe('OpenAIBackendAdapter', () => {
     const body = JSON.parse(init.body as string);
     expect(body.model).toBe('gpt-4o');
     expect(body.stream).toBe(true);
-    expect(body.messages).toEqual([{ role: 'user', content: 'Hello' }]);
+    expect(body.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }]);
   });
 
   it('uses max_completion_tokens for reasoning models', async () => {
@@ -301,6 +304,53 @@ describe('OpenAIBackendAdapter', () => {
       role: 'assistant',
       content: 'It is sunny and 15:00.',
     });
+  });
+
+  it('keeps a trailing assistant message that carries only tool parts (continuation round)', async () => {
+    const adapter = new OpenAIBackendAdapter({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+      model: 'gpt-4o',
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: createMockStream(['data: [DONE]']),
+    } as Response);
+
+    const { result } = await consumeStream(
+      adapter.stream(
+        {
+          messages: [
+            { role: 'user', content: [{ type: 'text', text: 'Roll for me.' }] },
+            {
+              role: 'assistant',
+              content: [
+                { type: 'tool_use', id: 'call_1', name: 'roll_dice', input: { sides: 6 } },
+                {
+                  type: 'tool_result',
+                  toolUseId: 'call_1',
+                  name: 'roll_dice',
+                  content: 'Rolled 1d6: 4',
+                  isError: false,
+                },
+              ],
+            },
+          ],
+          tokenUsage: { prompt: 10, completion: 100 },
+        },
+        new AbortController().signal,
+      ),
+    );
+    expect(result.finishReason).toBe('stop');
+
+    // The tool exchange must reach the API — dropping it as an "empty stream
+    // target" makes the provider re-request the same tool forever.
+    const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.messages).toHaveLength(3);
+    expect(body.messages[1]).toMatchObject({ role: 'assistant', tool_calls: [{ id: 'call_1' }] });
+    expect(body.messages[2]).toEqual({ role: 'tool', tool_call_id: 'call_1', content: 'Rolled 1d6: 4' });
   });
 
   it('converts image parts to OpenAI image_url format', async () => {

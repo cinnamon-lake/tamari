@@ -166,11 +166,15 @@ test.describe('Proxy API (/v1)', () => {
     // The round-trip really went through the config's adapter to the mock:
     // the captured /chat/completions body carries the translated system +
     // user messages (anthropic `system` field -> a system role message).
+    // Message content is a content-part array on the wire.
     const cap = await getLastLlmRequest();
-    const capBody = cap.body as { model?: string; messages?: Array<{ role: string; content: string }> };
+    const capBody = cap.body as { model?: string; messages?: Array<{ role: string; content: unknown }> };
     expect(capBody.model).toBe('mock-model');
-    expect(capBody.messages).toContainEqual({ role: 'system', content: 'You are terse.' });
-    expect(capBody.messages).toContainEqual({ role: 'user', content: 'respond: proxied hello' });
+    expect(capBody.messages).toContainEqual({ role: 'system', content: [{ type: 'text', text: 'You are terse.' }] });
+    expect(capBody.messages).toContainEqual({
+      role: 'user',
+      content: [{ type: 'text', text: 'respond: proxied hello' }],
+    });
   });
 
   test('maps a length finish to stop_reason max_tokens', async ({ page, request }) => {

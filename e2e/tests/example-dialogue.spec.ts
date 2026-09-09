@@ -1,7 +1,7 @@
 import { smokeTest as test, expect } from '../fixtures/smoke.js';
 import type { Page } from '../fixtures/base.js';
 import { patchActiveBackendConfig } from '../helpers/backendConfig.js';
-import { getLastLlmRequest, resetLlmRequests } from '../helpers/llm.js';
+import { getLastLlmRequest, resetLlmRequests, wireContentText } from '../helpers/llm.js';
 import { uniqueName } from '../helpers/names.js';
 
 const MES_EXAMPLE = '<START>\n{{user}}: Example question\n{{char}}: Example answer EXTOK1';
@@ -65,13 +65,15 @@ test.describe('Example Dialogue (mesExample)', () => {
     const messages = Array.isArray(body.messages) ? (body.messages as Array<Record<string, unknown>>) : [];
 
     // The parsed example block shows up as real conversation turns.
-    const exUserIdx = messages.findIndex((m) => m.role === 'user' && m.content === 'Example question');
-    const exCharIdx = messages.findIndex((m) => m.role === 'assistant' && String(m.content ?? '').includes('EXTOK1'));
+    const exUserIdx = messages.findIndex((m) => m.role === 'user' && wireContentText(m.content) === 'Example question');
+    const exCharIdx = messages.findIndex(
+      (m) => m.role === 'assistant' && wireContentText(m.content).includes('EXTOK1'),
+    );
     expect(exUserIdx).toBeGreaterThanOrEqual(0);
     expect(exCharIdx).toBeGreaterThan(exUserIdx);
 
     // …and they precede the actual chat history (greeting + our message).
-    const realUserIdx = messages.findIndex((m) => m.role === 'user' && String(m.content ?? '').includes('hello'));
+    const realUserIdx = messages.findIndex((m) => m.role === 'user' && wireContentText(m.content).includes('hello'));
     expect(realUserIdx).toBeGreaterThan(exCharIdx);
   });
 

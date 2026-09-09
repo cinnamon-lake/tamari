@@ -9,6 +9,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PromptBuilder, type BuildOptions } from './PromptBuilder.js';
 import { WorldInfoInjector } from './WorldInfoInjector.js';
+import { getMessageText } from '@tamari/types';
 import type { Message, WorldInfoEntry, RegexRule } from '@tamari/types';
 
 let nextId = 1;
@@ -69,7 +70,9 @@ function makeOpts(overrides?: Partial<BuildOptions>): BuildOptions {
 }
 
 function serialized(messages: Array<{ role: string; content: unknown }>): string[] {
-  return messages.map((m) => `${m.role}:${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`);
+  // Content is always a ContentPart[] now — serialize to role:text for
+  // prefix comparisons (the tests here only use plain-text history).
+  return messages.map((m) => `${m.role}:${getMessageText(m.content)}`);
 }
 
 describe('append-only prompt layout', () => {
@@ -174,7 +177,7 @@ describe('append-only prompt layout', () => {
     expect(json).toContain('CONSTANT-DEPTH');
 
     // The atDepth content sits in the pinned block above message 1, not at depth.
-    const roles = prompt.messages.map((m) => `${m.role}:${typeof m.content === 'string' ? m.content : ''}`);
+    const roles = prompt.messages.map((m) => `${m.role}:${getMessageText(m.content)}`);
     const depthIdx = roles.findIndex((r) => r.includes('CONSTANT-DEPTH'));
     const firstHistoryIdx = roles.findIndex((r) => r.startsWith('user:first'));
     expect(depthIdx).toBeGreaterThanOrEqual(0);
@@ -257,17 +260,24 @@ describe('append-only prompt layout', () => {
     expect(noteIdx).toBeGreaterThanOrEqual(0);
     expect(depthIdx).toBeGreaterThan(noteIdx);
     expect(absIdx).toBeGreaterThan(depthIdx);
-    // One pinned block: all three inside the same system message above history.
-    const blockMsg = prompt.messages.find(
-      (m) => m.role === 'system' && typeof m.content === 'string' && m.content.includes('NOTE-TEXT'),
+    // De-squished pinned block: each hoisted item is its OWN system message
+    // (never joined), in deterministic order above the history.
+    const blockTexts = prompt.messages
+      .map((m) => getMessageText(m.content))
+      .filter((t) => ['NOTE-TEXT', 'CONSTANT-DEPTH', 'ABS-PROMPT'].includes(t));
+    expect(blockTexts).toEqual(['NOTE-TEXT', 'CONSTANT-DEPTH', 'ABS-PROMPT']);
+    const blockIdxs = ['NOTE-TEXT', 'CONSTANT-DEPTH', 'ABS-PROMPT'].map((t) =>
+      prompt.messages.findIndex((m) => m.role === 'system' && getMessageText(m.content) === t),
     );
-    expect(blockMsg).toBeDefined();
-    expect(String(blockMsg!.content)).toContain('CONSTANT-DEPTH');
-    expect(String(blockMsg!.content)).toContain('ABS-PROMPT');
+    const firstHistoryIdx = prompt.messages.findIndex((m) => getMessageText(m.content) === 'first');
+    for (const idx of blockIdxs) {
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(idx).toBeLessThan(firstHistoryIdx);
+    }
     // The note is NOT spliced at depth between the two user messages.
     const roles = prompt.messages.map((m) => m.role);
     const lastUserIdx = roles.lastIndexOf('user');
-    expect(prompt.messages[lastUserIdx]!.content).toBe('second');
+    expect(getMessageText(prompt.messages[lastUserIdx]!.content)).toBe('second');
   });
 
   it('reasoning is re-sent verbatim under append-only (the renderer never strips)', async () => {

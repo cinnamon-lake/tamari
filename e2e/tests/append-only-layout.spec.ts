@@ -173,7 +173,7 @@ test.describe('Append-only prompt layout', () => {
     // The author's note is hoisted into the pinned block ABOVE message 1
     // (a system message before the first user/greeting message), never at depth.
     const firstUserIdx = messages.findIndex((m) => m.role === 'user');
-    const noteIdx = messages.findIndex((m) => typeof m.content === 'string' && m.content.includes('APPEND-ONLY-NOTE'));
+    const noteIdx = messages.findIndex((m) => JSON.stringify(m.content).includes('APPEND-ONLY-NOTE'));
     expect(noteIdx).toBeGreaterThanOrEqual(0);
     expect(noteIdx).toBeLessThan(firstUserIdx);
   });

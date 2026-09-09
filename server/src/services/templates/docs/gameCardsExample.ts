@@ -314,10 +314,26 @@ local function isTerminalFloor(fid)
   return true
 end
 
+-- Incoming message content is ALWAYS a parts array
+-- ({ { type = "text", text = "..." } }) — the pipeline never sends bare
+-- strings. Extract the text parts; a string slips through only as a courtesy.
+local function contentText(content)
+  if type(content) == "string" then return content end
+  if type(content) ~= "table" then return "" end
+  local out = {}
+  for _, b in ipairs(content) do
+    if b.type == "text" and type(b.text) == "string" then out[#out + 1] = b.text end
+  end
+  return table.concat(out, "\\n")
+end
+
 local function lastUserText(prompt)
   for i = #prompt.messages, 1, -1 do
     local m = prompt.messages[i]
-    if m.role == "user" and type(m.content) == "string" then return m.content end
+    if m.role == "user" then
+      local t = contentText(m.content)
+      if t ~= "" then return t end
+    end
   end
   return ""
 end
@@ -1837,6 +1853,21 @@ function M.clean(text)
     :gsub("^%s*(.-)%s*$", "%1"))
 end
 
+-- The plain text of a message's content. Incoming prompt/branch messages
+-- carry content as a PARTS array (never a bare string), so reading their text
+-- means collecting the text parts; script-BUILT content may still be a bare
+-- string. Both shapes read the same — anything else (no content, only
+-- tool/reasoning parts) reads as "".
+function M.text(content)
+  if type(content) == "string" then return content end
+  if type(content) ~= "table" then return "" end
+  local out = {}
+  for _, p in ipairs(content) do
+    if type(p) == "table" and p.type == "text" then out[#out + 1] = p.text or "" end
+  end
+  return table.concat(out)
+end
+
 -- One safe line: double quotes become single (so the result can ride a
 -- summary="…" attribute), whitespace collapses, ends trim. The text itself is
 -- never cut — max is opt-in and used for previews/excerpts only (the zoom
@@ -2963,13 +2994,16 @@ return M
 -- (lib/rolling). No tags, no display rules — the memoir is just text.
 --
 -- The span is the caller's, passed via opts.span (message-shaped entries,
--- usually tracked mechanically in state). gist() returns nil only when there
+-- usually tracked mechanically in state; content may be a parts array or a
+-- bare string — chrome.text reads both). gist() returns nil only when there
 -- is nothing to summarize (no span, empty span, empty delegate answer) — the
 -- caller picks the fallback. A delegate ERROR propagates to the CALLER, who
 -- decides what it means — main.lua's endFight pcalls gist() and degrades to
 -- a canned line rather than failing the turn. One
 -- honest bound: the gist is only as good as what the span shows — anything
 -- kept out of the delegate's view can't make it into the summary.
+
+local chrome = require("lib/chrome")
 
 local M = {}
 
@@ -2984,9 +3018,12 @@ function M.gist(prompt, opts)
   local lines = {}
   local budget = opts.maxSpanChars or 6000
   for i = #span, 1, -1 do -- newest-first until the budget is spent
-    -- Tool-call-shaped entries carry no content; skip them, never crash.
-    if type(span[i].content) == "string" then
-      local line = span[i].role .. ": " .. span[i].content
+    -- Entries with no readable text (tool-call-shaped parts, no content)
+    -- extract to "" and skip — never crash. Content may be a parts array
+    -- (entries filed straight from the prompt) or a bare string.
+    local text = chrome.text(span[i].content)
+    if text ~= "" then
+      local line = span[i].role .. ": " .. text
       if #line > budget then break end
       table.insert(lines, 1, line)
       budget = budget - #line

@@ -140,12 +140,18 @@ function toToolDefinitions(tools: NonNullable<CreateMessageBody['tools']>): Tool
 function toPipelineMessages(body: CreateMessageBody): PipelineMessage[] {
   const messages: PipelineMessage[] = [];
   if (body.system !== undefined) {
-    const system = typeof body.system === 'string' ? body.system : body.system.map((b) => b.text).join('\n');
-    if (system.length > 0) messages.push({ role: 'system', content: system });
+    // One text part per system block — no joining.
+    const parts: ContentPart[] =
+      typeof body.system === 'string'
+        ? [{ type: 'text', text: body.system }]
+        : body.system.map((b) => ({ type: 'text', text: b.text }));
+    if (parts.some((p) => p.type === 'text' && p.text.length > 0)) {
+      messages.push({ role: 'system', content: parts });
+    }
   }
   for (const m of body.messages) {
     if (typeof m.content === 'string') {
-      messages.push({ role: m.role, content: m.content });
+      messages.push({ role: m.role, content: [{ type: 'text', text: m.content }] });
       continue;
     }
     messages.push({ role: m.role, content: m.content.map(toContentPart) });

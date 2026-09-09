@@ -184,8 +184,8 @@ describe('createProxyRouter', () => {
     expect(adapter.stream).toHaveBeenCalledWith(
       {
         messages: [
-          { role: 'system', content: 'You are terse.' },
-          { role: 'user', content: 'hi' },
+          { role: 'system', content: [{ type: 'text', text: 'You are terse.' }] },
+          { role: 'user', content: [{ type: 'text', text: 'hi' }] },
         ],
         tokenUsage: { prompt: 0, completion: 300 },
       },
@@ -238,7 +238,7 @@ describe('createProxyRouter', () => {
     expect(adapter.stream).toHaveBeenCalledWith(
       {
         messages: [
-          { role: 'system', content: 'block system' },
+          { role: 'system', content: [{ type: 'text', text: 'block system' }] },
           {
             role: 'user',
             content: [
@@ -335,7 +335,7 @@ describe('createProxyRouter', () => {
     expect(adapter.stream).toHaveBeenCalledWith(
       {
         messages: [
-          { role: 'user', content: 'weather?' },
+          { role: 'user', content: [{ type: 'text', text: 'weather?' }] },
           {
             role: 'assistant',
             content: [{ type: 'tool_use', id: 'call_1', name: 'get_weather', input: { city: 'Oslo' } }],

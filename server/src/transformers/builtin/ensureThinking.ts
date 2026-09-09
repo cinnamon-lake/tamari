@@ -18,7 +18,7 @@
  */
 
 import { z } from 'zod';
-import type { ContentPart, PipelineMessage } from '@tamari/types';
+import type { PipelineMessage } from '@tamari/types';
 import { getMessageText } from '@tamari/types';
 import type { BuiltinTransformer } from '../types.js';
 
@@ -36,10 +36,8 @@ export const ensureThinking: BuiltinTransformer = {
     return messages.map((msg) => {
       if (msg.role !== 'assistant') return msg;
       if (!getMessageText(msg.content)) return msg;
-      const parts: ContentPart[] =
-        typeof msg.content === 'string' ? [{ type: 'text', text: msg.content }] : msg.content;
-      if (parts.some((p) => p.type === 'reasoning')) return msg;
-      return { ...msg, content: [{ type: 'reasoning', text: placeholder }, ...parts] };
+      if (msg.content.some((p) => p.type === 'reasoning')) return msg;
+      return { ...msg, content: [{ type: 'reasoning', text: placeholder }, ...msg.content] };
     });
   },
 };

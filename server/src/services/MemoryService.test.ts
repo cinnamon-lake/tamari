@@ -7,7 +7,7 @@ import type { IPromptListRepository } from '../repos/PromptListRepository.js';
 import type { BackendAdapterFactory } from '../backends/factory.js';
 import type { BackendAdapter, GenerationResult } from '../backends/BackendAdapter.js';
 import type { MemorySettings, Message, PromptList } from '@tamari/types';
-import { textToParts, DEFAULT_MEMORY_SUMMARY_PROMPT } from '@tamari/types';
+import { textToParts, getMessageText, DEFAULT_MEMORY_SUMMARY_PROMPT } from '@tamari/types';
 
 function makeMessage(
   id: number,
@@ -212,7 +212,8 @@ describe('MemoryService', () => {
     await service.ensureSummaryUpdated('chat1');
 
     const prompt = vi.mocked(deps.backend.stream).mock.calls[0]![0];
-    expect(prompt.messages[0]).toEqual({ role: 'system', content: 'Summarize.' });
+    expect(prompt.messages[0]!.role).toBe('system');
+    expect(getMessageText(prompt.messages[0]!.content)).toBe('Summarize.');
   });
 
   it('falls back to the default summary prompt when the prompt list is missing', async () => {
@@ -228,7 +229,8 @@ describe('MemoryService', () => {
     await service.ensureSummaryUpdated('chat1');
 
     const prompt = vi.mocked(deps.backend.stream).mock.calls[0]![0];
-    expect(prompt.messages[0]).toEqual({ role: 'system', content: DEFAULT_MEMORY_SUMMARY_PROMPT });
+    expect(prompt.messages[0]!.role).toBe('system');
+    expect(getMessageText(prompt.messages[0]!.content)).toBe(DEFAULT_MEMORY_SUMMARY_PROMPT);
   });
 
   it('summarizeRange also uses the memorySummary utility prompt', async () => {
@@ -238,7 +240,8 @@ describe('MemoryService', () => {
     await service.summarizeRange('chat1', { startMessageId: 1, endMessageId: 2 });
 
     const prompt = vi.mocked(deps.backend.stream).mock.calls[0]![0];
-    expect(prompt.messages[0]).toEqual({ role: 'system', content: 'Summarize.' });
+    expect(prompt.messages[0]!.role).toBe('system');
+    expect(getMessageText(prompt.messages[0]!.content)).toBe('Summarize.');
   });
 
   it('returns existing summary without calling backend when not enough new messages', async () => {

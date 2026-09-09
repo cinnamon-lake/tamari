@@ -8,7 +8,7 @@ const ctx: TransformerContext = { userName: 'User' };
 describe('strip-reasoning builtin', () => {
   it('strips reasoning/tool parts from old assistant messages, keeping only their final text', () => {
     const messages: PipelineMessage[] = [
-      { role: 'user', content: 'Hello' },
+      { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
       {
         role: 'assistant',
         content: [
@@ -16,7 +16,7 @@ describe('strip-reasoning builtin', () => {
           { type: 'text', text: 'Hi there' },
         ],
       },
-      { role: 'user', content: 'How are you?' },
+      { role: 'user', content: [{ type: 'text', text: 'How are you?' }] },
       {
         role: 'assistant',
         content: [
@@ -24,15 +24,15 @@ describe('strip-reasoning builtin', () => {
           { type: 'text', text: 'Doing great' },
         ],
       },
-      { role: 'assistant', content: '' }, // empty stream target (latest)
+      { role: 'assistant', content: [] }, // empty stream target (latest)
     ];
 
     const out = stripReasoning.apply(messages, {}, ctx);
     const assistants = out.filter((m) => m.role === 'assistant');
     expect(assistants.length).toBe(3);
-    expect(assistants[0]!.content).toBe('Hi there');
-    expect(assistants[1]!.content).toBe('Doing great');
-    expect(assistants[2]!.content).toBe('');
+    expect(assistants[0]!.content).toEqual([{ type: 'text', text: 'Hi there' }]);
+    expect(assistants[1]!.content).toEqual([{ type: 'text', text: 'Doing great' }]);
+    expect(assistants[2]!.content).toEqual([]);
   });
 
   it('keeps reasoning on the latest assistant message', () => {
@@ -53,8 +53,8 @@ describe('strip-reasoning builtin', () => {
       },
     ];
     const out = stripReasoning.apply(messages, {}, ctx);
-    expect(out[0]!.content).toBe('old text');
-    const latest = out[1]!.content as Array<{ type: string }>;
+    expect(out[0]!.content).toEqual([{ type: 'text', text: 'old text' }]);
+    const latest = out[1]!.content;
     expect(latest.some((p) => p.type === 'reasoning')).toBe(true);
   });
 
@@ -68,10 +68,10 @@ describe('strip-reasoning builtin', () => {
           { type: 'tool_use', id: 'call_1', name: 'get_weather', input: {} },
         ],
       },
-      { role: 'assistant', content: 'You are welcome' },
+      { role: 'assistant', content: [{ type: 'text', text: 'You are welcome' }] },
     ];
     const out = stripReasoning.apply(messages, {}, ctx);
-    expect(out[0]!.content).toBe('Let me check');
+    expect(out[0]!.content).toEqual([{ type: 'text', text: 'Let me check' }]);
   });
 
   it('falls back to joined text when nothing text-like survives the strip', () => {
@@ -83,10 +83,10 @@ describe('strip-reasoning builtin', () => {
           { type: 'tool_use', id: 'c', name: 't', input: {} },
         ],
       },
-      { role: 'assistant', content: 'latest' },
+      { role: 'assistant', content: [{ type: 'text', text: 'latest' }] },
     ];
     const out = stripReasoning.apply(messages, {}, ctx);
-    expect(out[0]!.content).toBe('');
+    expect(out[0]!.content).toEqual([{ type: 'text', text: '' }]);
   });
 
   it('keeps the final text part when non-text parts trail it', () => {
@@ -99,17 +99,17 @@ describe('strip-reasoning builtin', () => {
           { type: 'reasoning', text: 'afterthought' },
         ],
       },
-      { role: 'assistant', content: 'latest' },
+      { role: 'assistant', content: [{ type: 'text', text: 'latest' }] },
     ];
     const out = stripReasoning.apply(messages, {}, ctx);
-    expect(out[0]!.content).toBe('second');
+    expect(out[0]!.content).toEqual([{ type: 'text', text: 'second' }]);
   });
 
-  it('leaves string-content and non-assistant messages untouched', () => {
+  it('leaves plain-text and non-assistant messages untouched', () => {
     const messages: PipelineMessage[] = [
-      { role: 'system', content: 'sys' },
-      { role: 'user', content: 'hi' },
-      { role: 'assistant', content: 'plain' },
+      { role: 'system', content: [{ type: 'text', text: 'sys' }] },
+      { role: 'user', content: [{ type: 'text', text: 'hi' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'plain' }] },
     ];
     expect(stripReasoning.apply(messages, {}, ctx)).toEqual(messages);
   });

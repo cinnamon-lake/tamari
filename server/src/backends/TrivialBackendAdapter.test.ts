@@ -10,7 +10,7 @@ describe('TrivialBackendAdapter', () => {
     const backend = new TrivialBackendAdapter([[{ type: 'content', content: 'Hello!' }]]);
 
     const prompt = {
-      messages: [{ role: 'user' as const, content: 'Hi' }],
+      messages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'Hi' }] }],
       tokenUsage: { prompt: 2, completion: 6 },
     };
 
