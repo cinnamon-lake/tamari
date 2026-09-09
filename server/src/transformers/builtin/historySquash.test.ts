@@ -16,7 +16,11 @@ describe('history-squash builtin', () => {
     ];
     const out = historySquash.apply(messages, {}, ctx);
     expect(out.map((m) => m.role)).toEqual(['system', 'user', 'system']);
-    expect(out[1]!.content).toEqual([{ type: 'text', text: 'Alice: Hello\n\nBob: Hi there\n\nAlice: How are you?' }]);
+    expect(out[1]!.content).toEqual([
+      { type: 'text', text: 'Alice: Hello' },
+      { type: 'text', text: 'Bob: Hi there' },
+      { type: 'text', text: 'Alice: How are you?' },
+    ]);
   });
 
   it("role 'assistant' targets a single assistant message (noass)", () => {
@@ -25,20 +29,27 @@ describe('history-squash builtin', () => {
       { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] },
     ];
     const out = historySquash.apply(messages, { role: 'assistant' }, ctx);
-    expect(out).toEqual([{ role: 'assistant', content: [{ type: 'text', text: 'Alice: Hello\n\nBob: Hi' }] }]);
+    expect(out).toEqual([
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'Alice: Hello' },
+          { type: 'text', text: 'Bob: Hi' },
+        ],
+      },
+    ]);
   });
 
-  it('honors custom prefixes, suffixes, and separator', () => {
+  it('honors custom prefixes and suffixes', () => {
     const messages: PipelineMessage[] = [
       { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
       { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] },
     ];
-    const out = historySquash.apply(
-      messages,
-      { userPrefix: '<u>', userSuffix: '</u>', charPrefix: '<c>', charSuffix: '</c>', separator: '|' },
-      ctx,
-    );
-    expect(out[0]!.content).toEqual([{ type: 'text', text: '<u>Hello</u>|<c>Hi</c>' }]);
+    const out = historySquash.apply(messages, { userPrefix: '<u>', userSuffix: '</u>', charPrefix: '<c>', charSuffix: '</c>' }, ctx);
+    expect(out[0]!.content).toEqual([
+      { type: 'text', text: '<u>Hello</u>' },
+      { type: 'text', text: '<c>Hi</c>' },
+    ]);
   });
 
   it('places the collapsed message at the first collapsed position', () => {
@@ -61,7 +72,7 @@ describe('history-squash builtin', () => {
           { type: 'text', text: 'Answer' },
         ],
       },
-      { role: 'assistant', content: [{ type: 'text', text: '' }] }, // stream target stays put
+      { role: 'assistant', content: [{ type: 'text', text: '' }] }, // textless message stays put
     ];
     const out = historySquash.apply(messages, {}, ctx);
     expect(out).toEqual([

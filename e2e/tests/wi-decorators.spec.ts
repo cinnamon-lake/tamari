@@ -417,11 +417,11 @@ test.describe('WI V3 Decorators — activation semantics', () => {
 
     // Cooldown semantics (WorldInfoInjector.scan): after firing at message
     // index i, skip while `messages.length - 1 - i < cooldown`. The scan's
-    // chatHistory includes the EMPTY streaming-target assistant bubble (it is
-    // appended to the branch before prompt building and only filtered out of
-    // the outgoing request later), so the message distance grows by exactly 2
-    // per turn. cooldown=2 would therefore never skip (distance is 2 at the
-    // very next turn); cooldown=3 yields present -> absent -> present.
+    // chatHistory is target-free (the streaming target rides the protected
+    // tail), so the message distance grows by exactly 2 per turn (the user
+    // message + the assistant reply). cooldown=2 would therefore never skip
+    // (distance is 2 at the very next turn); cooldown=3 yields
+    // present -> absent -> present.
     const body1 = await sendAndCapture(app, 'coolkey turn one');
     expectWiToken(body1, 'COOLTOK', true);
 
@@ -444,12 +444,13 @@ test.describe('WI V3 Decorators — activation semantics', () => {
     await createLinkedCharacterAndChat(app, charName, bookName);
 
     // Delay semantics: skip while `messages.length < delay`. The scan history
-    // counts the greeting + the just-sent user message + the empty streaming
-    // target bubble, so turn 1 has length 3 (< 4 -> suppressed).
+    // is target-free (the streaming target rides the protected tail), so it
+    // counts the greeting + the just-sent user message — turn 1 has length 2
+    // (< 4 -> suppressed).
     const body1 = await sendAndCapture(app, 'delaykey too early');
     expectWiToken(body1, 'DELAYTOK', false);
 
-    // Turn 2: history has grown to 5 (>= 4); the key from turn 1 is still
+    // Turn 2: history has grown to 4 (>= 4); the key from turn 1 is still
     // in the scan text, so the entry fires now.
     const body2 = await sendAndCapture(app, 'delaykey late enough');
     expectWiToken(body2, 'DELAYTOK', true);
@@ -532,16 +533,16 @@ test.describe('WI V3 Decorators — activation semantics', () => {
     expect(text).not.toContain('@@unknown_thing');
     expect(text).not.toContain('@@@depth');
 
-    // Depth 2: insertAtDepth counts the empty streaming-target bubble that is
-    // still in chatHistory at splice time (it is dropped from the outgoing
-    // request afterwards), so depth 2 lands immediately BEFORE the final user
-    // message in the captured request.
+    // Depth 2: insertAtDepth now counts only REAL history — the generation
+    // target rides the protected tail (invisible to at-depth splicing), so
+    // depth 2 lands before the last assistant reply: two positions before the
+    // final user message in the captured request.
     const messages = messagesOf(body);
     const tokenIdx = messages.findIndex((m) => wireContentText(m.content).includes('[WI] FB_APPLY'));
     const lastUserIdx = messages.map((m) => m.role).lastIndexOf('user');
     expect(tokenIdx).toBeGreaterThanOrEqual(0);
     expect(lastUserIdx).toBeGreaterThanOrEqual(0);
-    expect(tokenIdx).toBe(lastUserIdx - 1);
+    expect(tokenIdx).toBe(lastUserIdx - 2);
   });
 
   test('@@@ fallback: known @@depth 1 skips the @@@depth 2 fallback', async ({ page, app }) => {
@@ -563,16 +564,15 @@ test.describe('WI V3 Decorators — activation semantics', () => {
     expect(text).not.toContain('@@@depth');
     expect(text).not.toContain('@@depth');
 
-    // Depth 1: the same streaming-bubble offset applies, so depth 1 lands
-    // AFTER the final user message — the injection is the last message of the
-    // request (@@depth 1 won, the @@@depth 2 fallback was skipped).
+    // Depth 1: with the target excluded from depth counting, depth 1 lands
+    // immediately BEFORE the final user message (@@depth 1 won, the @@@depth 2
+    // fallback was skipped).
     const messages = messagesOf(body);
     const tokenIdx = messages.findIndex((m) => wireContentText(m.content).includes('[WI] FB_SKIP'));
     const lastUserIdx = messages.map((m) => m.role).lastIndexOf('user');
     expect(tokenIdx).toBeGreaterThanOrEqual(0);
     expect(lastUserIdx).toBeGreaterThanOrEqual(0);
-    expect(tokenIdx).toBe(lastUserIdx + 1);
-    expect(tokenIdx).toBe(messages.length - 1);
+    expect(tokenIdx).toBe(lastUserIdx - 1);
   });
 
   test('decorator-only content: activates but injects no stray text', async ({ page, app }) => {

@@ -87,30 +87,32 @@ test.describe('Macro Blitz', () => {
     expect(all).not.toContain('{{time}}');
   });
 
-  test('chat inspection macros see the placeholder on generate and content on continue', async ({ page, app }) => {
+  test('chat inspection macros never see the generation tail', async ({ page, app }) => {
     await app.createCharacterAndChat({
       name: uniqueName('Inspect Char'),
       description: 'prev=[{{lastCharMessage}}] u=[{{lastUserMessage}}] lm=[{{lastMessage}}]',
       firstMes: 'Ready.',
     });
 
-    // Fresh generation: the server appends the empty assistant streaming target
-    // BEFORE building the prompt, so lastMessage/lastCharMessage see that empty
-    // placeholder while lastUserMessage sees the just-sent user text.
+    // Fresh generation: the empty streaming target rides the protected tail,
+    // invisible to macros — lastMessage/lastUserMessage see the just-sent user
+    // text and lastCharMessage sees the greeting.
     await app.sendUserMessage('respond: MARKER1', { expectReply: true });
     const first = bodyString(await getLastLlmRequest());
     expect(first).toContain('u=[respond: MARKER1]');
-    expect(first).toContain('prev=[]');
-    expect(first).toContain('lm=[]');
+    expect(first).toContain('prev=[Ready.]');
+    expect(first).toContain('lm=[respond: MARKER1]');
 
-    // Continue re-generates into the existing assistant message, so the target
-    // already holds MARKER1 and both chat-inspection macros resolve to it.
+    // Continue re-generates into the existing assistant message: the target
+    // already holds MARKER1 in the DB, but macros still resolve against the
+    // target-free history — MARKER1 never leaks into the macro context.
     const before = (await getLastLlmRequest()).count;
     await app.clickMessageAction(app.lastBubble('assistant'), 'Continue');
     const second = bodyString(await waitForNextLlmRequest(before));
-    expect(second).toContain('prev=[MARKER1]');
-    expect(second).toContain('lm=[MARKER1]');
+    expect(second).toContain('prev=[Ready.]');
+    expect(second).toContain('lm=[respond: MARKER1]');
     expect(second).toContain('u=[respond: MARKER1]');
+    expect(second).not.toContain('[MARKER1]');
 
     // Let the continued stream settle so the afterEach reset runs clean.
     await expect(page.locator('.message-bubble.streaming')).toHaveCount(0, { timeout: 30000 });

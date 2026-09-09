@@ -946,10 +946,16 @@ describe('e2e prompt integration', () => {
       .filter((m) => m.role === 'system')
       .map((m) => getMessageText(m.content));
 
-    // On first generation, lastMessage = empty assistant placeholder, lastUserMessage = user text
+    // On first generation the target (empty assistant placeholder) is NOT part
+    // of the macro context — the generation tail is invisible to macros.
+    // lastMessage/lastUserMessage = the user text; lastCharMessage = empty.
+    expect(firstSystemContents.some((c) => c.includes('Last: Greetings!'))).toBe(true);
     expect(firstSystemContents.some((c) => c.includes('User: Greetings!'))).toBe(true);
+    expect(firstSystemContents.some((c) => c.includes('Char: Greetings!'))).toBe(false);
 
-    // Continue: target message already has content, so lastMessage/lastCharMessage resolve to it
+    // Continue: the target message already has "Response!" in the DB, but it
+    // still rides the protected tail — macros keep resolving against the
+    // target-free history.
     await h.send(client, {
       type: 'action.continue',
       chatId: chat.chat.id,
@@ -963,10 +969,12 @@ describe('e2e prompt integration', () => {
       .filter((m) => m.role === 'system')
       .map((m) => getMessageText(m.content));
 
-    // On continue, the target message already has "Response!", so lastMessage/lastCharMessage resolve
-    expect(continueSystemContents.some((c) => c.includes('Last: Response!'))).toBe(true);
+    // The target's "Response!" is invisible to macros: lastMessage and
+    // lastUserMessage stay on the last REAL history message ("Greetings!"),
+    // and lastCharMessage stays empty (no assistant message in the history).
+    expect(continueSystemContents.some((c) => c.includes('Last: Greetings!'))).toBe(true);
     expect(continueSystemContents.some((c) => c.includes('User: Greetings!'))).toBe(true);
-    expect(continueSystemContents.some((c) => c.includes('Char: Response!'))).toBe(true);
+    expect(continueSystemContents.some((c) => c.includes('Response!'))).toBe(false);
   });
 
   it('resolves {{equal}} and {{?}} conditional macros', async () => {

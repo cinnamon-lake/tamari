@@ -43,6 +43,15 @@ export interface AuthorsNoteConfig {
 export interface BuildOptions {
   // ---- Core generation inputs ----
   chatHistory: Message[];
+  /**
+   * Generation tail: the in-flight target message plus synthetic trailing
+   * seeds (impersonate instruction; quiet-gen seed + accumulated transcript).
+   * Rendered verbatim at the very end of the prompt, AFTER the
+   * requestTransformers stage — invisible to WI scanning, RAG query text,
+   * macro context, prompt regex, author's-note/at-depth depth counting, and
+   * transformer chains (builtin + Lua).
+   */
+  tailMessages?: Message[];
   character?: Character | null;
   userName: string;
   maxContext: number;

@@ -59,7 +59,7 @@ interface GenerationTarget {
 
 `clientId` is constructor data for the implementations that need directed replies (`DraftTarget` broadcasts the impersonation draft to one client; error routing uses `sendTo`). Message patches broadcast to everyone as today, so `AssistantMessageTarget` only needs it for errors.
 
-**The assembly rule.** For chat targets, prompt history is always branch-up-to-anchor with the target's content appended last — `read()` is unconditionally the tail of the prompt. This one rule covers every chat flow:
+**The assembly rule.** For chat targets, prompt history is always branch-up-to-anchor (EXCLUSIVE — the anchor message itself is not history) with the target's content appended last as the protected tail — `read()` is unconditionally the tail of the prompt. The tail is rendered verbatim at the very end, after the requestTransformers stage: WI scanning, RAG query text, macros, prompt regex, depth injection, and transformer chains never see it. This one rule covers every chat flow:
 
 - **send / regenerate** — history is the branch up to the anchor (the user message / the swipe's parent); the fresh target's `read()` is empty-or-partial.
 - **continue** — the existing message's accumulated parts (text, tool_use, tool_result) read as the trailing content; the model picks up exactly where the state says it is. This is why continue-with-pending-tools needs no special case.

@@ -5,12 +5,13 @@
  *
  * Every user/assistant message with non-empty text is wrapped in its
  * per-role prefix/suffix (defaults `<userName>: ` / `<charName>: ` from the
- * transformer ctx — macros are already resolved at this stage), the wrapped
- * turns are joined with `separator` into a single message of the target
- * `role`, placed at the position of the first collapsed message. System and
+ * transformer ctx — macros are already resolved at this stage), and each
+ * wrapped turn becomes its own text part in a single message of the target
+ * `role`, placed at the position of the first collapsed message — no
+ * joining; wire-format flattening is the backend adapter's job. System and
  * tool messages are left untouched in place (preamble stays preamble,
- * jailbreak stays last); user/assistant messages with no text (e.g. the
- * empty trailing stream target) are also left in place.
+ * jailbreak stays last); user/assistant messages with no text are also
+ * left in place.
  *
  * NoAss's exotic post-processing (history cropping, rearranging,
  * inter-split prompts, {{lastlines}}) is deliberately out of scope — Lua
@@ -29,7 +30,6 @@ export const historySquashParamsSchema = z.object({
   userSuffix: z.string().default(''),
   charPrefix: z.string().optional(),
   charSuffix: z.string().default(''),
-  separator: z.string().default('\n\n'),
 });
 
 export const historySquash: BuiltinTransformer = {
@@ -57,7 +57,10 @@ export const historySquash: BuiltinTransformer = {
 
     if (firstIndex === -1) return messages;
 
-    const collapsed: PipelineMessage = { role: p.role, content: [{ type: 'text', text: turns.join(p.separator) }] };
+    const collapsed: PipelineMessage = {
+      role: p.role,
+      content: turns.map((text) => ({ type: 'text' as const, text })),
+    };
     const result: PipelineMessage[] = [];
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i];

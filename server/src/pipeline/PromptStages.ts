@@ -17,7 +17,7 @@
 
 import type { Message } from '@tamari/types';
 import { getMessageText } from '@tamari/types';
-import type { Prompt } from '../backends/BackendAdapter.js';
+import type { Prompt, PipelineMessage } from '../backends/BackendAdapter.js';
 import type { BuildOptions, WorldInfoScanResult, AuthorsNoteSpliceResult, AuthorsNoteConfig } from './PromptBuilder.js';
 import { PromptManager } from './PromptManager.js';
 import type { PromptCollection, RenderOptions } from './renderers/Renderer.js';
@@ -77,6 +77,12 @@ export class PromptContext {
   cacheDepth?: number;
   /** Set by the render stage (the only stage that must never be dropped). */
   result?: Prompt;
+  /**
+   * Rendered generation tail (stream target + synthetic trailing seeds), set
+   * by the render stage and appended to `result.messages` by the appendTail
+   * stage — AFTER requestTransformers, so transformer chains never see it.
+   */
+  renderedTail: PipelineMessage[] = [];
   /**
    * Append-only layout: volatile content hoisted to the pinned block at the
    * top of history (raw, macro-unresolved text — author's note, then constant
@@ -320,6 +326,7 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
           mediaVerboseMode: opts.media?.verboseMode,
           appendOnly,
           volatileBlock: ctx.volatileBlock,
+          tailMessages: opts.tailMessages,
         };
 
         const params: GenerationParams = {};
@@ -348,7 +355,11 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
         // One renderer for every backend: the pipeline always produces a
         // message list. Text-completion adapters flatten it themselves with
         // their configured instruct template (backends/formatTextPrompt.ts).
+        // The tail (generation target + synthetic trailing seeds) is stashed
+        // separately and appended by the appendTail stage, after the
+        // requestTransformers stage — the chain never sees it.
         const result = host.chatRenderer.render(ctx.collection, renderOpts);
+        ctx.renderedTail = result.tail;
         ctx.result = {
           messages: result.messages,
           tokenUsage: result.tokenUsage,
@@ -364,10 +375,12 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
       // Request transformers: run the backend config's chain over the final
       // rendered messages. Post-render placement means it works identically
       // for chat-completion and text-completion adapters (both consume
-      // Prompt.messages). Under append-only the chain is never resolved
-      // (ChatPromptAssembly skips it — post-render rewriting would break the
-      // byte-prefix invariant); if a caller passes one anyway, it is dropped
-      // with a trace note.
+      // Prompt.messages). The chain NEVER sees the generation tail (stream
+      // target + synthetic trailing seeds) — that is appended by the
+      // appendTail stage below, after the chain has run. Under append-only
+      // the chain is never resolved (ChatPromptAssembly skips it —
+      // post-render rewriting would break the byte-prefix invariant); if a
+      // caller passes one anyway, it is dropped with a trace note.
       id: 'requestTransformers',
       async run(ctx) {
         if (!ctx.result) return;
@@ -396,6 +409,18 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
         if (trace.length > 0) {
           ctx.result.transformerTrace = [...(ctx.result.transformerTrace ?? []), ...trace];
         }
+      },
+    },
+    {
+      // Generation tail goes TRULY last — after afterMessages (jailbreak etc.)
+      // and after the transformer chain. It is the in-flight stream target
+      // plus synthetic trailing seeds (impersonate/quiet), rendered by the
+      // render stage but deliberately excluded from everything upstream
+      // (WI scan, RAG, macros, regex, depth injection, transformers).
+      id: 'appendTail',
+      run(ctx) {
+        if (!ctx.result || ctx.renderedTail.length === 0) return;
+        ctx.result.messages = [...ctx.result.messages, ...ctx.renderedTail];
       },
     },
   ];

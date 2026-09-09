@@ -403,14 +403,6 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
                           onInput={(e) => setStepParam(index(), 'charSuffix', e.currentTarget.value)}
                         />
                       </label>
-                      <label class="field-label">
-                        {t('transformers.params.separator')}
-                        <input
-                          class="input"
-                          value={paramValue(step, 'separator')}
-                          onInput={(e) => setStepParam(index(), 'separator', e.currentTarget.value)}
-                        />
-                      </label>
                     </div>
                   </Show>
                   <Show when={step.kind === 'builtin' && step.id === 'ensure-thinking'}>

@@ -41,6 +41,14 @@ export interface RenderOptions {
    */
   appendOnly?: boolean;
   volatileBlock?: string[];
+  /**
+   * Generation tail (stream target + synthetic trailing seeds). Rendered with
+   * the same per-message body as history but AFTER everything else — including
+   * after-history prompts (jailbreak etc.) — and returned separately as
+   * `ChatRenderResult.tail` so PromptStages can append it after the
+   * requestTransformers stage. Never depth-injected, never transformer-visible.
+   */
+  tailMessages?: Message[];
 }
 
 export interface ExampleMessage {
@@ -60,6 +68,11 @@ export interface PromptCollection {
 export interface ChatRenderResult {
   type: 'chat';
   messages: PipelineMessage[];
+  /** Rendered generation tail (empty when RenderOptions.tailMessages is
+      absent). Kept out of `messages` so the requestTransformers stage never
+      sees it; PromptStages appends it to the final prompt afterwards. Its
+      tokens ARE included in tokenUsage. */
+  tail: PipelineMessage[];
   tokenUsage: { prompt: number; completion: number };
 }
 

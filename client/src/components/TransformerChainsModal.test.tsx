@@ -283,7 +283,7 @@ describe('TransformerChainsModal', () => {
     fireEvent.click(screen.getByText('Edit'));
     fireEvent.change(screen.getByLabelText('Target role'), { target: { value: 'assistant' } });
     fireEvent.input(screen.getByLabelText(/User prefix/), { target: { value: 'U: ' } });
-    fireEvent.input(screen.getByLabelText(/Separator/), { target: { value: ' | ' } });
+    fireEvent.input(screen.getByLabelText(/User suffix/), { target: { value: ' /U' } });
 
     await waitFor(() => {
       const saves = sentSaves(sendSpy);
@@ -292,7 +292,7 @@ describe('TransformerChainsModal', () => {
           kind: 'builtin',
           id: 'history-squash',
           enabled: true,
-          params: { role: 'assistant', userPrefix: 'U: ', separator: ' | ' },
+          params: { role: 'assistant', userPrefix: 'U: ', userSuffix: ' /U' },
         },
       ]);
     });
@@ -307,7 +307,7 @@ describe('TransformerChainsModal', () => {
             kind: 'builtin',
             id: 'history-squash',
             enabled: true,
-            params: { role: 'assistant', userPrefix: 'U: ', separator: ' | ' },
+            params: { role: 'assistant', userPrefix: 'U: ', userSuffix: ' /U' },
           },
         ],
       }),
@@ -320,7 +320,7 @@ describe('TransformerChainsModal', () => {
       const saves = sentSaves(sendSpy);
       // Empty prefix deletes the key so the server-side dynamic default applies.
       expect((saves.at(-1) as { data: { steps: unknown[] } }).data.steps).toEqual([
-        { kind: 'builtin', id: 'history-squash', enabled: true, params: { role: 'assistant', separator: ' | ' } },
+        { kind: 'builtin', id: 'history-squash', enabled: true, params: { role: 'assistant', userSuffix: ' /U' } },
       ]);
     });
   });

@@ -9,8 +9,10 @@
  * and shared; targets supply identity (chat/character) and per-kind options.
  *
  * The old `impersonatePrompt` / `syntheticUserText` options are unified into
- * `trailingSeed` — a synthetic trailing history message appended after the
- * resolved branch (role 'system' for impersonate, 'user' for quiet gens).
+ * `trailingMessages` — synthetic tail messages rendered verbatim at the very
+ * end of the prompt (role 'system' for impersonate, 'user' for quiet gens),
+ * alongside the anchored generation target. The tail never enters chatHistory,
+ * so WI/RAG/macros/regex/depth-injection/transformers never see it.
  */
 
 import { getLogger, logger } from '../lib/logger.js';
@@ -71,7 +73,8 @@ export interface ChatPromptBuildArgs {
   character: Character | null;
   /** The runner's resolved backend bundle (adapter itself is unused here). */
   resolved: Omit<ResolvedGenerationBackend, 'backend'>;
-  /** Anchor the branch on THIS message id (walk its parent chain, inclusive)
+  /** Anchor the branch on THIS message id (walk its parent chain, EXCLUSIVE —
+      the anchor itself becomes the protected tail, never part of chatHistory)
       instead of the chat's head/active-child pointers. Generation targets
       always pass the id of the message being generated — one rule for send,
       regenerate, and continue alike, with no pointer-state dependence. */
@@ -79,13 +82,16 @@ export interface ChatPromptBuildArgs {
   /** quietGenerate's per-call maxTokens override. */
   maxResponseTokensOverride?: number;
   lastGenerationType?: MacroGenerationType;
-  /** Synthetic trailing messages appended at the end of the resolved history
-      (impersonate instruction; quiet-gen seed + accumulated transcript). */
+  /** Synthetic trailing messages for the protected tail (impersonate
+      instruction; quiet-gen seed + accumulated transcript). Rendered verbatim
+      at the very end of the prompt, after the requestTransformers stage. */
   trailingMessages?: Array<{ role: 'system' | 'user' | 'assistant'; parts: ContentPart[] }>;
 }
 
 export interface ChatPromptBuildResult {
   prompt: Prompt;
+  /** The prompt history as built — target-free (the generation target and
+      synthetic trailing seeds ride the prompt's protected tail instead). */
   chatHistory: Message[];
   promptHistoryLimit: number;
 }
@@ -241,31 +247,57 @@ export class ChatPromptAssembly {
       args.maxResponseTokensOverride !== undefined
         ? Math.max(1, Math.floor(args.maxResponseTokensOverride))
         : (backendConfig?.maxTokens ?? 0);
-    const historySource =
-      args.anchorMessageId !== undefined
-        ? await chats.getBulkOfMessages(chatId, { limit: promptHistoryLimit, beforeId: args.anchorMessageId })
-        : await chats.getActiveBranch(chatId, { limit: promptHistoryLimit });
+    // The generation target (the message being streamed) is NOT part of the
+    // prompt history: it rides the protected tail (BuildOptions.tailMessages),
+    // appended after the requestTransformers stage — invisible to WI scanning,
+    // RAG query text, macros, prompt regex, depth injection, and transformers.
+    let targetMessage: Message | undefined;
+    let historySource: Message[];
+    if (args.anchorMessageId !== undefined) {
+      targetMessage = await chats.getMessageById(args.anchorMessageId);
+      if (targetMessage) {
+        historySource =
+          targetMessage.parentId !== null
+            ? await chats.getBulkOfMessages(chatId, { limit: promptHistoryLimit, beforeId: targetMessage.parentId })
+            : [];
+      } else {
+        // Target vanished mid-generation — fall back to the legacy inclusive
+        // walk (no tail) rather than crash the generation.
+        historySource = await chats.getBulkOfMessages(chatId, {
+          limit: promptHistoryLimit,
+          beforeId: args.anchorMessageId,
+        });
+      }
+    } else {
+      historySource = await chats.getActiveBranch(chatId, { limit: promptHistoryLimit });
+    }
     const chatHistory = await this.resolveAttachments(historySource);
 
+    // Protected tail: the target plus synthetic trailing messages
+    // (impersonation instruction, quiet seed, accumulated transcript). Macro
+    // vars chain from the preceding message, exactly like a real append.
+    const tailSource: Message[] = [];
+    if (targetMessage) tailSource.push(targetMessage);
     if (args.trailingMessages?.length) {
-      // Append synthetic trailing messages (impersonation instruction, quiet
-      // seed, accumulated transcript) after the resolved history. Macro vars
-      // chain from the preceding message, exactly like a real append.
       const now = Math.floor(Date.now() / 1000);
       for (const tm of args.trailingMessages) {
-        chatHistory.push({
+        const preceding = tailSource[tailSource.length - 1] ?? chatHistory[chatHistory.length - 1];
+        tailSource.push({
           id: 0,
           parentId: chat?.activeChildId ?? chat?.headMessageId ?? null,
           role: tm.role,
           extra: {
             parts: tm.parts,
-            macroVars: chatHistory[chatHistory.length - 1]?.extra.macroVars ?? {},
+            macroVars: preceding?.extra.macroVars ?? {},
           },
           createdAt: now,
           updatedAt: now,
         });
       }
     }
+    // Attachment resolution parity: the tail used to ride chatHistory through
+    // resolveAttachments — keep that (the target can carry attachments).
+    const tailMessages = tailSource.length > 0 ? await this.resolveAttachments(tailSource) : tailSource;
 
     // Update rolling memory summary before building prompt. Locked off under
     // append-only: a summary prepended before history would mutate
@@ -359,6 +391,7 @@ export class ChatPromptAssembly {
 
     const prompt = await promptBuilder.build({
       chatHistory,
+      tailMessages,
       character,
       personaDescription: persona?.description ?? undefined,
       maxContext: contextLength,

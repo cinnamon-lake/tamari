@@ -24,7 +24,10 @@ describe('executeChain', () => {
       ctx,
     );
     expect(messages.map((m) => m.role)).toEqual(['system', 'user']);
-    expect(messages[1]!.content).toEqual([{ type: 'text', text: 'Alice: hello\n\nBob: hi' }]);
+    expect(messages[1]!.content).toEqual([
+      { type: 'text', text: 'Alice: hello' },
+      { type: 'text', text: 'Bob: hi' },
+    ]);
     expect(trace).toEqual([]);
   });
 

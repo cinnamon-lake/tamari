@@ -314,9 +314,11 @@ export class AssistantMessageTarget implements GenerationTarget {
       chat: chat ?? null,
       character: this.character,
       resolved,
-      // One rule for every kind: the branch is computed from the message being
-      // generated (its parent chain, inclusive) — no chat-pointer dependence,
-      // no per-kind special cases. Regenerate is not a separate action.
+      // One rule for every kind: the branch is anchored on the message being
+      // generated (its parent chain, EXCLUSIVE — the target itself rides the
+      // prompt's protected tail, rendered after the requestTransformers
+      // stage) — no chat-pointer dependence, no per-kind special cases.
+      // Regenerate is not a separate action.
       anchorMessageId: this.message?.id,
       lastGenerationType: this.kind,
     });

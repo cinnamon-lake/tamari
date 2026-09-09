@@ -898,3 +898,172 @@ describe('chatHistory marker position', () => {
     expect(indexOfText(result, 'EXAMPLE_Q')).toBeGreaterThan(indexOfText(result, 'HIST_ASSISTANT'));
   });
 });
+
+describe('generation tail', () => {
+  const renderer = new ChatCompletionRenderer();
+
+  function makeCollectionWithJailbreak(): PromptCollection {
+    const pm = new PromptManager(
+      [
+        {
+          identifier: 'main',
+          name: 'main',
+          content: 'MAIN',
+          role: 'system',
+          enabled: true,
+          systemPrompt: true,
+          marker: false,
+        },
+        {
+          identifier: 'chatHistory',
+          name: 'chatHistory',
+          content: '',
+          role: 'system',
+          enabled: true,
+          systemPrompt: true,
+          marker: true,
+        },
+        {
+          identifier: 'jailbreak',
+          name: 'jailbreak',
+          content: 'JAILBREAK',
+          role: 'system',
+          enabled: true,
+          systemPrompt: true,
+          marker: false,
+        },
+      ],
+      [
+        { identifier: 'main', enabled: true },
+        { identifier: 'chatHistory', enabled: true },
+        { identifier: 'jailbreak', enabled: true },
+      ],
+    );
+    return {
+      prompts: pm.getOrderedPrompts(),
+      markers: {
+        charDescription: [''],
+        charPersonality: [''],
+        scenario: [''],
+        personaDescription: [''],
+        worldInfoBefore: [''],
+        worldInfoAfter: [''],
+      },
+    };
+  }
+
+  const renderOpts = (msgs: Message[], tail?: Message[]) => ({
+    macroResolver: MacroResolver.createPromptResolver(),
+    macroCtx: { userName: 'Alice', charName: 'Bob' } as Parameters<ChatCompletionRenderer['render']>[1]['macroCtx'],
+    tokenCounter,
+    chatHistory: msgs,
+    tailMessages: tail,
+    maxContext: 8192,
+    maxResponseTokens: 512,
+  });
+
+  it('returns an empty tail when tailMessages is absent', () => {
+    const result = renderer.render(makeCollectionWithJailbreak(), renderOpts([makeMsg(1, 'user', 'Hello')]));
+    expect(result.tail).toEqual([]);
+  });
+
+  it('renders tailMessages as result.tail, kept out of result.messages', () => {
+    const result = renderer.render(
+      makeCollectionWithJailbreak(),
+      renderOpts([makeMsg(1, 'user', 'Hello')], [makeMsg(2, 'assistant', '')]),
+    );
+    expect(result.tail).toHaveLength(1);
+    expect(result.tail[0]!.role).toBe('assistant');
+    expect(getMessageText(result.tail[0]!.content)).toBe('');
+    // The tail is not in messages — the only assistant content there is none.
+    expect(result.messages.some((m) => m.role === 'assistant')).toBe(false);
+  });
+
+  it('renders the tail after after-history prompts when re-appended (truly last)', () => {
+    const result = renderer.render(
+      makeCollectionWithJailbreak(),
+      renderOpts([makeMsg(1, 'user', 'HIST')], [makeMsg(2, 'assistant', 'TAIL')]),
+    );
+    // messages end with the jailbreak; the tail rides separately and a later
+    // stage appends it — the final prompt is [..., JAILBREAK, TAIL].
+    expect(getMessageText(result.messages[result.messages.length - 1]!.content)).toBe('JAILBREAK');
+    const finalMessages = [...result.messages, ...result.tail];
+    expect(getMessageText(finalMessages[finalMessages.length - 1]!.content)).toBe('TAIL');
+    const jbIdx = finalMessages.findIndex((m) => getMessageText(m.content) === 'JAILBREAK');
+    const tailIdx = finalMessages.findIndex((m) => getMessageText(m.content) === 'TAIL');
+    expect(tailIdx).toBeGreaterThan(jbIdx);
+  });
+
+  it('attaches depth-0 absolute prompts after the last REAL history message, before the tail', () => {
+    const collection = makeCollectionWithJailbreak();
+    collection.prompts = [
+      ...collection.prompts,
+      {
+        identifier: 'abs0',
+        name: 'Absolute 0',
+        content: 'DEPTH-ZERO',
+        role: 'system',
+        enabled: true,
+        injectionPosition: 'absolute',
+        injectionDepth: 0,
+      },
+    ];
+
+    const result = renderer.render(
+      collection,
+      renderOpts([makeMsg(1, 'user', 'Hello')], [makeMsg(2, 'assistant', '')]),
+    );
+
+    // Depth 0 = after the newest chatHistory element ('Hello') — the tail is
+    // NOT the newest anything: the injection lands inside `messages`, and the
+    // tail still comes after it once appended.
+    const helloIdx = result.messages.findIndex((m) => getMessageText(m.content) === 'Hello');
+    expect(getMessageText(result.messages[helloIdx + 1]!.content)).toBe('DEPTH-ZERO');
+    expect(result.messages.some((m) => m.role === 'assistant')).toBe(false);
+    expect(getMessageText(result.tail[0]!.content)).toBe('');
+  });
+
+  it('excludes the tail from depth counting', () => {
+    const collection = makeCollectionWithJailbreak();
+    collection.prompts = [
+      ...collection.prompts,
+      {
+        identifier: 'abs1',
+        name: 'Absolute 1',
+        content: 'DEPTH-ONE',
+        role: 'system',
+        enabled: true,
+        injectionPosition: 'absolute',
+        injectionDepth: 1,
+      },
+    ];
+
+    const result = renderer.render(
+      collection,
+      renderOpts([makeMsg(1, 'user', 'ONE'), makeMsg(2, 'assistant', 'TWO')], [makeMsg(3, 'assistant', '')]),
+    );
+
+    // Depth 1 counts REAL history only: ONE(1) TWO(0) → injected between them.
+    // If the tail counted, it would land after TWO instead.
+    const oneIdx = result.messages.findIndex((m) => getMessageText(m.content) === 'ONE');
+    expect(getMessageText(result.messages[oneIdx + 1]!.content)).toBe('DEPTH-ONE');
+    expect(getMessageText(result.messages[oneIdx + 2]!.content)).toBe('TWO');
+  });
+
+  it('resolves macros in tail messages', () => {
+    const result = renderer.render(
+      makeCollectionWithJailbreak(),
+      renderOpts([makeMsg(1, 'user', 'Hello')], [makeMsg(2, 'user', '{{user}} says hi to {{char}}')]),
+    );
+    expect(getMessageText(result.tail[0]!.content)).toBe('Alice says hi to Bob');
+  });
+
+  it('includes the tail in the prompt token count', () => {
+    const withTail = renderer.render(
+      makeCollectionWithJailbreak(),
+      renderOpts([makeMsg(1, 'user', 'Hello')], [makeMsg(2, 'assistant', 'TAIL-TOKENS')]),
+    );
+    const withoutTail = renderer.render(makeCollectionWithJailbreak(), renderOpts([makeMsg(1, 'user', 'Hello')]));
+    expect(withTail.tokenUsage.prompt).toBeGreaterThan(withoutTail.tokenUsage.prompt);
+  });
+});

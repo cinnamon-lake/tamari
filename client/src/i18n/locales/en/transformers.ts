@@ -59,7 +59,6 @@ export const transformers = {
     userSuffix: 'User suffix',
     charPrefix: 'Character prefix (empty = "<char>: ")',
     charSuffix: 'Character suffix',
-    separator: 'Separator',
     placeholder: 'Placeholder text',
   },
 

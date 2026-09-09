@@ -11,7 +11,7 @@
  * backends/formatTextPrompt.ts).
  */
 
-import { getMessageText } from '@tamari/types';
+import { getMessageText, type Message } from '@tamari/types';
 import { str } from '../../lib/coerce.js';
 import type { PipelineMessage, ContentPart, InlineContentPart, TextPart } from '../../backends/BackendAdapter.js';
 import type { PromptDef } from '../PromptManager.js';
@@ -87,8 +87,9 @@ export class ChatCompletionRenderer implements PromptRenderer {
 
     // Add the full chat history. We iterate newest-first (unshift) so the
     // absolute-prompt depth accounting below counts from the end of history.
-    // The trailing empty assistant message (stream target) is NOT stripped here.
-    // Stripping it is the backend adapter's responsibility.
+    // The generation target is no longer part of chatHistory — it arrives via
+    // opts.tailMessages and renders as the protected tail below, so depth 0
+    // attaches after the last REAL history message.
     const history = [...opts.chatHistory];
     history.reverse();
     const historyMessages: PipelineMessage[] = [];
@@ -117,88 +118,9 @@ export class ChatCompletionRenderer implements PromptRenderer {
         }
       }
 
-      const messageText = getMessageText(msg.extra.parts);
-      const resolvedText = opts.macroResolver.resolve(messageText, opts.macroCtx);
-
-      // Build content: always a ContentPart[] (never a bare string).
-      let content: ContentPart[] = [{ type: 'text', text: resolvedText }];
-
-      if (msg.role === 'assistant' && msg.extra.parts && msg.extra.parts.length > 0) {
-        // Reasoning / tool blocks are always re-sent in full — stripping them
-        // from older turns is the strip-reasoning request transformer's job
-        // (opt-in via a transformer chain, post-render).
-        let parts = msg.extra.parts;
-        // Resolve macros in the remaining text part(s)
-        parts = parts.map((p) =>
-          p.type === 'text' ? { ...p, text: opts.macroResolver.resolve(p.text, opts.macroCtx) } : p,
-        );
-        // Drop media the backend can't consume — including media nested inside
-        // tool_result content (e.g. images returned by image-gen tools).
-        parts = this.filterUnsupportedMedia(parts, opts);
-        if (parts.length > 0) {
-          content = parts;
-        }
-        // else: parts became empty → fall back to the resolved text part
-      } else if (msg.role === 'assistant' && msg.extra.toolCalls) {
-        const parts: ContentPart[] = [];
-        const tc = msg.extra.toolCalls;
-        for (const call of tc) {
-          parts.push({
-            type: 'tool_use',
-            id: call.id,
-            name: call.name,
-            input: call.arguments,
-          });
-        }
-        if (resolvedText) {
-          parts.push({ type: 'text', text: resolvedText });
-        }
-        if (parts.length > 0) {
-          content = parts;
-        }
-      } else {
-        const attachments = extractAttachments(msg.extra.attachments);
-        const parts: ContentPart[] = [{ type: 'text', text: resolvedText }];
-        if (attachments.length > 0) {
-          for (const att of attachments) {
-            const source = att.dataUrl ? str(att.dataUrl) : `/api/attachments/${att.id}`;
-            if (att.mimeType.startsWith('image/')) {
-              if (opts.supportsImages !== false) {
-                parts.push({ type: 'image', source, mimeType: att.mimeType, detail: 'auto' });
-              } else if (opts.mediaVerboseMode) {
-                parts.push({ type: 'text', text: '[Attached image]' });
-              }
-            } else if (att.mimeType.startsWith('audio/')) {
-              if (opts.supportsAudio !== false) {
-                parts.push({ type: 'audio', source, mimeType: att.mimeType });
-              } else if (opts.mediaVerboseMode) {
-                parts.push({ type: 'text', text: '[Attached audio]' });
-              }
-            } else if (att.mimeType.startsWith('video/')) {
-              if (opts.supportsVideo !== false) {
-                parts.push({ type: 'video', source, mimeType: att.mimeType });
-              } else if (opts.mediaVerboseMode) {
-                parts.push({ type: 'text', text: '[Attached video]' });
-              }
-            }
-          }
-        }
-        // For tool messages, preserve tool_call_id via tool_result parts
-        if (msg.role === 'tool' && msg.extra.toolCallId) {
-          parts.push({
-            type: 'tool_result',
-            toolUseId: str(msg.extra.toolCallId),
-            name: msg.extra.toolName ? str(msg.extra.toolName) : undefined,
-            content: resolvedText,
-            isError: Boolean(msg.extra.isError),
-          });
-        }
-        content = parts;
-      }
-
       historyMessages.unshift({
         role: msg.role,
-        content,
+        content: this.buildMessageContent(msg, opts),
       });
 
       messagesProcessed++;
@@ -229,11 +151,21 @@ export class ChatCompletionRenderer implements PromptRenderer {
     // Prompts ordered after the chatHistory marker render after the history.
     const afterMessages = this.renderRelativePrompts(afterRel, collection, opts);
 
+    // Generation tail (stream target + synthetic trailing seeds): same
+    // per-message body as history — macros resolved, media filtered — but
+    // NEVER depth-injected, and kept OUT of `messages` so the
+    // requestTransformers stage never sees it (PromptStages appends it after).
+    const tail: PipelineMessage[] = (opts.tailMessages ?? []).map((msg) => ({
+      role: msg.role,
+      content: this.buildMessageContent(msg, opts),
+    }));
+
     const finalMessages = [...headMessages, ...volatileMessages, ...historyMessages, ...afterMessages];
 
-    // Accurate token count using the message-aware counter
+    // Accurate token count using the message-aware counter (tail included —
+    // it is sent to the backend, just via a later pipeline stage).
     const promptTokens = opts.tokenCounter.countMessages(
-      finalMessages.map((m) => ({
+      [...finalMessages, ...tail].map((m) => ({
         role: m.role,
         content: getMessageText(m.content),
       })),
@@ -244,14 +176,104 @@ export class ChatCompletionRenderer implements PromptRenderer {
         outputMessageCount: finalMessages.length,
         outputRoles: finalMessages.map((m) => m.role),
         outputHasParts: finalMessages.map((m) => Array.isArray(m.content)),
+        tailMessageCount: tail.length,
       },
       'render() returning',
     );
     return {
       type: 'chat',
       messages: finalMessages,
+      tail,
       tokenUsage: { prompt: promptTokens, completion: opts.maxResponseTokens },
     };
+  }
+
+  /**
+   * Per-message content body, shared by the history loop and tail rendering:
+   * macro-resolved text plus assistant parts (reasoning/tool_use/tool_result),
+   * legacy toolCalls, attachments, and tool-role tool_call_id preservation.
+   * Always a ContentPart[] (never a bare string).
+   */
+  private buildMessageContent(msg: Message, opts: RenderOptions): ContentPart[] {
+    const messageText = getMessageText(msg.extra.parts);
+    const resolvedText = opts.macroResolver.resolve(messageText, opts.macroCtx);
+
+    let content: ContentPart[] = [{ type: 'text', text: resolvedText }];
+
+    if (msg.role === 'assistant' && msg.extra.parts && msg.extra.parts.length > 0) {
+      // Reasoning / tool blocks are always re-sent in full — stripping them
+      // from older turns is the strip-reasoning request transformer's job
+      // (opt-in via a transformer chain, post-render).
+      let parts = msg.extra.parts;
+      // Resolve macros in the remaining text part(s)
+      parts = parts.map((p) =>
+        p.type === 'text' ? { ...p, text: opts.macroResolver.resolve(p.text, opts.macroCtx) } : p,
+      );
+      // Drop media the backend can't consume — including media nested inside
+      // tool_result content (e.g. images returned by image-gen tools).
+      parts = this.filterUnsupportedMedia(parts, opts);
+      if (parts.length > 0) {
+        content = parts;
+      }
+      // else: parts became empty → fall back to the resolved text part
+    } else if (msg.role === 'assistant' && msg.extra.toolCalls) {
+      const parts: ContentPart[] = [];
+      const tc = msg.extra.toolCalls;
+      for (const call of tc) {
+        parts.push({
+          type: 'tool_use',
+          id: call.id,
+          name: call.name,
+          input: call.arguments,
+        });
+      }
+      if (resolvedText) {
+        parts.push({ type: 'text', text: resolvedText });
+      }
+      if (parts.length > 0) {
+        content = parts;
+      }
+    } else {
+      const attachments = extractAttachments(msg.extra.attachments);
+      const parts: ContentPart[] = [{ type: 'text', text: resolvedText }];
+      if (attachments.length > 0) {
+        for (const att of attachments) {
+          const source = att.dataUrl ? str(att.dataUrl) : `/api/attachments/${att.id}`;
+          if (att.mimeType.startsWith('image/')) {
+            if (opts.supportsImages !== false) {
+              parts.push({ type: 'image', source, mimeType: att.mimeType, detail: 'auto' });
+            } else if (opts.mediaVerboseMode) {
+              parts.push({ type: 'text', text: '[Attached image]' });
+            }
+          } else if (att.mimeType.startsWith('audio/')) {
+            if (opts.supportsAudio !== false) {
+              parts.push({ type: 'audio', source, mimeType: att.mimeType });
+            } else if (opts.mediaVerboseMode) {
+              parts.push({ type: 'text', text: '[Attached audio]' });
+            }
+          } else if (att.mimeType.startsWith('video/')) {
+            if (opts.supportsVideo !== false) {
+              parts.push({ type: 'video', source, mimeType: att.mimeType });
+            } else if (opts.mediaVerboseMode) {
+              parts.push({ type: 'text', text: '[Attached video]' });
+            }
+          }
+        }
+      }
+      // For tool messages, preserve tool_call_id via tool_result parts
+      if (msg.role === 'tool' && msg.extra.toolCallId) {
+        parts.push({
+          type: 'tool_result',
+          toolUseId: str(msg.extra.toolCallId),
+          name: msg.extra.toolName ? str(msg.extra.toolName) : undefined,
+          content: resolvedText,
+          isError: Boolean(msg.extra.isError),
+        });
+      }
+      content = parts;
+    }
+
+    return content;
   }
 
   /** Keep, placeholder, or drop a single media part per the backend's support. */

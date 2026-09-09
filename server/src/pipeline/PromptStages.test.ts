@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { PromptBuilder, type BuildOptions } from './PromptBuilder.js';
 import { createDefaultStages, type PromptStage } from './PromptStages.js';
-import type { Message } from '@tamari/types';
+import { getMessageText, type Message } from '@tamari/types';
 
 function userMessage(id: number, text: string): Message {
   return {
@@ -47,6 +47,7 @@ const EXPECTED_DEFAULT_IDS = [
   'cacheDepth',
   'render',
   'requestTransformers',
+  'appendTail',
 ];
 
 describe('PromptStages', () => {
@@ -95,5 +96,32 @@ describe('PromptStages', () => {
     const base = new PromptBuilder();
     const stages = createDefaultStages(base).filter((s) => s.id !== 'render');
     await expect(new PromptBuilder(undefined, stages).build(makeOpts())).rejects.toThrow('render stage');
+  });
+
+  it('appends the generation tail truly last when no transformer chain is configured', async () => {
+    const prompt = await new PromptBuilder().build(makeOpts({ tailMessages: [userMessage(2, 'TAIL-MESSAGE')] }));
+    const last = prompt.messages[prompt.messages.length - 1]!;
+    expect(getMessageText(last.content)).toBe('TAIL-MESSAGE');
+    // Exactly one copy — the tail is not also part of the rendered history.
+    expect(prompt.messages.filter((m) => getMessageText(m.content) === 'TAIL-MESSAGE')).toHaveLength(1);
+  });
+
+  it('the transformer chain never sees the generation tail', async () => {
+    const prompt = await new PromptBuilder().build(
+      makeOpts({
+        chatHistory: [userMessage(1, '  padded history  ')],
+        tailMessages: [userMessage(2, '  padded tail  ')],
+        transformers: {
+          steps: [{ kind: 'builtin', id: 'whitespace', enabled: true, params: { mode: 'trim' } }],
+          luaSources: new Map(),
+        },
+      }),
+    );
+    const texts = prompt.messages.map((m) => getMessageText(m.content));
+    // The chain ran: the history message was trimmed.
+    expect(texts).toContain('padded history');
+    expect(texts).not.toContain('  padded history  ');
+    // The tail was appended AFTER the chain: still untrimmed, and last.
+    expect(texts[texts.length - 1]).toBe('  padded tail  ');
   });
 });
