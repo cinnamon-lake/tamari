@@ -45,7 +45,11 @@ describe('history-squash builtin', () => {
       { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
       { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] },
     ];
-    const out = historySquash.apply(messages, { userPrefix: '<u>', userSuffix: '</u>', charPrefix: '<c>', charSuffix: '</c>' }, ctx);
+    const out = historySquash.apply(
+      messages,
+      { userPrefix: '<u>', userSuffix: '</u>', charPrefix: '<c>', charSuffix: '</c>' },
+      ctx,
+    );
     expect(out[0]!.content).toEqual([
       { type: 'text', text: '<u>Hello</u>' },
       { type: 'text', text: '<c>Hi</c>' },

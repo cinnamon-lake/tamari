@@ -132,6 +132,42 @@ return Tool
       const result = await executor.execute(code, 'json_test', {});
       expect(result.content).toBe('{"x":1}');
     });
+
+    it('pipes print() output to the context onDebug sink', async () => {
+      const code = `
+Tool = {}
+function Tool.getDefinition()
+  return { stateKey = "loud", configSchema = {}, tools = { { name = "loud", description = "Prints", parameters = {} } } }
+end
+function Tool.execute(args, context, toolName)
+  print("loading", toolName)
+  return "done"
+end
+return Tool
+`;
+      const lines: string[] = [];
+      const result = await executor.execute(code, 'loud', {}, { onDebug: (text) => lines.push(text) });
+      expect(result.content).toBe('done');
+      expect(lines).toEqual(['loading\tloud\n']);
+    });
+
+    it('keeps print() output on the onDebug sink when execute throws', async () => {
+      const code = `
+Tool = {}
+function Tool.getDefinition()
+  return { stateKey = "lf", configSchema = {}, tools = { { name = "lf", description = "Fails loudly", parameters = {} } } }
+end
+function Tool.execute(args, context, toolName)
+  print("before")
+  error("boom")
+end
+return Tool
+`;
+      const lines: string[] = [];
+      const result = await executor.execute(code, 'lf', {}, { onDebug: (text) => lines.push(text) });
+      expect(String(result.content)).toContain('boom');
+      expect(lines).toEqual(['before\n']);
+    });
   });
 
   describe('serialize / deserialize', () => {

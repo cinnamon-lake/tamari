@@ -21,8 +21,14 @@
 
 import { newId } from '@tamari/wordid';
 import { ToolParametersSchema } from '@tamari/types';
-import type { LuaRuntime, LuaRuntimeOptions } from '../scripting/LuaRuntime.js';
-import { friendlyLuaError, MAX_EXECUTION_MS, LUA_TOOL_BUDGET, type ExecutionBudget } from '../scripting/LuaRuntime.js';
+import type { LuaRuntime, LuaRuntimeOptions, LuaPrintCapture } from '../scripting/LuaRuntime.js';
+import {
+  friendlyLuaError,
+  installPrintCapture,
+  MAX_EXECUTION_MS,
+  LUA_TOOL_BUDGET,
+  type ExecutionBudget,
+} from '../scripting/LuaRuntime.js';
 import { ScriptContext } from '../scripting/ScriptContext.js';
 import { createToolStApi, type StApiDeps } from '../scripting/StApi.js';
 import { str } from '../lib/coerce.js';
@@ -57,6 +63,8 @@ interface LoadedTemplate {
   def: ToolTemplateDefinition;
   lua: import('wasmoon').LuaEngine;
   cleanup: () => void;
+  /** print() capture installed at load — covers compile, execute, serialize. */
+  prints: LuaPrintCapture;
 }
 
 export class LuaToolExecutor {
@@ -95,9 +103,22 @@ export class LuaToolExecutor {
       return { content: loaded.error };
     }
 
-    const { def, lua, cleanup } = loaded;
+    const { def, lua, cleanup, prints } = loaded;
     const stateKey = def.stateKey || toolName;
     let drainSt: (() => Promise<void>) | null = null;
+
+    // Captured print() lines go to the generation's backend_debug stream when
+    // a target wired the sink (live — a line printed before a timeout still
+    // lands), else to the debug log. Drained at every settle point below.
+    const drainPrints = (): void => {
+      if (prints.lines.length === 0) return;
+      for (const line of prints.lines) {
+        if (context?.onDebug) context.onDebug(line + '\n');
+        else log.debug({ toolName, line }, 'lua tool print');
+      }
+      prints.lines.length = 0;
+    };
+    drainPrints(); // anything printed while the chunk loaded
 
     // Current st-injection context, so the wall ceiling can abort in-flight
     // st calls when it fires.
@@ -249,6 +270,7 @@ export class LuaToolExecutor {
       }),
     ]);
     clearTimeout(wallTimer);
+    drainPrints();
 
     try {
       if (outcome === 'timeout' || !result) {
@@ -264,6 +286,7 @@ export class LuaToolExecutor {
       // closure, which the checker does not track.
       const drain = drainSt as (() => Promise<void>) | null;
       if (drain) await drain();
+      drainPrints();
       cleanup();
     }
   }
@@ -370,6 +393,8 @@ export class LuaToolExecutor {
     // pipelines legitimately await slow APIs inside it).
     const { lua, cleanup } = await this.luaRuntime.createState(sandbox, budget?.wallMs ?? MAX_EXECUTION_MS);
     try {
+      // print() capture — drained by execute() into the ToolContext debug sink.
+      const prints = await installPrintCapture(lua);
       // attachments.create — only for templates that opted into allowFiles, and
       // only when the server wired media deps (always in production).
       if (sandbox?.allowFiles && this.media) {
@@ -436,6 +461,7 @@ export class LuaToolExecutor {
         },
         lua,
         cleanup,
+        prints,
       };
     } catch (err) {
       cleanup();

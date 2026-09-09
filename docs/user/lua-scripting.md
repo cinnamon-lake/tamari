@@ -665,7 +665,7 @@ When the AI is given access to the `run_lua` tool (via **Tools** in the sidebar)
 }
 ```
 
-The tool returns the string representation of the last expression. Tables are JSON-serialized.
+The tool returns the string representation of the last expression. Tables are JSON-serialized. `print()` output is captured and included in the tool result before the return value, like a Lua repl — the model sees everything the script printed.
 
 ---
 

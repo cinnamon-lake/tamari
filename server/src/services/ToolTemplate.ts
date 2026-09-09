@@ -31,6 +31,11 @@ export interface ToolContext {
   /** The generation record id of the run this tool executes in (parent
       reference for sub-agent records). */
   generationId?: string;
+  /** Debug-output sink for tool internals (captured Lua print() lines, request
+      script output). The generation runner wires it to backend_debug parts on
+      the target; surfaces without a target leave it unset and callers fall
+      back to the debug log. */
+  onDebug?: (text: string) => void;
 }
 
 export interface ToolTemplateToolDef {

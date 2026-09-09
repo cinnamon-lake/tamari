@@ -79,4 +79,21 @@ describe('executeChain', () => {
     ]);
     expect(trace).toEqual([]);
   });
+
+  it('collects lua step print() output into debug, prefixed with the step id', async () => {
+    const steps: TransformerStep[] = [{ kind: 'lua', scriptId: 's1', enabled: true }];
+    const luaSources = new Map([
+      ['s1', 'function handle(messages, ctx) print("squashed", #messages) return messages end'],
+    ]);
+    const { debug } = await executeChain([user('hi')], steps, ctx, luaSources);
+    expect(debug).toEqual(['[s1] squashed\t1']);
+  });
+
+  it('keeps print() output when the lua step fails', async () => {
+    const steps: TransformerStep[] = [{ kind: 'lua', scriptId: 's1', enabled: true }];
+    const luaSources = new Map([['s1', 'function handle(messages, ctx) print("before") error("boom") end']]);
+    const { trace, debug } = await executeChain([user('hi')], steps, ctx, luaSources);
+    expect(trace[0]).toContain('script failed');
+    expect(debug).toEqual(['[s1] before']);
+  });
 });

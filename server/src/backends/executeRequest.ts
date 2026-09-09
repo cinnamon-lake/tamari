@@ -41,7 +41,7 @@ export interface ExecuteRequestOptions {
 }
 
 export type ExecuteRequestOutcome =
-  { ok: true; body: ReadableStream<Uint8Array> } | { ok: false; result: GenerationResult };
+  { ok: true; body: ReadableStream<Uint8Array>; prints: string[] } | { ok: false; result: GenerationResult };
 
 /**
  * Run the shared request prologue: apply the request script, log, fetch, and
@@ -55,21 +55,26 @@ export async function executeRequest(options: ExecuteRequestOptions): Promise<Ex
   let finalUrl = request.url;
   let finalInit = request.init;
   let guardAllowLocalhost = false;
+  let scriptPrints: string[] = [];
   if (requestScript) {
     try {
       const result = await applyRequestScript(finalUrl, finalInit, requestScript);
       finalUrl = result.url;
       finalInit = result.init;
       guardAllowLocalhost = result.guardAllowLocalhost;
+      scriptPrints = result.prints;
     } catch (err) {
       if (err instanceof RequestScriptError) {
         logRequestError(adapterId, err);
+        // The script's print() trail precedes the error — usually the only
+        // clue the author left before the failure.
+        const trail = err.prints.length > 0 ? `\n--- script output ---\n${err.prints.join('\n')}` : '';
         return {
           ok: false,
           result: {
             finishReason: 'error',
             usage: { promptTokens, completionTokens: 0 },
-            error: `Request script error: ${err.message}`,
+            error: `Request script error: ${err.message}${trail}`,
           },
         };
       }
@@ -127,5 +132,5 @@ export async function executeRequest(options: ExecuteRequestOptions): Promise<Ex
     };
   }
 
-  return { ok: true, body: response.body };
+  return { ok: true, body: response.body, prints: scriptPrints };
 }

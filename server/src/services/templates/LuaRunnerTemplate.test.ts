@@ -77,8 +77,10 @@ describe('LuaRunnerTemplate', () => {
 
     it('stringifies bigint results', async () => {
       // Real Lua states only produce numbers/strings/tables; exercise the bigint branch via a stub runtime.
+      // The stub lua needs the surface installPrintCapture touches (global.set + doString).
+      const stubLua = { global: { set: () => {} }, doString: async () => {} };
       const stubRuntime = {
-        createState: async () => ({ lua: {}, cleanup: () => {} }),
+        createState: async () => ({ lua: stubLua, cleanup: () => {} }),
         run: async () => ({ result: 10n }),
       } as unknown as LuaRuntime;
       const result = await makeTemplate(stubRuntime).execute('run_lua', { script: 'return 1' });
@@ -86,8 +88,9 @@ describe('LuaRunnerTemplate', () => {
     });
 
     it('wraps unexpected executor failures', async () => {
+      const stubLua = { global: { set: () => {} }, doString: async () => {} };
       const brokenRuntime = {
-        createState: async () => ({ lua: {}, cleanup: () => {} }),
+        createState: async () => ({ lua: stubLua, cleanup: () => {} }),
         run: async (): Promise<never> => {
           throw new Error('kaboom');
         },
@@ -97,8 +100,9 @@ describe('LuaRunnerTemplate', () => {
     });
 
     it('wraps non-Error executor failures', async () => {
+      const stubLua = { global: { set: () => {} }, doString: async () => {} };
       const brokenRuntime = {
-        createState: async () => ({ lua: {}, cleanup: () => {} }),
+        createState: async () => ({ lua: stubLua, cleanup: () => {} }),
         run: async (): Promise<never> => {
           // eslint-disable-next-line @typescript-eslint/only-throw-error -- intentionally throwing a non-Error
           throw 'plain failure';
@@ -106,6 +110,30 @@ describe('LuaRunnerTemplate', () => {
       } as unknown as LuaRuntime;
       const result = await makeTemplate(brokenRuntime).execute('run_lua', { script: 'return 1' });
       expect(result.content).toBe('Execution error: plain failure');
+    });
+
+    it('captures print() output when the script returns nothing', async () => {
+      const result = await template.execute('run_lua', { script: 'print("hello", 42)' });
+      expect(result.content).toBe('hello\t42');
+    });
+
+    it('returns printed output before the return value, like a repl', async () => {
+      const result = await template.execute('run_lua', {
+        script: 'print("working...")\nprint({ a = 1 })\nreturn 6 * 7',
+      });
+      const lines = (result.content as string).split('\n');
+      expect(lines[0]).toBe('working...');
+      expect(lines[1]).toMatch(/^table: /);
+      expect(lines[2]).toBe('42');
+    });
+
+    it('keeps printed output when the script errors', async () => {
+      const result = await template.execute('run_lua', { script: 'print("before")\nerror("boom")' });
+      expect(result.content).toContain('before');
+      expect(result.content).toContain('Lua error:');
+      expect((result.content as string).indexOf('before')).toBeLessThan(
+        (result.content as string).indexOf('Lua error:'),
+      );
     });
   });
 

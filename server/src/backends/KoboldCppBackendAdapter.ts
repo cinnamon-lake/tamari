@@ -57,6 +57,8 @@ export class KoboldCppBackendAdapter implements BackendAdapter {
       promptTokens: prompt.tokenUsage.prompt,
     });
     if (!outcome.ok) return outcome.result;
+    // Request-script print() output, as backend_debug parts before the response.
+    for (const line of outcome.prints) yield { type: 'backendDebug', token: line + '\n' };
 
     let completionTokens = 0;
     let finishReason: string | null = null;

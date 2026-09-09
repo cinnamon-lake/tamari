@@ -157,4 +157,10 @@ export interface Prompt {
    * when non-empty; the runner copies it into generations.meta.transformers.
    */
   transformerTrace?: string[];
+  /**
+   * print() output captured from Lua transformer steps during prompt assembly,
+   * each line prefixed with the step id. Present only when non-empty; the
+   * runner writes it as backend_debug parts when the generation opens.
+   */
+  transformerDebug?: string[];
 }

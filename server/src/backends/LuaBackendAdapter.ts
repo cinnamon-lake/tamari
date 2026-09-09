@@ -41,8 +41,8 @@
  * nothing usable is an error, never a silent empty reply.
  */
 
-import type { LuaRuntime } from '../scripting/LuaRuntime.js';
-import { friendlyLuaError, isLuaTimeoutError } from '../scripting/LuaRuntime.js';
+import type { LuaRuntime, LuaPrintCapture } from '../scripting/LuaRuntime.js';
+import { friendlyLuaError, installPrintCapture, isLuaTimeoutError } from '../scripting/LuaRuntime.js';
 import type { IScriptBlobRepository } from '../repos/ScriptBlobRepository.js';
 import { MemoryScriptBlobRepository } from './MemoryScriptBlobRepository.js';
 import { storeAppend, storeGetJson, storePutJson, storeReadArray } from './scriptBlobArrays.js';
@@ -67,10 +67,6 @@ const log = getLogger('backends/LuaBackendAdapter');
 const LUA_GENERATE_TIMEOUT_MS = 10 * 60 * 1000;
 const LUA_LIST_MODELS_TIMEOUT_MS = 10 * 1000;
 
-/** Cap on captured print() output per generate() call — the JS-side buffer is
-    outside Lua's setMemoryMax, so a script printing in a tight loop must not
-    grow it unbounded. */
-const PRINT_CAP_BYTES = 64 * 1024;
 /** Poll interval for draining captured print lines while generate() runs. */
 const PRINT_DRAIN_INTERVAL_MS = 50;
 
@@ -296,39 +292,19 @@ export class LuaBackendAdapter implements BackendAdapter {
     // Captured print() output — drained as backendDebug stream items. Declared
     // outside the try so the catch path can drain whatever a failing script
     // printed before it errored.
-    const printLines: string[] = [];
+    let prints: LuaPrintCapture = { lines: [], truncated: false };
     const drainPrints = (): BackendStreamItem[] => {
-      if (printLines.length === 0) return [];
-      const items: BackendStreamItem[] = printLines.map((line) => ({ type: 'backendDebug', token: line + '\n' }));
-      printLines.length = 0;
+      if (prints.lines.length === 0) return [];
+      const items: BackendStreamItem[] = prints.lines.map((line) => ({ type: 'backendDebug', token: line + '\n' }));
+      for (const line of prints.lines) log.debug({ backend: this.name, line }, 'custom backend print');
+      prints.lines.length = 0;
       return items;
     };
     try {
       // print() capture: a JS sink plus a Lua-side shim with real print
       // semantics (tostring each arg, tab-joined) — Lua tables cross wasmoon
       // as JS objects, so stringifying JS-side would yield "[object Object]".
-      let printBytes = 0;
-      let printTruncated = false;
-      lua.global.set('__printCapture', (line: unknown) => {
-        const s = typeof line === 'string' ? line : String(line);
-        if (printTruncated) return;
-        if (printBytes + s.length > PRINT_CAP_BYTES) {
-          printTruncated = true;
-          printLines.push('…[print output truncated]');
-          return;
-        }
-        printLines.push(s);
-        printBytes += s.length;
-        log.debug({ backend: this.name, line: s }, 'custom backend print');
-      });
-      await lua.doString(`
-        print = function(...)
-          local n = select('#', ...)
-          local parts = {}
-          for i = 1, n do parts[i] = tostring(select(i, ...)) end
-          __printCapture(table.concat(parts, '\\t'))
-        end
-      `);
+      prints = await installPrintCapture(lua);
 
       // Track delegated usage so scripts that don't report usage still account tokens.
       let delegatedUsage = { promptTokens: 0, completionTokens: 0 };

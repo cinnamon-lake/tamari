@@ -9,6 +9,9 @@
  */
 
 import { applyRequestScript } from '../backends/RequestScript.js';
+import { getLogger } from '../lib/logger.js';
+
+const log = getLogger('tts/BaseTtsAdapter');
 
 export interface BaseTtsConfig {
   baseUrl: string;
@@ -34,6 +37,9 @@ export abstract class BaseTtsAdapter<C extends BaseTtsConfig = BaseTtsConfig> {
   /** Run the configured request script (if any) over the outgoing request. */
   protected async applyScript(url: string, init: RequestInit): Promise<{ url: string; init: RequestInit }> {
     if (!this.config.requestScript) return { url, init };
-    return applyRequestScript(url, init, this.config.requestScript);
+    const result = await applyRequestScript(url, init, this.config.requestScript);
+    // No generation channel down here — the print() trail goes to the debug log.
+    for (const line of result.prints) log.debug({ line }, 'TTS request script print');
+    return { url: result.url, init: result.init };
   }
 }

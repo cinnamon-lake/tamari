@@ -29,6 +29,7 @@ import { ContentPartSchema } from '@tamari/types';
 import type { ContentPart, PipelineMessage } from '@tamari/types';
 import type { TransformerContext } from './types.js';
 import type { LuaRuntime } from '../scripting/LuaRuntime.js';
+import { installPrintCapture } from '../scripting/LuaRuntime.js';
 import { validateLuaSource } from '../scripting/validateLuaSource.js';
 
 const luaFactory = new LuaFactory();
@@ -45,6 +46,8 @@ export interface LuaTransformerResult {
   messages: PipelineMessage[];
   /** Trace note when the step failed (messages are the pre-step array). */
   note?: string;
+  /** print() output captured during the step — surfaced as backend_debug parts. */
+  prints?: string[];
 }
 
 export interface LuaTransformerOptions {
@@ -68,6 +71,13 @@ export async function runLuaTransformer(
   // traceAllocations routes the state through the JS allocator wrapper so
   // setMemoryMax can reject growth — same heap cap as RequestScript/LuaRuntime.
   const lua = await luaFactory.createEngine({ enableProxy: false, injectObjects: true, traceAllocations: true });
+  // print() capture — returned on the result so the chain executor can
+  // surface it as backend_debug parts (drained on every exit path below).
+  // The holder lives outside the try so the catch path can drain whatever a
+  // failing script printed before it errored.
+  let printLines: string[] = [];
+  const withPrints = (res: LuaTransformerResult): LuaTransformerResult =>
+    printLines.length > 0 ? { ...res, prints: [...printLines] } : res;
   try {
     lua.global.setMemoryMax(opts?.maxMemoryBytes ?? 64 * 1024 * 1024);
     // setTimeout takes an ABSOLUTE epoch-ms deadline, not a duration. It covers
@@ -85,6 +95,8 @@ export async function runLuaTransformer(
     lua.global.set('load', undefined);
     lua.global.set('loadstring', undefined);
 
+    printLines = (await installPrintCapture(lua)).lines;
+
     // Load the chunk, then invoke its entry point THROUGH doString rather
     // than a JS-side proxy call: wasmoon's instruction-hook deadline never
     // reaches function-proxy calls (they run on a child thread whose timeout
@@ -97,16 +109,16 @@ export async function runLuaTransformer(
     await lua.doString(script);
     const handle: unknown = lua.global.get('handle');
     if (typeof handle !== 'function') {
-      return { messages, note: 'script must define handle(messages, ctx) — kept pre-step messages' };
+      return withPrints({ messages, note: 'script must define handle(messages, ctx) — kept pre-step messages' });
     }
     const returned: unknown = await lua.doString('return handle(__tamari_messages, __tamari_ctx)');
 
     const parsed = MessagesResultSchema.safeParse(returned);
     if (!parsed.success) {
-      return {
+      return withPrints({
         messages,
         note: `script returned malformed messages (${parsed.error.issues[0]?.message ?? 'invalid'}) — kept pre-step messages`,
-      };
+      });
     }
     // Normalize: scripts may return a bare-string content (tolerated); the
     // post-chain invariant is always a parts array.
@@ -118,10 +130,10 @@ export async function runLuaTransformer(
         ...(m.reasoningFormatted !== undefined ? { reasoningFormatted: m.reasoningFormatted } : {}),
       };
     });
-    return { messages: normalized };
+    return withPrints({ messages: normalized });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { messages, note: `script failed: ${message} — kept pre-step messages` };
+    return withPrints({ messages, note: `script failed: ${message} — kept pre-step messages` });
   } finally {
     lua.global.close();
   }

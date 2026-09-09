@@ -126,7 +126,12 @@ export class ForgeImageTemplate implements ToolTemplate {
         const result = await applyRequestScript(url, init, requestScript, { files }, true);
         url = result.url;
         init = result.init;
+        // Request-script print() output → the generation's backend_debug stream.
+        for (const line of result.prints) context?.onDebug?.(line + '\n');
       } catch (err) {
+        if (err instanceof RequestScriptError) {
+          for (const line of err.prints) context?.onDebug?.(line + '\n');
+        }
         const msg = err instanceof RequestScriptError ? err.message : String(err);
         return { content: `Request script error: ${msg}` };
       }

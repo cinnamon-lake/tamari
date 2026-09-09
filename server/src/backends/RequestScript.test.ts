@@ -116,6 +116,28 @@ describe('applyRequestScript', () => {
     expect(body.prompt).toBe('base64abc');
   });
 
+  it('captures print() output on the result', async () => {
+    const result = await applyRequestScript(
+      'http://example.com',
+      { method: 'POST', body: '{}' },
+      'print("rewriting", request.url)\nrequest.body.touched = true',
+    );
+
+    expect(result.prints).toEqual(['rewriting\thttp://example.com']);
+    expect(JSON.parse(result.init.body as string).touched).toBe(true);
+  });
+
+  it('attaches print() output to the error when the script fails', async () => {
+    const err = await applyRequestScript(
+      'http://example.com',
+      { method: 'POST', body: '{}' },
+      'print("before")\nerror("boom")',
+    ).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(RequestScriptError);
+    expect((err as RequestScriptError).prints).toEqual(['before']);
+  });
+
   it('allows scripts on a loopback-configured backend (literal IP)', async () => {
     const result = await applyRequestScript(
       'http://127.0.0.1:9876/v1/chat/completions',

@@ -199,6 +199,50 @@ export class LuaRuntime {
   }
 }
 
+/** Cap on captured print() output per execution — the JS-side buffer is
+    outside Lua's setMemoryMax, so a script printing in a tight loop must not
+    grow it unbounded. */
+export const PRINT_CAP_BYTES = 64 * 1024;
+
+export interface LuaPrintCapture {
+  /** Captured lines, one per print() call (args tostring'd, tab-joined). */
+  lines: string[];
+  /** True once the byte cap tripped — the last line is the truncation marker. */
+  truncated: boolean;
+}
+
+/**
+ * print() capture: a JS sink plus a Lua-side shim with real print semantics
+ * (tostring each arg, tab-joined) — Lua tables cross wasmoon as JS objects,
+ * so stringifying JS-side would yield "[object Object]". Returns the buffer
+ * the sink appends to; each surface drains it however suits it (polled for
+ * live streaming as in LuaBackendAdapter, once at the end for batch tools).
+ */
+export async function installPrintCapture(lua: LuaEngine): Promise<LuaPrintCapture> {
+  const capture: LuaPrintCapture = { lines: [], truncated: false };
+  let bytes = 0;
+  lua.global.set('__printCapture', (line: unknown) => {
+    const s = typeof line === 'string' ? line : String(line);
+    if (capture.truncated) return;
+    if (bytes + s.length > PRINT_CAP_BYTES) {
+      capture.truncated = true;
+      capture.lines.push('…[print output truncated]');
+      return;
+    }
+    capture.lines.push(s);
+    bytes += s.length;
+  });
+  await lua.doString(`
+    print = function(...)
+      local n = select('#', ...)
+      local parts = {}
+      for i = 1, n do parts[i] = tostring(select(i, ...)) end
+      __printCapture(table.concat(parts, '\\t'))
+    end
+  `);
+  return capture;
+}
+
 /**
  * Detects the WASM-abort family: wasmoon's instruction hook raises its timeout
  * error from C, where the non-string Error object makes lua_error surface it as

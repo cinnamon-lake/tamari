@@ -292,6 +292,7 @@ export class GenerationRunner {
       // when capture is on (target-level flag wins over the global setting).
       const capturePrompts = target.capturePrompts ?? (await this.deps.settings.get('debugPrompts')) === true;
       let firstPrompt: Prompt | undefined;
+      let transformerDebugEmitted = false;
       const roundPrompts: Prompt[] = [];
       const toolCallsMeta: Array<{ name: string; isError?: boolean }> = [];
       const buildMeta = (traceError?: TraceError): GenerationMeta => ({
@@ -323,6 +324,10 @@ export class GenerationRunner {
               lock: held,
               depth: target.depth ?? 0,
               generationId,
+              // Tool-internal debug output (Lua prints, request-script output)
+              // lands as backend_debug parts — live, between tool_use and
+              // tool_result, so it survives tool timeouts.
+              onDebug: (text) => target.write({ type: 'backendDebug', token: text }),
             });
             toolCallsMeta.push({ name: call.name, isError: outcome.isError });
             await target.writeToolOutcome(call, outcome);
@@ -338,6 +343,12 @@ export class GenerationRunner {
         const prompt = await target.prompt(resolved);
         firstPrompt ??= prompt;
         roundPrompts.push(prompt);
+        // Lua transformer print() output from prompt assembly — written once,
+        // up front, as backend_debug parts.
+        if (!transformerDebugEmitted && prompt.transformerDebug?.length) {
+          transformerDebugEmitted = true;
+          for (const line of prompt.transformerDebug) target.write({ type: 'backendDebug', token: line + '\n' });
+        }
         if (!recordCreated) {
           await this.deps.generations.create(generationId, {
             chatId: target.chatId,

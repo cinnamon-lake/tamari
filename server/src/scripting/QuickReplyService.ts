@@ -18,7 +18,14 @@ import type { QuickReply } from '@tamari/types';
 import type { IWorldInfoRepository } from '../repos/WorldInfoRepository.js';
 import type { IChatMemberRepository } from '../repos/ChatMemberRepository.js';
 import type { IExtensionDataRepository } from '../repos/ExtensionDataRepository.js';
-import { LuaRuntime, QUICK_REPLY_BUDGET, friendlyLuaError, type ExecutionBudget } from './LuaRuntime.js';
+import {
+  LuaRuntime,
+  QUICK_REPLY_BUDGET,
+  friendlyLuaError,
+  installPrintCapture,
+  type ExecutionBudget,
+  type LuaPrintCapture,
+} from './LuaRuntime.js';
 import { ScriptContext } from './ScriptContext.js';
 import { createStApi } from './StApi.js';
 
@@ -163,6 +170,7 @@ export class QuickReplyService {
     };
 
     let cleanup: (() => void) | undefined;
+    let prints: LuaPrintCapture | undefined;
 
     try {
       // The armed hook deadline doubles as the wall ceiling — total script
@@ -171,6 +179,9 @@ export class QuickReplyService {
       // the legacy flat 5s that aborted long-pipeline scripts opaquely.
       const { lua, cleanup: c } = await this.luaRuntime.createState({}, budget.wallMs);
       cleanup = c;
+      // print() capture — QR scripts run outside any generation, so the
+      // output goes to the debug log (drained in the finally below).
+      prints = await installPrintCapture(lua);
       const api = createStApi(ctx, {
         generationService: this.deps.generationService,
         chats: this.deps.chats,
@@ -254,6 +265,10 @@ export class QuickReplyService {
         Promise.allSettled(Array.from(pendingPromises)),
         new Promise((resolve) => setTimeout(resolve, 10000)),
       ]);
+      if (prints) {
+        for (const line of prints.lines) log.debug({ chatId, line }, 'quick reply print');
+        prints.lines.length = 0;
+      }
       cleanup?.();
       this.unregisterScript(chatId, ctx);
       ctx.releaseLock();

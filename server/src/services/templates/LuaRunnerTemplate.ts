@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { ToolRegistry } from '../ToolRegistry.js';
 import type { ToolContext, ToolExecuteResult, ToolTemplate } from '../ToolTemplate.js';
 import type { LuaRuntime } from '../../scripting/LuaRuntime.js';
+import { installPrintCapture } from '../../scripting/LuaRuntime.js';
 
 export interface LuaRunnerTemplateDeps {
   luaRuntime: LuaRuntime;
@@ -46,16 +47,28 @@ class LuaRunnerTemplate implements ToolTemplate {
 
     const { lua, cleanup } = await this.deps.luaRuntime.createState();
     try {
+      // print() goes into the tool result like a Lua repl: output first, then
+      // the return value (or the error). Without the shim the wasmoon default
+      // drops prints into the server log where the model never sees them.
+      const prints = await installPrintCapture(lua);
       const result = await this.deps.luaRuntime.run(lua, script);
-      if (result.error) return { content: `Lua error: ${result.error}` };
-      const value = result.result;
-      if (value === null || value === undefined) return { content: 'nil' };
-      if (typeof value === 'object') return { content: JSON.stringify(value) };
-      if (typeof value === 'string') return { content: value };
-      if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-        return { content: `${value}` };
+      const printed = prints.lines.join('\n');
+      if (result.error) {
+        return { content: printed ? `${printed}\nLua error: ${result.error}` : `Lua error: ${result.error}` };
       }
-      return { content: 'nil' };
+      const value = result.result;
+      let valueText: string | null = null;
+      if (value === null || value === undefined) {
+        valueText = null;
+      } else if (typeof value === 'object') {
+        valueText = JSON.stringify(value);
+      } else if (typeof value === 'string') {
+        valueText = value;
+      } else if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+        valueText = `${value}`;
+      }
+      if (printed) return { content: valueText !== null ? `${printed}\n${valueText}` : printed };
+      return { content: valueText ?? 'nil' };
     } catch (err) {
       return { content: `Execution error: ${err instanceof Error ? err.message : String(err)}` };
     } finally {

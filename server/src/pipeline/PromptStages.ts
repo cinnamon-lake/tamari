@@ -399,7 +399,7 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
           model: ctx.opts.model,
           backendProvider: ctx.opts.backendProvider,
         };
-        const { messages, trace } = await executeChain(
+        const { messages, trace, debug } = await executeChain(
           ctx.result.messages,
           transformers.steps,
           tctx,
@@ -408,6 +408,9 @@ export function createDefaultStages(host: PromptBuilderStageHost): PromptStage[]
         ctx.result.messages = messages;
         if (trace.length > 0) {
           ctx.result.transformerTrace = [...(ctx.result.transformerTrace ?? []), ...trace];
+        }
+        if (debug.length > 0) {
+          ctx.result.transformerDebug = [...(ctx.result.transformerDebug ?? []), ...debug];
         }
       },
     },

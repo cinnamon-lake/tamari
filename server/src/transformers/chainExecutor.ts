@@ -16,6 +16,8 @@ import type { TransformerContext } from './types.js';
 export interface ChainExecutionResult {
   messages: PipelineMessage[];
   trace: string[];
+  /** print() output captured from Lua steps, each line prefixed with the step id. */
+  debug: string[];
 }
 
 export async function executeChain(
@@ -26,6 +28,7 @@ export async function executeChain(
 ): Promise<ChainExecutionResult> {
   let current = messages;
   const trace: string[] = [];
+  const debug: string[] = [];
 
   for (const step of steps) {
     if (!step.enabled) continue;
@@ -54,8 +57,9 @@ export async function executeChain(
     }
     const result = await runLuaTransformer(source, current, ctx);
     if (result.note) trace.push(`lua step '${step.scriptId}': ${result.note}`);
+    for (const line of result.prints ?? []) debug.push(`[${step.scriptId}] ${line}`);
     current = result.messages;
   }
 
-  return { messages: current, trace };
+  return { messages: current, trace, debug };
 }

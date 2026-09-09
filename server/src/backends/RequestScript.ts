@@ -10,10 +10,14 @@ import { LuaFactory } from 'wasmoon';
 import { URL } from 'node:url';
 import ipaddr from 'ipaddr.js';
 import dns from 'node:dns';
+import { installPrintCapture } from '../scripting/LuaRuntime.js';
 
 const luaFactory = new LuaFactory();
 
 export class RequestScriptError extends Error {
+  /** print() output captured before the failure — the author's debug trail. */
+  prints: string[] = [];
+
   constructor(message: string) {
     super(message);
     this.name = 'RequestScriptError';
@@ -115,10 +119,10 @@ export async function applyRequestScript(
   script: string | undefined,
   extras?: Record<string, unknown>,
   allowLocalhost = false,
-): Promise<{ url: string; init: RequestInit; guardAllowLocalhost: boolean }> {
+): Promise<{ url: string; init: RequestInit; guardAllowLocalhost: boolean; prints: string[] }> {
   if (!script?.trim()) {
     await assertSafeUrl(url, allowLocalhost);
-    return { url, init, guardAllowLocalhost: allowLocalhost };
+    return { url, init, guardAllowLocalhost: allowLocalhost, prints: [] };
   }
 
   // If the adapter's configured endpoint is itself loopback, the user runs a
@@ -136,6 +140,9 @@ export async function applyRequestScript(
   // traceAllocations routes the state through the JS allocator wrapper so
   // setMemoryMax can reject growth — same 64 MB heap cap as LuaRuntime.
   const lua = await luaFactory.createEngine({ enableProxy: false, injectObjects: true, traceAllocations: true });
+  // Captured print() lines — returned on success, attached to the error on
+  // failure, so the author's debug trail survives either way.
+  let prints: string[] = [];
   try {
     lua.global.setMemoryMax(64 * 1024 * 1024);
     // Enforce execution timeout at the Lua VM level (same as LuaRuntime) so a
@@ -153,6 +160,8 @@ export async function applyRequestScript(
     lua.global.set('dofile', undefined);
     lua.global.set('load', undefined);
     lua.global.set('loadstring', undefined);
+
+    prints = (await installPrintCapture(lua)).lines;
 
     const requestTable = {
       url,
@@ -185,10 +194,13 @@ export async function applyRequestScript(
         body: mutated.body !== undefined ? JSON.stringify(mutated.body) : init.body,
       },
       guardAllowLocalhost: allowLoopback,
+      prints,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new RequestScriptError(message);
+    const wrapped = new RequestScriptError(message);
+    wrapped.prints = prints;
+    throw wrapped;
   } finally {
     lua.global.close();
   }

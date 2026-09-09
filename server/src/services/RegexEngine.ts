@@ -31,7 +31,7 @@ import { Worker } from 'node:worker_threads';
 import type { LuaEngine } from 'wasmoon';
 import { logger } from '../lib/logger.js';
 import type { RegexRule } from '@tamari/types';
-import { LuaRuntime } from '../scripting/LuaRuntime.js';
+import { LuaRuntime, installPrintCapture, type LuaPrintCapture } from '../scripting/LuaRuntime.js';
 import { toLuaLiteral } from '../backends/LuaBackendAdapter.js';
 
 const REGEX_TIMEOUT_MS = 1000;
@@ -115,13 +115,16 @@ export async function applyRules(text: string, rules: RegexRule[]): Promise<stri
   let result = text;
   // Lazily created on the first Lua rule; shared by all Lua rules in this call
   // and always cleaned up — wasmoon engines are not cheap to leak.
-  let luaState: { lua: LuaEngine; cleanup: () => void } | null = null;
+  let luaState: { lua: LuaEngine; cleanup: () => void; prints: LuaPrintCapture } | null = null;
   try {
     for (const rule of rules) {
       if (rule.disabled) continue;
       try {
         if (rule.replaceLua && rule.replaceLua.trim().length > 0) {
-          luaState ??= await getLuaRuntime().createState({}, LUA_REPLACE_TIMEOUT_MS);
+          if (!luaState) {
+            const state = await getLuaRuntime().createState({}, LUA_REPLACE_TIMEOUT_MS);
+            luaState = { ...state, prints: await installPrintCapture(state.lua) };
+          }
           result = await applyLuaRule(result, rule, luaState.lua);
         } else {
           result = await applyRule(result, rule);
@@ -129,6 +132,13 @@ export async function applyRules(text: string, rules: RegexRule[]): Promise<stri
       } catch (err) {
         // Skip malformed or timed-out rules
         logger.warn({ err, rule: rule.name }, 'regex rule failed, skipped');
+      } finally {
+        // print() has no generation channel down here — debug log, drained per
+        // rule so the lines stay attributed.
+        if (luaState && luaState.prints.lines.length > 0) {
+          for (const line of luaState.prints.lines) logger.debug({ rule: rule.name, line }, 'regex lua print');
+          luaState.prints.lines.length = 0;
+        }
       }
     }
   } finally {

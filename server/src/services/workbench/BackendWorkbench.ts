@@ -338,10 +338,20 @@ export class BackendWorkbench {
     try {
       const result = await applyRequestScript(url, init, script);
       const after = describeRequest(result.url, result.init);
-      return { content: JSON.stringify({ mode: 'dry', before, after }) };
+      return {
+        content: JSON.stringify({
+          mode: 'dry',
+          before,
+          after,
+          ...(result.prints.length > 0 ? { prints: result.prints } : {}),
+        }),
+      };
     } catch (err) {
       const message = err instanceof RequestScriptError ? err.message : String(err);
-      return { content: JSON.stringify({ mode: 'dry', before, error: message }) };
+      const prints = err instanceof RequestScriptError ? err.prints : [];
+      return {
+        content: JSON.stringify({ mode: 'dry', before, error: message, ...(prints.length > 0 ? { prints } : {}) }),
+      };
     }
   }
 
