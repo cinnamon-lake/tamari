@@ -129,9 +129,15 @@ export class GenerationRunner {
 
   /** Release. Warns if the chat wasn't locked (an unbalanced release). */
   unlockChat(chatId: string): void {
-    if (!this.mutexFor(chatId).unlock()) {
+    const mutex = this.mutexFor(chatId);
+    if (!mutex.unlock()) {
       log.warn({ chatId }, 'unlockChat: mutex not held — unbalanced release');
+      return;
     }
+    // Drop the entry once it is idle so the map doesn't grow with every chat
+    // ever opened. Handoff keeps `locked` set, so a mutex with queued waiters
+    // is never idle.
+    if (mutex.idle) this.chatMutexes.delete(chatId);
   }
 
   // ── Stop / replay ──────────────────────────────────────────────────────

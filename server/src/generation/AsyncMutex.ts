@@ -3,7 +3,9 @@
  * to the next waiter WITHOUT clearing `locked`, so a concurrent `tryLock()`
  * can't steal the lock in the gap before the waiter resumes. `lock()` races a
  * 30s timeout so a wedged holder can't hang queued waiters indefinitely (a
- * stop-gap until `lock()` accepts an AbortSignal wired from handleStop).
+ * stop-gap until `lock()` accepts an AbortSignal wired from handleStop). A
+ * timed-out waiter is REMOVED from the queue — leaving it in place would hand
+ * the tenure to a dead waiter on the next unlock() and wedge the mutex forever.
  *
  * Moved verbatim from GenerationService.ts as part of the generation-runner
  * migration (docs/design/generation-runner.md).
@@ -18,11 +20,16 @@ export class AsyncMutex {
       return;
     }
     await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('Chat lock acquisition timeout')), 30_000);
-      this.waiters.push(() => {
+      const waiter = () => {
         clearTimeout(timer);
         resolve();
-      });
+      };
+      const timer = setTimeout(() => {
+        const i = this.waiters.indexOf(waiter);
+        if (i !== -1) this.waiters.splice(i, 1);
+        reject(new Error('Chat lock acquisition timeout'));
+      }, 30_000);
+      this.waiters.push(waiter);
     });
     // Ownership was transferred by the prior unlock(); `locked` is already true.
   }
@@ -31,6 +38,11 @@ export class AsyncMutex {
     if (this.locked) return false;
     this.locked = true;
     return true;
+  }
+
+  /** Not held and no one queued — safe for the owner to drop this mutex. */
+  get idle(): boolean {
+    return !this.locked && this.waiters.length === 0;
   }
 
   /**
