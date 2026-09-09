@@ -17,7 +17,7 @@
  * / switching the edit target, and are cancelled when the target is deleted.
  */
 
-import { createSignal, createEffect, Show, For, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, Show, For, Index, onMount, onCleanup } from 'solid-js';
 import type { BuiltinTransformerId, TransformerChain, TransformerStep } from '@tamari/types';
 import { useI18n } from '../i18n/index.js';
 import { Modal } from './Modal.js';
@@ -153,6 +153,11 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
     return script?.name ?? step.scriptId;
   };
 
+  /** Narrow a step to a specific builtin — Show conditions can't narrow the
+      union across two separate `step()` accessor calls. */
+  const isBuiltinStep = (step: TransformerStep, id: BuiltinTransformerId): boolean =>
+    step.kind === 'builtin' && step.id === id;
+
   const updateStepAt = (index: number, updater: (step: TransformerStep) => TransformerStep) => {
     setSteps((list) => list.map((step, i) => (i === index ? updater(step) : step)));
     setDirty(true);
@@ -286,7 +291,11 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
 
           <h4 class="text-sm text-muted mb-0 mt-md">{t('transformers.steps')}</h4>
           <Show when={steps().length > 0} fallback={<p class="hint-text">{t('transformers.stepsEmpty')}</p>}>
-            <For each={steps()}>
+            {/* Index (not For): rows are keyed by position, so a param edit
+                that replaces the step object updates the row in place instead
+                of re-creating its DOM — otherwise the focused input loses
+                focus on every keystroke (GreetingsEditor precedent). */}
+            <Index each={steps()}>
               {(step, index) => (
                 <div class="transformer-chain-step">
                   <div class="transformer-chain-step-head">
@@ -294,18 +303,18 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
                       <input
                         class="checkbox-input"
                         type="checkbox"
-                        checked={step.enabled}
-                        onChange={(e) => toggleStep(index(), e.currentTarget.checked)}
+                        checked={step().enabled}
+                        onChange={(e) => toggleStep(index, e.currentTarget.checked)}
                         aria-label={t('transformers.stepEnabled')}
                       />
-                      <span class="transformer-chain-step-name">{stepLabel(step)}</span>
+                      <span class="transformer-chain-step-name">{stepLabel(step())}</span>
                     </label>
                     <div class="transformer-chain-step-actions">
                       <button
                         class="icon-btn small"
                         type="button"
-                        disabled={index() === 0}
-                        onClick={() => moveStep(index(), -1)}
+                        disabled={index === 0}
+                        onClick={() => moveStep(index, -1)}
                         title={t('transformers.moveUp')}
                         aria-label={t('transformers.moveUp')}
                       >
@@ -314,8 +323,8 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
                       <button
                         class="icon-btn small"
                         type="button"
-                        disabled={index() === steps().length - 1}
-                        onClick={() => moveStep(index(), 1)}
+                        disabled={index === steps().length - 1}
+                        onClick={() => moveStep(index, 1)}
                         title={t('transformers.moveDown')}
                         aria-label={t('transformers.moveDown')}
                       >
@@ -324,7 +333,7 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
                       <button
                         class="icon-btn small"
                         type="button"
-                        onClick={() => removeStep(index())}
+                        onClick={() => removeStep(index)}
                         title={t('transformers.removeStep')}
                         aria-label={t('transformers.removeStep')}
                       >
@@ -334,13 +343,13 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
                   </div>
 
                   {/* Builtin params (typed per builtin id); Lua steps have none. */}
-                  <Show when={step.kind === 'builtin' && step.id === 'whitespace'}>
+                  <Show when={isBuiltinStep(step(), 'whitespace')}>
                     <label class="field-label">
                       {t('transformers.params.mode')}
                       <select
                         class="select"
-                        value={paramValue(step, 'mode') || 'none'}
-                        onChange={(e) => setStepParam(index(), 'mode', e.currentTarget.value)}
+                        value={paramValue(step(), 'mode') || 'none'}
+                        onChange={(e) => setStepParam(index, 'mode', e.currentTarget.value)}
                       >
                         <option class="select-option" value="none">
                           {t('transformers.params.modeNone')}
@@ -354,14 +363,14 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
                       </select>
                     </label>
                   </Show>
-                  <Show when={step.kind === 'builtin' && step.id === 'history-squash'}>
+                  <Show when={isBuiltinStep(step(), 'history-squash')}>
                     <div class="transformer-chain-step-params">
                       <label class="field-label">
                         {t('transformers.params.role')}
                         <select
                           class="select"
-                          value={paramValue(step, 'role') || 'user'}
-                          onChange={(e) => setStepParam(index(), 'role', e.currentTarget.value)}
+                          value={paramValue(step(), 'role') || 'user'}
+                          onChange={(e) => setStepParam(index, 'role', e.currentTarget.value)}
                         >
                           <option class="select-option" value="user">
                             {t('transformers.params.roleUser')}
@@ -375,49 +384,49 @@ export function TransformerChainsModal(props: { onClose: () => void }) {
                         {t('transformers.params.userPrefix')}
                         <input
                           class="input"
-                          value={paramValue(step, 'userPrefix')}
-                          onInput={(e) => setStepParam(index(), 'userPrefix', e.currentTarget.value)}
+                          value={paramValue(step(), 'userPrefix')}
+                          onInput={(e) => setStepParam(index, 'userPrefix', e.currentTarget.value)}
                         />
                       </label>
                       <label class="field-label">
                         {t('transformers.params.userSuffix')}
                         <input
                           class="input"
-                          value={paramValue(step, 'userSuffix')}
-                          onInput={(e) => setStepParam(index(), 'userSuffix', e.currentTarget.value)}
+                          value={paramValue(step(), 'userSuffix')}
+                          onInput={(e) => setStepParam(index, 'userSuffix', e.currentTarget.value)}
                         />
                       </label>
                       <label class="field-label">
                         {t('transformers.params.charPrefix')}
                         <input
                           class="input"
-                          value={paramValue(step, 'charPrefix')}
-                          onInput={(e) => setStepParam(index(), 'charPrefix', e.currentTarget.value)}
+                          value={paramValue(step(), 'charPrefix')}
+                          onInput={(e) => setStepParam(index, 'charPrefix', e.currentTarget.value)}
                         />
                       </label>
                       <label class="field-label">
                         {t('transformers.params.charSuffix')}
                         <input
                           class="input"
-                          value={paramValue(step, 'charSuffix')}
-                          onInput={(e) => setStepParam(index(), 'charSuffix', e.currentTarget.value)}
+                          value={paramValue(step(), 'charSuffix')}
+                          onInput={(e) => setStepParam(index, 'charSuffix', e.currentTarget.value)}
                         />
                       </label>
                     </div>
                   </Show>
-                  <Show when={step.kind === 'builtin' && step.id === 'ensure-thinking'}>
+                  <Show when={isBuiltinStep(step(), 'ensure-thinking')}>
                     <label class="field-label">
                       {t('transformers.params.placeholder')}
                       <input
                         class="input"
-                        value={paramValue(step, 'placeholder')}
-                        onInput={(e) => setStepParam(index(), 'placeholder', e.currentTarget.value)}
+                        value={paramValue(step(), 'placeholder')}
+                        onInput={(e) => setStepParam(index, 'placeholder', e.currentTarget.value)}
                       />
                     </label>
                   </Show>
                 </div>
               )}
-            </For>
+            </Index>
           </Show>
 
           <div class="transformer-chain-add-row">

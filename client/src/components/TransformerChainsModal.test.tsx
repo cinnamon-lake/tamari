@@ -325,6 +325,22 @@ describe('TransformerChainsModal', () => {
     });
   });
 
+  it('keeps focus in a step param input while typing (row is not re-created)', () => {
+    vi.spyOn(bus, 'send').mockImplementation(() => {});
+    setState('transformerChains', [makeChain({ steps: [{ kind: 'builtin', id: 'history-squash', enabled: true }] })]);
+    render(() => <TransformerChainsModal onClose={() => {}} />);
+
+    fireEvent.click(screen.getByText('Edit'));
+    const input = screen.getByLabelText(/User prefix/);
+    input.focus();
+    fireEvent.input(input, { target: { value: 'U' } });
+
+    // Index-keyed rows update in place: the input node must survive the edit
+    // (a <For> here re-creates the row on every keystroke, dropping focus).
+    expect(screen.getByLabelText(/User prefix/)).toBe(input);
+    expect(document.activeElement).toBe(input);
+  });
+
   it('cancels a pending save when the edited chain is deleted', async () => {
     vi.useFakeTimers();
     try {
