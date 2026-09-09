@@ -45,9 +45,9 @@ const NaiImageArgs = z.object({
   prompt: z
     .string()
     .describe(
-      'Detailed description of the image. Comma-separated Danbooru-style tags ' +
-        '(e.g. "1girl, purple hair, bob cut, looking at viewer, smug, cowboy shot"), plain English ' +
-        'sentences, or a mix of both. Start with character counts, then character/series names, then the rest.',
+      'Global prompt for the image, ' +
+        'e.g. "1girl, solo, concrete rooftop, sky, sunset and cityscape behind chainlink fence". ' +
+        'Do not describe individual characters here.',
     ),
   orientation: z
     .enum(['square', 'portrait', 'landscape'])
@@ -65,10 +65,11 @@ const NaiImageArgs = z.object({
     .array(NaiCharacterPrompt)
     .optional()
     .describe(
-      'Per-character prompts for multi-character scenes. Describe each character separately here ' +
-        'instead of mixing their traits into the main prompt; the main prompt should still state how ' +
-        'many characters there are (e.g. "2girls") and the shared scene/background. The model closely ' +
-        'follows the x/y position of each character, so spread them across the canvas.',
+      'Specific prompt for each character, ' +
+        'e.g. "girl, hatsune miku, seifuku, one eye closed, looking at viewer, grin, heart sticker, double v, cowboy shot"; ' +
+        'the main prompt should still state how many characters there are (e.g. "2girls"). ' +
+        'If you want to include character positions, set both x and y, ' +
+        'and set them for every character in character_prompts.',
     ),
   seed: z
     .number()
@@ -155,13 +156,12 @@ export class NaiImageTemplate implements ToolTemplate {
             '- Tags and natural language both work and can be freely mixed. V5 understands full English sentences well, so when in doubt, describe the scene precisely in plain words instead of guessing tags.\n' +
             '- Commas are always parsed as tag separators, even inside natural language — write natural-language parts without commas.\n' +
             '- Use only tags that actually exist on Danbooru. If you suspect a tag does not exist, do not use it. Most established anime characters and series DO have Danbooru tags, so reference them by name (e.g. "hatsune miku, vocaloid").\n' +
-            '- Tag order: character counts first ("1girl", "2boys"), then character and series names, then everything else in any order.\n' +
             '- Tag ONLY what should be visible in the image. If it would not be visible in the finished picture, do not tag it.\n' +
+            '- Don\'t underestimate how much an existing tag can give you. "kasane teto" is the entire Teto, and there\'s no need to also bring up the drill hair, the ahoge or the detached sleeves, unless you want to change up her hair or dress her in a new outfit.\n' +
             '- Always lock in the framing explicitly: "portrait", "upper body", "cowboy shot", "full body", "close-up", etc. If omitted, the model picks one at random.\n' +
             '- Always lock in eye direction ("looking at viewer", "looking to the side", "looking away") and hand positions ("hands on own hips", "hand in own hair", "arms at sides") — eyes and hands drift when left unspecified.\n' +
             '- To render legible text in the image (V5 handles English, Japanese, Chinese), put the exact wording in quotes in a natural-language sentence, e.g. A speech bubble saying "Hello world!". Avoid the "no text" tag when you want text.\n' +
             '- Useful V5 tags: "high complexity" for normal detailed images ("low"/"ultra complexity" for more stylized looks), "transparent background" for a true alpha-channel background, "depthness" for deeper shading.\n' +
-            '- For scenes with multiple characters, pass character_prompts and describe each character separately there.\n' +
             'When an image is successfully generated, the result will include a reference in the format {{attachment::ID}}. To display the image in your response, include this exact reference.',
           parameters: z.toJSONSchema(NaiImageArgs) as Record<string, unknown>,
         },
