@@ -226,7 +226,7 @@ describe('MessagePartsView', () => {
     expect(screen.getByText('legacy flat')).toBeInTheDocument();
   });
 
-  it('wraps everything before the last text part in a collapsed tool-activity dropdown', () => {
+  it('collapses a leading run of non-text parts into a tool-activity dropdown', () => {
     render(() => (
       <MessagePartsView
         message={makeMessage(
@@ -254,6 +254,58 @@ describe('MessagePartsView', () => {
     expect(details!.contains(finalPart)).toBe(false);
   });
 
+  it('collapses non-text runs in place, keeping all text parts visible in order', () => {
+    render(() => (
+      <MessagePartsView
+        message={makeMessage(
+          [
+            { type: 'text', text: 'before' },
+            { type: 'tool_use', id: 'call-1', name: 'generate_image', input: {} },
+            { type: 'tool_result', toolUseId: 'call-1', content: 'done' },
+            { type: 'text', text: 'after' },
+          ],
+          ['<p>before</p>', null, null, '<p>after</p>'],
+        )}
+      />
+    ));
+    const details = document.querySelector<HTMLDetailsElement>('details.tool-activity-block');
+    expect(details).not.toBeNull();
+    expect(details!.querySelectorAll('[data-part-index]')).toHaveLength(2);
+    // Both text parts stay visible, outside the dropdown.
+    expect(screen.getByText('before')).toBeInTheDocument();
+    expect(screen.getByText('after')).toBeInTheDocument();
+    expect(details!.contains(document.querySelector('[data-part-index="0"]'))).toBe(false);
+    expect(details!.contains(document.querySelector('[data-part-index="3"]'))).toBe(false);
+    // The dropdown sits between the two text parts in document order.
+    const content = document.querySelector('.message-content')!;
+    const order = [...content.children].map((el) =>
+      el.matches('details') ? 'dropdown' : (el as HTMLElement).dataset.partIndex,
+    );
+    expect(order).toEqual(['0', 'dropdown', '3']);
+  });
+
+  it('creates a separate dropdown per non-text run', () => {
+    render(() => (
+      <MessagePartsView
+        message={makeMessage(
+          [
+            { type: 'text', text: 'one' },
+            { type: 'tool_use', id: 'c1', name: 'a', input: {} },
+            { type: 'text', text: 'two' },
+            { type: 'tool_use', id: 'c2', name: 'b', input: {} },
+            { type: 'tool_result', toolUseId: 'c2', content: 'ok' },
+            { type: 'text', text: 'three' },
+          ],
+          ['<p>one</p>', null, '<p>two</p>', null, null, '<p>three</p>'],
+        )}
+      />
+    ));
+    const dropdowns = document.querySelectorAll<HTMLDetailsElement>('details.tool-activity-block');
+    expect(dropdowns).toHaveLength(2);
+    expect(dropdowns[0]!.querySelectorAll('[data-part-index]')).toHaveLength(1);
+    expect(dropdowns[1]!.querySelectorAll('[data-part-index]')).toHaveLength(2);
+  });
+
   it('does not collapse anything when there is no text part (live tool activity)', () => {
     render(() => (
       <MessagePartsView
@@ -272,19 +324,20 @@ describe('MessagePartsView', () => {
       <MessagePartsView
         message={makeMessage(
           [
-            { type: 'text', text: 'interim' },
+            { type: 'tool_use', id: 'call-1', name: 'roll_dice', input: {} },
+            { type: 'tool_result', toolUseId: 'call-1', content: '7' },
             { type: 'text', text: 'final' },
           ],
-          ['<p>interim</p>', '<p>final</p>'],
+          [null, null, '<p>final</p>'],
         )}
-        editingPartIndex={0}
+        editingPartIndex={1}
         renderEditArea={(idx, text) => <textarea data-testid={`edit-${idx}`} value={text} />}
       />
     ));
     const details = document.querySelector<HTMLDetailsElement>('details.tool-activity-block');
     expect(details).not.toBeNull();
     expect(details!.open).toBe(true);
-    expect(screen.getByTestId('edit-0')).toBeInTheDocument();
+    expect(screen.getByText('final')).toBeInTheDocument();
   });
 });
 
@@ -319,7 +372,7 @@ describe('MessagePartsView attachment token rewrite', () => {
     expect(img?.getAttribute('src')).toContain('/api/attachments/att-1?token=abc123');
   });
 
-  it('tokens attachment media inside collapsed tool-activity parts', () => {
+  it('tokens attachment media in text parts that stay visible beside collapsed tool activity', () => {
     setAuthToken('abc123');
     render(() => (
       <MessagePartsView
@@ -333,7 +386,10 @@ describe('MessagePartsView attachment token rewrite', () => {
         )}
       />
     ));
-    const img = document.querySelector('.tool-activity-content img');
+    const img = document.querySelector<HTMLImageElement>('.message-part-text img');
     expect(img?.getAttribute('src')).toContain('/api/attachments/att-1?token=abc123');
+    const details = document.querySelector('details.tool-activity-block');
+    expect(details).not.toBeNull();
+    expect(details!.contains(img)).toBe(false);
   });
 });

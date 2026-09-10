@@ -75,24 +75,36 @@ export function MessagePartsView(props: MessagePartsViewProps) {
   const tokenedHtml = createMemo(() => renderedHtml().map((h) => (h == null ? h : authenticateMediaInHtml(h))));
   const widgetToolUseIds = createMemo(() => collectWidgetToolUseIds(parts()));
 
-  // Everything before the last text part (tool calls/results, reasoning,
-  // interim chatter) collapses into one dropdown; the final text stays
-  // visible. While streaming with no text yet (lastTextIndex === -1)
+  // Text parts always render in place; runs of everything else (tool
+  // calls/results, reasoning, empty text) collapse into a dropdown exactly
+  // where the run sits in the message. While streaming with no text yet
   // nothing collapses, so live tool activity stays on screen.
-  const lastTextIndex = createMemo(() => {
+  interface IndexedPart {
+    part: ContentPart;
+    index: number;
+  }
+  interface Segment {
+    collapsible: boolean;
+    entries: IndexedPart[];
+  }
+  const segments = createMemo<Segment[]>(() => {
     const ps = parts();
-    for (let i = ps.length - 1; i >= 0; i--) {
-      const p = ps[i];
-      if (p?.type === 'text' && p.text.trim()) return i;
-    }
-    return -1;
+    const hasText = ps.some((p) => p.type === 'text' && p.text.trim());
+    const segs: Segment[] = [];
+    ps.forEach((part, index) => {
+      const collapsible = hasText && !(part.type === 'text' && part.text.trim());
+      const last = segs[segs.length - 1];
+      if (last && last.collapsible === collapsible) {
+        last.entries.push({ part, index });
+      } else {
+        segs.push({ collapsible, entries: [{ part, index }] });
+      }
+    });
+    return segs;
   });
-  const collapsedParts = createMemo(() => parts().slice(0, Math.max(lastTextIndex(), 0)));
-  const visibleParts = createMemo(() => (lastTextIndex() >= 0 ? parts().slice(lastTextIndex()) : parts()));
-  // Keep the dropdown open when the part being edited lives inside it.
-  const editingCollapsedPart = createMemo(
-    () => props.editingPartIndex != null && props.editingPartIndex < collapsedParts().length,
-  );
+  // Keep a dropdown open when the part being edited lives inside it.
+  const editingInSegment = (seg: Segment) =>
+    props.editingPartIndex != null && seg.entries.some((e) => e.index === props.editingPartIndex);
 
   const renderPart = (part: ContentPart, index: () => number): JSX.Element => {
     switch (part.type) {
@@ -176,11 +188,11 @@ export function MessagePartsView(props: MessagePartsViewProps) {
     }
   };
 
-  // offset keeps part indices aligned with the original `parts` array
+  // entry.index keeps part indices aligned with the original `parts` array
   // (renderedHtml and editingPartIndex are indexed against it).
-  const renderEntry = (part: ContentPart, index: () => number, offset: number): JSX.Element => (
-    <div data-part-index={index() + offset} class={`message-part message-part-${part.type}`}>
-      {renderPart(part, () => index() + offset)}
+  const renderEntry = (entry: IndexedPart): JSX.Element => (
+    <div data-part-index={entry.index} class={`message-part message-part-${entry.part.type}`}>
+      {renderPart(entry.part, () => entry.index)}
     </div>
   );
 
@@ -199,17 +211,20 @@ export function MessagePartsView(props: MessagePartsViewProps) {
           </Show>
         }
       >
-        <Show when={collapsedParts().length > 0}>
-          <details class="tool-activity-block" open={editingCollapsedPart()}>
-            <summary class="tool-activity-summary">
-              <i class="bi bi-tools" /> Tool activity ({collapsedParts().length})
-            </summary>
-            <div class="tool-activity-content">
-              <For each={collapsedParts()}>{(part, index) => renderEntry(part, index, 0)}</For>
-            </div>
-          </details>
-        </Show>
-        <For each={visibleParts()}>{(part, index) => renderEntry(part, index, collapsedParts().length)}</For>
+        <For each={segments()}>
+          {(seg) => (
+            <Show when={seg.collapsible} fallback={<For each={seg.entries}>{(entry) => renderEntry(entry)}</For>}>
+              <details class="tool-activity-block" open={editingInSegment(seg)}>
+                <summary class="tool-activity-summary">
+                  <i class="bi bi-tools" /> Tool activity ({seg.entries.length})
+                </summary>
+                <div class="tool-activity-content">
+                  <For each={seg.entries}>{(entry) => renderEntry(entry)}</For>
+                </div>
+              </details>
+            </Show>
+          )}
+        </For>
       </Show>
       {/* Editing a message that has no text part: the edit area appends one
           (editingPartIndex === parts.length). */}

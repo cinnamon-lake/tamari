@@ -36,13 +36,14 @@ export class App {
 
   /**
    * Expand a message bubble's collapsed tool-activity dropdown, if any.
-   * MessagePartsView wraps every part before the last text part (tool calls,
-   * tool results, reasoning, backend debug, interim text) in a closed
-   * <details class="tool-activity-block">; visibility assertions and clicks on
-   * those parts must open it first. No-op when the bubble has no dropdown
-   * (the message ends with a widget or has no text part) or it is already open.
+   * MessagePartsView wraps each run of non-text parts (tool calls, tool
+   * results, reasoning, backend debug) in a closed
+   * <details class="tool-activity-block"> where it sits in the message;
+   * visibility assertions and clicks on those parts must open it first.
+   * No-op when the bubble has no dropdown (the message has no text part)
+   * or it is already open.
    *
-   * The dropdown only mounts once the trailing text part exists, so callers
+   * The dropdown only mounts once a text part exists, so callers
    * right after sendUserMessage can race its mount — poll briefly for it.
    */
   async expandToolActivity(message: Locator, timeout = 10000): Promise<void> {
